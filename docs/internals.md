@@ -801,7 +801,7 @@ object at the change and once the second bus has gone.
   refuses the connection, the send fails (logged `apns send failed`;
   counted failed, no token dropped) and APNs pauses as after a 5xx, so
   the rest of the delivery doesn't each wait out the 5 s again. The way
-  out then is a small relay that speaks HTTP/2 to Apple (for instance on the VPS that renders the timelapse), which the
+  out then is a small relay that speaks HTTP/2 to Apple (for instance on a small VPS), which the
   Worker calls with the same request and its own shared secret; nothing
   in Cloudflare sends APNs for us.
 - **Requests.** `POST https://<host>/3/device/<hex>`, with
@@ -2496,9 +2496,10 @@ asked it. Asking about a day nobody recorded
 creates no storage. `/download/*`
 serves only release files, so the days are reachable only through
 `/api/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
-opens these routes and nothing else, so the machine that renders the videos
-unattended (`scripts/dev/render-timelapse.mjs`, on a VPS) never holds the
-dashboard's key.
+opens these routes and nothing else, so a machine left to render the videos
+unattended (`scripts/dev/render-timelapse.mjs`) never holds the dashboard's
+key. Nothing runs the renderer on a schedule; it is run by hand from a
+checkout.
 
 **Replaying it.** The dashboard's Timelapse section (`/admin/#/timelapse`,
 [`timelapse.js`](../apps/web/public/admin/timelapse/timelapse.js), loaded when

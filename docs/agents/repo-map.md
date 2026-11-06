@@ -90,8 +90,9 @@ apps/api/
                       src/venue-stops.json (the stops students use for a building,
                       where the map's nearest is wrong; then run walk_routes.py)
   migrations/         D1 schema, numbered NNNN_name.sql
-  scripts/dev/        dev-stub.mjs, stub-admin.mjs (its dashboard numbers);
-                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS)
+  scripts/dev/        dev-stub.mjs, stub-admin.mjs (its dashboard numbers); shot.mjs
+                      (a page's screenshot); render-timelapse.mjs (renders a recorded day
+                      headless, by hand), its selectors in render-timelapse-ui.mjs
   scripts/deploy/     predeploy.mjs (first step of a deploy); vapid-key.mjs (makes the Web Push key, once)
   scripts/data/       The weekly scrapers (scrape_stops.py, scrape_lta.py, route_shapes.py,
                       fetch_calendar.py), walk_routes.py, check_scraped.py;
@@ -118,7 +119,9 @@ apps/web/public/
                       (Map tab), board.js (a stop's board, shared by both), map-files.js,
                       offline.js, pull.js (pull to refresh), timing.js (when Now refetches)
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
-                      each with zh/), not-found/ (the Worker's 404 page)
+                      each with zh/), not-found/ (the Worker's 404 page). The dashboard's
+                      sections link to each other by hash (#/feed) from views.js: moving
+                      one, git grep its old address across apps/web/public
   admin/timelapse/    The dashboard's Timelapse section (#/timelapse): replays a recorded
                       day on the map and exports a video (replay.js, shared with the
                       API tests; Mediabunny encodes). index.html only forwards there

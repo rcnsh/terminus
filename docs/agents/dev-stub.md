@@ -24,9 +24,14 @@
 It listens on loopback only; `STUB_HOST=0.0.0.0` opens it to the network
 (a phone on the same Wi-Fi), and `PORT` moves it from 8787.
 
-It serves `apps/web/public` from disk, so a reload shows your change. Use it
-with a headless browser (Playwright plus Chromium) to check web UI changes,
-and take screenshots for UI changes. The admin dashboard token is `dev`.
+It serves `apps/web/public` from disk, so a reload shows your change. Check
+web UI changes against it in headless Chromium and screenshot them:
+`node apps/api/scripts/dev/shot.mjs <url> <out.png>` (`--scheme dark`,
+`--width 390` for a phone, `--wait <selector>`, `--operator dev` for the
+dashboard signed in). Playwright is pinned in the root `package.json`; its
+browser once: `pnpm exec playwright install chromium-headless-shell`. For
+clicks and typing, write a script on the same `playwright` import. The admin
+dashboard token is `dev`.
 Street-map tiles are absent unless you put a map in `dev/map/`; routes and
 stops still draw.
 
