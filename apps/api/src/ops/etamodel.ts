@@ -196,10 +196,6 @@ export function quantile(xs: number[], q: number): number {
   return rank(sorted(xs), q);
 }
 
-function medians(groups: Map<string, number[]>): Record<string, [number, number]> {
-  return Object.fromEntries([...groups].map(([k, xs]) => [k, [xs.length, Math.round(median(xs))]]));
-}
-
 function spreads(groups: Map<string, number[]>): Record<string, Spread> {
   return Object.fromEntries(
     [...groups].map(([k, xs]) => {
@@ -433,17 +429,22 @@ export function horizonOf(s: number): number {
   return k < 0 ? HORIZONS.length - 1 : k;
 }
 
-/** The whole model: the segment table, the feed's usual error, and the blend's weights. */
+/** The whole model: the segment table, the correction to the feed's times, and the blend's weights. */
 export interface EtaModel {
   v: 1;
   table: SegmentTable;
-  /** The feed's median error, s (positive: the bus comes later than it says), by `svc|horizon` and `*|horizon`: [count, s]. */
+  /** The correction to the feed's time, s (positive: the bus comes later than it says), by `svc|horizon` and `*|horizon`: [count, s] (biasOf). */
   bias: Record<string, [number, number]>;
   /** Per horizon (HORIZONS), the weight on history against the corrected feed, 0 to 1. */
   weights: number[];
 }
 
-/** The feed's error at that horizon for that service, pulled towards every service's (BIAS_PRIOR). */
+/**
+ * The correction for that service at that horizon, pulled towards every
+ * service's (BIAS_PRIOR). Every service's is capped no higher than any one
+ * service's (its errors are among them: biasOf), so the mix stays within
+ * the service's cap.
+ */
 export function biasS(model: Pick<EtaModel, 'bias'>, svc: string, feedS: number): number {
   const h = horizonOf(feedS);
   const any = model.bias[`*|${h}`];
@@ -786,38 +787,61 @@ const WEIGHT_STEPS = 10;
 /**
  * For each horizon, the blend's summed absolute error at each weight on
  * history from 0 to 1 in tenths, over the cases the blend's history
- * (gated) could answer, and how many there were, before checkS. Sums add up across days, so a day's grid can be kept
- * and the weights fitted from many.
+ * (gated) could answer, and how many there were, before checkS; and at
+ * each weight, and by the feed's own time, how many of those buses came
+ * early (EARLY_BY_S). Sums add
+ * up across days, so a day's grid can be kept and the weights fitted from
+ * many.
  */
 export interface WeightGrid {
   sums: number[][];
   n: number[];
+  early: number[][];
+  /** Per horizon, how many of those buses came early by the feed's own time. */
+  feedEarly: number[];
 }
 
 export function weightGrid(model: Pick<EtaModel, 'bias'>, cases: Case[]): WeightGrid {
   const sums = HORIZONS.map(() => Array.from({ length: WEIGHT_STEPS + 1 }, () => 0));
+  const early = HORIZONS.map(() => Array.from({ length: WEIGHT_STEPS + 1 }, () => 0));
   const n = HORIZONS.map(() => 0);
+  const feedEarly = HORIZONS.map(() => 0);
   for (const c of cases) {
     const hist = c.hist.gated;
     if (hist === null) continue;
     const h = horizonOf(c.feedS);
     const corrected = Math.max(0, c.feedS + biasS(model, c.svc, c.feedS));
     n[h]++;
+    if (c.actualS - c.feedS < -EARLY_BY_S) feedEarly[h]++;
     for (let k = 0; k <= WEIGHT_STEPS; k++) {
       const w = k / WEIGHT_STEPS;
-      sums[h][k] += Math.abs(c.actualS - (w * hist + (1 - w) * corrected));
+      const errS = c.actualS - (w * hist + (1 - w) * corrected);
+      sums[h][k] += Math.abs(errS);
+      if (errS < -EARLY_BY_S) early[h][k]++;
     }
   }
-  return { sums: sums.map((row) => row.map((x) => Math.round(x))), n };
+  return { sums: sums.map((row) => row.map((x) => Math.round(x))), n, early, feedEarly };
 }
 
-/** Per horizon, the weight that erred least over [grids] together; 0 (the corrected feed) where none had a case. */
+/**
+ * Per horizon, the weight that erred least over [grids] together, among
+ * those that left no more buses early than the feed's own times did; where
+ * none did, the one that left fewest; 0 (the corrected feed) where none had
+ * a case.
+ */
 export function weightsFrom(grids: WeightGrid[]): number[] {
   return HORIZONS.map((_, h) => {
     if (!grids.some((g) => g.n[h] > 0)) return 0;
+    const earlyAt = (k: number) => grids.reduce((sum, g) => sum + g.early[h][k], 0);
+    const steps = Array.from({ length: WEIGHT_STEPS + 1 }, (_, k) => k);
+    const limit = Math.max(
+      grids.reduce((sum, g) => sum + g.feedEarly[h], 0),
+      Math.min(...steps.map(earlyAt)),
+    );
     let best = 0;
     let bestErr = Infinity;
-    for (let k = 0; k <= WEIGHT_STEPS; k++) {
+    for (const k of steps) {
+      if (earlyAt(k) > limit) continue;
       const err = grids.reduce((sum, g) => sum + (g.sums[h]?.[k] ?? 0), 0);
       // Ties go to the lower weight: the feed, which users already see.
       if (err < bestErr) {
@@ -829,7 +853,15 @@ export function weightsFrom(grids: WeightGrid[]): number[] {
   });
 }
 
-/** The feed's error at each horizon, per service and for all, from [errors]: [count, median s]. */
+/**
+ * The correction to the feed's time at each horizon, per service and for
+ * all, from [errors] (the bus's arrival less the time said): [count, s].
+ * The one with the least absolute error among those that leave no more
+ * buses early (EARLY_BY_S) than the feed: the median error, unless adding
+ * it would. The bus usually comes later than the feed says, so the median
+ * moves every time later, the early buses' too, and someone who trusted
+ * the time misses the bus (docs/eta-backtest.md, round 6).
+ */
 export function biasOf(errors: { svc: string; feedS: number; errS: number }[]): Record<string, [number, number]> {
   const groups = new Map<string, number[]>();
   for (const e of errors) {
@@ -837,7 +869,21 @@ export function biasOf(errors: { svc: string; feedS: number; errS: number }[]): 
     push(groups, `${e.svc}|${h}`, e.errS);
     push(groups, `*|${h}`, e.errS);
   }
-  return medians(groups);
+  return Object.fromEntries([...groups].map(([k, xs]) => [k, [xs.length, Math.round(correctionOf(xs))]]));
+}
+
+/**
+ * biasOf's correction for one group of errors, exactly. Adding [o] makes a
+ * bus early when its error is under o less EARLY_BY_S, so no more come early
+ * than with none for any o up to the smallest error not already early, plus
+ * EARLY_BY_S. Absolute error is least at the median and grows away from
+ * it, so the answer is the median, or that ceiling when the median is past it.
+ */
+function correctionOf(errs: number[]): number {
+  // A loop, not Math.min(...): every service's group pools 28 days of rows, past what spreading allows.
+  let least = Infinity;
+  for (const e of errs) if (e >= -EARLY_BY_S && e < least) least = e;
+  return Math.min(median(errs), least + EARLY_BY_S);
 }
 
 /**

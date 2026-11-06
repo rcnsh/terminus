@@ -81,8 +81,14 @@ beyond the language.
    answer sees anything from after it was asked. Scored, but not in the
    blend: on production days it is worse than gated history alone
    ([eta-backtest.md](eta-backtest.md), round 3).
-6. **The feed corrected.** The feed's time plus its median error for that
-   service at that horizon in the training data (`biasS`).
+6. **The feed corrected.** The feed's time plus a correction for that
+   service at that horizon from the training data (`biasOf`, `biasS`): its
+   median error, unless adding that would have more buses come over a
+   minute early than the feed does, then the nearest one that doesn't.
+   The bus usually comes later than the feed says, so the median moves
+   every time later, the early buses' too, and someone who trusted the
+   time misses the bus. On the stable site's days almost no correction
+   passes (within 16 s either way): the gain is history's and the check's.
 7. **The check** (`checkS`, the `checked` method). For a plate whose bus
    was seen at a stop in the last 90 s, a time over 4 minutes sooner than
    the bus could get there at its quickest (each segment's quick end,
@@ -93,8 +99,12 @@ beyond the language.
    leaves the rest alone (about 1 question in 100).
 8. **The blend.** Per horizon (under 2 min, 2 to 5, 5 to 10, 10 to 30), a
    weight on gated history against the corrected feed, picked in tenths to
-   minimise absolute error (`weightGrid`, `weightsFrom`; ties go to the
-   feed), then checked. Without history it's the corrected feed; without
+   minimise absolute error among the weights that leave no more buses
+   early than the feed's own times did (`weightGrid`, `weightsFrom`; ties
+   go to the feed, and the corrected feed alone where no weight does),
+   then checked. Both limits hold on the days fitted on; on later days
+   early buses can drift a little past the feed's (eta-backtest.md, round
+   7). Without history it's the corrected feed; without
    the feed, history.
 
 Nothing in the answer path calls it. Users see the feed's times as before.

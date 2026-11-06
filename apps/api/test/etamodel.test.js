@@ -10,7 +10,10 @@ import { readFileSync } from 'node:fs';
 import { placeBuses } from '../src/map/buses.ts';
 import {
   checkS,
+  weightGrid,
+  weightsFrom,
   actualFor,
+  biasOf,
   biasS,
   buildTable,
   earlyS,
@@ -614,4 +617,61 @@ test('the paired test is the same every run, and leaves out questions without bo
   const noFeed = [...cs, { ...asked('d0', 100, null, 100) }];
   assert.equal(pairedTest(noFeed, dayOfAsked, 'blend').n, cs.length, "nor without the feed's");
   assert.equal(pairedTest([], dayOfAsked, 'blend'), null);
+});
+
+test("the correction: the feed's median error, unless adding it would have more buses come early", () => {
+  const err = (errS) => ({ svc: 'D2', feedS: 200, errS });
+  // The bus 40 to 80 s later than said, never earlier: the median, 60 s, makes nobody early.
+  assert.equal(biasOf(Array.from({ length: 41 }, (_, i) => err(40 + i)))['D2|1'][1], 60);
+  // Most buses 200 s later than said, a fifth on time. Adding the median
+  // would say 200 s for a bus that comes at once; adding 60 s is the most
+  // that leaves nobody early by more than the feed's rounding.
+  const mixed = [...Array.from({ length: 80 }, () => err(200)), ...Array.from({ length: 20 }, () => err(0))];
+  assert.equal(biasOf(mixed)['D2|1'][1], 60);
+  // The feed too late for most buses: a correction towards sooner, as long as no more come early.
+  assert.equal(biasOf(Array.from({ length: 21 }, (_, i) => err(-100 + i)))['D2|1'][1], -90);
+  // The ceiling exactly, between the steps a search would try: two buses
+  // already early, the rest 200 s and 400 s late; 260 s leaves the 200 s
+  // ones on time by the minute, so no more early than with none.
+  const sparse = [err(-100), err(-100), err(200), ...Array.from({ length: 97 }, () => err(400))];
+  assert.equal(biasOf(sparse)['D2|1'][1], 260);
+});
+
+test('the weights: the least error among the blends that leave no more buses early than the corrected feed', () => {
+  // History is closer on average, but says 120 s too late on a quarter of cases (those buses come early by it).
+  const cases = Array.from({ length: 20 }, (_, i) => ({ svc: 'D2', feedS: 200, actualS: 260, hist: { gated: i % 4 ? 260 : 380 } }));
+  const grid = weightGrid({ bias: {} }, cases);
+  assert.deepEqual(grid.n, [0, 20, 0, 0]);
+  assert.equal(grid.early[1][0], 0, 'the feed, 60 s too soon: nobody early');
+  assert.deepEqual(grid.feedEarly, [0, 0, 0, 0], "and by the feed's own time");
+  assert.equal(grid.early[1][10], 5, 'all on history: five buses early');
+  assert.ok(grid.sums[1][10] < grid.sums[1][0], 'though history errs less in all');
+  const w = weightsFrom([grid])[1];
+  assert.ok(w > 0 && w < 1, `some weight on history, short of making buses early: ${w}`);
+  // The share early at that weight stays the feed's: 120 s too late times w, under a minute.
+  assert.ok(120 * w <= 60);
+});
+
+test('the weights: where every blend leaves more buses early than the feed, the one that leaves fewest', () => {
+  const grid = {
+    sums: [[5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5], [], [], []],
+    n: [1, 0, 0, 0],
+    early: [[9, 9, 9, 9, 9, 9, 9, 3, 3, 9, 9], [], [], []],
+    feedEarly: [0, 0, 0, 0],
+  };
+  assert.equal(weightsFrom([grid])[0], 0.7, 'of the fewest early (0.7 and 0.8), the one that errs least');
+});
+
+test("the weights are held to the feed's own early buses, not the corrected feed's", () => {
+  // A correction that came out too late for these days: corrected, every bus is early by it.
+  const cases = Array.from({ length: 20 }, () => ({ svc: 'D2', feedS: 200, actualS: 200, hist: { gated: 200 } }));
+  const grid = weightGrid({ bias: { '*|1': [100, 90] } }, cases);
+  assert.equal(grid.early[1][0], 20, 'the corrected feed: all early');
+  assert.equal(grid.feedEarly[1], 0, 'the feed: none');
+  assert.equal(weightsFrom([grid])[1], 1, 'all on history, which is exact, rather than any of the corrected feed');
+});
+
+test('the correction over 28 days of every service: hundreds of thousands of errors, no stack overflow', () => {
+  const errors = Array.from({ length: 200_000 }, (_, i) => ({ svc: 'D2', feedS: 200, errS: (i % 300) - 60 }));
+  assert.equal(biasOf(errors)['*|1'][1], 0, 'the smallest error not already early is -60: no room to add anything');
 });
