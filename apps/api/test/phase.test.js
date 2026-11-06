@@ -18,7 +18,7 @@ import {
   tripPhase,
 } from '../src/answer/phase.ts';
 import { planOfLeave } from '../src/answer/plan.ts';
-import { laterChange, tripEnd } from '../src/answer/trip.ts';
+import { dayState, laterChange, tripEnd } from '../src/answer/trip.ts';
 import { LEAVE_GAP_MS, cardFor } from '../src/answer/card.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
@@ -93,6 +93,23 @@ test('at the stop before the leave-by, the card changes when the bus goes; the T
   // With no location, the two are the same.
   const away = await tripPhase(tripOf(answer, { bus }), now, fixtureFeed().look);
   assert.deepEqual(away.wakesAt, away.changesAt);
+});
+
+test('on a later bus home than planned, you are home once that bus has had time to get you there, not by the plan', async () => {
+  const now = FROZEN_NOW;
+  const plan = { svc: 'D2', board: iso(now - 30 * MIN), arrive: iso(now - 20 * MIN) };
+  // Said to be on the bus 20 min after it (the boarded tap records the bus pulling in).
+  const boarded = { ...plan, board: iso(now - 10 * MIN), arrive: iso(now), plate: 'PD123X' };
+  const rec = { kind: 'boarded', at: now - 10 * MIN, boarded };
+  // When the day says the trip home has got you there (next.ts reads it the same way).
+  const homeBy = dayState({ date: '2026-08-27', trips: { 'home:660': rec }, plans: { 'home:660': plan } }).homeBy.get('home:660');
+  const trip = tripOf(leaveAt(now - 35 * MIN), { bus: plan, rec, home: { lastEndMs: now - 60 * MIN, homeBy } });
+  const { verdict, changesAt } = await tripPhase(trip, now - 5 * MIN, fixtureFeed().look);
+  assert.equal(phaseOf(verdict), 'riding');
+  const planned = Date.parse(plan.arrive) + HOME_GRACE_MS;
+  assert.equal(await phaseAt(trip, planned), 'riding', "the plan's home-by passes on the bus");
+  assert.deepEqual(changesAt, { at: Date.parse(boarded.arrive) + RIDE_GRACE_MS, leave: false });
+  assert.equal((await tripPhase(trip, changesAt.at, fixtureFeed().look)).verdict.kind, 'home');
 });
 
 test('a class trip is over LATE_GRACE_MIN after the class starts: the next trip is planned then', async () => {

@@ -650,8 +650,9 @@ change and once the second bus has gone (`changesAt`).
   not at a stop you're riding past. The headline is then the bus ("D2 at
   9:41"), never "Leave by" or "Leave now".
 - **Home since the last class.** Once a trip home after a class is over
-  (seen home, or with no location its planned bus's arrival plus
-  `HOME_GRACE_MS`, 10 min: `DayState.homeBy`), whatever comes next today
+  (seen home, or with no location its bus's arrival plus `HOME_GRACE_MS`,
+  10 min: `DayState.homeBy`; the bus you said you caught, else the
+  planned one), whatever comes next today
   starts from home, however short the gap (`homeAfter` in profile.ts), and
   Today keeps that trip home, done. A one-off added after you got home is
   planned from there, not from the class. With no bus planned for the trip

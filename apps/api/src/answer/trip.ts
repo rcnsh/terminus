@@ -361,9 +361,12 @@ export function dayState(day: DayRecord | null): {
     if (r.kind === 'missed') missed.add(k);
     if (r.away) away = true;
   }
-  // A missed bus got you nowhere.
-  for (const [k, p] of Object.entries(day?.plans ?? {})) {
-    const end = tripEnd(p);
+  // A missed bus got you nowhere. The bus you said you caught gets you home
+  // when it arrives, not the plan's: a later one than planned arrives later.
+  for (const k of new Set([...Object.keys(day?.plans ?? {}), ...Object.keys(day?.trips ?? {})])) {
+    const r = day?.trips[k];
+    const p = r?.kind === 'boarded' && r.boarded ? r.boarded : day?.plans?.[k];
+    const end = p && tripEnd(p);
     if (isHomeKey(k) && end && !missed.has(k)) homeBy.set(k, Date.parse(end) + HOME_GRACE_MS);
   }
   return { skipped, done, missed, homeBy, away };
