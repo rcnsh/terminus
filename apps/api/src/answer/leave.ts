@@ -15,7 +15,7 @@
 import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopArrivals } from '../types.ts';
 import { PUBLIC, TRANSFER, WALK } from '../config.ts';
 import { legRideS, readyS } from './resolve.ts';
-import { type Departure, departuresFrom, nextDeparture } from './departures.ts';
+import { type Departure, type ServiceBoard, departuresFrom, nextDeparture, serviceBoard } from './departures.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
 import { busChange, isoSeconds, shortStop } from './format.ts';
@@ -258,7 +258,8 @@ function forLeg(
 
   // The buses that get you there on time; with no live times, windows that
   // end as late as they can, at the latest you can board.
-  const fits = departuresFrom(graph, sa, leg.svc, { now: nowMs, from: earliest, until: latestBoard, around: latestBoard }).filter(
+  const sb = serviceBoard(graph, sa, leg.svc, nowMs);
+  const fits = departuresFrom(graph, sb, leg.svc, { now: nowMs, from: earliest, until: latestBoard, around: latestBoard }).filter(
     (d) => d.latest <= latestBoard,
   );
   if (fits.length) {
@@ -271,7 +272,7 @@ function forLeg(
     return at(b, false, note);
   }
   // Nothing gets you there on time: the first bus you can catch.
-  const first = nextDeparture(graph, sa, leg.svc, earliest, nowMs);
+  const first = nextDeparture(graph, sb, leg.svc, earliest, nowMs);
   return first ? at(first, true, null) : null;
 }
 
@@ -300,13 +301,13 @@ const busOf = (d: Departure): Bus => ({
 });
 
 /** The first bus you can be at the stop for by `fromMs`. */
-function firstBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, nowMs: number): Bus | null {
+function firstBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, nowMs: number): Bus | null {
   const d = nextDeparture(graph, sa, svc, fromMs, nowMs);
   return d ? busOf(d) : null;
 }
 
 /** The latest bus leaving by `byMs` that you can be at the stop for by `fromMs`. */
-function lastBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, byMs: number, nowMs: number): Bus | null {
+function lastBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, byMs: number, nowMs: number): Bus | null {
   const b = departuresFrom(graph, sa, svc, { now: nowMs, from: fromMs, until: byMs, around: byMs })
     .filter((d) => d.latest <= byMs)
     .at(-1);
@@ -361,16 +362,19 @@ function forTransfer(
     change: changeOf(t, b1.latest + ride1, b2),
   });
 
+  // Each board read once, for every bus asked of it.
+  const sb1 = serviceBoard(graph, sa1, leg.svc, nowMs);
+  const sb2 = serviceBoard(graph, sa2, t.svc, nowMs);
   const earliest1 = nowMs + readyS(leg) * 1000;
   const by2 = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + t.rideS) * 1000;
-  const last2 = lastBus(graph, t.svc, sa2, earliest1 + ride1 + change, by2, nowMs);
-  const last1 = last2 && lastBus(graph, leg.svc, sa1, earliest1, last2.atStop - change - ride1, nowMs);
+  const last2 = lastBus(graph, t.svc, sb2, earliest1 + ride1 + change, by2, nowMs);
+  const last1 = last2 && lastBus(graph, leg.svc, sb1, earliest1, last2.atStop - change - ride1, nowMs);
   if (last1) {
-    const b2 = firstBus(graph, t.svc, sa2, last1.latest + ride1 + change, nowMs);
+    const b2 = firstBus(graph, t.svc, sb2, last1.latest + ride1 + change, nowMs);
     if (b2) return done(last1, b2, false);
   }
-  const b1 = firstBus(graph, leg.svc, sa1, earliest1, nowMs);
-  const b2 = b1 && firstBus(graph, t.svc, sa2, b1.latest + ride1 + change, nowMs);
+  const b1 = firstBus(graph, leg.svc, sb1, earliest1, nowMs);
+  const b2 = b1 && firstBus(graph, t.svc, sb2, b1.latest + ride1 + change, nowMs);
   if (!b1 || !b2) return null;
   return done(b1, b2, after(b2) > arriveBy.atMs - ON_TIME_SLACK_S * 1000);
 }
@@ -412,14 +416,16 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
   for (const { leg, endS } of legs) {
     const sa = f.byStop.get(leg.stop.code);
     const t = leg.change;
-    const sa2 = t ? f.byStop.get(t.stop.code) : undefined;
+    // Each board read once: the change stop's is asked again for every first bus.
+    const sb = serviceBoard(f.graph, sa, leg.svc, f.nowMs);
+    const sb2 = t ? serviceBoard(f.graph, f.byStop.get(t.stop.code), t.svc, f.nowMs) : null;
     const walk = walkMs(leg);
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
     const from = f.nowMs + readyS(leg) * 1000;
     // With no live times, the estimates fall either side of the chosen bus, so it stays among them.
     const chosen = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
-    const buses = departuresFrom(f.graph, sa, leg.svc, {
+    const buses = departuresFrom(f.graph, sb, leg.svc, {
       now: f.nowMs,
       from,
       until: untilMs,
@@ -432,9 +438,8 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
       if (d.earliest === prev) continue;
       prev = d.earliest;
       const b = busOf(d);
-      const b2 = t
-        ? firstBus(f.graph, t.svc, sa2, b.latest + leg.rideS * 1000 + (t.crossS + TRANSFER.changeBufferS) * 1000, f.nowMs)
-        : null;
+      const b2 =
+        t && sb2 ? firstBus(f.graph, t.svc, sb2, b.latest + leg.rideS * 1000 + (t.crossS + TRANSFER.changeBufferS) * 1000, f.nowMs) : null;
       if (t && !b2) break;
       const l: Leave = {
         at: isoSeconds(b.atStop - walk),
