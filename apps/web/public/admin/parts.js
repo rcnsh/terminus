@@ -122,7 +122,11 @@ export function Tile({ n, show = fmt, k, sub, delta, upGood = true, spark, spark
   return href ? html`<a class="tile link" href=${href}>${body}</a>` : html`<div class="tile">${body}</div>`;
 }
 
-/** A row of tiles, in as many columns as fill its rows evenly when there's room (admin.css), else half as many. */
+/**
+ * A row of tiles, in as many columns as fill its rows evenly when there's
+ * room (admin.css), else half as many. An odd count past six can't fill
+ * every row; it leaves one short.
+ */
 export function Tiles({ children }) {
   const n = [children].flat(Infinity).filter(Boolean).length;
   const cols = n <= 6 ? n : Math.ceil(n / 2);

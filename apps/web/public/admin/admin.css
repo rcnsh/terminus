@@ -575,5 +575,6 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
     animation: none !important;
     transition-property: opacity, color, background-color, border-color, fill, stroke !important;
   }
+  .dash :is(.btn, .chips button, .seg button, .timelapse .play):active, .dash .tile.link:hover, .attention li > a:hover { transform: none !important; }
 }
 .muted { color: var(--muted); }

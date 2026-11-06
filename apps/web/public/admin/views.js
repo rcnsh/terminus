@@ -185,7 +185,7 @@ export function Overview({ s, d }) {
         k="Crash reports this week"
         n=${d.an ? d.crashReports : null}
         tone=${d.crashFatal ? 'bad' : ''}
-        sub=${d.an ? `${fmt(d.crashFatal)} closed the app · ${plural(d.crashes.length, 'kind')}` : ''}
+        sub=${d.an ? `${fmt(d.crashFatal)} closed the app · ${plural(d.crashes.length, 'different error')}` : ''}
         href="#/crashes"
       />
       <${Tile} k="Reports this week" n=${s.feedback?.last7d ?? 0} sub=${`${fmt(s.feedback?.latest?.length ?? 0)} kept`} href="#/reports" />
@@ -1231,9 +1231,10 @@ export function Reports({ s, d, query, remove }) {
     const k = new Date(f.created).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
     perDay.set(k, (perDay.get(k) ?? 0) + 1);
   }
-  // From the oldest report kept (two weeks at least), not a month mostly empty.
-  const firstDay = d.d30.findIndex((x) => perDay.has(x));
-  const chartDays = d.d30.slice(Math.max(0, Math.min(firstDay < 0 ? 0 : firstDay, d.d30.length - 14)));
+  // From the oldest report kept (two weeks at least), not a month mostly empty; the whole month when one is older.
+  const oldest = [...perDay.keys()].sort()[0] ?? d.d30[0];
+  const firstDay = oldest < d.d30[0] ? 0 : d.d30.indexOf(oldest);
+  const chartDays = d.d30.slice(Math.max(0, Math.min(firstDay, d.d30.length - 14)));
   return html`
     <${Tiles}>
       <${Tile} k="This week" n=${fb.last7d} />
