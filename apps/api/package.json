@@ -16,17 +16,17 @@
     "check": "pnpm test && pnpm typecheck"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261025.1",
+    "@cloudflare/workers-types": "5.20261101.1",
     "@types/react": "19.3.0",
-    "cf": "1.0.0-beta.21",
+    "cf": "1.0.0-beta.26",
     "typescript": "7.0.2",
-    "wrangler": "4.152.0"
+    "wrangler": "4.156.0"
   },
   "dependencies": {
     "@protomaps/basemaps": "5.7.2",
     "htm": "3.1.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-email": "6.11.3"
+    "react-email": "6.11.6"
   }
 }
