@@ -109,13 +109,12 @@ struct CrashReport: Codable, Equatable, Sendable {
         var lines: [String] = []
         func walk(_ frames: [[String: Any]]) {
             for f in frames where lines.count < maxStackLines {
-                let name = f["binaryName"] as? String ?? "???"
-                let offset = (f["offsetIntoBinaryTextSegment"] as? NSNumber)?.uint64Value
-                let address = (f["address"] as? NSNumber)?.uint64Value
-                var line = name
-                if let offset { line += " +0x" + String(offset, radix: 16) }
-                if let address { line += " (0x" + String(address, radix: 16) + ")" }
-                lines.append(line)
+                lines.append(
+                    frameLine(
+                        f["binaryName"] as? String ?? "???",
+                        offset: (f["offsetIntoBinaryTextSegment"] as? NSNumber)?.uint64Value,
+                        address: (f["address"] as? NSNumber)?.uint64Value
+                    ))
                 if let sub = f["subFrames"] as? [[String: Any]] { walk(sub) }
             }
         }
@@ -124,6 +123,43 @@ struct CrashReport: Codable, Equatable, Sendable {
             walk(stack["callStackRootFrames"] as? [[String: Any]] ?? [])
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// An exception's return addresses in the same form as a MetricKit
+    /// stack, so the two read and symbolicate alike. [image] names the
+    /// binary an address is in and where that binary starts.
+    static func frames(addresses: [UInt], image: (UInt) -> (name: String, base: UInt)?) -> String {
+        addresses.prefix(maxStackLines).map { a in
+            guard let i = image(a), a >= i.base else { return frameLine("???", offset: nil, address: UInt64(a)) }
+            return frameLine(i.name, offset: UInt64(a - i.base), address: UInt64(a))
+        }.joined(separator: "\n")
+    }
+
+    /// "Terminus +0x1a2b (0x10234a2b)": one frame, the same from MetricKit or an exception, so takeException can match them.
+    static func frameLine(_ binary: String, offset: UInt64?, address: UInt64?) -> String {
+        var line = binary
+        if let offset { line += " +0x" + String(offset, radix: 16) }
+        if let address { line += " (0x" + String(address, radix: 16) + ")" }
+        return line
+    }
+
+    /// The binary holding [address] and where it starts, from dyld.
+    static func image(of address: UInt) -> (name: String, base: UInt)? {
+        var info = Dl_info()
+        guard dladdr(UnsafeRawPointer(bitPattern: address), &info) != 0, let path = info.dli_fname, let base = info.dli_fbase else {
+            return nil
+        }
+        return ((String(cString: path) as NSString).lastPathComponent, UInt(bitPattern: base))
+    }
+
+    /// The address of the stack's first frame in [app], as "(0x1004aca94)".
+    /// MetricKit's later report of the same crash holds it too; another
+    /// crash's doesn't, since the app loads at a new address each launch.
+    static func ownFrame(in stack: String, app: String) -> String? {
+        guard let line = stack.split(separator: "\n").first(where: { $0.hasPrefix(app + " +0x") }),
+            let open = line.range(of: " (0x")
+        else { return nil }
+        return String(line[line.index(after: open.lowerBound)...])
     }
 }
 
@@ -162,7 +198,37 @@ struct CrashReportStore: Sendable {
 
     func remove(_ url: URL) { try? FileManager.default.removeItem(at: url) }
 
-    func removeAll() { files().forEach(remove) }
+    /// The last few exceptions' own frames (ownFrame), one a line.
+    private var exceptionsFile: URL { dir.appendingPathComponent("exceptions.txt") }
+
+    /// Remembers an exception's frame, so MetricKit's report of the same crash can be told apart.
+    func markException(_ frame: String) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        write(marks: marks().suffix(max(0, limit - 1)) + [frame])
+    }
+
+    /// Whether [stack] is a crash already reported as its exception, forgetting the mark if so.
+    func takeException(in stack: String) -> Bool {
+        var marks = marks()
+        guard let hit = marks.firstIndex(where: { stack.contains($0) }) else { return false }
+        marks.remove(at: hit)
+        write(marks: marks)
+        return true
+    }
+
+    private func marks() -> [String] {
+        ((try? String(contentsOf: exceptionsFile, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+    }
+
+    private func write(marks: [String]) {
+        try? marks.joined(separator: "\n").write(to: exceptionsFile, atomically: true, encoding: .utf8)
+    }
+
+    /// Every waiting report, and the exceptions' marks with them.
+    func removeAll() {
+        files().forEach(remove)
+        remove(exceptionsFile)
+    }
 
     private func files() -> [URL] {
         let all = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
@@ -198,12 +264,15 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
         NSSetUncaughtExceptionHandler { e in
             // The app is going down: write the file and nothing else, no network.
             guard CrashReporter.enabled else { return }
+            let stack = CrashReport.frames(addresses: e.callStackReturnAddresses.map(\.uintValue), image: CrashReport.image(of:))
             CrashReporter.store.add(
                 .make(
                     version: CrashReporter.version, os: CrashReporter.os,
-                    type: e.name.rawValue, message: e.reason ?? "",
-                    stack: e.callStackSymbols.joined(separator: "\n"), fatal: true
+                    type: e.name.rawValue, message: e.reason ?? "", stack: stack, fatal: true
                 ))
+            if let app = Bundle.main.executableURL?.lastPathComponent, let frame = CrashReport.ownFrame(in: stack, app: app) {
+                CrashReporter.store.markException(frame)
+            }
         }
         Task.detached(priority: .utility) { await Self.sendPending() }
     }
@@ -213,7 +282,12 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber, @unchecked Senda
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
         guard Self.enabled else { return }
         for payload in payloads {
-            for crash in payload.crashDiagnostics ?? [] { Self.store.add(Self.report(crash)) }
+            for crash in payload.crashDiagnostics ?? [] {
+                // An uncaught exception ends the app with SIGABRT, which MetricKit
+                // reports too: one crash, already kept with its exception's name.
+                let report = Self.report(crash)
+                if !Self.store.takeException(in: report.stack) { Self.store.add(report) }
+            }
         }
         Task.detached(priority: .utility) { await Self.sendPending() }
     }
