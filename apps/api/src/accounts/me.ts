@@ -61,14 +61,13 @@ import { answerRequest, loadRider, prefsFor, tripDay } from '../answer/rider.ts'
 import { dayPlan } from '../timetable/day.ts';
 import {
   PLATE_WINDOW_S,
+  type PlateLookup,
   SIGNALS,
   type TripRecord,
+  applySignal,
   clearTrip,
-  laterChange,
-  leaveOf,
   loadDay,
   saveSignals,
-  secondBusOf,
   sgtDate,
   updateTrip,
 } from '../answer/trip.ts';
@@ -812,98 +811,15 @@ export const ME_ROUTES: MeRoute[] = [
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
-      const current = key === now.trip.key;
-      // After the planned bus has left, "On it" and "Missed it" are about that
-      // bus (the plan), not the next one the answer has moved on to.
-      const p = current ? now.trip.plan : null;
-      const gone = p?.board ? Date.parse(p.board) <= nowMs + 60_000 : false;
-      const l = current
-        ? gone && p
-          ? p.change
-            ? { ...now.answer.leave, ...leaveOf(p) }
-            : {
-                ...now.answer.leave,
-                svc: p.svc,
-                stop: p.stop,
-                board: p.board,
-                arrive: p.arrive,
-                off: p.off,
-                stopCode: p.stopCode,
-                offCode: p.alightCode,
-              }
-          : now.answer.leave
-        : null;
-      const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;
-      let rec: TripRecord | null;
-      switch (kind) {
-        case 'reset':
-          rec = null;
-          break;
-        case 'boarded': {
-          // Already on the first bus of a trip that changes buses: that's
-          // still the bus you're on, not a new one.
-          const was = day?.trips[key];
-          if (current && was?.kind === 'boarded' && was.boarded?.change && now.trip.phase === 'riding' && now.trip.rec?.boarded?.change) {
-            rec = was;
-            break;
-          }
-          // No bus to be on (a walk, or an old card): you've set off.
-          if (!l?.svc) {
-            rec = { kind: 'left', at: nowMs, label };
-            break;
-          }
-          // The bus pulling in now, which may be one before or after the
-          // plan's: its times are the plan's moved to when it's due here.
-          const graph = l.paid ? GRAPH_PUBLIC : GRAPH;
-          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.route ?? l.svc, nowMs, graph);
-          const shift = boardAt && l.board ? Date.parse(boardAt) - Date.parse(l.board) : 0;
-          // A public bus is followed on its own route and feed (trip.ts, next.ts).
-          const paid = l.paid ? { paid: true as const, ...(l.route ? { route: l.route } : {}) } : {};
-          rec = {
-            kind,
-            at: nowMs,
-            label,
-            boarded: l.change
-              ? {
-                  // A trip that changes buses: this bus to the change, its
-                  // time there moved with it; the second bus as planned.
-                  svc: l.svc,
-                  stop: l.stop ?? '',
-                  board: boardAt ?? l.board,
-                  arrive: l.change.reach && shift ? isoSeconds(Date.parse(l.change.reach) + shift) : l.change.reach,
-                  ...(l.stopCode ? { stopCode: l.stopCode } : {}),
-                  alightCode: l.change.fromCode,
-                  ...(plate ? { plate } : {}),
-                  ...paid,
-                  ...(now.answer.dest?.to ? { change: laterChange(secondBusOf(l, now.answer.dest.to), l.change.reach, shift) } : {}),
-                }
-              : {
-                  svc: l.svc,
-                  stop: l.stop ?? '',
-                  board: boardAt ?? l.board,
-                  arrive: l.arrive && shift ? isoSeconds(Date.parse(l.arrive) + shift) : l.arrive,
-                  ...(l.off ? { off: l.off } : {}),
-                  ...(l.stopCode ? { stopCode: l.stopCode } : {}),
-                  ...(now.answer.dest?.to ? { alightCode: l.offCode ?? l.toCode ?? now.answer.dest.to } : {}),
-                  ...(plate ? { plate } : {}),
-                  ...paid,
-                },
-          };
-          break;
-        }
-        case 'missed':
-          rec = { kind, at: nowMs, label, missed: l?.board ?? null };
-          break;
-        default:
-          rec = { kind, at: nowMs, label };
-      }
+      // The bus pulling in now, for its plate: a feed read through the cache, only for "On it".
+      const plate: PlateLookup = (stopCode, svc, graph) => plateAt(env, ctx, deps, stopCode, svc, nowMs, graph);
+      const { rec, outcome } = await applySignal(kind, key, now, day, profile, nowMs, plate);
       const next = await updateTrip(env, session.user.id, { items: [{ key, rec }] }, nowMs);
       logSignal(env, kind);
-      // What happened to the trip, for what terminus learns (outcomes.ts).
-      const outcome = rec ? OUTCOME_OF[rec.kind] : undefined;
-      if (rec === null) await clearOutcome(db, session.user.id, key, nowMs);
-      // A trip home isn't a class: nothing to learn from skipping it.
-      else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
+      // What happened to the trip, for what terminus learns (outcomes.ts),
+      // recorded before the answer reads the trip choices again.
+      if (outcome === 'clear') await clearOutcome(db, session.user.id, key, nowMs);
+      else if (outcome) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
       // A tap here changes the other phones' cards now, not at their next
       // refresh; an iPhone pushed in the other language gets the card in its
@@ -1503,15 +1419,6 @@ async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknow
 }
 
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;
-
-/** The outcome a signal records; the others (a location, "waiting") say nothing about it. */
-const OUTCOME_OF: Partial<Record<TripRecord['kind'], 'boarded' | 'missed' | 'skipped' | 'arrived'>> = {
-  boarded: 'boarded',
-  left: 'boarded',
-  missed: 'missed',
-  skipped: 'skipped',
-  arrived: 'arrived',
-};
 
 /**
  * Whether the account page should walk someone through setup first: an
