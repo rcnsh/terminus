@@ -334,6 +334,11 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
       startAt(s);
       [n, i] = [1, 0];
     } else if (closes === null) closes = serviceEndsAt(graph, svc, t);
+    // A day's service over before you can be at the stop: on to the next start.
+    if (closes !== null && closes < w.from) {
+      t = closes;
+      continue;
+    }
     const cut = partial;
     partial = false;
     // A bus may still come before the service closes, not after.

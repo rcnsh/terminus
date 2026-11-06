@@ -16,6 +16,7 @@ import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopAr
 import { PUBLIC, TRANSFER, WALK } from '../config.ts';
 import { legRideS, readyS } from './resolve.ts';
 import { type Departure, type ServiceBoard, departuresFrom, nextDeparture, serviceBoard } from './departures.ts';
+import { serviceResumesAt } from './hours.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
 import { busChange, isoSeconds, shortStop } from './format.ts';
@@ -231,6 +232,27 @@ interface LegLeave {
   change?: BusChange;
 }
 
+/** How far before the latest you can board a leave-by looks first: two days, not every day to a class months off. */
+const LOOKBACK_MS = 2 * 86_400_000;
+
+/**
+ * The buses of `svc` leaving by `byMs` that you can be at the stop for
+ * from `fromMs`, lined up on `byMs`, less the part of a window you'd reach
+ * the stop in: its bus may have gone. Only the last two matter (a
+ * leave-by's bus, and the one before for "one earlier"), so the two days
+ * before `byMs` are asked first. Each day's windows after the first start
+ * in that time are the same whichever day they're counted from; when the
+ * last two aren't both among them, the whole time is asked.
+ */
+function leavingBy(graph: Graph, sb: ServiceBoard, svc: string, fromMs: number, byMs: number, nowMs: number): Departure[] {
+  const ask = (from: number) => departuresFrom(graph, sb, svc, { now: nowMs, from, until: byMs, around: byMs }).filter((d) => !d.partial);
+  const near = byMs - LOOKBACK_MS;
+  if (near <= fromMs) return ask(fromMs);
+  const fits = ask(near);
+  const begins = serviceResumesAt(graph, svc, near);
+  return fits.length >= 2 && (begins === null || fits[fits.length - 2].earliest >= begins) ? fits : ask(fromMs);
+}
+
 /** A bus at a stop, as a leave-by plans it. With a live time all three are
  *  that time; without, the bus is somewhere in a headway. */
 interface Bus {
@@ -287,9 +309,7 @@ function forLeg(
   // The buses that get you there on time; with no live times, windows that
   // end as late as they can, at the latest you can board.
   const sb = serviceBoard(graph, sa, leg.svc, nowMs);
-  const fits = departuresFrom(graph, sb, leg.svc, { now: nowMs, from: earliest, until: latestBoard, around: latestBoard }).filter(
-    (d) => !d.partial,
-  );
+  const fits = leavingBy(graph, sb, leg.svc, earliest, latestBoard, nowMs);
   if (fits.length) {
     let b = fits[fits.length - 1];
     const crowd = crowdCheck(leg, b.latest, arriveBy, risk);
@@ -312,9 +332,7 @@ function firstBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, n
 
 /** The latest bus leaving by `byMs` that you can be at the stop for by `fromMs`. */
 function lastBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, byMs: number, nowMs: number): Bus | null {
-  const b = departuresFrom(graph, sa, svc, { now: nowMs, from: fromMs, until: byMs, around: byMs })
-    .filter((d) => !d.partial)
-    .at(-1);
+  const b = leavingBy(graph, sa, svc, fromMs, byMs, nowMs).at(-1);
   return b ? busOf(b) : null;
 }
 
