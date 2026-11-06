@@ -203,7 +203,7 @@ const SIGNALS = {
   missed: (plan, now) => ({ bus: plan, rec: { kind: 'missed', at: now } }),
 };
 
-test('for every golden trip, the phase holds until changesAt and differs at it', async () => {
+test('for every golden trip, the phase holds until changesAt and differs at it, with a location and without', async () => {
   assert.ok(goldenTrips.length >= 10, `${goldenTrips.length} golden trips`);
   let checked = 0;
   for (const { name, answer, plan } of goldenTrips) {
@@ -215,7 +215,8 @@ test('for every golden trip, the phase holds until changesAt and differs at it',
       second: (c) => ({ change: { ...c, board: iso(Date.parse(c.board) + MIN) }, live: true }),
       next: iso(end + 12 * MIN),
     }).look;
-    const places = { nowhere };
+    const stop = GRAPH.stops.find((s) => s.code === (plan.stopCode ?? answer.stop.code));
+    const places = { nowhere, ...(stop ? { atStop: { lat: stop.lat, lon: stop.lon } } : {}) };
     for (const [signal, make] of Object.entries(SIGNALS)) {
       for (const [where, at] of Object.entries(places)) {
         const classAtMs = answer.timing?.classAt ? Date.parse(answer.timing.classAt) : null;

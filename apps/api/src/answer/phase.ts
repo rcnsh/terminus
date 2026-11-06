@@ -325,7 +325,8 @@ async function phaseAt(t: TripIn, c: Clock, look: Lookups): Promise<Verdict> {
     // buses, on the second bus's road once it has left. A location is taken
     // as it is: seenOnBus at a later moment asks whether you could have
     // walked there since, and once seen the plan says so (`seen`).
-    const onSecond = (b: Plan) => Boolean(b.change?.board && c.ms >= Date.parse(b.change.board) && seenOnBus(b.change, lat!, lon!, c.ms));
+    const onSecond = (b: Plan) =>
+      Boolean(b.change?.board && c.reached(Date.parse(b.change.board)) && seenOnBus(b.change, lat!, lon!, c.ms));
     const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, c.ms) || onSecond(bus));
     if (bus.seen || seenNow) {
       const on = await onBus(bus, t.at, c, look);
@@ -351,7 +352,7 @@ function phaseFor(a: MeAnswer, rec: TripRecord | undefined, c: Clock, at: At): P
   // whatever the clock says. Not hours before it (you may live by that
   // stop), and not at any other stop (riding past one is not waiting at it).
   const code = a.leave?.stopCode ?? a.stop.code;
-  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || c.ms >= leaveAt - WAIT_EARLY_MS)) {
+  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || c.reached(leaveAt - WAIT_EARLY_MS, true))) {
     const s = indexGraph(GRAPH).byCode.get(code);
     if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
   }
@@ -387,7 +388,7 @@ async function onBus(b: Plan, at: At, c: Clock, look: Lookups): Promise<OnBus> {
     const gone = secondLeavesMs(fed.change);
     if (gone === null || !c.reached(gone + CHANGE_GRACE_MS)) return { phase: 'waiting', b: cur, live: fed.live };
     const s = second.stopCode ? indexGraph(GRAPH).byCode.get(second.stopCode) : undefined;
-    if (s && at.lat !== null && at.lon !== null && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M && c.ms >= gone + ASSUME_MS)
+    if (s && at.lat !== null && at.lon !== null && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M && c.reached(gone + ASSUME_MS))
       return 'missed';
     return onBus(fed.change, at, c, look);
   }

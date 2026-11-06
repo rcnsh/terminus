@@ -10,7 +10,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, needsWatch, saveSignals, seenOnBus, sgtDate } from '../src/answer/trip.ts';
-import { ASSUME_MS, RIDE_GRACE_MS } from '../src/answer/phase.ts';
+import { ASSUME_MS, DUE_MS, RIDE_GRACE_MS, WAIT_EARLY_MS } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { tripCardFor } from '../src/accounts/me.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
@@ -714,6 +714,20 @@ test('after "Missed it", the Trip object next wakes when the class\'s trip is ov
   // The next bus's leave-by changes nothing: missed stays missed. GEA1000
   // starts at 10:00, and the trip moves on to the next one LATE_GRACE_MIN later.
   assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'));
+});
+
+test('at the stop well before the leave-by, the card says when it turns to waiting there; the Trip object, with no location, does not', async () => {
+  const { env, phone, next, TRIPS, clock } = await setup();
+  const first = await next(phone);
+  clock(Date.parse(first.leave.at) - 18 * 60_000);
+  const s = stopAt(first.leave.stopCode);
+  const there = await next(phone, `?lat=${s.lat}&lon=${s.lon}`);
+  const leaveAt = Date.parse(there.leave.at);
+  assert.equal(there.card.phase, 'idle');
+  assert.ok(leaveAt - WAIT_EARLY_MS > Date.now());
+  assert.equal(Date.parse(there.card.nextChangeAt), leaveAt - WAIT_EARLY_MS);
+  const card = await wakeCard(env, TRIPS);
+  assert.equal(card.wakeAt, Date.parse(card.answer.leave.at) - DUE_MS, 'without a location: when it is due');
 });
 
 /* What terminus learns from the answers (outcomes.ts). */

@@ -527,7 +527,11 @@ time only through its `Clock`, which notes each moment it's asked about,
 so a transition's time is declared with its condition: the next change is
 the first noted moment at which the same rules say something else (the
 trip, its phase, or whether the bus has gone). The time goes forward; the
-answer, the feed and where the request is stay as they are now. Feed reads
+answer, the feed and where the request is stay as they are now. So a
+request with a location counts the moments only a location makes a change
+(waiting at the stop from `WAIT_EARLY_MS` before the leave-by, still at the
+change stop after the second bus left), and the Trip object's wake, which
+has none, never wakes for them. Feed reads
 for the bus you're on come through `Lookups`, asked only when a rule needs
 them; later moments reuse what was read now and take anything not read as
 the plan's times, so working out the next change costs no feed call.
