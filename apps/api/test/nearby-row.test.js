@@ -68,16 +68,9 @@ test('nearbyRow: one bus from the feed gets two estimates after it', () => {
   );
 });
 
-test('nearbyRow: no bus is guessed past the last one, or for a public bus, or with no time', () => {
-  const ends = { ...row(4 * 60, [16 * 60]), endsAt: new Date(NOW + 20 * 60_000).toISOString() };
-  assert.equal(nearbyRow(ends, NOW, guesses(16 * 60, 12 * 60)).later.length, 1);
+test('nearbyRow: no bus is guessed for a public bus, or with no time', () => {
   assert.equal(nearbyRow({ ...row(4 * 60, [16 * 60]), paid: true }, NOW, guesses(16 * 60, 12 * 60)).later.length, 1);
   assert.equal(nearbyRow(row(null), NOW, guesses(0, 12 * 60)).later.length, 0);
-});
-
-test('nearbyRow: with no end time (outside its hours, or hours unknown) nothing is guessed', () => {
-  const r = nearbyRow({ ...row(4 * 60), endsAt: null }, NOW, guesses(4 * 60, 10 * 60));
-  assert.deepEqual(r.later, []);
 });
 
 test('nearbyRow: laterText names the buses the row now has, guessed ones too', () => {

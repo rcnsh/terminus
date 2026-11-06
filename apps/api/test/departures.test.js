@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
 import { departuresFrom } from '../src/answer/departures.ts';
-import { scoreLeg } from '../src/answer/resolve.ts';
+import { nearbyRow, scoreLeg } from '../src/answer/resolve.ts';
 import { leaveBy } from '../src/answer/leave.ts';
 import { ON_TIME_SLACK_S } from '../src/timetable/profile.ts';
 
@@ -119,4 +119,47 @@ test('before the service starts, the first bus is due within a headway of the st
     [l.board, l.arrive],
     [new Date(want.earliest).toISOString().replace('.000', ''), new Date(want.latest + rideS * 1000).toISOString().replace('.000', '')],
   );
+});
+
+test('no estimate is due after the service closes: the bus before the close was the last', () => {
+  // D2 closes at 23:00; the last live bus at 22:50, every 873 s at 22:00.
+  const now = at('2026-08-27T22:40');
+  const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', [at('2026-08-27T22:50')]), 'D2', {
+    now,
+    from: now,
+    until: at('2026-08-27T23:30'),
+  });
+  assert.deepEqual(
+    ds.map((d) => d.kind),
+    ['live'],
+  );
+});
+
+test('with its hours unknown, a service is guessed for, as far as a day ahead', () => {
+  const unknown = { ...GRAPH, serviceHours: {} };
+  const sa = board('PGP', NOW, 'D2', [LAST]);
+  const ds = departuresFrom(unknown, sa, 'D2', { now: NOW, from: NOW, until: NOW + 3 * 86_400_000 });
+  assert.ok(ds.length > 3);
+  assert.ok(ds.at(-1).latest <= NOW + 86_400_000, 'not past a day');
+  const empty = departuresFrom(unknown, board('PGP', NOW, 'D2', []), 'D2', { now: NOW, from: NOW, until: NOW + 3 * 86_400_000 });
+  assert.ok(empty.at(-1).earliest <= NOW + 86_400_000, 'nor with no live times');
+
+  // Nearby: the row says nothing of when the service ends, and still gets its third bus.
+  const r = {
+    svc: 'D2',
+    etaS: (LAST - NOW) / 1000,
+    quality: 'live',
+    ambiguousBerth: false,
+    later: [],
+    color: null,
+    towards: [],
+    via: [],
+    crowd: null,
+    endsAt: null,
+    running: true,
+    eta: '15 min',
+    laterText: null,
+    toText: '',
+  };
+  assert.equal(nearbyRow(r, NOW, ds).later.length, 2);
 });

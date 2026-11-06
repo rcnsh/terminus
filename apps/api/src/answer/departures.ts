@@ -20,8 +20,8 @@ import {
 } from './resolve.ts';
 import { isPublic } from './public.ts';
 
-/** How far ahead a bus is looked for: past a day it's no bus. */
-export const PROJECT_MS = 86_400_000;
+/** How far ahead of now a bus is looked for: past a day it's no bus, whatever the hours say (or don't). */
+const PROJECT_MS = 86_400_000;
 
 /** One bus of a service leaving a stop. */
 export interface Departure {
@@ -90,7 +90,7 @@ function liveBuses(graph: Graph, svc: string, sa: StopArrivals | undefined, nowM
  * service runs.
  */
 export function departuresFrom(graph: Graph, board: StopArrivals | undefined, svc: string, w: DepartureWindow): Departure[] {
-  const until = w.until ?? w.from + PROJECT_MS;
+  const until = Math.min(w.until ?? Infinity, w.now + PROJECT_MS);
   const max = w.max ?? Infinity;
   // Each estimate counts the headway in force at the bus before it, so the
   // card, the leave-by and Nearby step the same way across an hour.
@@ -109,7 +109,6 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
   const last = live.at(-1);
   let t = last ? last.at + headwayAt(last.at) : w.from;
   for (let n = 1; last && out.length < max && t <= until && runs(t); n++) {
-    if (t > last.at + PROJECT_MS) return out;
     if (t >= w.from) out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
     t += headwayAt(t);
   }
@@ -144,7 +143,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
   for (let n = 1, i = 0; out.length < max && t <= until; n++, i++) {
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
-      if (s === null || s > t + PROJECT_MS || s > until) break;
+      if (s === null || s > until) break;
       [t, fixed, anchor, opens, n, i] = [s, [], 'opens', true, 1, 0];
     }
     // A bus may still come before the service closes, not after.

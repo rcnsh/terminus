@@ -701,20 +701,18 @@ export const NEARBY_LATER = 2;
  *
  * The shuttle feed gives two buses a service; where it gives fewer than
  * Nearby's three, the rest are the service's estimated departures after
- * the last one (`guessed`, departures.ts), marked `scheduled`, never live.
- * Only while the service's hours are known and it's inside them, and not
- * past its last bus; not for a public bus, whose own timetable LTA gives.
+ * the last one (`guessed`, departures.ts, which keeps them to the
+ * service's hours), marked `scheduled`, never live. Not for a public bus,
+ * whose own timetable LTA gives.
  */
 export function nearbyRow(r: BoardRow, nowMs: number, guessed: Departure[] = []): NearbyRow {
   const at = (etaS: number) => new Date(Math.round((nowMs + etaS * 1000) / 60_000) * 60_000).toISOString().replace('.000Z', 'Z');
   const later = [...r.later];
-  const endsMs = r.endsAt ? Date.parse(r.endsAt) : null;
-  if (r.running && r.etaS != null && !r.paid && endsMs !== null) {
+  if (r.running && r.etaS != null && !r.paid) {
     for (const d of guessed) {
       if (later.length >= NEARBY_LATER) break;
       if (d.kind !== 'estimate' || d.arrival) continue;
       const etaS = Math.round((d.earliest - nowMs) / 1000);
-      if (nowMs + etaS * 1000 > endsMs) break;
       later.push({ etaS, quality: 'scheduled', eta: etaText(etaS, 'scheduled') });
     }
   }

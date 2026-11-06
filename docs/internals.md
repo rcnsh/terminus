@@ -484,9 +484,11 @@ pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.co
   board, a column each for the next three buses, in minutes, the next one
   large. It doesn't weigh the walk to the stop: every
   bus is shown as it comes, whoever is asking. The
-  shuttle feed gives two a service, so the third is guessed a headway
-  after the second (`nearbyRow`, `NEARBY_LATER`), `scheduled` and shown
-  with "~", never past the service's last bus or for a public bus. Each stop has
+  shuttle feed gives two a service, so the third is the service's next
+  estimate, a headway after the second (`departures.ts`, `nearbyRow`,
+  `NEARBY_LATER`), `scheduled` and shown with "~", never past the
+  service's last bus or for a public bus. With its hours unknown it is
+  guessed all the same, as every estimate is, up to a day ahead. Each stop has
   `via` too: the places most of its buses pass first (each row's first
   two, the most shared first, up to three), and `viaText` ("to UTown,
   Science, Kent Ridge MRT"), the heading the widget puts over each side
@@ -1470,7 +1472,8 @@ cached or stale answer's bus is compared with a walk that starts now, and
 with another stop's fresher times, on one clock. A stale answer's `asOf`
 stays its fetch time. The card is made with the request's now too.
 
-**Operating hours bound every guess.** A headway guess stepped on from the
+**Operating hours bound every guess.** No guess is more than a day ahead,
+and with a service's hours unknown that is the only bound. A headway guess stepped on from the
 last bus the feed lists is an instant, a headway after the bus before it,
 and is dropped once it's after the service stops (`serviceEndsAt`): that was
 the last bus. With no live time to step from, a guess is a bus due somewhere
