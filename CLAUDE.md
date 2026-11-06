@@ -161,8 +161,11 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   `import type` (`verbatimModuleSyntax`).
 - **Goldens.** `golden.test.js` pins whole answers to `fixtures/answers/`.
   After an intended change, run `UPDATE_GOLDEN=1 pnpm test` and review the
-  fixture diff. The Android, Mac and iPhone unit tests read the same
-  fixtures, so a changed answer shape must still parse there.
+  fixture diff. The website, Android, Mac and iPhone tests read the same
+  fixtures and assert values from them ("Leave by ~09:36"), so a changed
+  golden means changing those tests too (`rg -l '<value>' apps`). Goldens
+  and tests of how a guess is used run with one headway for every shuttle
+  (`test/_headways.mjs`), so measuring headways again leaves them alone.
 - Account tests run the real migration SQL against `node:sqlite`.
 - Add tests for API changes, and check each new test fails without your
   fix. Prefer tests on real data, such as the real `shapes.json` lines,
