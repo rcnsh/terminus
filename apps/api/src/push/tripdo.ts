@@ -292,9 +292,12 @@ export class Trip {
     const plans: Promise<unknown>[] = [];
     // A plan refused as stale: the card was worked out from a day that's gone.
     let stale = false;
+    const saved: Record<string, Plan> = {};
     const savePlan = (key: string, plan: Plan) => {
       const p = this.state.blockConcurrencyWhile(async () => {
-        if (!(await this.cleared()) && !(await this.putPlan(date, key, plan, day))) stale = true;
+        if (await this.cleared()) return;
+        if (await this.putPlan(date, key, plan, day)) saved[key] = plan;
+        else stale = true;
       });
       plans.push(p);
       return p;
@@ -315,6 +318,14 @@ export class Trip {
     const lang: Lang = audience.iphoneLang ?? 'en';
     const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan, audience.iphoneH12));
     await Promise.allSettled(plans);
+    // With no plan to save (one was stored already), a step or signal while
+    // the wake ran shows only in the stored day: the trip as read, with any
+    // plan this wake saved.
+    if (!stale && card?.key && !(await this.cleared())) {
+      const k = card.key;
+      const expect = { ...planBasis(day, k), ...(saved[k] ? { plan: saved[k] } : {}) };
+      stale = !sameBasis(today(await this.storedDay(), date), k, expect);
+    }
     // Pushing it would tell the phones about the bus the user just stepped
     // off (or a trip already signalled): wake again soon, from the new day.
     if (stale) return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: null } };
