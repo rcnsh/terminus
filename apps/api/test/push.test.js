@@ -240,6 +240,34 @@ test('a step made while the Trip object wakes is kept: the wake does not save th
   assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
 });
 
+test('a step made while a request waits for the feed is kept: the request does not save the plan it worked out before it', async () => {
+  const feed = heldFeed();
+  const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap });
+  const first = await next(phone);
+  const key = first.card.step?.trip;
+  const to = first.card.step?.later;
+  assert.ok(key && to, 'the card offers a later bus');
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+
+  // Time to go: the request saves the plan.
+  clock(Date.parse(first.leave.at) - 2 * 60_000);
+  feed.hold();
+  const asked = call('/api/me/next', { token: phone });
+  await feed.asked('the request');
+  // "Later bus" on another device while the request waits for the feed.
+  const res = await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(Date.now()), steps: { [key]: to }, deleteAt: endOfDayMs(Date.now()) }),
+  });
+  assert.equal(res.status, 200);
+  feed.release();
+  assert.equal((await asked).status, 200);
+
+  const day = storage().get('day');
+  assert.deepEqual(day.steps?.[key], to, 'the step is kept');
+  assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
+});
+
 test("the Trip object tells an iPhone too: the notification in the account's words, and its Live Activity", async () => {
   const { privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');

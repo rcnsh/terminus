@@ -20,7 +20,7 @@
 
 import { loadCalendar } from '../timetable/calendarsync.ts';
 import type { Env } from '../types.ts';
-import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate } from '../answer/trip.ts';
+import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, planBasis, sameBasis, sgtDate } from '../answer/trip.ts';
 import type { MeDeps } from '../accounts/me.ts';
 import { tripCardFor } from '../accounts/me.ts';
 import { type AnswerIn, type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
@@ -148,6 +148,10 @@ export class Trip {
     const stored = await this.storedDay();
     const next = today(stored, u.date);
     let changed = next !== stored;
+    // A plan worked out from a trip that has changed since is dropped,
+    // checked before this update's own changes (sameBasis).
+    const fresh = (key: string) => !u.basis?.[key] || sameBasis(next, key, u.basis[key]);
+    const plansIn = Object.entries(u.plans ?? {}).filter(([key]) => fresh(key));
     for (const { key, rec } of u.items ?? []) {
       // A day has a handful of trips; past this many a new one is refused,
       // so the record stays far below a stored value's size limit.
@@ -156,9 +160,9 @@ export class Trip {
       else delete next.trips[key];
       changed = true;
     }
-    if (u.plans && Object.keys(u.plans).length) {
+    if (plansIn.length) {
       const plans = { ...next.plans };
-      for (const [key, plan] of Object.entries(u.plans))
+      for (const [key, plan] of plansIn)
         if (plan) plans[key] = plan;
         else delete plans[key];
       next.plans = plans;
@@ -462,15 +466,13 @@ export class Trip {
   }
 
   /**
-   * Saves a plan a wake worked out from `read`, the day as it read it before
-   * awaiting D1 and the feed. A POST meanwhile (a step, another device's
-   * plan) is newer: when the trip's plan or step has changed since, the
-   * wake's plan is dropped, and the next answer plans from what's stored.
+   * Saves a plan a wake worked out from `read`, the day as it read it, unless
+   * the trip has changed since (sameBasis): the next answer then plans from
+   * what's stored.
    */
   private async putPlan(date: string, key: string, plan: Plan, read: DayRecord | null): Promise<void> {
     const next = today(await this.storedDay(), date);
-    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-    if (!same(next.plans?.[key], read?.plans?.[key]) || !same(next.steps?.[key], read?.steps?.[key])) return;
+    if (!sameBasis(next, key, planBasis(read, key))) return;
     next.plans = { ...next.plans, [key]: plan };
     await this.storage.put('day', next);
   }
