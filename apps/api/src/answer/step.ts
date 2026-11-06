@@ -14,6 +14,7 @@
  */
 
 import type { Leave } from '../types.ts';
+import type { Departing } from './leave.ts';
 import { type Plan, tripEnd } from './trip.ts';
 import { SAME_BUS_MS } from './plan.ts';
 import { STEP } from '../config.ts';
@@ -70,13 +71,15 @@ export function parseTarget(v: unknown): StepTarget | null {
 const boardMs = (l: Leave) => Date.parse(l.board!);
 const atMs = (l: Leave) => Date.parse(l.at);
 const arriveMs = (l: Leave) => Date.parse(l.arrive!);
+/** Which of the departures a leave-by is (leave.ts `Departing`); undefined for the server's own. */
+const busOf = (l: Leave): string | undefined => (l as Partial<Departing>).bus;
 const isService = (l: Leave, t: StepTarget) => (l.route ?? l.svc) === t.svc && l.stopCode === t.stop;
 
 /** The same service from the same stop within SAME_BUS_MS: the feed moved its time a little. */
 export const sameAs = (l: Leave, t: StepTarget) => isService(l, t) && Math.abs(boardMs(l) - Date.parse(t.board)) <= SAME_BUS_MS;
 
 /** Of the buses `sameAs` the target, the one whose time is nearest it. */
-function closestSame(all: Leave[], t: StepTarget): Leave | undefined {
+function closestSame<L extends Leave>(all: L[], t: StepTarget): L | undefined {
   const at = Date.parse(t.board);
   return all.filter((l) => sameAs(l, t)).sort((a, b) => Math.abs(boardMs(a) - at) - Math.abs(boardMs(b) - at))[0];
 }
@@ -103,7 +106,7 @@ export interface StepInput {
   /** The server's own bus for the trip; null when it's a walk or nothing runs. */
   own: Leave | null;
   /** Every bus that gets you there (leave.ts `departures`). */
-  all: Leave[];
+  all: Departing[];
   /** The bus the user chose for this trip, if any. */
   target: StepTarget | null;
   /** A class: the latest arrival "Later" may offer. Null for any other trip. */
@@ -122,10 +125,9 @@ export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
   // The server's own answer, or a walk that has since come to beat the chosen bus: still that bus.
   const own = targetOf(f.own) ? f.own! : found;
   if (!own) return null;
-  // Two of the departures are the same bus only when they are one; the
-  // server's own leave-by isn't among them, and is matched by time.
-  const among = (l: Leave) => f.all.includes(l);
-  const same = (a: Leave, b: Leave) => (among(a) && among(b) ? a === b : sameAs(a, targetOf(b)!));
+  // Two of the departures are the same bus when they are the same
+  // departure; the server's own leave-by isn't one of them, and is matched by time.
+  const same = (a: Leave, b: Leave) => (busOf(a) && busOf(b) ? busOf(a) === busOf(b) : sameAs(a, targetOf(b)!));
   const moved = found !== null && !same(found, own);
   const pick = moved ? found! : own;
   const lastLeaveMs = f.lastArriveMs === null ? atMs(own) + STEP.laterMaxS * 1000 : null;
@@ -136,8 +138,8 @@ export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
   // Never the bus itself: when you're late its leave-by is now, and the same
   // bus among the departures leaves a little after. Only that one: another
   // of its service minutes behind (bunched) is still a step.
-  const self = among(pick) ? pick : closestSame(f.all, targetOf(pick)!);
-  const other = (l: Leave) => l !== self;
+  const self = busOf(pick) ?? closestSame(f.all, targetOf(pick)!)?.bus;
+  const other = (l: Departing) => l.bus !== self;
   const later =
     f.all
       .filter((l) => fits(l) && other(l) && atMs(l) > atMs(pick) && arriveMs(l) >= arriveMs(pick))

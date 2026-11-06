@@ -12,7 +12,7 @@ import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import { candidateStops, confidence, haversineM, indexGraph, nearestStop, pickAlt, scoreOptions, wholeWalk } from './resolve.ts';
 import { logAnswer, logBoard } from '../ops/analytics.ts';
-import { type LeaveInput, departureOf, departures, leaveBy } from './leave.ts';
+import { type LeaveInput, departureOf, departures, leaveBy, publicLeave } from './leave.ts';
 import { stepFrom } from './step.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { planTransfers } from './transfer.ts';
@@ -234,7 +234,7 @@ export function withSteps(
   const own = answer.leave ? (answer.leave.svc ? answer.leave : null) : headline;
   const s = stepFrom({ trip: step.trip, own, all, target: step.target, lastArriveMs, nowMs });
   if (!s) return { steps: null };
-  return s.steps.moved ? { steps: s.steps, leave: s.leave } : { steps: s.steps };
+  return s.steps.moved ? { steps: s.steps, leave: publicLeave(s.leave) } : { steps: s.steps };
 }
 
 /** More than any walk to a stop: how far past the latest leave-by a bus may leave. */

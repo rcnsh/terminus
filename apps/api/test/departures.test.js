@@ -204,6 +204,24 @@ test("the card's bus is found among the departures by which bus it is, though it
   assert.ok(s.steps?.later, 'a later bus to step to');
 });
 
+test('a departure is known by its identity, not by which object it is: a copy is the same bus, and the identity stays inside', () => {
+  const now = at('2026-08-27T16:00');
+  const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
+  const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
+  const options = scoreOptions(GRAPH, candidates, byStop, now);
+  const f = { options, candidates, byStop, graph: GRAPH, arriveBy: null, walkAllS: null, nowMs: now };
+  const all = departures(f, now + 3600_000);
+  const copies = all.map((l) => ({ ...l }));
+  assert.deepEqual(departureOf(copies, options[0]), all[0]);
+
+  // A chosen bus sent back is the user's: the leave-by the answer gives has no identity on it.
+  const departsAt = new Date(now + options[0].boardS * 1000).toISOString();
+  const later = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: null }, false, now).steps.later;
+  const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: later }, false, now);
+  assert.equal(s.leave.board, later.board);
+  assert.ok(!('bus' in s.leave), Object.keys(s.leave).join());
+});
+
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
   const now = at('2026-08-27T16:00');
   const sa = board('PGP', now, 'D2', []);
