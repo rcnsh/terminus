@@ -1,5 +1,51 @@
 # Arrival-time backtest: results
 
+## Round 6: tested over the days together, early buses counted
+
+**The blend's gain is real, but it makes buses come early more often.**
+The stable site's 30 recorder days (7 October to 5 November 2026) and
+the feed's plated predictions from Analytics Engine, walked forward from
+12 October as before: 25 test days, 5,293 questions history could answer.
+"Is it better than the feed?" (eta-model.md, *The backtest*) now tests
+each method against the feed over the days together, and counts the
+share of buses that came over a minute sooner than said.
+
+19 October is an incident: the feed over 5 minutes off on 36% of the 284
+questions it answered that day, mostly times stuck and buses leaving a
+first stop. Without it
+(24 days, 5,039 questions; change against the feed, 95% interval):
+
+| feed said | method | MAE change, s | p90 change, s | early: feed → method | early change, points | verdict |
+|---|---|---|---|---|---|---|
+| any time | checked | −7.0 (−8.8 to −5.3) | −15.4 (−22.0 to −8.7) | 7.7% → 13.3% | +5.6 (+4.4 to +6.8) | worse |
+| any time | blend | −7.8 (−9.4 to −6.3) | −14.9 (−23.4 to −8.0) | 7.7% → 12.9% | +5.2 (+4.1 to +6.4) | worse |
+| under 2 min | blend | −12.9 (−21.9 to −6.0) | −8.4 (−13.2 to −3.8) | 1.2% → 0.9% | −0.3 (−0.9 to +0.5) | better |
+| 2 to 5 min | blend | −2.8 (−4.1 to −1.7) | −11.6 (−19.6 to −5.8) | 4.3% → 4.4% | +0.1 (−1.4 to +1.4) | better |
+| 5 to 10 min | blend | −5.8 (−7.9 to −3.6) | −17.3 (−26.1 to −11.3) | 4.8% → 11.1% | +6.4 (+4.6 to +8.3) | worse |
+| 10 to 30 min | blend | −8.8 (−11.1 to −6.8) | −23.7 (−29.4 to −13.9) | 11.5% → 19.2% | +7.7 (+6.3 to +9.1) | worse |
+
+- **The gain holds.** MAE and p90 improve at every horizon, and the
+  intervals stay below zero: it isn't a few good days. With 19 October
+  in, the blend's MAE falls by 14.1 s rather than 7.8 s.
+- **Early buses are the cost.** From 5 minutes ahead, the blend says the
+  bus comes later than the feed does, and the bus beats it by over a
+  minute on 11 to 19% of answers against the feed's 5 to 12%. Someone who
+  leaves by those times misses the bus more often, which MAE can't show:
+  it counts a minute early the same as a minute late.
+- **The correction causes it.** With every method tested
+  (`--methods corrected,checked,gated,recent,blend`), the corrected feed
+  alone adds 5.6 points of early buses overall, the same as checked,
+  against history+gate's 1.6 and history+gate+recent's 4.0. The feed's median error is the bus coming later
+  (24 s at 5 to 10 minutes, 36 s at 10 to 30), so adding it moves the
+  times later for every bus, including the ones that were already going
+  to be early.
+- **Under 5 minutes the blend is better** with no more early buses: the
+  check and history do the work there, and the correction is small.
+- **Next:** correct the feed by less than its median error (a lower
+  percentile), or fit the weights with a cost on early buses, and run
+  this again. Until then the blend shouldn't answer anyone from 5 minutes
+  out.
+
 ## Round 5: the recorder's buses kept to their side of the road
 
 **With the passings repaired, the blend beats the feed by 16%, not 9%.**

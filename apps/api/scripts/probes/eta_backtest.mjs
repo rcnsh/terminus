@@ -25,11 +25,14 @@
  * on is tested on a model fitted on the WALK_DAYS days before it, as the
  * shadow does (etashadow.ts), and the days' questions are scored together. A question whose bus could have come after
  * the data ends isn't asked, so a short recording can't favour short
- * horizons. Nothing here is random: the same files give the same report.
+ * horizons. "Is it better than the feed?" tests the checked feed and the
+ * blend (or the --methods given) against the feed over the days together
+ * (etamodel.ts pairedTest), with and without incident days. Nothing here is random: the same files
+ * give the same report (the test's resampling has a fixed seed).
  *
  *   node scripts/probes/eta_backtest.mjs [--recording f.jsonl]... [--day d.json.gz --predictions p.jsonl]...
  *                                 [--split 0.6] [--walk-from 2026-10-12] [--out results.md] [--model-out model.json]
- *                                 [--recent-min 30] [--recent-n 2] [--recent-prior 0]
+ *                                 [--recent-min 30] [--recent-n 2] [--recent-prior 0] [--methods checked,blend]
  *
  * The --recent-* settings are the buses just ahead's (etamodel.ts Recent):
  * how many minutes back a segment counts, how many are needed, and how
@@ -40,7 +43,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { GRAPH } from '../../src/answer/graph.ts';
 import { HORIZONS, aeTime, departs, passingsOf } from '../../src/ops/eta.ts';
-import { windowOf } from '../../src/map/timelapse.ts';
+import { serviceDate, windowOf } from '../../src/map/timelapse.ts';
 import { SGT_MS } from '../../src/config.ts';
 import {
   CAUSES,
@@ -49,12 +52,16 @@ import {
   MISS_S,
   RECENT,
   STUCK_S,
+  EARLY_BY_S,
+  PAIRED_MIN_DAYS,
   causeOf,
   casesOf,
+  earlyShare,
   horizonOf,
   errorStats,
   fitModel,
   passingsFromReadings,
+  pairedTest,
   ringOf,
   scoreCases,
   segmentsOf,
@@ -85,6 +92,8 @@ const WALK_FROM = one('walk-from', null);
 /** Days a walked day's model is fitted on: the shadow's history. */
 const WALK_DAYS = 28;
 const MODEL_OUT = one('model-out', null);
+/** The methods "Is it better than the feed?" tests: the two that could be served, unless asked for others. */
+const CANDIDATES = one('methods', 'checked,blend').split(',');
 const recent = {
   windowMs: Number(one('recent-min', `${RECENT.windowMs / 60_000}`)) * 60_000,
   minN: Number(one('recent-n', `${RECENT.minN}`)),
@@ -95,6 +104,8 @@ if (!recordings.length && !days.length) usage('give at least one --recording, or
 if (days.length !== predictionFiles.length) usage('each --day needs its --predictions, in the same order');
 if (!(SPLIT > 0 && SPLIT < 1)) usage('--split is between 0 and 1');
 if (WALK_FROM !== null && !/^\d{4}-\d{2}-\d{2}$/.test(WALK_FROM)) usage('--walk-from is a date, YYYY-MM-DD');
+if (!CANDIDATES.every((m) => METHODS.includes(m) && m !== 'feed'))
+  usage(`--methods is a list of ${METHODS.filter((m) => m !== 'feed').join(', ')}`);
 if (!(recent.windowMs > 0 && recent.minN >= 1 && recent.prior >= 0))
   usage('--recent-min over 0, --recent-n 1 or more, --recent-prior 0 or more');
 
@@ -316,6 +327,85 @@ p(
   `The gate gave ${gated.length} of these ${scored.length} questions back to the feed ` +
     `(${scored.length ? Math.round((gated.length / scored.length) * 100) : 0}%); the buses just ahead changed history's answer on ${fresh.length}.`,
 );
+
+// Better than the feed over the days together (pairedTest), not day by day:
+// a day has a few dozen questions at a horizon, too few to tell a gain from luck.
+const full = cases.filter((c) => METHODS.every((m) => c.answers[m] !== null));
+const dayOf = (c) => serviceDate(c.t);
+/** A day the feed was this often over MISS_S off is an incident (an outage, stuck times): reported apart, not averaged in unseen. */
+const INCIDENT_MISS = 0.2;
+const INCIDENT_MIN_N = 20;
+// An incident is judged on every question the feed answered that day: in an
+// outage history can't answer many of them, and they would drop out of `full`.
+const byDay = new Map();
+for (const c of cases) {
+  const d = byDay.get(dayOf(c)) ?? { all: [], cs: [] };
+  d.all.push(c);
+  if (METHODS.every((m) => c.answers[m] !== null)) d.cs.push(c);
+  byDay.set(dayOf(c), d);
+}
+const perDay = [...byDay.keys()].sort().map((date) => {
+  const { all, cs } = byDay.get(date);
+  const feed = errorStats(cs.map((c) => c.actualS - c.answers.feed));
+  const feedAll = errorStats(all.map((c) => c.actualS - c.feedS));
+  return { date, cs, feed, feedAll, incident: all.length >= INCIDENT_MIN_N && feedAll.miss > INCIDENT_MISS };
+});
+const incidents = perDay.filter((d) => d.incident).map((d) => d.date);
+const signed = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x)}`;
+const points = (x) => Math.round(x * 1000) / 10;
+const interval = (x, scale = (v) => Math.round(v * 10) / 10) =>
+  x.lo === null ? signed(scale(x.diff)) : `${signed(scale(x.diff))} (${signed(scale(x.lo))} to ${signed(scale(x.hi))})`;
+const verdicts = (cs) => {
+  p(`| feed said | method | n | days | MAE change, s | p90 change, s | early: feed → method | early change, points | verdict |`);
+  p('|---|---|---|---|---|---|---|---|---|');
+  const scopes = [['any time', cs], ...HORIZONS.map((h, i) => [h.label, cs.filter((c) => horizonOf(c.feedS) === i)])];
+  for (const [label, scope] of scopes) {
+    for (const m of CANDIDATES) {
+      const t = pairedTest(scope, dayOf, m);
+      if (!t) continue;
+      const early = (k) => share(earlyShare(scope.map((c) => c.actualS - c.answers[k])));
+      p(
+        `| ${label} | ${LABELS[m]} | ${t.n} | ${t.days} | ${interval(t.mae)} | ${interval(t.p90)} | ${early('feed')} → ${early(m)} | ` +
+          `${interval(t.early, points)} | **${t.verdict}** |`,
+      );
+    }
+  }
+};
+p();
+p('### Is it better than the feed?');
+p();
+p(
+  "Each method's figure less the feed's on the same questions, over every day together, with its 95% interval from resampling whole days " +
+    `(negative is better). **Early** is the share of answers the bus beat by over ${EARLY_BY_S} s: someone who trusted the time missed it. ` +
+    "**Better**: MAE's interval below zero, and neither p90 nor early shown to be worse; **worse**: any of the three shown to be worse; otherwise **unclear**. " +
+    `With fewer than ${PAIRED_MIN_DAYS} days there is no interval: **too few days**.`,
+);
+p();
+verdicts(full);
+if (incidents.length) {
+  p();
+  p(
+    `Without the incident days (${incidents.join(', ')}: the feed over ${MISS_S / 60} minutes off on more than ` +
+      `${INCIDENT_MISS * 100}% of at least ${INCIDENT_MIN_N} questions):`,
+  );
+  p();
+  verdicts(full.filter((c) => !incidents.includes(dayOf(c))));
+}
+p();
+p('### Day by day');
+p();
+p(
+  `MAE on the questions every method answered (n); the feed's misses on every question it answered that day (all), which is what makes an incident.`,
+);
+p();
+p(`| day | n | feed MAE | ${CANDIDATES.map((m) => `${LABELS[m]} MAE`).join(' | ')} | all | feed over ${MISS_S / 60} min | incident |`);
+p(`|---|---|---|${CANDIDATES.map(() => '---').join('|')}|---|---|---|`);
+for (const d of perDay) {
+  const mae = (m) => fmt(errorStats(d.cs.map((c) => c.actualS - c.answers[m])).mae);
+  p(
+    `| ${d.date} | ${d.cs.length} | ${fmt(d.feed.mae)} | ${CANDIDATES.map(mae).join(' | ')} | ${d.feedAll.n} | ${share(d.feedAll.miss)} | ${d.incident ? 'yes' : ''} |`,
+  );
+}
 p();
 p('### Where the gate lets history answer');
 p();
