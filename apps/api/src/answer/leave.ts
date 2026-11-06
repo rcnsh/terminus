@@ -15,7 +15,7 @@
 import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopArrivals } from '../types.ts';
 import { PUBLIC, TRANSFER, WALK } from '../config.ts';
 import { headwayFor, inService, legRideS, readyS, serviceClosedAt, serviceResumesAt } from './resolve.ts';
-import { type Departure, PROJECT_MS, type Quirks, departuresFrom, liveBuses, nextDeparture } from './departures.ts';
+import { type Departure, PROJECT_MS, departuresFrom, liveBuses, nextDeparture } from './departures.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
 import { busChange, isoSeconds, shortStop } from './format.ts';
@@ -295,14 +295,13 @@ function forLeg(
   }
 
   const earliest = nowMs + readyS(leg) * 1000;
-  const hold = { holdHeadway: latestBoard };
-  const buses = departuresFrom(graph, sa, leg.svc, { now: nowMs, from: earliest, until: latestBoard }, hold).map((d) => ({
+  const buses = departuresFrom(graph, sa, leg.svc, { now: nowMs, from: earliest, until: latestBoard }).map((d) => ({
     at: d.earliest,
     estimated: d.kind === 'estimate',
     stale: d.kind === 'stale',
   }));
   // Nothing in time: the first bus you can catch.
-  const next = buses.length ? null : nextDeparture(graph, sa, leg.svc, earliest, nowMs, hold);
+  const next = buses.length ? null : nextDeparture(graph, sa, leg.svc, earliest, nowMs);
   if (next) buses.push({ at: next.earliest, estimated: next.kind === 'estimate', stale: next.kind === 'stale' });
   if (!buses.length) return null;
 
@@ -354,15 +353,15 @@ const busOf = (d: Departure): Bus => ({
 });
 
 /** The first bus you can be at the stop for by `fromMs`. */
-function firstBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, nowMs: number, quirks?: Quirks): Bus | null {
-  const d = nextDeparture(graph, sa, svc, fromMs, nowMs, quirks);
+function firstBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, nowMs: number): Bus | null {
+  const d = nextDeparture(graph, sa, svc, fromMs, nowMs);
   return d ? busOf(d) : null;
 }
 
 /** The latest bus leaving by `byMs` that you can be at the stop for by `fromMs`. */
 function lastBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, byMs: number, nowMs: number): Bus | null {
   if (liveBuses(graph, svc, sa, nowMs).length) {
-    const b = departuresFrom(graph, sa, svc, { now: nowMs, from: fromMs, until: byMs }, { holdHeadway: byMs }).at(-1);
+    const b = departuresFrom(graph, sa, svc, { now: nowMs, from: fromMs, until: byMs }).at(-1);
     return b ? busOf(b) : null;
   }
   // No live times: a whole headway early, and one is sure to come in time.
@@ -463,16 +462,15 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
     const from = f.nowMs + readyS(leg) * 1000;
-    // Guessed buses a whole number of headways from the chosen one, so it
-    // stays among them: one headway for them all, the chosen bus's.
+    // With no live times, the estimates fall either side of the chosen bus, so it stays among them.
     const chosen = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
-    const buses = departuresFrom(
-      f.graph,
-      sa,
-      leg.svc,
-      { now: f.nowMs, from, until: untilMs, max: MAX_DEPARTURES, ...(chosen !== undefined ? { around: chosen } : {}) },
-      chosen !== undefined && !liveBuses(f.graph, leg.svc, sa, f.nowMs).length ? { holdHeadway: chosen } : {},
-    );
+    const buses = departuresFrom(f.graph, sa, leg.svc, {
+      now: f.nowMs,
+      from,
+      until: untilMs,
+      max: MAX_DEPARTURES,
+      ...(chosen !== undefined ? { around: chosen } : {}),
+    });
     let prev: number | null = null;
     for (const d of buses) {
       // Two live times at the same instant are one bus.

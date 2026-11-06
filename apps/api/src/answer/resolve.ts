@@ -1013,9 +1013,9 @@ export function scoreLeg(
   const earliest = earliestS + ageS;
   const fromMs = fetchedAt + earliest * 1000;
   const sOf = (ms: number) => (ms - fetchedAt) / 1000;
-  // The width of a guess's window: a headway, as it was at `atMs`.
+  // The width of a guess's window from `atMs`: a headway, as it is then.
   const headwayS = (atMs: number) => {
-    const d = nextDeparture(graph, undefined, leg.svc, atMs, nowMs, { holdHeadway: atMs });
+    const d = nextDeparture(graph, undefined, leg.svc, atMs, nowMs);
     return d ? (d.latest - d.earliest) / 1000 : 0;
   };
   // A missing entry means we never reached the feed -- not that no bus is
@@ -1070,7 +1070,7 @@ export function scoreLeg(
     // graph still says this service goes where you are going -- but
     // boardS here is only an ordering key. The formatter must never
     // print a time for an 'unknown' option.
-    boardS = earliest + headwayS(nowMs) / 2;
+    boardS = earliest + headwayS(fromMs) / 2;
     if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
     quality = available ? 'scheduled' : 'unknown';
   }

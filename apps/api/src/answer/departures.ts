@@ -42,12 +42,6 @@ export interface DepartureWindow {
   max?: number;
 }
 
-/** Per-caller rules kept from before this module, each to go. */
-export interface Quirks {
-  /** Every estimate counts the headway at this time, not its own. */
-  holdHeadway?: number;
-}
-
 interface LiveBus {
   id: string;
   at: number;
@@ -82,16 +76,12 @@ export function liveBuses(graph: Graph, svc: string, sa: StopArrivals | undefine
  * headway (`earliest` to `latest`); stepped on from a live bus, it is a
  * headway after it.
  */
-export function departuresFrom(
-  graph: Graph,
-  board: StopArrivals | undefined,
-  svc: string,
-  w: DepartureWindow,
-  quirks: Quirks = {},
-): Departure[] {
+export function departuresFrom(graph: Graph, board: StopArrivals | undefined, svc: string, w: DepartureWindow): Departure[] {
   const until = w.until ?? w.from + PROJECT_MS;
   const max = w.max ?? Infinity;
-  const headwayAt = (ms: number) => Math.max(60, headwayFor(graph, svc, quirks.holdHeadway ?? ms)) * 1000;
+  // Each estimate counts the headway in force at the bus before it, so the
+  // card, the leave-by and Nearby step the same way across an hour.
+  const headwayAt = (ms: number) => Math.max(60, headwayFor(graph, svc, ms)) * 1000;
   const runs = (ms: number) => inService(graph, svc, ms);
   const live = liveBuses(graph, svc, board, w.now);
   const out: Departure[] = [];
@@ -103,47 +93,48 @@ export function departuresFrom(
   if (live.length) {
     // Past the last live time, one headway at a time, while the service runs.
     const last = live[live.length - 1];
-    const headway = headwayAt(last.at);
-    for (let n = 1, t = last.at + headway; t <= until && t <= last.at + PROJECT_MS && out.length < max; n++, t += headway) {
+    for (let n = 1, t = last.at + headwayAt(last.at); t <= until && t <= last.at + PROJECT_MS && out.length < max; n++) {
       if (!runs(t)) break;
       if (t >= w.from) out.push({ id: `${last.id}+${n}`, kind: 'estimate', earliest: t, latest: t });
+      t += headwayAt(t);
     }
     return out;
   }
 
   // No live times: there by `from`, and a bus within a headway, once it runs.
-  let t = w.from;
-  let anchor = 'reach';
+  // Around a chosen bus, the windows meet at it, so it stays among them as
+  // the clock moves on: back from it a headway at a time to `from`.
+  let fixed: number[] = [];
   if (w.around !== undefined) {
-    // A whole number of headways from the chosen bus, so it stays among them.
-    const headway = headwayAt(w.around);
-    t = w.around - Math.floor((w.around - w.from) / headway) * headway;
-    anchor = 'around';
+    let b = w.around;
+    if (b >= w.from) {
+      fixed = [b];
+      for (let x = b - headwayAt(b - headwayAt(b)); x >= w.from && fixed.length < 2000; x -= headwayAt(x - headwayAt(x))) fixed.unshift(x);
+    } else {
+      while (b < w.from) b += headwayAt(b);
+      fixed = [b];
+    }
   }
-  for (let n = 1; out.length < max; n++) {
+  const anchor = fixed.length ? 'around' : 'reach';
+  let t = fixed.length ? fixed[0] : w.from;
+  for (let n = 1, i = 0; out.length < max; n++, i++) {
     let opens = false;
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
       if (s === null || s > t + PROJECT_MS) break;
       t = s;
       opens = true;
+      fixed = [];
     }
     if (t > until) break;
-    const headway = headwayAt(t);
-    out.push({ id: `${anchor}+${n}`, kind: 'estimate', earliest: t, latest: t + headway, ...(opens ? { opens: true as const } : {}) });
-    t += headway;
+    const end = i + 1 < fixed.length ? fixed[i + 1] : t + headwayAt(t);
+    out.push({ id: `${anchor}+${n}`, kind: 'estimate', earliest: t, latest: end, ...(opens ? { opens: true as const } : {}) });
+    t = end;
   }
   return out;
 }
 
 /** The first of `svc`'s departures you can be at the stop for by `fromMs`; null when there is none within a day. */
-export function nextDeparture(
-  graph: Graph,
-  board: StopArrivals | undefined,
-  svc: string,
-  fromMs: number,
-  nowMs: number,
-  quirks: Quirks = {},
-): Departure | null {
-  return departuresFrom(graph, board, svc, { now: nowMs, from: fromMs, max: 1 }, quirks)[0] ?? null;
+export function nextDeparture(graph: Graph, board: StopArrivals | undefined, svc: string, fromMs: number, nowMs: number): Departure | null {
+  return departuresFrom(graph, board, svc, { now: nowMs, from: fromMs, max: 1 })[0] ?? null;
 }

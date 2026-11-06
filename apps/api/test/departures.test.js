@@ -1,0 +1,62 @@
+/**
+ * A service's departures from a stop (departures.ts): the feed's live
+ * times, then estimates one headway apart while the service runs, and
+ * the card and the leave-by that read them. On the real graph, with the
+ * measured headways (data/headways.json), where the point is the hours.
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { GRAPH } from '../src/answer/graph.ts';
+import { departuresFrom } from '../src/answer/departures.ts';
+import { scoreLeg } from '../src/answer/resolve.ts';
+import { leaveBy } from '../src/answer/leave.ts';
+import { ON_TIME_SLACK_S } from '../src/timetable/profile.ts';
+
+/** An instant from a Singapore wall-clock time, "2026-08-27T19:40". */
+const at = (sgt) => Date.parse(`${sgt}+08:00`);
+const hhmmss = (ms) => new Date(ms + 8 * 3600_000).toISOString().slice(11, 19);
+
+/** A board at `code` fetched at `fetchedAt`, with `svc`'s buses at these times. */
+const board = (code, fetchedAt, svc, times, extra = {}) => ({
+  code,
+  fetchedAt,
+  stale: false,
+  available: true,
+  arrivals: times.map((t, i) => ({ svc, etaS: (t - fetchedAt) / 1000, crowd: null, plate: `P${i}`, berth: null })),
+  ...extra,
+});
+
+const PGP = GRAPH.stops.find((s) => s.code === 'PGP');
+const leg = { svc: 'D2', hops: 5, off: undefined, to: { code: 'UTOWN', name: 'UTown' } };
+
+// D2 on a weekday in term: every 422 s at 19:00, 654 s at 20:00.
+const NOW = at('2026-08-27T19:40');
+const LAST = at('2026-08-27T19:55');
+
+test('an estimate counts the headway at the bus before it: past an hour, the card and the leave-by step alike', () => {
+  const sa = board('PGP', NOW, 'D2', [LAST]);
+  const [first, second] = departuresFrom(GRAPH, sa, 'D2', { now: NOW, from: LAST + 1 }).filter((d) => d.kind === 'estimate');
+  assert.equal(hhmmss(first.latest), '20:02:02', 'the 19:00 headway, from the 19:55 bus');
+  assert.equal(second.latest - first.latest, 654_000, 'the 20:00 headway, from the 20:02 bus');
+
+  // The card: you can't be there for the 19:55, so the bus after it.
+  const s = scoreLeg(GRAPH, { ...leg, rideS: 600 }, sa, NOW, (LAST - NOW) / 1000 + 60);
+  const card = NOW + s.boardS * 1000;
+  assert.ok(card >= first.earliest && card <= first.latest, hhmmss(card));
+
+  // A class whose latest bus is at 20:10: the 20:02:02 one, not 20:05:54.
+  const rideS = 600;
+  const arriveBy = { atMs: at('2026-08-27T20:10') + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
+  const option = { svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: 0, totalS: 0, fromMs: NOW, quality: 'scheduled', hops: 5 };
+  const l = leaveBy({
+    options: [option],
+    candidates: [],
+    byStop: new Map([['PGP', board('PGP', NOW, 'D2', [at('2026-08-27T19:42'), LAST])]]),
+    graph: GRAPH,
+    arriveBy,
+    walkAllS: null,
+    nowMs: NOW,
+  });
+  assert.equal(hhmmss(Date.parse(l.arrive) - rideS * 1000), '20:02:02');
+});

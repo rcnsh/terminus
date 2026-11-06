@@ -1484,8 +1484,7 @@ shuttle's headway, so `data/headways.json` holds the gaps the buses keep:
 the median between two buses at a stop on the recorder's days (one bus
 running alone counts by its lap), by period (term or vacation), kind of day
 (weekday, Saturday, Sunday and public holidays) and SGT hour.
-`headwayFor(graph, svc, atMs)` reads the hour the bus is caught in (for a
-class, the latest it can be boarded, not now), else the nearest hour
+`headwayFor(graph, svc, atMs)` reads the hour asked about, else the nearest hour
 measured that day (the quiet early and late hours run like their neighbours,
 not like the day's median), else the service's usual one. A period with no
 days measured, or a day past the calendar, is the longer of
@@ -1495,9 +1494,13 @@ half-wait in `transfer.ts`) use the usual one. In term the A and D lines run
 about every 7 minutes on a weekday, 10 to 15 in the late evening and 15 to
 30 at weekends; R1 and R2 every 20, K 40, P an hour. Refresh it with
 `scripts/data/measure_headways.mjs` over the recorder's day files from R2
-(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Guessed buses
-either side of one already chosen keep that bus's headway, so the chosen bus
-stays among them (`departures`).
+(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Every guess
+comes from [`departures.ts`](../apps/api/src/answer/departures.ts), and each
+estimate counts the headway in force at the bus before it, stepping on
+from the last live bus: the card, the leave-by and Nearby guess the same
+buses across an hour, where D2 goes from 7 to 11 minutes at 20:00.
+With no live times, estimates either side of a bus already chosen meet at
+it, so the chosen bus stays among them as the clock moves on.
 
 **The walk the whole way follows the paths.** With a location, out by the
 stops near you and on by the routed walks between stops (`walks.json`); the

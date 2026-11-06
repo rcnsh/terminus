@@ -1724,7 +1724,7 @@ function nearbyStop<T extends object>(
     via,
     viaText: viaText(via),
     board: board.map((r) => ({
-      ...nearbyRow(r, nowMs, departuresFrom(graph, sa, r.svc, { now: nowMs, from: nowMs, max: NEARBY_LATER + 3 }, { holdHeadway: nowMs })),
+      ...nearbyRow(r, nowMs, departuresFrom(graph, sa, r.svc, { now: nowMs, from: nowMs, max: NEARBY_LATER + 3 })),
       ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
     })),
   };
