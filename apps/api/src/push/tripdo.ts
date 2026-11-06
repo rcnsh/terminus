@@ -290,9 +290,11 @@ export class Trip {
     // read back to note the next wake. Only they are: the object is billed
     // for the time it's awake.
     const plans: Promise<unknown>[] = [];
+    // A plan refused as stale: the card was worked out from a day that's gone.
+    let stale = false;
     const savePlan = (key: string, plan: Plan) => {
       const p = this.state.blockConcurrencyWhile(async () => {
-        if (!(await this.cleared())) await this.putPlan(date, key, plan, day);
+        if (!(await this.cleared()) && !(await this.putPlan(date, key, plan, day))) stale = true;
       });
       plans.push(p);
       return p;
@@ -313,6 +315,9 @@ export class Trip {
     const lang: Lang = audience.iphoneLang ?? 'en';
     const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan, audience.iphoneH12));
     await Promise.allSettled(plans);
+    // Pushing it would tell the phones about the bus the user just stepped
+    // off (or a trip already signalled): wake again soon, from the new day.
+    if (stale) return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: null } };
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
     const apns = apnsEnabled(env) && audience.lives > 0;
     if (!card) {
@@ -468,13 +473,14 @@ export class Trip {
   /**
    * Saves a plan a wake worked out from `read`, the day as it read it, unless
    * the trip has changed since (sameBasis): the next answer then plans from
-   * what's stored.
+   * what's stored. False when it was dropped.
    */
-  private async putPlan(date: string, key: string, plan: Plan, read: DayRecord | null): Promise<void> {
+  private async putPlan(date: string, key: string, plan: Plan, read: DayRecord | null): Promise<boolean> {
     const next = today(await this.storedDay(), date);
-    if (!sameBasis(next, key, planBasis(read, key))) return;
+    if (!sameBasis(next, key, planBasis(read, key))) return false;
     next.plans = { ...next.plans, [key]: plan };
     await this.storage.put('day', next);
+    return true;
   }
 
   /**
