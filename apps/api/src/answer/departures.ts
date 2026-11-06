@@ -259,16 +259,17 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   // you can be at the stop, the next in the headway after that, and so
   // on. Around a bus already chosen, the windows meet at it, so it stays
   // among them as the clock moves on: back from it a headway at a time to
-  // `from`. Before the service starts, or after it has stopped for the
-  // day, the first bus is due within a headway of the next start; after
-  // that one, the windows around a chosen bus carry on as they would with
-  // the service running, so a class's leave-by is the same at 06:30 as at 07:30.
-  let fixed: number[] = [];
-  let partial = false;
+  // `from`, or to the start of the day's service it's in. Before the
+  // service starts, or after it has stopped for the day, the first bus is
+  // due within a headway of the next start; after that one, the windows
+  // around a chosen bus carry on as they would with the service running,
+  // so a class's leave-by is the same at 06:30 as at 07:30, and the same
+  // whether or not the feed listed buses the night before.
+  let chain: number[] = [];
   // A chosen bus more than a day off (a step target kept, or sent, from
   // long ago) says nothing of today's buses, and walking to it a headway
   // at a time would take millions of steps.
-  if (!last && w.around !== undefined && Math.abs(w.around - w.now) <= PROJECT_MS) {
+  if (w.around !== undefined && Math.abs(w.around - w.now) <= PROJECT_MS) {
     let b = w.around;
     // Closed by then, after running: the windows meet at the close, so the
     // last one before it is a whole headway, and a bus sure to come.
@@ -276,16 +277,26 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
     if (closed !== null && closed > w.from) b = closed;
     // Back, or on, to the window `from` falls in: its bus may still be one you can catch.
     if (b >= w.from) {
-      fixed = [b];
-      while (fixed[0] > w.from && fixed.length < 2000) fixed.unshift(fixed[0] - headwayAt(fixed[0] - headwayAt(fixed[0])));
+      chain = [b];
+      for (let p = b; p > w.from;) {
+        p -= headwayAt(p - headwayAt(p));
+        chain.push(p);
+        // Before that day's start: the windows there come from the start (startAt).
+        if (!runs(p)) break;
+      }
+      chain.reverse();
     } else {
       let before = b;
       while (b < w.from) [before, b] = [b, b + headwayAt(b)];
-      fixed = b > w.from ? [before, b] : [b];
+      chain = b > w.from ? [before, b] : [b];
     }
-    partial = fixed[0] < w.from;
-    t = Math.max(fixed[0], w.from);
   }
+  // The windows from `from` meet at the chosen bus when it's in the same
+  // day's service and no live time comes before them.
+  const aligned = !last && chain.length > 0 && chain[0] <= w.from;
+  let fixed = aligned ? chain : [];
+  let partial = aligned && chain[0] < w.from;
+  if (aligned) t = Math.max(chain[0], w.from);
   let anchor = 'reach';
   let opens = false;
   // From the start: its own window is the first bus's, a headway at least,
@@ -293,7 +304,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   // meet with no gap (it may have the second bus too); then those windows.
   const startAt = (s: number) => {
     const h = headwayAt(s);
-    [t, fixed, anchor, opens, partial] = [s, [s, ...fixed.filter((f) => f >= s + h)], `opens@${s}`, true, false];
+    [t, fixed, anchor, opens, partial] = [s, [s, ...chain.filter((f) => f >= s + h)], `opens@${s}`, true, false];
   };
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);

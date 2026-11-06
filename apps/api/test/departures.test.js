@@ -264,6 +264,26 @@ test("before the service starts, the windows around a chosen bus meet the start'
   assert.equal(hhmmss(ds.at(-1).latest), '08:30:00');
 });
 
+test("tomorrow morning's class leave-by is the same whether or not the feed lists a bus tonight", () => {
+  // 22:40 on a weekday; D2 closes at 23:00 and starts at 07:15. The latest you can board is 07:50 tomorrow.
+  const now = at('2026-08-27T22:40');
+  const rideS = 600;
+  const arriveBy = { atMs: at('2026-08-28T07:50') + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
+  const leaveFor = (times) =>
+    leaveBy({
+      options: [{ svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: 0, totalS: 0, fromMs: now, quality: 'scheduled', hops: 5 }],
+      candidates: [],
+      byStop: new Map([['PGP', board('PGP', now, 'D2', times)]]),
+      graph: GRAPH,
+      arriveBy,
+      walkAllS: null,
+      nowMs: now,
+    });
+  const empty = leaveFor([]);
+  assert.equal(hhmmss(Date.parse(empty.arrive) - rideS * 1000), '07:50:00', 'a window that ends at the latest you can board');
+  assert.deepEqual(leaveFor([at('2026-08-27T22:50')]), empty);
+});
+
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
   const now = at('2026-08-27T16:00');
   const sa = board('PGP', now, 'D2', []);
