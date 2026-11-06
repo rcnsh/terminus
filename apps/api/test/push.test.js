@@ -16,6 +16,9 @@ import { DUE_MS } from '../src/answer/phase.ts';
 import { remindUser } from '../src/push/push.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { indexGraph } from '../src/answer/resolve.ts';
+import { answerRequest, loadRider } from '../src/answer/rider.ts';
+import { DAY_ASK } from '../src/answer/next.ts';
+import { answerFor, collectArrivals } from '../src/answer/answer.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
 // How a headway guess is used, not how long it is: one guess for every shuttle.
@@ -140,6 +143,28 @@ test('a device registers its push token; the same token moves with the device', 
   assert.deepEqual(pushTokens(), [{ name: 'MacBook', push_token: 'fcm-1' }]);
   await call('/api/me/push', { method: 'DELETE', token: mac });
   assert.deepEqual(pushTokens(), []);
+});
+
+test("a request's answer nudges the rider's other devices, never the one that asked", async () => {
+  const { env, call, phone, mac, fcm } = await setup();
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await call('/api/me/push', { method: 'POST', token: mac, body: { token: 'fcm-mac' } });
+  // On the bus: a phase worth pushing (an idle card is never pushed).
+  await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
+  const session = (name) => env.DB._db.prepare('SELECT user_id, token_hash FROM sessions WHERE name = ?').get(name);
+  const { user_id: userId, token_hash: phoneHash } = session('Pixel');
+  const answer = async (nudgeFrom) => {
+    fcm.sent.length = 0;
+    const ctx = makeCtx();
+    const rider = await loadRider(env, userId, Date.now());
+    const body = await answerRequest(env, ctx, { answerFor, collectArrivals }, rider, DAY_ASK, Date.now(), nudgeFrom);
+    await ctx.settle();
+    assert.equal(body.card.phase, 'riding');
+    return fcm.sent.map((m) => m.token);
+  };
+  assert.deepEqual(await answer(phoneHash), ['fcm-mac']);
+  assert.deepEqual(await answer(session('MacBook').token_hash), ['fcm-phone']);
+  assert.deepEqual(await answer(undefined), [], 'nobody is nudged unless asked');
 });
 
 test('the Trip object wakes when the phase changes and nudges the phone, once per change', async () => {
@@ -913,6 +938,26 @@ test("the Trip object words each iPhone's alert and Live Activity in its own clo
   const live = apple.filter((p) => p.type === 'liveactivity');
   assert.ok(live.length > 0);
   for (const p of live) assert.doesNotMatch(words(p), AMPM);
+});
+
+test("a step on another device that leaves no trip ends the iPhone's Live Activity at once", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, phone, mac, next, wakeUntil } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  const first = await next(phone);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
+  // Not on campus from the Mac (which ends that Live Activity), an iPhone
+  // still running one, then "Best bus" on the class: the answer has no trip left.
+  await call('/api/me/signal', { method: 'POST', token: mac, body: { kind: 'away' } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  apple.length = 0;
+  const out = await (await call('/api/me/step', { method: 'POST', token: mac, body: { trip: first.card.step.trip, to: null } })).json();
+  assert.equal(out.card.phase, 'idle');
+  assert.deepEqual(
+    apple.filter((p) => p.type === 'liveactivity').map((p) => p.body.aps.event),
+    ['end'],
+  );
 });
 
 test('with no class left today, a running Live Activity is ended', async () => {

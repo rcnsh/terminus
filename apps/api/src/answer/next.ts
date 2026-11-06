@@ -5,7 +5,7 @@
  */
 
 import type { Answer, Env, FeedState, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from '../types.ts';
-import type { MeDeps } from '../accounts/me.ts';
+import type { MeDeps } from './answer.ts';
 import {
   MAX_VENUE_WALK_S,
   type NextTrip,
@@ -646,13 +646,13 @@ export async function planned(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   return { answer: p.answer, trip };
 }
 
-/** What a request changes in the Trip object: a route sends it all, the Trip object keeps only the plans. */
+/** What an answer changes in the Trip object; rider.ts saves what each kind of caller should. */
 export type NextUpdate = Omit<TripUpdate, 'date' | 'deleteAt'>;
 
 /**
  * /api/me/next's body (the answer, when it changes by itself, and the card), the
  * trip it's about, and what it changes in the Trip object. Nothing is saved
- * here: the caller sends `update`, or inside the Trip object keeps only its plans.
+ * here: rider.ts answers through it and saves `update` as its caller should.
  */
 export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rider, ask: Ask, nowMs: number) {
   const { userId, profile, day } = rider;

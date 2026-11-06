@@ -21,9 +21,9 @@
 import { loadCalendar } from '../timetable/calendarsync.ts';
 import type { Env } from '../types.ts';
 import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate, tripRev } from '../answer/trip.ts';
-import type { MeDeps } from '../accounts/me.ts';
-import { tripCardFor } from '../accounts/me.ts';
-import { type AnswerIn, type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
+import type { MeDeps } from '../answer/answer.ts';
+import { answerWake, nudgeOf } from '../answer/rider.ts';
+import { type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
 import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
 import { type Lang, withLang } from '../i18n.ts';
 import { logTripWake } from '../ops/analytics.ts';
@@ -338,7 +338,9 @@ export class Trip {
     // account chose. Another iPhone in the other language or clock gets the
     // card worded again for it (answerIn), without saving plans a second time.
     const lang: Lang = audience.iphoneLang ?? 'en';
-    const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan, audience.iphoneH12));
+    const card = await withLang(lang, () =>
+      answerWake(env, ctx, deps, userId, day, nowMs, { savePlan, h12: audience.iphoneH12, rewordDeps: { answerFor, collectArrivals } }),
+    );
     await Promise.allSettled(plans);
     // A step, a signal or another device's plan while the wake ran moved the
     // trip's revision on: its card (or a plan it couldn't save) is from a day that's gone.
@@ -366,7 +368,7 @@ export class Trip {
     // Logged as a wake that pushed nothing, keeping the leave-by last seen:
     // this card's is from the day that's gone, and the next wake's shift is from that one.
     if (stale) {
-      if (card) log(false, card.phase, card.quality, null);
+      if (card) log(false, card.answer.card.phase, card.answer.quality, null);
       return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: before?.leaveAt ?? null } };
     }
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
@@ -400,9 +402,9 @@ export class Trip {
       : last?.started;
     const now: Pushed = {
       key: card.key,
-      phase: card.phase,
+      phase: card.answer.card.phase,
       at: nowMs,
-      ...(card.gone ? { gone: true } : {}),
+      ...(card.answer.card.gone ? { gone: true } : {}),
       live: JSON.stringify(live),
       ...(started ? { started } : {}),
     };
@@ -411,12 +413,8 @@ export class Trip {
     const changed = last
       ? last.key !== now.key || last.phase !== now.phase || Boolean(last.gone) !== Boolean(now.gone)
       : now.phase !== 'idle';
-    // The card worded again for an iPhone in the other language or clock (plans aren't saved twice).
-    const answerIn: AnswerIn = (l, h12) =>
-      withLang(l, () => tripCardFor(env, ctx, { answerFor, collectArrivals }, userId, day, nowMs, async () => {}, h12)).then(
-        (c) => c?.answer ?? null,
-      );
-    const clockChosen = card.clockChosen;
+    // The card worded again for an iPhone in the other language or clock: saving nothing.
+    const { answerIn, clockChosen } = card;
     // A push due that reached no device: tried again at the next wake.
     let unsent = false;
     // A Live Activity's start that didn't go, tried again on its own while
@@ -442,22 +440,11 @@ export class Trip {
       const urgent = now.phase === 'due' || now.phase === 'missed';
       // The same moments start an iPhone's Live Activity where none runs (push.ts).
       const startLive = urgent && apnsEnabled(env) && card.key !== null;
+      // Every device, the one whose request asked for this wake too: it hasn't seen this card.
       const out = await nudgeUser(
         env,
         userId,
-        {
-          phase: now.phase,
-          urgent,
-          remind: card.remind,
-          answer: card.answer,
-          lang,
-          answerIn,
-          clockChosen,
-          tripOver: card.key === null,
-          phaseChanged: last?.phase !== now.phase,
-          startLive,
-          startedFor: new Set(now.started?.sessions),
-        },
+        nudgeOf(card, { urgent, lang, phaseChanged: last?.phase !== now.phase, startLive, startedFor: new Set(now.started?.sessions) }),
         nowMs,
       );
       if (startLive && now.started) now.started = withStarts(now.started, out);
@@ -490,7 +477,7 @@ export class Trip {
     // The trip is over but its end didn't go: with no next change to wake
     // for, the wake is tried again, as a failed one is.
     if (unsent && !card.key) throw new Error('trip end not sent');
-    log(changed, now.phase, card.quality, card.leaveAt);
+    log(changed, now.phase, card.answer.quality, card.leaveAt);
     const seen = { at: nowMs, leaveAt: card.leaveAt };
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.

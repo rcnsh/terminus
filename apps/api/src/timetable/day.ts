@@ -7,7 +7,7 @@
  */
 
 import type { Env, Leave, PlaceChip, Timing } from '../types.ts';
-import type { MeDeps } from '../accounts/me.ts';
+import type { MeDeps } from '../answer/answer.ts';
 import {
   GAP_RETURN_MIN,
   HOME_BY_MIN,
