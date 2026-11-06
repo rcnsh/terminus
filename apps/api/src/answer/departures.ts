@@ -288,11 +288,12 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   }
   let anchor = 'reach';
   let opens = false;
-  // The windows around a chosen bus to carry on with after the start's own.
-  let resume: number[] = [];
+  // From the start: its own window is the first bus's, a headway at least,
+  // and runs on to the first of the windows around a chosen bus, so they
+  // meet with no gap (it may have the second bus too); then those windows.
   const startAt = (s: number) => {
-    resume = fixed.filter((f) => f >= s + headwayAt(s));
-    [t, fixed, anchor, opens, partial] = [s, [], `opens@${s}`, true, false];
+    const h = headwayAt(s);
+    [t, fixed, anchor, opens, partial] = [s, [s, ...fixed.filter((f) => f >= s + h)], `opens@${s}`, true, false];
   };
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
@@ -325,7 +326,6 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
       opens = false;
     }
     t = end;
-    if (resume.length) [t, fixed, i, resume] = [resume[0], resume, -1, []];
   }
   return out;
 }

@@ -248,6 +248,22 @@ test('no departure leaves after `until`: a window that ends past it is left out,
   assert.ok(ds.length > 3 && ds.at(-1).latest > at('2026-08-27T08:30') - 3 * headwayFor(GRAPH, 'D2', now) * 1000, 'up to it');
 });
 
+test("before the service starts, the windows around a chosen bus meet the start's own, with no gap between", () => {
+  // D2 starts at 07:15, every 430 s at 07:00; the windows meet at 08:30.
+  const now = at('2026-08-27T06:30');
+  const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', []), 'D2', {
+    now,
+    from: now + 80_000,
+    until: at('2026-08-27T08:30'),
+    around: at('2026-08-27T08:30'),
+  });
+  assert.equal(hhmmss(ds[0].earliest), '07:15:00');
+  assert.ok(ds[0].latest - ds[0].earliest >= 430_000, 'the first bus is due within it');
+  for (let i = 1; i < ds.length; i++)
+    assert.equal(ds[i].earliest, ds[i - 1].latest, `${hhmmss(ds[i - 1].latest)} to ${hhmmss(ds[i].earliest)}`);
+  assert.equal(hhmmss(ds.at(-1).latest), '08:30:00');
+});
+
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
   const now = at('2026-08-27T16:00');
   const sa = board('PGP', now, 'D2', []);
