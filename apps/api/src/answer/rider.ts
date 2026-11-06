@@ -92,9 +92,6 @@ function nudgeOf(a: Answered, wake: WakeNudge = { urgent: false }): Nudge {
   };
 }
 
-/** A place or stop asked for has no trip key either, but the day's trip goes on. */
-const tripOverOf = (key: string | null, ask: Ask) => key === null && !ask.place && !ask.to;
-
 /**
  * A request's answer, logged, without the nudge: what it changes in the Trip
  * object (arrived, the plan, a watch) is saved after the response, so a
@@ -119,11 +116,13 @@ async function requestAnswer(
       ),
     );
   }
+  // The day's plan, not a place or stop asked for: those have no trip key
+  // either, but the day's trip goes on.
   const isPlan = !ask.place && !ask.to;
   const shown: TripUpdate['pushed'] = isPlan
     ? { key: trip.key, phase: body.card.phase, at: nowMs, ...(body.card.gone ? { gone: true } : {}) }
     : undefined;
-  return { body, tripOver: tripOverOf(trip.key, ask), shown };
+  return { body, tripOver: isPlan && trip.key === null, shown };
 }
 
 /**
@@ -233,7 +232,8 @@ export async function answerWake(
   for (const [key, plan] of Object.entries(update.plans ?? {})) if (plan) ctx.waitUntil(opts.savePlan(key, plan));
   const answered: Answered = {
     answer: body,
-    tripOver: tripOverOf(trip.key, ask),
+    // A wake always asks for the day's plan.
+    tripOver: trip.key === null,
     clockChosen: profile.clock !== 'auto',
     answerIn: reword(env, ctx, opts.rewordDeps ?? deps, rider, ask, nowMs),
   };
