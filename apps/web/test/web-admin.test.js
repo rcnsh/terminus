@@ -23,7 +23,7 @@ test("the dashboard's days are Singapore days, and the week leaves today's few h
   assert.equal(d.answersChange, 0);
 });
 
-test("each API key's requests: today and the 7 full days before it, what was turned away, its commonest route, and revoked keys counted apart", () => {
+test("each API key's requests: today and the 7 full days before it, what was turned away, its commonest route, and unlisted keys counted apart", () => {
   const d14 = Array.from({ length: 14 }, (_, i) => new Date(Date.UTC(2026, 9, 11 + i)).toISOString().slice(0, 10));
   const s = {
     apiKeys: {
@@ -34,25 +34,31 @@ test("each API key's requests: today and the 7 full days before it, what was tur
     },
     analytics: {
       keys: [
-        { keyId: 'k1', day: '2026-10-12', route: '/api/arrivals', outcome: 'ok', n: '500' },
-        { keyId: 'k1', day: '2026-10-23', route: '/api/next', outcome: 'ok', n: '30' },
-        { keyId: 'k1', day: '2026-10-24', route: '/api/buses', outcome: 'ok', n: '10' },
-        { keyId: 'k1', day: '2026-10-24', route: '/api/buses', outcome: 'limited', n: '25' },
-        { keyId: 'k1', day: '2026-10-01', route: '/api/next', outcome: 'ok', n: '999' },
-        { keyId: 'gone', day: '2026-10-20', route: '/api/next', outcome: 'ok', n: '7' },
+        { keyId: 'k1', day: '2026-10-16', outcome: 'ok', n: '500' },
+        { keyId: 'k1', day: '2026-10-17', outcome: 'ok', n: '30' },
+        { keyId: 'k1', day: '2026-10-23', outcome: 'limited', n: '4' },
+        { keyId: 'k1', day: '2026-10-24', outcome: 'ok', n: '10' },
+        { keyId: 'k1', day: '2026-10-24', outcome: 'limited', n: '25' },
+        { keyId: 'gone', day: '2026-10-20', outcome: 'ok', n: '7' },
+      ],
+      keyRoutes: [
+        { keyId: 'k1', route: '/api/buses', n: '40' },
+        { keyId: 'k1', route: '/api/next', n: '29' },
       ],
     },
   };
-  const { rows, revoked14 } = keyRows(s, d14);
+  const { rows, unlisted, counted } = keyRows(s, d14);
   assert.deepEqual(
     rows.map((r) => [r.id, r.today, r.n7, r.limited7, r.route]),
     [
-      ['k1', 35, 30, 0, '/api/next'],
+      ['k1', 35, 34, 4, '/api/buses'],
       ['k2', 0, 0, 0, ''],
     ],
+    'the 16th is before the week; today is apart from it',
   );
-  assert.equal(revoked14, 7);
-  assert.deepEqual(keyRows({ apiKeys: s.apiKeys, analytics: { error: 'x' } }, d14).rows[0].n7, 0, 'Analytics Engine failing: no counts');
+  assert.equal(unlisted, 7);
+  assert.equal(counted, true);
+  assert.equal(keyRows({ apiKeys: s.apiKeys, analytics: { error: 'x' } }, d14).rows[0].n7, 0, 'Analytics Engine failing: no counts');
 });
 
 /** A fetch whose /api/admin/stats answers wait for the test: `asked[i].answer(status, body)`. */

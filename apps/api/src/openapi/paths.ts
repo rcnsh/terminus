@@ -2147,7 +2147,7 @@ export function paths(): Record<string, unknown> {
               analytics: {
                 type: ['object', 'null'],
                 description:
-                  'Answers and errors per day, and the requests made with each API key per day, route and outcome (`keys`), from Analytics Engine; null when it is not configured.',
+                  'Answers and errors per day, the requests made with each API key per day and outcome (`keys`) and by route (`keyRoutes`), from Analytics Engine; null when it is not configured.',
               },
               accounts: { type: 'object', additionalProperties: { type: 'integer' } },
               apps: { type: 'object', additionalProperties: { type: 'integer' } },

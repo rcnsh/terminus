@@ -26,6 +26,8 @@ import { shadowSummary } from './etashadow.ts';
 const DAY = 86_400_000;
 /** API keys the dashboard lists, most lately used first: five an account, so this is every key for a long while. */
 const KEYS_LISTED = 500;
+/** Rows of each per-key query: the 500 keys' two outcomes on 9 days is 9,000. */
+const KEY_ROWS = 10_000;
 
 /** HEALTH_TOKEN itself, or an operator session that hasn't run out. */
 export async function isOperator(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
@@ -281,49 +283,55 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
   try {
-    const [dismissed, [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings, nextMs, keyUse]] =
-      await Promise.all([
-        dismissedCrashes(env),
-        Promise.all([
-          // _sample_interval: each row may stand for several, at high volume. Days are Singapore's, as the
-          // dashboard's are; 15 of them, so it can compare two full weeks and still chart today.
-          sql(`SELECT ${SG_DAY} AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
+    const [
+      dismissed,
+      [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings, nextMs, keyUse, keyRoutes],
+    ] = await Promise.all([
+      dismissedCrashes(env),
+      Promise.all([
+        // _sample_interval: each row may stand for several, at high volume. Days are Singapore's, as the
+        // dashboard's are; 15 of them, so it can compare two full weeks and still chart today.
+        sql(`SELECT ${SG_DAY} AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '15' DAY AND blob1 IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
-          sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'answer' GROUP BY quality ORDER BY n DESC`),
-          sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
-          sql(`SELECT ${SG_DAY} AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT ${SG_DAY} AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 = 'timelapse' GROUP BY day, outcome ORDER BY day`),
-          // One row per day and name: max() in case a day was ever counted twice.
-          sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
+        // One row per day and name: max() in case a day was ever counted twice.
+        sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'active' GROUP BY day, scope, name ORDER BY day`),
-          sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
+        sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
                   SUM(_sample_interval) AS n, SUM(_sample_interval * double2) AS fatal, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, platform, type, message, stack ORDER BY n DESC LIMIT ${CRASH_ROWS}`),
-          sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT ${CRASH_ROWS * 5}`),
-          // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
-          sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
+        // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
+        sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'legacy'
            GROUP BY what, client, route ORDER BY n DESC LIMIT 100`),
-          // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
-          sql(`SELECT blob4 AS day, blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of FROM ${dataset}
+        // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
+        sql(`SELECT blob4 AS day, blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'settings' GROUP BY day, setting, value ORDER BY day`),
-          // How long /api/me/next took over the last 24 hours (logNextTook).
-          sql(`SELECT quantileExactWeighted(0.5)(double12, _sample_interval) AS p50,
+        // How long /api/me/next took over the last 24 hours (logNextTook).
+        sql(`SELECT quantileExactWeighted(0.5)(double12, _sample_interval) AS p50,
                   quantileExactWeighted(0.95)(double12, _sample_interval) AS p95, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '1' DAY AND blob1 = 'next'`),
-          // Requests made with each API key (keyuse.ts), per Singapore day, route and whether its limit turned them away;
-          // newest first, so a limit drops the oldest days.
-          sql(`SELECT blob2 AS keyId, ${SG_DAY} AS day, blob3 AS route, blob4 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
-           WHERE timestamp > NOW() - INTERVAL '15' DAY AND blob1 = 'apikey'
-           GROUP BY keyId, day, route, outcome ORDER BY day DESC LIMIT 10000`),
-        ]),
-      ]);
+        // Requests made with each API key (keyuse.ts), per Singapore day and whether its limit turned them away,
+        // over today and the 7 days before (9 days back covers them in any time zone): at most two rows per key a day.
+        sql(`SELECT blob2 AS keyId, ${SG_DAY} AS day, blob4 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '9' DAY AND blob1 = 'apikey'
+           GROUP BY keyId, day, outcome ORDER BY day DESC LIMIT ${KEY_ROWS}`),
+        // And by route over the last 8 days, for each key's commonest: one row per key and keyed route.
+        sql(`SELECT blob2 AS keyId, blob3 AS route, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '8' DAY AND blob1 = 'apikey'
+           GROUP BY keyId, route ORDER BY n DESC LIMIT ${KEY_ROWS}`),
+      ]),
+    ]);
     return {
       daily,
       quality,
@@ -335,6 +343,7 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
       settings,
       next: nextTook(nextMs),
       keys: keyUse,
+      keyRoutes,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

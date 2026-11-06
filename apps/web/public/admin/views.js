@@ -475,52 +475,52 @@ export function Devices({ s, d }) {
 
 /**
  * Every API key with whose it is (admin.ts apiKeys.list), beside the
- * requests each made (analytics.keys, keyuse.ts): today so far, and the
- * 7 full Singapore days to yesterday, as the dashboard's other weeks are.
- * The 14 days, today included, count only what came from revoked keys. Rows for a key since revoked have no owner left, so they
- * are only counted.
+ * requests each made (analytics.keys and keyRoutes, keyuse.ts): today so
+ * far, and the 7 full Singapore days to yesterday, as the dashboard's
+ * other weeks are. Requests from a key not in the list (revoked, or past
+ * the newest 500) have no owner to show, so they are only totalled.
  */
 export function keyRows(s, d14) {
-  const days = new Set(d14);
+  const an = s.analytics && !s.analytics.error ? s.analytics : null;
   const today = d14.at(-1);
   const week = new Set(d14.slice(-8, -1));
   const use = new Map();
-  for (const r of s.analytics && !s.analytics.error ? (s.analytics.keys ?? []) : []) {
-    const day = String(r.day).slice(0, 10);
-    if (!days.has(day)) continue;
+  for (const r of an?.keys ?? []) {
+    const on = day(r);
+    if (on !== today && !week.has(on)) continue;
     const n = Number(r.n) || 0;
-    const u = use.get(r.keyId) ?? { n14: 0, today: 0, n7: 0, limited7: 0, routes: new Map() };
-    u.n14 += n;
-    if (day === today) u.today += n;
-    if (week.has(day)) {
+    const u = use.get(r.keyId) ?? { all: 0, today: 0, n7: 0, limited7: 0 };
+    u.all += n;
+    if (on === today) u.today += n;
+    else {
       u.n7 += n;
       if (r.outcome === 'limited') u.limited7 += n;
-      u.routes.set(r.route, (u.routes.get(r.route) ?? 0) + n);
     }
     use.set(r.keyId, u);
   }
+  // Commonest first, so the first row seen for a key is its top route.
+  const top = new Map();
+  for (const r of an?.keyRoutes ?? []) if (!top.has(r.keyId)) top.set(r.keyId, r.route);
   const rows = (s.apiKeys?.list ?? []).map((k) => {
     const u = use.get(k.id);
     use.delete(k.id);
-    const top = [...(u?.routes ?? [])].sort((a, b) => b[1] - a[1])[0];
-    return { ...k, key: k.id, today: u?.today ?? 0, n7: u?.n7 ?? 0, limited7: u?.limited7 ?? 0, route: top?.[0] ?? '' };
+    return { ...k, key: k.id, today: u?.today ?? 0, n7: u?.n7 ?? 0, limited7: u?.limited7 ?? 0, route: top.get(k.id) ?? '' };
   });
-  return { rows, revoked14: sum([...use.values()].map((u) => u.n14)) };
+  return { rows, unlisted: sum([...use.values()].map((u) => u.all)), counted: Boolean(an?.keys?.length) };
 }
 
 function ApiKeys({ s, d }) {
   const [q, setQ] = useState('');
-  const counting = Boolean(s.collect?.keys && d.an);
-  const { rows, revoked14 } = keyRows(s, d.d14);
+  const { rows, unlisted, counted } = useMemo(() => keyRows(s, d.d14), [s, d.d14]);
+  // Counts already recorded stay in view after the switch is turned off.
+  const counting = Boolean(d.an && (s.collect?.keys || counted));
   const needle = q.trim().toLowerCase();
   const shown = rows.filter(
     (r) => !needle || [r.name, r.email ?? 'no email', r.hint].some((x) => String(x).toLowerCase().includes(needle)),
   );
   const sub = !d.an
     ? 'Requests per key need Analytics Engine connected.'
-    : !s.collect?.keys
-      ? 'Not counting requests: turn on “API key requests” under Collection to count them.'
-      : `Requests made with each key, by Singapore day: today so far, and the 7 full days before; turned away means its rate limit refused them.${revoked14 ? ` ${plural(revoked14, 'request')} in 14 days came from keys since revoked.` : ''}`;
+    : `${s.collect?.keys ? 'Requests made with each key, by Singapore day: today so far, and the 7 full days before; turned away means its rate limit refused them; the commonest route counts the last 8 days.' : `Not counting requests: turn on “API key requests” under Collection to count them.${counted ? ' The counts below are from before it was turned off.' : ''}`}${unlisted ? ` ${plural(unlisted, 'request')} in those 8 days came from keys not listed here (revoked, or past the newest 500).` : ''}`;
   return html`
     <${Card}
       title="API keys"
@@ -544,7 +544,7 @@ function ApiKeys({ s, d }) {
                 { key: 'today', label: 'Today', num: true },
                 { key: 'n7', label: '7 days to yesterday', num: true, meter: true },
                 { key: 'limited7', label: 'Turned away, 7 days', num: true },
-                { key: 'route', label: 'Most asked, 7 days', cell: (r) => (r.route ? html`<code>${r.route}</code>` : '—') },
+                { key: 'route', label: 'Most asked', cell: (r) => (r.route ? html`<code>${r.route}</code>` : '—') },
               ]
             : []),
         ]}

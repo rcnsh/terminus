@@ -165,16 +165,15 @@ export function fakeAeRows(q, nowMs) {
     ];
   }
   if (q.includes("blob1 = 'apikey'")) {
-    return days(nowMs, 15).flatMap((day) =>
-      [...KEYS.filter(([, , , n]) => n), ['demo-key-gone', '', '', 80]].flatMap(([keyId, , , perDay]) =>
-        KEY_ROUTES.map((route, r) => ({
-          keyId,
-          day,
-          route,
-          outcome: 'ok',
-          n: Math.round((perDay * busy(day) * (0.6 + rand(`${keyId}${day}`) * 0.8)) / (r + 1)),
-        })).concat(keyId === 'demo-key-1' && rand(`l${day}`) > 0.6 ? [{ keyId, day, route: '/api/buses', outcome: 'limited', n: 40 }] : []),
-      ),
+    const used = [...KEYS.filter(([, , , n]) => n), ['demo-key-gone', '', '', 80]];
+    if (q.includes('blob3 AS route')) {
+      return used.flatMap(([keyId, , , perDay]) => KEY_ROUTES.map((route, r) => ({ keyId, route, n: Math.round((perDay * 6) / (r + 1)) })));
+    }
+    return days(nowMs, 9).flatMap((day) =>
+      used.flatMap(([keyId, , , perDay]) => [
+        { keyId, day, outcome: 'ok', n: Math.round(perDay * busy(day) * (0.6 + rand(`${keyId}${day}`) * 0.8)) },
+        ...(keyId === 'demo-key-1' && rand(`l${day}`) > 0.6 ? [{ keyId, day, outcome: 'limited', n: 40 }] : []),
+      ]),
     );
   }
   if (q.includes("blob1 = 'settings'")) {

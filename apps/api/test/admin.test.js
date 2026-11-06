@@ -12,7 +12,7 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   };
   const env = { KV: makeKV(), ANALYTICS_TOKEN: 'ae-token', CF_ACCOUNT_ID: 'acct' };
   const s = await adminStats(env, Date.now(), fetchImpl);
-  assert.equal(asked.length, 11);
+  assert.equal(asked.length, 12);
   assert.match(asked[9].sql, /quantileExactWeighted\(0\.95\)\(double12, _sample_interval\)[\s\S]*blob1 = 'next'/, "/api/me/next's times");
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
   // The dashboard lines these up with Singapore days (parts.js lastDays), and compares two full weeks besides today.
@@ -22,7 +22,12 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   assert.match(asked[5].sql, /blob1 = 'apperror'/, 'the error reports, by fingerprint');
   assert.match(asked[7].sql, /blob1 = 'legacy'/, 'what still uses the old address and paths');
   assert.match(asked[8].sql, /blob1 = 'settings'/, "the settings' daily counts");
-  assert.match(asked[10].sql, /blob2 AS keyId[\s\S]*blob1 = 'apikey'/, 'the requests made with each API key');
+  assert.match(
+    asked[10].sql,
+    /blob2 AS keyId[\s\S]*blob1 = 'apikey'[\s\S]*GROUP BY keyId, day, outcome/,
+    'the requests made with each API key, by day',
+  );
+  assert.match(asked[11].sql, /blob3 AS route[\s\S]*blob1 = 'apikey'[\s\S]*GROUP BY keyId, route/, "and each key's routes");
   assert.ok(
     asked.every((a) => a.url === 'https://api.cloudflare.com/client/v4/accounts/acct/analytics_engine/sql' && a.auth === 'Bearer ae-token'),
   );

@@ -57,8 +57,8 @@
  *   double12 tookMs          'next' rows: ms from the request's start to its answer built
  *
  *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
- *           'apperror', 'tripwake', 'legacy', 'settings', 'next' and 'apikey' rows
- *           use their kind
+ *           'apperror', 'tripwake', 'legacy', 'settings' and 'next' rows use their
+ *           kind; 'apikey' rows the key's id
  *
  * Seven kinds give the columns their own meaning:
  *
@@ -347,7 +347,8 @@ export interface KeyUseRow {
 export function logKeyUse(env: Env, r: KeyUseRow): void {
   if (!analyticsEnabled(env)) return;
   try {
-    env.AE!.writeDataPoint({ blobs: ['apikey', r.keyId, r.route, r.outcome], doubles: [1], indexes: ['apikey'] });
+    // Indexed by key, so Analytics Engine samples each key apart: a busy one never thins out a quiet one's counts.
+    env.AE!.writeDataPoint({ blobs: ['apikey', r.keyId, r.route, r.outcome], doubles: [1], indexes: [r.keyId] });
   } catch {
     // Same rule as above: a lost count never stops a request.
   }

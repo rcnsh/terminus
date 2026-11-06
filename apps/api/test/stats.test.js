@@ -370,7 +370,15 @@ test("requests made with an API key are counted against it only while switched o
       ['apikey', 'k2', '/api/stops/pairs', 'limited'],
     ],
   );
+  assert.deepEqual(
+    ae.rows('apikey').map((r) => r.indexes),
+    [['k1'], ['k2']],
+    'sampled per key',
+  );
 
+  // Two requests can touch last_used in the same millisecond: set the order outright.
+  db._db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').run(now - 60_000, 'k1');
+  db._db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').run(now - 1000, 'k2');
   const s = await adminStats({ ...env, DB: db }, now + 1000);
   assert.deepEqual(
     s.apiKeys.list.map((k) => [k.id, k.name, k.hint, k.email, k.userId, k.lastUsed !== null]),
@@ -378,7 +386,7 @@ test("requests made with an API key are counted against it only while switched o
       ['k2', 'Script', '_two', null, 'u2', true],
       ['k1', 'Bot', '_one', 'dev@u.nus.edu', 'u1', true],
     ],
-    'every key, most lately used first (k2 asked last), with its owner',
+    'every key, most lately used first, with its owner',
   );
   assert.equal(s.collect.keys, true);
 });
