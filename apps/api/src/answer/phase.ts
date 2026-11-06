@@ -76,6 +76,8 @@ export interface Lookups {
 /** Where a request is; nowhere for the Trip object's wake. */
 export type At = { lat: number | null; lon: number | null };
 
+const NOWHERE: At = { lat: null, lon: null };
+
 /** The trip's answer from where you are, and the bus the trip is about (plan.ts). */
 export interface TripPlan {
   /** The answer as worked out now. */
@@ -258,8 +260,18 @@ function remembered(look: Lookups): { now: Lookups; later: Lookups } {
  * wake) never counts a moment only a location makes a change (at the stop,
  * seen on the bus), and one with a location does. The feed is taken to say
  * what it says now (see `remembered`).
+ *
+ * `wakesAt` is the change the Trip object wakes for, as it sees the trip:
+ * from nowhere. For a request with a location it's worked out again without
+ * it, from what this request planned and read; a request at the stop is
+ * `waiting` until its bus goes, while the object, which can't see that,
+ * still owes the phones "due" and "Leave now".
  */
-export async function tripPhase(t: TripIn, nowMs: number, look: Lookups): Promise<{ verdict: Verdict; changesAt: Change | null }> {
+export async function tripPhase(
+  t: TripIn,
+  nowMs: number,
+  look: Lookups,
+): Promise<{ verdict: Verdict; changesAt: Change | null; wakesAt: Change | null }> {
   const feed = remembered(look);
   let planned: Promise<TripPlan> | undefined;
   const asNow: TripIn = { ...t, planned: () => (planned ??= t.planned()) };
@@ -287,22 +299,35 @@ export async function tripPhase(t: TripIn, nowMs: number, look: Lookups): Promis
     nowMs,
     (a, b) => shown(a) === shown(b),
   );
-  return { verdict: now, changesAt: next };
+  if (t.at.lat === null || t.at.lon === null) return { verdict: now, changesAt: next, wakesAt: next };
+  // asLater throws only when this request didn't plan; a trip it didn't
+  // plan for gives the same moments from nowhere.
+  const wakesAt = await changesOf(
+    (c) => phaseAt({ ...asLater, at: NOWHERE }, c, feed.later),
+    nowMs,
+    (a, b) => shown(a) === shown(b),
+  )
+    .then((r) => r.next)
+    .catch(() => next);
+  return { verdict: now, changesAt: next, wakesAt };
 }
 
-/** The phase of a trip that is only its answer (the way home in the evening), and when it next changes. */
+/** The phase of a trip that is only its answer (the way home in the evening), and when it next changes, as tripPhase. */
 export async function answerPhase(
   a: MeAnswer,
   rec: TripRecord | undefined,
   at: At,
   nowMs: number,
-): Promise<{ phase: Phase; changesAt: Change | null }> {
-  const { now, next } = await changesOf(
-    async (c) => phaseFor(a, rec, c, at),
-    nowMs,
-    (x, y) => x === y,
-  );
-  return { phase: now, changesAt: next };
+): Promise<{ phase: Phase; changesAt: Change | null; wakesAt: Change | null }> {
+  const from = (where: At) =>
+    changesOf(
+      async (c) => phaseFor(a, rec, c, where),
+      nowMs,
+      (x, y) => x === y,
+    );
+  const { now, next } = await from(at);
+  const wakesAt = at.lat === null || at.lon === null ? next : (await from(NOWHERE)).next;
+  return { phase: now, changesAt: next, wakesAt };
 }
 
 /**

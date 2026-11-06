@@ -678,9 +678,9 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
   // The display-ready card, in the account's 12- or 24-hour choice, else the client's.
   const card = cardFor(full, hour12(ask.h12, profile), trip, await feedDownSince(env, nowMs), nowMs);
-  // Push: have the Trip object wake when this card next changes, to tell the
-  // phones, unless it already wakes about then or sooner.
-  const wakeAt = trip.changesAt?.at ?? null;
+  // Push: have the Trip object wake when the trip next changes as it sees
+  // it, to tell the phones, unless it already wakes about then or sooner.
+  const wakeAt = trip.wakesAt?.at ?? null;
   if (wakeAt !== null && pushEnabled(env) && needsWatch(day, wakeAt, nowMs) && classesOn(profile, nowMs).length) {
     update.watch = { userId, at: wakeAt };
   }
@@ -730,8 +730,8 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, false, stepOf('home:evening'));
       const r = signalOf(day, 'home:evening');
       const shown = { ...answer, warning: lastBusWarning(GRAPH, answer, nowMs) };
-      const { phase, changesAt } = await answerPhase(shown, r, at, nowMs);
-      return { answer: shown, trip: { key: 'home:evening', phase, rec: r, undo, changesAt } };
+      const { phase, changesAt, wakesAt } = await answerPhase(shown, r, at, nowMs);
+      return { answer: shown, trip: { key: 'home:evening', phase, rec: r, undo, changesAt, wakesAt } };
     }
     return idle(restAnswer(GRAPH, profile, nowMs, places, h12));
   }
@@ -824,7 +824,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
     classAtMs: dest.why === 'class' && dest.trip ? classStartMs(dest.trip, nowMs) : null,
     planned,
   };
-  const { verdict: v, changesAt } = await tripPhase(trip, nowMs, feedLookups(env, ctx, deps, nowMs));
+  const { verdict: v, changesAt, wakesAt } = await tripPhase(trip, nowMs, feedLookups(env, ctx, deps, nowMs));
   // The answer on the bus you're on: at the change stop, the second bus to catch.
   const aboard = (on: Aboard) =>
     on.phase === 'waiting'
@@ -841,13 +841,13 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       if (on === 'missed')
         return {
           answer: await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12),
-          trip: { key, phase: 'missed', rec, undo, changesAt },
+          trip: { key, phase: 'missed', rec, undo, changesAt, wakesAt },
         };
-      if (on) return { answer: aboard(on), trip: { key, phase: on.phase, rec: { ...rec!, boarded: on.b }, undo, changesAt } };
+      if (on) return { answer: aboard(on), trip: { key, phase: on.phase, rec: { ...rec!, boarded: on.b }, undo, changesAt, wakesAt } };
       // The bus you were on should have got you there by now.
       return {
         answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped),
-        trip: { key, phase: 'arrived', rec, undo, changesAt },
+        trip: { key, phase: 'arrived', rec, undo, changesAt, wakesAt },
       };
     }
     case 'there':
@@ -856,20 +856,20 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       // bare "You're here" that would flip to it a moment later.
       return {
         answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped),
-        trip: { key, phase: 'arrived', rec, undo, changesAt },
+        trip: { key, phase: 'arrived', rec, undo, changesAt, wakesAt },
       };
   }
 
   const { fresh, answer, bus, save, drop } = await planned();
   const warned = (a: MeAnswer) => (home ? { ...a, warning: lastBusWarning(GRAPH, a, nowMs) } : a);
-  if (v.kind === 'held') return { answer: warned(answer), trip: { key, phase: 'idle', rec, undo, changesAt } };
+  if (v.kind === 'held') return { answer: warned(answer), trip: { key, phase: 'idle', rec, undo, changesAt, wakesAt } };
   const flags = { ...(save ? { planChanged: true } : {}), ...(drop ? { planDropped: true } : {}) };
   switch (v.kind) {
     case 'missed':
       // Missed, and the answer is the next way there.
       return {
         answer: fresh,
-        trip: { key, phase: 'missed', rec, undo, ...flags, assumed: true, plan: bus, planChanged: false, changesAt },
+        trip: { key, phase: 'missed', rec, undo, ...flags, assumed: true, plan: bus, planChanged: false, changesAt, wakesAt },
       };
     case 'seen':
       return {
@@ -882,13 +882,17 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
           plan: v.on.b,
           ...(v.seenNow ? { seenOn: { ...bus!, seen: true as const } } : {}),
           changesAt,
+          wakesAt,
         },
       };
     case 'gone':
-      return { answer: warned(fresh), trip: { key, phase: v.phase, rec, undo, plan: bus, gone: true, changesAt } };
+      return { answer: warned(fresh), trip: { key, phase: v.phase, rec, undo, plan: bus, gone: true, changesAt, wakesAt } };
   }
   // `past` never comes now (see phaseAt): worded as the plan if it did.
-  return { answer: warned(answer), trip: { key, phase: phaseOf(v), rec, undo, ...flags, ...(bus ? { plan: bus } : {}), changesAt } };
+  return {
+    answer: warned(answer),
+    trip: { key, phase: phaseOf(v), rec, undo, ...flags, ...(bus ? { plan: bus } : {}), changesAt, wakesAt },
+  };
 }
 
 /** The phase's feed lookups (phase.ts), from the cached feed. */

@@ -77,6 +77,24 @@ test('phases follow the clock until a signal says otherwise, and say when they n
   assert.equal(await phaseAt(tripOf({ ...leaveAt(now), arrived: true }), now), 'arrived');
 });
 
+test('at the stop before the leave-by, the card changes when the bus goes; the Trip object, from nowhere, still wakes for due', async () => {
+  const now = FROZEN_NOW;
+  const pgp = GRAPH.stops.find((s) => s.code === 'PGP');
+  const answer = leaveAt(now + 10 * MIN);
+  const bus = { svc: 'D2', board: iso(now + 14 * MIN), arrive: iso(now + 20 * MIN) };
+  const there = await tripPhase(tripOf(answer, { bus, at: { lat: pgp.lat, lon: pgp.lon } }), now, fixtureFeed().look);
+  assert.equal(phaseOf(there.verdict), 'waiting');
+  assert.notEqual(there.changesAt.at, now + 10 * MIN - DUE_MS, 'waiting holds through the leave-by');
+  assert.deepEqual(there.wakesAt, { at: now + 10 * MIN - DUE_MS, leave: true });
+  const evening = await answerPhase(answer, undefined, { lat: pgp.lat, lon: pgp.lon }, now);
+  assert.equal(evening.phase, 'waiting');
+  assert.equal(evening.changesAt, null);
+  assert.deepEqual(evening.wakesAt, { at: now + 10 * MIN - DUE_MS, leave: true });
+  // With no location, the two are the same.
+  const away = await tripPhase(tripOf(answer, { bus }), now, fixtureFeed().look);
+  assert.deepEqual(away.wakesAt, away.changesAt);
+});
+
 test('a class trip is over LATE_GRACE_MIN after the class starts: the next trip is planned then', async () => {
   const now = FROZEN_NOW;
   const classAtMs = now + 20 * MIN;

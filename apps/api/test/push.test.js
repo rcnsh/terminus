@@ -14,6 +14,8 @@ import { armTrips, remindTerm } from '../src/ops/monitor.ts';
 import { endOfDayMs, sgtDate } from '../src/answer/trip.ts';
 import { DUE_MS } from '../src/answer/phase.ts';
 import { remindUser } from '../src/push/push.ts';
+import { GRAPH } from '../src/answer/graph.ts';
+import { indexGraph } from '../src/answer/resolve.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
 // How a headway guess is used, not how long it is: one guess for every shuttle.
@@ -165,6 +167,27 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.ok(wake > Date.now(), 'it keeps waking');
   assert.equal(fcm.sent.length, before);
   assert.equal(fcm.oauth, 1, 'the access token is reused');
+});
+
+test('a request from the stop before the leave-by still has the Trip object wake to push time to go', async () => {
+  // The leave-by, from an account of its own, so this one's first request is the one at the stop.
+  const pilot = await setup();
+  const leave = (await pilot.next(pilot.phone)).leave;
+  const { call, phone, fcm, clock, alarm, wakeUntil } = await setup();
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  clock(Date.parse(leave.at) - 10 * 60_000);
+  const stop = indexGraph(GRAPH).byCode.get(leave.stopCode);
+  const there = await (await call(`/api/me/next?lat=${stop.lat}&lon=${stop.lon}`, { token: phone })).json();
+  // The phone at the stop is waiting until its bus goes; the object, with no
+  // location, still owes "due" five minutes before the leave-by.
+  assert.equal(there.card.phase, 'waiting');
+  assert.equal(alarm(), Date.parse(there.leave.at) - DUE_MS);
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due'],
+  );
+  assert.equal(fcm.sent[0].android.priority, 'HIGH');
 });
 
 /**

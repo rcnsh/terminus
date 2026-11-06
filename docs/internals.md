@@ -530,8 +530,11 @@ trip, its phase, or whether the bus has gone). The time goes forward; the
 answer, the feed and where the request is stay as they are now. So a
 request with a location counts the moments only a location makes a change
 (waiting at the stop from `WAIT_EARLY_MS` before the leave-by, still at the
-change stop after the second bus left), and the Trip object's wake, which
-has none, never wakes for them. Feed reads
+change stop after the second bus left) in the card's `nextChangeAt`. The
+Trip object has no location, so it wakes at `wakesAt`: the same rules from
+nowhere, on what the request planned and read. A phone at the stop is
+`waiting` until its bus goes, but the object still owes the phones "due"
+and "Leave now", and never wakes for a moment only a location sees. Feed reads
 for the bus you're on come through `Lookups`, asked only when a rule needs
 them; later moments reuse what was read now and take anything not read as
 the plan's times, so working out the next change costs no feed call.
@@ -707,7 +710,7 @@ change and once the second bus has gone (`changesAt`).
 - **Push** ([src/push/push.ts](../apps/api/src/push/push.ts), [src/push/tripdo.ts](../apps/api/src/push/tripdo.ts)).
   When push is set up (`pushEnabled`: `FCM_SERVICE_ACCOUNT` or
   `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
-  Trip object to wake at the trip's `changesAt` (phase.ts): only when its
+  Trip object to wake at the trip's `wakesAt` (phase.ts): only when its
   phase, `gone` or the trip itself changes (due, leave-by, the bus taken to
   have gone, the change of buses, the ride's end, the class's trip over,
   the last class ending for the trip home, and with no location, home by

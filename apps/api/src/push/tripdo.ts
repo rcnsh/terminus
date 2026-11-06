@@ -10,7 +10,7 @@
  *   refuses every write: a request already under way when the account went
  *   can't store the user's trip again.
  * - **Push:** when the Worker has worked out a card, the object wakes at
- *   its next phase change (`changesAt` in phase.ts, not the card's `nextChangeAt`,
+ *   its next phase change (`wakesAt` in phase.ts, not the card's `nextChangeAt`,
  *   which also counts going stale), works out the card again, and nudges
  *   the user's phones (push.ts) if the trip or its phase changed, starting
  *   an iPhone's Live Activity when it's due or missed. It keeps

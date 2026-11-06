@@ -70,9 +70,12 @@ export interface TripView {
   planChanged?: boolean;
   /** The remembered plan was a guess this request's location replaced with a walk (the caller deletes it). */
   planDropped?: boolean;
-  /** When the trip's phase next changes by itself (phase.ts): the Trip
-   *  object wakes then to push. Absent outside a trip. */
+  /** When the trip's phase next changes by itself (phase.ts), as this
+   *  request sees it: the card's next change. Absent outside a trip. */
   changesAt?: Change | null;
+  /** The same as the Trip object sees it, with no location (tripPhase's
+   *  `wakesAt`): the object wakes then to push. */
+  wakesAt?: Change | null;
   /** False when the user turned reminders off for this trip. */
   remind?: boolean;
   /** Something terminus has learned and offers to change (outcomes.ts). */
