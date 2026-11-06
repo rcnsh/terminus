@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { GRAPH } from '../src/answer/graph.ts';
 import { departuresFrom } from '../src/answer/departures.ts';
 import { headwayFor } from '../src/answer/hours.ts';
-import { nearbyRow, scoreLeg, scoreOptions } from '../src/answer/resolve.ts';
+import { nearbyRow, readyS, scoreLeg, scoreOptions } from '../src/answer/resolve.ts';
 import { departureOf, departures, leaveBy } from '../src/answer/leave.ts';
 import { withSteps } from '../src/answer/answer.ts';
 import { SAME_BUS_MS } from '../src/answer/plan.ts';
@@ -240,4 +240,36 @@ test('estimates long after the last live bus are the same buses as stepping a he
   assert.ok(new Set(expected.map((e) => step(e.at))).size > 1, 'the headway changes among them');
   const got = departuresFrom(GRAPH, sa, 'D2', { now, from, max: 12 }).map((d) => ({ id: d.id, at: d.earliest }));
   assert.deepEqual(got, expected);
+});
+
+test('the first bus after the start waits for it, however many headways in you reach the stop', () => {
+  // D2 starts at 07:15, every 430 s at 07:00: its first window ends at 07:22:10.
+  const now = at('2026-08-27T07:10');
+  const sa = board('PGP', now, 'D2', []);
+  for (const reach of ['07:16', '07:23']) {
+    const [d] = departuresFrom(GRAPH, sa, 'D2', { now, from: at(`2026-08-27T${reach}`) });
+    assert.equal(d.opens, true, reach);
+    // Not for a trip that can't wait for the start; for a class, no wait once you're there after it.
+    const earliestS = (at(`2026-08-27T${reach}`) - now) / 1000;
+    assert.equal(scoreLeg(GRAPH, leg, sa, now, earliestS), null, reach);
+    assert.equal(scoreLeg(GRAPH, leg, sa, now, earliestS, { openBy: at('2026-08-27T08:00') }).opensInS, 0);
+  }
+});
+
+test('late for a class, a bus you reach after the service starts is "leave now", not a wait for the start', () => {
+  // D2 starts at 07:15 and its first window ends at 07:22:10; you can be at the stop by 07:23.
+  const now = at('2026-08-27T07:10');
+  const rideS = 600;
+  const walkS = (at('2026-08-27T07:23') - now) / 1000 - readyS({ walkS: 0 });
+  const arriveBy = { atMs: at('2026-08-27T07:30'), venueWalkS: 0 };
+  const l = leaveBy({
+    options: [{ svc: 'D2', stop: PGP, walkS, rideS, boardS: 0, totalS: 0, fromMs: now, quality: 'scheduled', hops: 5 }],
+    candidates: [],
+    byStop: new Map([['PGP', board('PGP', now, 'D2', [])]]),
+    graph: GRAPH,
+    arriveBy,
+    walkAllS: null,
+    nowMs: now,
+  });
+  assert.equal(l.at, new Date(now).toISOString().replace('.000Z', 'Z'));
 });

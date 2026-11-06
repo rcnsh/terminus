@@ -285,8 +285,10 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
         latest: end,
         ...(opens ? { opens: true as const } : {}),
       });
+      // Only once one is pushed: reaching the stop after the start's own
+      // window, the first you can catch still waits for the start.
+      opens = false;
     }
-    opens = false;
     t = end;
     if (resume.length) [t, fixed, i, resume] = [resume[0], resume, -1, []];
   }
