@@ -303,7 +303,7 @@ export async function tripPhase(
     async (c) => {
       if (!first) return phaseAt(asLater, c, feed.later);
       first = false;
-      const v = await phaseAt(asNow, c, feed.now);
+      const v = await phaseAt(asNow, c, feed.now, feed.later);
       seenNow = v.kind === 'seen' && v.seenNow;
       return v;
     },
@@ -344,15 +344,23 @@ export async function answerPhase(
 /**
  * The trip's phase at the clock's time. The rules in order; the first that
  * holds decides. A signal wins over the clock: once you say you're on the
- * bus, it doesn't matter that the leave-by passed.
+ * bus, it doesn't matter that the leave-by passed. `known`: the feed as far
+ * as it has been read, with no call (see `remembered`).
  */
-async function phaseAt(t: TripIn, c: Clock, look: Lookups): Promise<Verdict> {
+async function phaseAt(t: TripIn, c: Clock, look: Lookups, known: Lookups = look): Promise<Verdict> {
   const { lat, lon } = t.at;
   // Never at the request's own time: the planner (nextClass) has moved on by then.
   if (t.classAtMs != null && c.reached(t.classAtMs + LATE_GRACE_MIN * 60_000)) return { kind: 'past' };
   // No location, and long enough since the last class to be home by now:
   // its planned bus has got you there, or with none planned, HOME_BY_MIN.
-  if (t.home && lat === null && c.reached(t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000)) return { kind: 'home' };
+  // On a bus the feed has running later than that, not before the feed has
+  // it there, where `onBus` ends the ride: the feed only as read already, so
+  // a request that hasn't read it goes by the plan, with no call.
+  if (t.home && lat === null) {
+    const by = t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000;
+    const there = t.rec?.kind === 'boarded' && t.rec.boarded ? await knownArrival(t.rec.boarded, known) : null;
+    if (c.reached(there === null ? by : Math.max(by, there))) return { kind: 'home' };
+  }
   if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, t.at, c, look) };
 
   const { fresh, answer, bus } = await t.planned();
@@ -452,6 +460,13 @@ async function onBus(b: Plan, at: At, c: Clock, look: Lookups): Promise<OnBus> {
   // so the next bus of the service due at your stop is the guess, marked
   // as one; with nothing due, the card says only where to get off.
   return { phase: 'riding', b: { ...b, arrive: await look.nextArrival(b) }, live: false };
+}
+
+/** When the feed has the last bus of `b` at the stop you get off at, from what `known` has read: null when it hasn't. */
+async function knownArrival(b: Plan, known: Lookups): Promise<number | null> {
+  const last = b.change ? (await known.secondBus(b)).change : b;
+  const live = await known.liveArrival(last);
+  return live === null ? null : Date.parse(live);
 }
 
 /** The feed's arrival for the bus you're on, while it's still to come. */

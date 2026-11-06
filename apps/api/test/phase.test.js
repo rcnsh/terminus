@@ -132,6 +132,31 @@ test('a rule that throws at a later moment fails the call: it is not taken as a 
   await assert.rejects(tripPhase(located, now, fixtureFeed().look), TypeError);
 });
 
+test('on a bus home that the feed has running late, the trip home is not over at its home-by but when the feed has that bus there', async () => {
+  const now = FROZEN_NOW;
+  // On the D2 due home at 18:10 (now + 10 min); the feed has it there at 18:25.
+  const boarded = { svc: 'D2', board: iso(now - 10 * MIN), arrive: iso(now + 10 * MIN), plate: 'PD123X' };
+  const rec = { kind: 'boarded', at: now - 10 * MIN, boarded };
+  const homeBy = dayState({ date: '2026-08-27', trips: { 'home:660': rec } }).homeBy.get('home:660');
+  assert.equal(homeBy, now + 10 * MIN + HOME_GRACE_MS);
+  const live = now + 25 * MIN;
+  const feed = fixtureFeed({ live: { D2: iso(live) } });
+  const trip = tripOf(leaveAt(now - 15 * MIN), { bus: boarded, rec, home: { lastEndMs: now - 60 * MIN, homeBy } });
+  const { verdict, changesAt } = await tripPhase(trip, now, feed.look);
+  assert.equal(phaseOf(verdict), 'riding');
+  assert.deepEqual(changesAt, { at: live, leave: false }, 'not at the home-by, mid-ride');
+  assert.deepEqual(feed.asked, ['live D2'], 'the feed read once, for the bus you are on');
+  // A request that doesn't read the feed (past the home-by, no location) still goes by the plan, as before.
+  const quiet = fixtureFeed({ live: { D2: iso(live) } });
+  assert.equal((await tripPhase(trip, live, quiet.look)).verdict.kind, 'home');
+  assert.deepEqual(quiet.asked, []);
+  assert.equal(
+    (await tripPhase(trip, homeBy, fixtureFeed({ live: { D2: iso(live) } }).look)).verdict.kind,
+    'home',
+    'past the home-by, no feed read: by the plan',
+  );
+});
+
 test('a class trip is over LATE_GRACE_MIN after the class starts: the next trip is planned then', async () => {
   const now = FROZEN_NOW;
   const classAtMs = now + 20 * MIN;
