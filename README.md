@@ -245,7 +245,7 @@ a build without them comes out unsigned (Android) or ad-hoc signed (Mac).
 The campus street map goes to R2 with the **map tiles** workflow or
 `scripts/map-tiles.sh`.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) to send a change.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) to send a change.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/loc-dark.webp">

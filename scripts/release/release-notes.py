@@ -1,9 +1,9 @@
 """
 Release notes for scripts/release/github-release.sh, as GitHub-flavoured Markdown:
 a beta callout for a pre-release, the hand-written highlights in
-RELEASE_NOTES.md (when its first line is `<!-- <version> -->`), every commit
+docs/RELEASE_NOTES.md (when its first line is `<!-- <version> -->`), every commit
 since the previous tag (folded away when there are highlights), the downloads
-and the checksums. RELEASE_NOTES.md holds only the latest release's
+and the checksums. docs/RELEASE_NOTES.md holds only the latest release's
 highlights: write over it for the next one.
 
     python3 scripts/release/release-notes.py <version> <tag> <previous tag> <apk> <dmg> [beta]
@@ -70,12 +70,12 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
         )
     out.append(f'<sub>Released {date}</sub>\n')
 
-    highlights = open('RELEASE_NOTES.md').read() if os.path.exists('RELEASE_NOTES.md') else ''
+    highlights = open('docs/RELEASE_NOTES.md').read() if os.path.exists('docs/RELEASE_NOTES.md') else ''
     first, _, rest = highlights.partition('\n')
     has_highlights = first.strip() == f'<!-- {version} -->'
     marker = re.fullmatch(r'<!--\s*(.*?)\s*-->', first.strip())
     if marker and not has_highlights:
-        print(f'warning: RELEASE_NOTES.md is for {marker[1]}, not {version}; its highlights are left out', file=sys.stderr)
+        print(f'warning: docs/RELEASE_NOTES.md is for {marker[1]}, not {version}; its highlights are left out', file=sys.stderr)
     if has_highlights:
         out.append(rest.strip() + '\n')
 

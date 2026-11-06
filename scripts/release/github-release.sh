@@ -1,7 +1,7 @@
 #!/bin/bash
 # Publish a GitHub release for a tagged version, with the APKs (one per CPU
 # type) and the Mac DMG attached, the hand-written highlights in
-# RELEASE_NOTES.md (when it's for this version) and the commits since the
+# docs/RELEASE_NOTES.md (when it's for this version) and the commits since the
 # previous tag. scripts/release/release.sh runs it once every file is in
 # build/release/<version>; run again, it re-uploads the files to the
 # existing release.

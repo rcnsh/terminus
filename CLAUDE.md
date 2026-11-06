@@ -8,7 +8,7 @@ Live at https://terminus.run (API docs at `/docs`), beta at
 https://beta.terminus.run. An independent student project, not affiliated
 with NUS.
 
-Name new code and copy with the words in [GLOSSARY.md](GLOSSARY.md) (stop,
+Name new code and copy with the words in [GLOSSARY.md](docs/GLOSSARY.md) (stop,
 service, trip, plan, estimate, …). The deeper why is in
 [docs/internals.md](docs/internals.md); decisions that look odd but are
 deliberate are in [docs/adr/](docs/adr/).
