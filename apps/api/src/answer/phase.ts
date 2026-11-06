@@ -76,6 +76,45 @@ export type At = { lat: number | null; lon: number | null };
 
 const NOWHERE: At = { lat: null, lon: null };
 
+/**
+ * Where a request is, as the rules ask about it, over one run of them from
+ * now on. `decided`: whether the location made any rule come out otherwise
+ * than with none. When it didn't, the moments and verdicts are the same as
+ * from nowhere, so the Trip object's view needs no second run (tripPhase).
+ */
+interface Where {
+  located: boolean;
+  decided: boolean;
+  /** Within AT_STOP_M of the stop `code`. */
+  atStop(code: string): boolean;
+  /** seenOnBus at `ms`, asked in time order. Once it says no for a bus it
+   *  says no later too, unasked: the walk you could have made only grows. */
+  onBus(b: Plan, ms: number): boolean;
+}
+
+function whereOf({ lat, lon }: At): Where {
+  const located = lat !== null && lon !== null;
+  const notOn = new WeakSet<Plan>();
+  const w: Where = {
+    located,
+    decided: false,
+    atStop(code) {
+      const s = located ? indexGraph(GRAPH).byCode.get(code) : undefined;
+      const yes = s !== undefined && haversineM(lat!, lon!, s.lat, s.lon) <= AT_STOP_M;
+      if (yes) w.decided = true;
+      return yes;
+    },
+    onBus(b, ms) {
+      if (!located || notOn.has(b)) return false;
+      const yes = seenOnBus(b, lat!, lon!, ms);
+      if (yes) w.decided = true;
+      else notOn.add(b);
+      return yes;
+    },
+  };
+  return w;
+}
+
 /** The trip's answer from where you are, and the bus the trip is about (plan.ts). */
 export interface TripPlan {
   /** The answer as worked out now. */
@@ -297,10 +336,10 @@ function remembered(look: Lookups): { now: Lookups; later: Lookups } {
  * what it says now (see `remembered`).
  *
  * `wakesAt` is the change the Trip object wakes for, as it sees the trip:
- * from nowhere. For a request with a location it's worked out again without
- * it, from what this request planned and read; a request at the stop is
- * `waiting` until its bus goes, while the object, which can't see that,
- * still owes the phones "due" and "Leave now".
+ * from nowhere. For a request whose location decided something (`Where`)
+ * it's worked out again without it, from what this request planned and
+ * read; a request at the stop is `waiting` until its bus goes, while the
+ * object, which can't see that, still owes the phones "due" and "Leave now".
  */
 export async function tripPhase(
   t: TripIn,
@@ -323,22 +362,24 @@ export async function tripPhase(
     },
   };
   let first = true;
+  const here = whereOf(t.at);
   const { now, next } = await changesOf(
     async (c) => {
-      if (!first) return phaseAt(asLater, c, feed.later);
+      if (!first) return phaseAt(asLater, here, c, feed.later);
       first = false;
-      const v = await phaseAt(asNow, c, feed.now, feed.later);
+      const v = await phaseAt(asNow, here, c, feed.now, feed.later);
       seenNow = v.kind === 'seen' && v.seenNow;
       return v;
     },
     nowMs,
     (a, b) => shown(a) === shown(b),
   );
-  if (t.at.lat === null || t.at.lon === null) return { verdict: now, changesAt: next, wakesAt: next };
+  if (!here.decided) return { verdict: now, changesAt: next, wakesAt: next };
   // asLater throws only when this request didn't plan; a trip it didn't
   // plan for gives the same moments from nowhere.
+  const nowhere = whereOf(NOWHERE);
   const wakesAt = await changesOf(
-    (c) => phaseAt({ ...asLater, at: NOWHERE }, c, feed.later),
+    (c) => phaseAt(asLater, nowhere, c, feed.later),
     nowMs,
     (a, b) => shown(a) === shown(b),
   )
@@ -354,14 +395,15 @@ export async function answerPhase(
   at: At,
   nowMs: number,
 ): Promise<{ phase: Phase; changesAt: Change | null; wakesAt: Change | null }> {
-  const from = (where: At) =>
+  const from = (w: Where) =>
     changesOf(
-      async (c) => phaseFor(a, rec, c, where),
+      async (c) => phaseFor(a, rec, c, w),
       nowMs,
       (x, y) => x === y,
     );
-  const { now, next } = await from(at);
-  const wakesAt = at.lat === null || at.lon === null ? next : (await from(NOWHERE)).next;
+  const here = whereOf(at);
+  const { now, next } = await from(here);
+  const wakesAt = here.decided ? (await from(whereOf(NOWHERE))).next : next;
   return { phase: now, changesAt: next, wakesAt };
 }
 
@@ -371,8 +413,7 @@ export async function answerPhase(
  * bus, it doesn't matter that the leave-by passed. `known`: the feed as far
  * as it has been read, with no call (see `remembered`).
  */
-async function phaseAt(t: TripIn, c: Clock, look: Lookups, known: Lookups = look): Promise<Verdict> {
-  const { lat, lon } = t.at;
+async function phaseAt(t: TripIn, w: Where, c: Clock, look: Lookups, known: Lookups = look): Promise<Verdict> {
   // Never at the request's own time: the planner (nextClass) has moved on by then.
   if (t.classAtMs != null && c.reached(t.classAtMs + LATE_GRACE_MIN * 60_000)) return { kind: 'past' };
   // No location, and long enough since the last class to be home by now:
@@ -380,12 +421,13 @@ async function phaseAt(t: TripIn, c: Clock, look: Lookups, known: Lookups = look
   // On a bus the feed has running later than that, not before the feed has
   // it there, where `onBus` ends the ride: the feed only as read already, so
   // a request that hasn't read it goes by the plan, with no call.
-  if (t.home && lat === null) {
+  if (t.home && w.located) w.decided = true;
+  else if (t.home) {
     const by = t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000;
     const there = t.rec?.kind === 'boarded' && t.rec.boarded ? await knownArrival(t.rec.boarded, known) : null;
     if (c.reached(there === null ? by : Math.max(by, there))) return { kind: 'home' };
   }
-  if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, t.at, c, look) };
+  if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, w, c, look) };
 
   const { fresh, answer, bus } = await t.planned();
   // Seen at the class's stop before it starts.
@@ -401,30 +443,29 @@ async function phaseAt(t: TripIn, c: Clock, look: Lookups, known: Lookups = look
   // on a bus. Nothing is asked either.
   if (!t.rec && bus?.board && !answer.arrived && c.reached(Date.parse(bus.board) + ASSUME_MS)) {
     // Still at the stop now (this request's location), not just earlier: missed.
-    if (phaseFor(answer, undefined, c, t.at) === 'waiting') return { kind: 'missed' };
+    if (phaseFor(answer, undefined, c, w) === 'waiting') return { kind: 'missed' };
     // Seen on it, now or by an earlier request (noted on the plan, so a
     // device without a location follows the phone). On a trip that changes
     // buses, on the second bus's road once it has left. seenOnBus compares
     // the time itself (could you have walked there since?); once it says so,
     // the plan does (`seen`), at later moments too (tripPhase).
-    const onSecond = (b: Plan) =>
-      Boolean(b.change?.board && c.reached(Date.parse(b.change.board)) && seenOnBus(b.change, lat!, lon!, c.ms));
-    const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, c.ms) || onSecond(bus));
+    const onSecond = (b: Plan) => Boolean(b.change?.board && c.reached(Date.parse(b.change.board)) && w.onBus(b.change, c.ms));
+    const seenNow = !bus.seen && w.located && (w.onBus(bus, c.ms) || onSecond(bus));
     if (bus.seen || seenNow) {
-      const on = await onBus(bus, t.at, c, look);
+      const on = await onBus(bus, w, c, look);
       if (on && on !== 'missed') return { kind: 'seen', on, seenNow };
     }
     // Not known: the next way there, which is what you need if you missed
     // it, and says only that the bus has gone if you didn't. Under way
     // either way: never "Time to get going" to someone who may be on board.
-    const phase = phaseFor(fresh, undefined, c, t.at);
+    const phase = phaseFor(fresh, undefined, c, w);
     return { kind: 'gone', phase: phase === 'idle' || phase === 'due' ? 'heading' : phase };
   }
-  return { kind: 'plan', phase: phaseFor(answer, t.rec, c, t.at) };
+  return { kind: 'plan', phase: phaseFor(answer, t.rec, c, w) };
 }
 
 /** The phase of a planned trip, from its answer and the latest signal. */
-function phaseFor(a: MeAnswer, rec: TripRecord | undefined, c: Clock, at: At): Phase {
+function phaseFor(a: MeAnswer, rec: TripRecord | undefined, c: Clock, w: Where): Phase {
   if (a.arrived) return 'arrived';
   if (rec?.kind === 'boarded') return 'riding';
   if (rec?.kind === 'missed') return 'missed';
@@ -434,10 +475,7 @@ function phaseFor(a: MeAnswer, rec: TripRecord | undefined, c: Clock, at: At): P
   // whatever the clock says. Not hours before it (you may live by that
   // stop), and not at any other stop (riding past one is not waiting at it).
   const code = a.leave?.stopCode ?? a.stop.code;
-  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || c.reached(leaveAt - WAIT_EARLY_MS, true))) {
-    const s = indexGraph(GRAPH).byCode.get(code);
-    if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
-  }
+  if (code && a.leave?.svc && w.atStop(code) && (leaveAt === null || c.reached(leaveAt - WAIT_EARLY_MS, true))) return 'waiting';
   if (rec?.kind === 'left') return 'heading';
   if (leaveAt === null) return 'idle';
   if (c.reached(leaveAt, true)) return 'heading';
@@ -454,7 +492,7 @@ function phaseFor(a: MeAnswer, rec: TripRecord | undefined, c: Clock, at: At): P
  * `missed` when you're still at the change stop once the second bus has
  * left; null once the ride is over.
  */
-async function onBus(b: Plan, at: At, c: Clock, look: Lookups): Promise<OnBus> {
+async function onBus(b: Plan, w: Where, c: Clock, look: Lookups): Promise<OnBus> {
   const second = b.change;
   if (second) {
     // Before the second bus leaves, the feed can say the first is still on its way to the change.
@@ -469,10 +507,8 @@ async function onBus(b: Plan, at: At, c: Clock, look: Lookups): Promise<OnBus> {
     const cur = { ...b, change: fed.change };
     const gone = secondLeavesMs(fed.change);
     if (gone === null || !c.reached(gone + CHANGE_GRACE_MS)) return { phase: 'waiting', b: cur, live: fed.live };
-    const s = second.stopCode ? indexGraph(GRAPH).byCode.get(second.stopCode) : undefined;
-    if (s && at.lat !== null && at.lon !== null && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M && c.reached(gone + ASSUME_MS))
-      return 'missed';
-    return onBus(fed.change, at, c, look);
+    if (second.stopCode && w.atStop(second.stopCode) && c.reached(gone + ASSUME_MS)) return 'missed';
+    return onBus(fed.change, w, c, look);
   }
   const live = await liveBy(b, c, look);
   const arrive = live ?? b.arrive;

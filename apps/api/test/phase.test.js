@@ -206,6 +206,34 @@ test('the 30 s a sliding leave-by waits never skips a change that does not slide
   assert.equal(Date.parse(card.nextChangeAt), now + 20_000);
 });
 
+test('a request whose location decides nothing works out the next change once, as one without a location', async () => {
+  const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { card: _card, refreshAt: _r, ...answer } = fixture;
+  const bus = planOfLeave(answer.leave, false, answer.dest.to);
+  // The plan's bus gone five minutes ago; the next one to leave for in 10.
+  const now = Date.parse(bus.board) + 5 * MIN;
+  const fresh = { ...answer, leave: { ...answer.leave, at: iso(now + 10 * MIN), board: iso(now + 15 * MIN) } };
+  /** The trip's rules run once per moment tried: counted by what they read of the answer. */
+  const cost = async (at) => {
+    let reads = 0;
+    const counted = new Proxy(fresh, { get: (o, k) => (reads++, o[k]) });
+    const out = await tripPhase(tripOf(answer, { bus, fresh: counted, at }), now, fixtureFeed().look);
+    return { reads, out };
+  };
+  const far = await cost({ lat: 1.25, lon: 103.9 });
+  const none = await cost(nowhere);
+  assert.equal(phaseOf(far.out.verdict), phaseOf(none.out.verdict));
+  assert.deepEqual(far.out.wakesAt, none.out.wakesAt);
+  assert.equal(far.reads, none.reads);
+  // On the bus's road, but no further than you could have walked: seenOnBus says no once, and stays no as the walk grows.
+  let asked = 0;
+  const counted = new Proxy(bus, { get: (o, k) => (k === 'paid' && asked++, o[k]) });
+  const road = onRide(bus.svc, bus.stopCode, bus.alightCode, 150);
+  const { verdict } = await tripPhase(tripOf(answer, { bus: counted, fresh, at: road }), now, fixtureFeed().look);
+  assert.equal(verdict.kind, 'gone');
+  assert.equal(asked, 1);
+});
+
 /* On a bus: one, or two with a change (transfer.ts). */
 
 /** A leave-by for K at PGP to Kent Vale, then P to College Green. */
