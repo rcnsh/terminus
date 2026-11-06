@@ -20,7 +20,7 @@
 
 import { loadCalendar } from '../timetable/calendarsync.ts';
 import type { Env } from '../types.ts';
-import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, planBasis, sameBasis, sgtDate } from '../answer/trip.ts';
+import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate, tripRev } from '../answer/trip.ts';
 import type { MeDeps } from '../accounts/me.ts';
 import { tripCardFor } from '../accounts/me.ts';
 import { type AnswerIn, type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
@@ -149,8 +149,9 @@ export class Trip {
     const next = today(stored, u.date);
     let changed = next !== stored;
     // A plan worked out from a trip that has changed since is dropped,
-    // checked before this update's own changes (sameBasis).
-    const fresh = (key: string) => !u.basis?.[key] || sameBasis(next, key, u.basis[key]);
+    // checked before this update's own changes (tripRev). An older Worker
+    // sends no basis, and its plan is saved as it always was.
+    const fresh = (key: string) => typeof u.basis?.[key] !== 'number' || tripRev(next, key) === u.basis[key];
     const plansIn = Object.entries(u.plans ?? {}).filter(([key]) => fresh(key));
     for (const { key, rec } of u.items ?? []) {
       // A day has a handful of trips; past this many a new one is refused,
@@ -158,13 +159,16 @@ export class Trip {
       if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;
       if (rec) next.trips[key] = rec;
       else delete next.trips[key];
+      bump(next, key);
       changed = true;
     }
     if (plansIn.length) {
       const plans = { ...next.plans };
-      for (const [key, plan] of plansIn)
+      for (const [key, plan] of plansIn) {
         if (plan) plans[key] = plan;
         else delete plans[key];
+        bump(next, key);
+      }
       next.plans = plans;
       changed = true;
     }
@@ -180,6 +184,7 @@ export class Trip {
         const { [key]: _old, ...plans } = next.plans;
         next.plans = plans;
       }
+      bump(next, key);
       changed = true;
     }
     if (u.watch) {
@@ -290,14 +295,14 @@ export class Trip {
     // read back to note the next wake. Only they are: the object is billed
     // for the time it's awake.
     const plans: Promise<unknown>[] = [];
-    // A plan refused as stale: the card was worked out from a day that's gone.
-    let stale = false;
-    const saved: Record<string, Plan> = {};
+    // The revision each trip the card planned for should still have: as read,
+    // or as this wake's own plan moved it on. A plan refused leaves it as read.
+    const revs = new Map<string, number>();
+    const expected = (key: string) => revs.get(key) ?? tripRev(day, key);
     const savePlan = (key: string, plan: Plan) => {
       const p = this.state.blockConcurrencyWhile(async () => {
         if (await this.cleared()) return;
-        if (await this.putPlan(date, key, plan, day)) saved[key] = plan;
-        else stale = true;
+        revs.set(key, (await this.putPlan(date, key, plan, expected(key))) ?? expected(key));
       });
       plans.push(p);
       return p;
@@ -318,13 +323,13 @@ export class Trip {
     const lang: Lang = audience.iphoneLang ?? 'en';
     const card = await withLang(lang, () => tripCardFor(env, ctx, deps, userId, day, nowMs, savePlan, audience.iphoneH12));
     await Promise.allSettled(plans);
-    // With no plan to save (one was stored already), a step or signal while
-    // the wake ran shows only in the stored day: the trip as read, with any
-    // plan this wake saved.
-    if (!stale && card?.key && !(await this.cleared())) {
-      const k = card.key;
-      const expect = { ...planBasis(day, k), ...(saved[k] ? { plan: saved[k] } : {}) };
-      stale = !sameBasis(today(await this.storedDay(), date), k, expect);
+    // A step, a signal or another device's plan while the wake ran moved the
+    // trip's revision on: its card (or a plan it couldn't save) is from a day that's gone.
+    const keys = new Set([...revs.keys(), ...(card?.key ? [card.key] : [])]);
+    let stale = false;
+    if (keys.size && !(await this.cleared())) {
+      const stored = today(await this.storedDay(), date);
+      stale = [...keys].some((k) => tripRev(stored, k) !== expected(k));
     }
     // Pushing it would tell the phones about the bus the user just stepped
     // off (or a trip already signalled): wake again soon, from the new day.
@@ -482,16 +487,17 @@ export class Trip {
   }
 
   /**
-   * Saves a plan a wake worked out from `read`, the day as it read it, unless
-   * the trip has changed since (sameBasis): the next answer then plans from
-   * what's stored. False when it was dropped.
+   * Saves a plan a wake worked out from the trip at revision `rev`, unless
+   * the trip has changed since (tripRev): the next answer then plans from
+   * what's stored. The trip's new revision, or null when it was dropped.
    */
-  private async putPlan(date: string, key: string, plan: Plan, read: DayRecord | null): Promise<boolean> {
+  private async putPlan(date: string, key: string, plan: Plan, rev: number): Promise<number | null> {
     const next = today(await this.storedDay(), date);
-    if (!sameBasis(next, key, planBasis(read, key))) return false;
+    if (tripRev(next, key) !== rev) return null;
     next.plans = { ...next.plans, [key]: plan };
+    const r = bump(next, key);
     await this.storage.put('day', next);
-    return true;
+    return r;
   }
 
   /**
@@ -509,6 +515,13 @@ export class Trip {
     // No alarm is pending while alarm() runs, so one is always set again then.
     if (Number.isFinite(at) && (await this.storage.getAlarm()) !== at) await this.storage.setAlarm(at);
   }
+}
+
+/** Moves a trip's revision on, for a write to its plan, step or record (tripRev); the new one. */
+function bump(day: DayRecord, key: string): number {
+  const r = tripRev(day, key) + 1;
+  day.revs = { ...day.revs, [key]: r };
+  return r;
 }
 
 /** Today's record: the stored one if it's today's, else a fresh one. */

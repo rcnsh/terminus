@@ -53,12 +53,12 @@ import {
   needsWatch,
   offStop,
   phaseFor,
-  planBasis,
   rideStage,
   secondLeavesMs,
   seenOnBus,
   signalOf,
   tripEnd,
+  tripRev,
 } from './trip.ts';
 import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from './plan.ts';
 import { stepsPastLeave } from './step.ts';
@@ -667,7 +667,7 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   const plan = trip.seenOn ?? (trip.planChanged ? trip.plan : null);
   if (plan && trip.key && (trip.phase !== 'idle' || plan.located)) update.plans = { [trip.key]: plan };
   else if (trip.planDropped && trip.key) update.plans = { [trip.key]: null };
-  if (update.plans && trip.key) update.basis = { [trip.key]: planBasis(day, trip.key) };
+  if (update.plans && trip.key) update.basis = { [trip.key]: tripRev(day, trip.key) };
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !ask.place && !ask.to;

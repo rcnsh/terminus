@@ -356,6 +356,68 @@ test('a step made while a request waits for the feed is kept: the request does n
   assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
 });
 
+test('the Trip object saves a plan only from the revision of the trip it reads: every write moves it on', async () => {
+  const { TRIPS } = await setup();
+  const TRIP = TRIPS.get('rev-test');
+  const post = async (body) =>
+    (
+      await TRIP.fetch('https://trip/update', {
+        method: 'POST',
+        body: JSON.stringify({ date: sgtDate(Date.now()), deleteAt: endOfDayMs(Date.now()), ...body }),
+      })
+    ).json();
+  const plan = (svc) => ({ svc, stop: 'PGP', board: new Date(Date.now() + 600_000).toISOString() });
+  // Read at revision 0, and nothing wrote since: saved, and the revision moves on.
+  let day = await post({ plans: { t: plan('D2') }, basis: { t: 0 } });
+  assert.equal(day.plans.t.svc, 'D2');
+  assert.equal(day.revs.t, 1);
+  // A plan worked out from revision 0 again is from before that one: dropped.
+  day = await post({ plans: { t: plan('R2') }, basis: { t: 0 } });
+  assert.equal(day.plans.t.svc, 'D2', 'a plan from an older revision is dropped');
+  // A signal, a step and a reset each move it on.
+  day = await post({ items: [{ key: 't', rec: { kind: 'waiting', at: Date.now() } }] });
+  assert.equal(day.revs.t, 2);
+  day = await post({ steps: { t: { svc: 'D2', board: plan('D2').board } } });
+  assert.equal(day.revs.t, 3);
+  day = await post({ items: [{ key: 't', rec: null }] });
+  assert.equal(day.revs.t, 4);
+  day = await post({ plans: { t: plan('R2') }, basis: { t: 3 } });
+  assert.equal(day.plans?.t, undefined, 'a plan from before the reset is dropped');
+  day = await post({ plans: { t: plan('R2') }, basis: { t: 4 } });
+  assert.equal(day.plans.t.svc, 'R2', 'one from the revision stored is saved');
+  // An older Worker sends no basis: its plan is saved as it always was.
+  day = await post({ plans: { t: plan('A1') } });
+  assert.equal(day.plans.t.svc, 'A1');
+  // Another trip's revision is its own.
+  day = await post({ plans: { u: plan('D2') }, basis: { u: 0 } });
+  assert.equal(day.plans.u.svc, 'D2');
+});
+
+test('a trip reset to nothing still has its plan saved: the request reads the revision the reset left', async () => {
+  const { call, phone, next, TRIPS, clock } = await setup();
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(phone);
+  const key = first.card.step?.trip;
+  assert.ok(key);
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+  const TRIP = TRIPS.get([...TRIPS.instances.keys()][0]);
+  const post = (body) =>
+    TRIP.fetch('https://trip/update', {
+      method: 'POST',
+      body: JSON.stringify({ date: sgtDate(Date.now()), deleteAt: endOfDayMs(Date.now()), ...body }),
+    });
+  // A signal and its undo leave the day with nothing in it but the revision.
+  await post({ items: [{ key, rec: { kind: 'waiting', at: Date.now() } }] });
+  await post({ items: [{ key, rec: null }] });
+  storage().delete('wakeAt');
+  const { watch: _w, ...rest } = storage().get('day');
+  storage().set('day', rest);
+
+  clock(Date.parse(first.leave.at) - 2 * 60_000);
+  await next(phone);
+  assert.ok(storage().get('day').plans?.[key], 'time to go saves the plan');
+});
+
 test("the Trip object tells an iPhone too: the notification in the account's words, and its Live Activity", async () => {
   const { privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
