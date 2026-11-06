@@ -371,6 +371,16 @@ export interface ServiceHours {
   sunday?: DayWindow;
 }
 
+/** The kind of day a timetable runs on: Sunday hours on public holidays too (resolve.ts dayKindOf). */
+export type DayKind = 'weekday' | 'saturday' | 'sunday';
+
+/**
+ * One service's measured gaps between buses, s: by period (term time, or
+ * the vacation's own timetable), then day kind, as the median over the day
+ * (`all`) and by SGT hour ("7" .. "23"), where there were enough to say.
+ */
+export type HeadwaysByTime = Partial<Record<'term' | 'vacation', Partial<Record<DayKind, { all: number; hours: Record<string, number> }>>>>;
+
 export interface Graph {
   generated: string;
   stops: Stop[];
@@ -381,6 +391,8 @@ export interface Graph {
   serviceHours?: Record<string, ServiceHours>;
   /** service -> mean headway in seconds, when known. Falls back to config. */
   headwayS?: Record<string, number>;
+  /** service -> its measured headways by period, day and hour (data/headways.json); headwayFor reads it. */
+  headwaysByTime?: Record<string, HeadwaysByTime>;
   /**
    * service -> metres along the route at each stop of `routes[svc]`, where
    * known (public buses, from LTA's route data). Ride time comes from these

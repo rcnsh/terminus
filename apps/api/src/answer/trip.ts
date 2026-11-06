@@ -199,7 +199,7 @@ export const CHANGE_GRACE_MS = 30_000;
 export function secondLeavesMs(c: Plan): number | null {
   if (!c.board) return null;
   const at = Date.parse(c.board);
-  return c.estimated ? at + Math.max(60, headwayFor(GRAPH, c.svc)) * 1000 : at;
+  return c.estimated ? at + Math.max(60, headwayFor(GRAPH, c.svc, at)) * 1000 : at;
 }
 
 /**

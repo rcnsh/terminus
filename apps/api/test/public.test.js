@@ -11,12 +11,22 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/answer/public.ts';
-import { boardAt, candidateStops, feedFor, inService, indexGraph, legRideS, reach, scoreOptions } from '../src/answer/resolve.ts';
+import {
+  boardAt,
+  candidateStops,
+  feedFor,
+  headwayFor,
+  inService,
+  indexGraph,
+  legRideS,
+  reach,
+  scoreOptions,
+} from '../src/answer/resolve.ts';
 import { collectArrivals, mergeFeeds } from '../src/answer/answer.ts';
 import { planOfLeave } from '../src/answer/plan.ts';
 import { leaveOf } from '../src/answer/trip.ts';
 import { leaveBy } from '../src/answer/leave.ts';
-import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK } from '../src/config.ts';
+import { PUBLIC, RIDE, WALK } from '../src/config.ts';
 import pub from '../data/public.json' with { type: 'json' };
 
 const idx = indexGraph(GRAPH_PUBLIC);
@@ -107,7 +117,7 @@ test("a ride on past a loop's terminal waits there for the next run, a headway",
   assert.equal(bus95.rideS, Math.round(rideMetres(idx, '95', 'CLB', 'KR-MRT-OPP') / PUBLIC.speedMs) + GRAPH_PUBLIC.headwayS['95']);
   // The A1 ends its at Kent Ridge Bus Terminal, the stop after CLB.
   const a1 = clb.legs.find((l) => l.svc === 'A1');
-  assert.equal(a1.rideS, a1.hops * RIDE.secondsPerHop + DEFAULT_HEADWAY_S);
+  assert.equal(a1.rideS, a1.hops * RIDE.secondsPerHop + headwayFor(GRAPH_PUBLIC, 'A1'));
   // The 96's interchange (Clementi) isn't a campus stop: riding round from Raffles Hall goes through it.
   assert.ok(reach(idx, '96', 'RAFFLES', 'IT').through, '96 round through Clementi');
   assert.ok(!reach(idx, '96', 'IT', 'RAFFLES').through, 'IT to Raffles Hall: the same run');

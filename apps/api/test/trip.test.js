@@ -27,6 +27,10 @@ import { GRAPH } from '../src/answer/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/answer/resolve.ts';
 import { clockAt } from '../src/clock.ts';
 import { onRide, onRideQuery, rideLength } from './_ride.mjs';
+import { withoutMeasuredHeadways } from './_headways.mjs';
+
+// How a headway guess is used, not how long it is: one guess for every shuttle.
+withoutMeasuredHeadways();
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
