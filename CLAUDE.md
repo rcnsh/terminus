@@ -34,6 +34,10 @@ Each of these is required reading for its case, before the first edit:
   [docs/agents/feeds.md](docs/agents/feeds.md), rule 2 in full.
 - **Mechanics:** how answers, the stop graph, live buses, public buses, the
   timelapse and the street map work: [docs/agents/core.md](docs/agents/core.md).
+- **Arrival-time model:** the shadow model that predicts arrivals against
+  NUS's times (`src/ops/etamodel.ts`, `etashadow.ts`, `eta.ts`):
+  [docs/eta-model.md](docs/eta-model.md), with results in
+  [eta-backtest.md](docs/eta-backtest.md).
 - **Where:** which file owns something: [docs/agents/repo-map.md](docs/agents/repo-map.md).
 - **Addresses:** terminus.run and terminus.rcn.sh, redirects, emailed
   links, the apps' server list or developer menu:
