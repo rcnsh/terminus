@@ -290,7 +290,7 @@ p(
 );
 p();
 p(
-  "Methods: **feed**, the feed's time as served; **corrected**, plus the feed's median error at that horizon for that service in training;",
+  "Methods: **feed**, the feed's time as served; **corrected**, plus its median error at that horizon for that service in training, or less where that would make more buses early;",
 );
 p(
   "**checked**, corrected, or history's time where corrected is over 4 minutes outside what the plate's bus could do (seen in the last 90 s);",
@@ -537,7 +537,7 @@ if (walked) {
 p(`Weight on history, by horizon: ${HORIZONS.map((h, i) => `${h.label} ${model.weights[i]}`).join('; ')}.`);
 p();
 p(
-  `Feed bias (median error, s, all services), by horizon: ${HORIZONS.map(
+  `Correction to the feed (s, all services; positive: later), by horizon: ${HORIZONS.map(
     (h, i) => `${h.label} ${fmt(model.bias[`*|${i}`]?.[1])} (n ${model.bias[`*|${i}`]?.[0] ?? 0})`,
   ).join('; ')}.`,
 );

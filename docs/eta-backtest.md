@@ -1,5 +1,49 @@
 # Arrival-time backtest: results
 
+## Round 7: fitted to leave no more buses early than the feed
+
+**The blend now passes at every horizon.** The correction and the blend's
+weights are fitted for the least error among the choices that leave no
+more buses early than the feed's own times did (`biasOf`, `weightsFrom`).
+Same 30 days and predictions as round 6, walked forward from 12 October,
+so each day is fitted only on the days before it. Without the 19 October
+incident (change against the feed, 95% interval):
+
+| feed said | method | MAE change, s | p90 change, s | early: feed → method | early change, points | verdict |
+|---|---|---|---|---|---|---|
+| any time | checked | −2.4 (−3.6 to −1.3) | −1.6 (−3.0 to +0.5) | 7.7% → 7.5% | −0.2 (−0.7 to +0.2) | better |
+| any time | blend | −4.1 (−5.3 to −3.0) | −3.6 (−9.3 to −0.1) | 7.7% → 8.1% | +0.5 (−0.2 to +1.1) | better |
+| under 2 min | blend | −12.8 (−21.8 to −5.9) | −8.1 (−13.0 to −3.3) | 1.2% → 1.1% | −0.2 (−0.8 to +0.7) | better |
+| 2 to 5 min | blend | −2.1 (−3.0 to −1.3) | −7.7 (−16.8 to −3.1) | 4.3% → 4.0% | −0.3 (−1.7 to +0.8) | better |
+| 5 to 10 min | blend | −1.5 (−2.2 to −0.8) | −3.5 (−6.1 to +0.6) | 4.8% → 5.0% | +0.2 (−0.2 to +0.6) | better |
+| 10 to 30 min | blend | −3.5 (−5.9 to −1.5) | −9.3 (−15.6 to −3.2) | 11.5% → 12.5% | +0.9 (0 to +1.9) | better |
+
+With 19 October in, the blend is better at every horizon too, and its MAE
+falls by 9.9 s overall.
+
+- **The gain is smaller than round 6's** (4.1 s rather than 7.8 s), and
+  that's the point: round 6's extra 4 s came from moving times later,
+  which made more people miss their bus.
+- **Early buses are held, not cut.** The limit holds on the days a model
+  is fitted on; on the days after, early buses drift up a little, most at
+  10 to 30 minutes (+0.9 points, the interval touching 0). The bar still
+  passes, but that is the horizon to watch in the shadow. The limit is
+  checked on the blend before the check (checkS) replaces any times, which
+  may be part of it.
+- **Almost no correction passes.** Every correction big enough to help
+  moves some buses to early: for all services together it is 0 at every
+  horizon but 1 s at 5 to 10 minutes, and for single services between 8 s
+  sooner and 16 s later. The gain is history's and the check's.
+- **The weights:** under 2 minutes 0.6 on history, 2 to 5 0.6, 5 to 10 0,
+  10 to 30 1 (round 6's fit: 0.6, 0.7, 0.5, 1). At 5 to 10 minutes history
+  makes buses early, so it gets none.
+- **A price on early buses didn't work.** Fitting to the error plus the
+  service's headway for each bus over a minute early (the wait for the next)
+  overcorrected: it moved times 12 to 59 s sooner, early buses fell to 3%,
+  and MAE rose 7 s, worse at every horizon but the first. A quarter of the
+  headway failed at 5 to 10 minutes. A price assumes a rider arrives just
+  in time; the limit needs no price and matches the bar in eta-model.md.
+
 ## Round 6: tested over the days together, early buses counted
 
 **The blend's gain is real, but it makes buses come early more often.**
