@@ -2518,6 +2518,12 @@ the bus fades out after the first and in before the next. A reading
 further on than a bus could have driven fades out and in too, but stays
 in the count of buses out throughout (`countBySvc`), so a service with
 one bus out doesn't blink to none at every jump (a one-way route's end).
+Before any of that, a reading the bus is back from within the next two is
+left out (`withoutFarSide`): the recorder placed it on the far side of a
+road its line takes both ways, and D1 and D2 have hundreds of those a day.
+A step back of more than 150 m counts as away too, so a bus at a loop's
+terminal read at the line's end instead of its start doesn't slide back
+round. A bus that stays away has gone there, and fades across.
 After its last reading a bus stays for one poll, then fades. The page draws the map
 at the video's exact size with `preserveDrawingBuffer` and no label fades.
 For each frame it sets the time, gives the buses' GeoJSON source their
