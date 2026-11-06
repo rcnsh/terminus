@@ -11,10 +11,16 @@
 // corners rather than cutting across. Readings far apart (the feed down,
 // the breaker open, the bus off its line for a while) aren't joined up: the
 // bus fades out after the first and back in before the next. So does a bus
-// whose next reading is further on than a bus could have driven (its track
-// started again somewhere else). After its last reading a bus stays for one
-// poll (it would have been seen again then), then fades: the end of a
-// recording isn't every bus fading out at once.
+// whose next reading is further on than a bus could have driven, or more
+// than a step back (its track started again somewhere else). After its last
+// reading a bus stays for one poll (it would have been seen again then),
+// then fades: the end of a recording isn't every bus fading out at once.
+//
+// A reading the bus is back from within the next two is left out: the
+// recorder placed it on the far side of a road its line takes both ways
+// (D1 and D2 do it hundreds of times a day), and drawn, it would fade out
+// and in for nothing. The arrival-time backtest passes over the same
+// readings (passingsOf in apps/api/src/ops/eta.ts).
 
 /** Readings further apart than this aren't joined: the bus fades out and in. */
 export const GAP_MS = 120_000;
@@ -23,6 +29,12 @@ export const FADE_MS = 15_000;
 /** Faster than this along the road (72 km/h, plus slack) is a jump, not a drive. */
 const MAX_SPEED_MS = 20;
 const SLACK_M = 150;
+/** Further back than this is the far side of the road, or a bus reversing for a
+ *  moment: left out when the bus is back within AWAY_MAX (the backtest, measuring
+ *  rather than drawing, lets a bus go 500 m back: eta.ts BACK_M). */
+const BACK_M = 150;
+/** How many readings on a bus may be away before it's taken to have gone there (eta.ts RUN_TO_MOVE, less the one that agrees). */
+const AWAY_MAX = 2;
 
 const DAY_MS = 86_400_000;
 const SGT_MS = 8 * 3_600_000;
@@ -105,6 +117,8 @@ export function decodeDay(file) {
     // slightly out of order between services).
     track.pts.sort((a, b) => a.t - b.t);
     track.pts = track.pts.filter((p, i, all) => i === 0 || p.t !== all[i - 1].t);
+    const route = routes[track.svc];
+    if (route) track.pts = withoutFarSide(track.pts, route.path);
   }
   return {
     date: file.date,
@@ -117,6 +131,47 @@ export function decodeDay(file) {
     stops: file.stops,
     tracks: [...tracks.values()],
   };
+}
+
+/** Metres from reading [a] to [b] along [path]. Round a loop, the short way
+ *  across its start: on from the end, or a step back from just past it. */
+function alongBy(path, a, b) {
+  const d = b.along - a.along;
+  if (!path.loop || !(path.total > 0)) return d;
+  if (d < -path.total / 2) return d + path.total;
+  if (d > path.total / 2) return d - path.total;
+  return d;
+}
+
+/** Whether a bus drove from reading [a] to [b]: not far back, nor further on than a bus could. */
+function drivable(path, a, b) {
+  const dt = b.t - a.t;
+  if (dt <= 0 || dt > GAP_MS) return false;
+  const d = alongBy(path, a, b);
+  return d >= -BACK_M && d <= (MAX_SPEED_MS * dt) / 1000 + SLACK_M;
+}
+
+/** [pts] without the readings the bus is back from within AWAY_MAX: each is
+ *  measured from the last one kept, and a bus that stays away is taken to
+ *  have gone there (a jump, which fades). After a gap it starts afresh. */
+export function withoutFarSide(pts, path) {
+  if (!pts.length) return pts;
+  const out = [pts[0]];
+  let good = pts[0];
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i];
+    const away = p.t - good.t <= GAP_MS && !drivable(path, good, p);
+    if (away && backWithin(pts, i, good, path)) continue;
+    out.push(p);
+    good = p;
+  }
+  return out;
+}
+
+/** Whether one of the AWAY_MAX readings after [i] has the bus back on from [good]. */
+function backWithin(pts, i, good, path) {
+  for (let j = i + 1; j <= i + AWAY_MAX && j < pts.length; j++) if (drivable(path, good, pts[j])) return true;
+  return false;
 }
 
 /** The last index whose reading is at or before [t], or -1. */
@@ -152,14 +207,10 @@ export function placeAt(track, path, t, holdMs = 0) {
   // A gap: out after the reading before it, in before the one after.
   if (dt > GAP_MS) return t - a.t < b.t - t ? at(a, 1 - (t - a.t) / FADE_MS) : at(b, 1 - (b.t - t) / FADE_MS);
   const k = (t - a.t) / dt;
-  let d = b.along - a.along;
-  // Round a loop, past the end is on from the start.
-  if (path.loop && path.total > 0 && d < -path.total / 2) d += path.total;
-  // Further than it could have driven, or backwards a long way: it didn't
+  // Further than it could have driven, or back more than a step: it didn't
   // drive there, so it doesn't slide there. Out at one, in at the other.
-  if (Math.abs(d) > (MAX_SPEED_MS * dt) / 1000 + SLACK_M)
-    return { along: (k < 0.5 ? a : b).along, alpha: Math.abs(1 - 2 * k), jumping: true };
-  return { along: a.along + d * k, alpha: 1 };
+  if (!drivable(path, a, b)) return { along: (k < 0.5 ? a : b).along, alpha: Math.abs(1 - 2 * k), jumping: true };
+  return { along: a.along + alongBy(path, a, b) * k, alpha: 1 };
 }
 
 /** Every bus on the map at [t]: where, which way, its colour and opacity. */

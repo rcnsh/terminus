@@ -883,14 +883,14 @@ test('/api/timelapse/days: operator only, today while recording, closed days fro
   );
 });
 
-/** A day with one D2 bus at these [t, along] readings. */
-function oneBus(readings) {
+/** A day with one bus (on D2 unless [svc] says) at these [t, along] readings. */
+function oneBus(readings, svc = 'D2') {
   const plates = ['PD1'];
-  const shape = shapeFor('D2', GRAPH.routes.D2);
+  const shape = shapeFor(svc, GRAPH.routes[svc]);
   let last = FROZEN_NOW;
   const rows = readings.map(([t, along]) => {
     const p = pointAlong(shape, along);
-    const row = { dt: FROZEN_NOW + t - last, svc: 'D2', buses: encodeBus({ plate: 'PD1', lat: p.lat, lon: p.lon, along }, 0) };
+    const row = { dt: FROZEN_NOW + t - last, svc, buses: encodeBus({ plate: 'PD1', lat: p.lat, lon: p.lon, along }, 0) };
     last = FROZEN_NOW + t;
     return row;
   });
@@ -995,6 +995,87 @@ test('a reading further on than a bus can drive is a jump: out at one place, in 
     [5 * 60_000, 700],
   ]);
   assert.deepEqual(countBySvc(busesAt(gap, FROZEN_NOW + 2.5 * 60_000)), {});
+});
+
+test('a reading on the far side of a two-way road, that the bus is back from, is left out', () => {
+  // Two D1 buses on 2026-10-27 between 10:31 and 10:35 (seconds from the
+  // first reading, metres along D1). The recorder put PD804L on the outbound
+  // side of the road it was driving back along for one reading, and PD539C,
+  // leaving the terminal, at the loop's end instead of its start for two.
+  const pd804l = oneBus(
+    [
+      [0, 3_725],
+      [34, 3_907],
+      [59, 3_907],
+      [94, 719],
+      [119, 4_257],
+      [154, 4_477],
+    ].map(([s, m]) => [s * 1000, m]),
+    'D1',
+  );
+  assert.deepEqual(
+    pd804l.tracks[0].pts.map((p) => p.along),
+    [3_725, 3_907, 3_907, 4_257, 4_477],
+  );
+  const pd539c = oneBus(
+    [
+      [0, 0],
+      [25, 0],
+      [60, 189],
+      [85, 4_603],
+      [120, 4_603],
+      [145, 393],
+      [180, 647],
+    ].map(([s, m]) => [s * 1000, m]),
+    'D1',
+  );
+  assert.deepEqual(
+    pd539c.tracks[0].pts.map((p) => p.along),
+    [0, 0, 189, 393, 647],
+  );
+  // Drawn, neither fades on the way.
+  for (const day of [pd804l, pd539c]) {
+    const { start, end } = day;
+    for (let t = start; t <= end; t += 1_000) assert.equal(busesAt(day, t)[0]?.alpha, 1, `at +${(t - start) / 1000} s`);
+  }
+});
+
+test('a bus that stays where it jumped to has gone there: it fades across once, forward or back', () => {
+  for (const [from, to] of [
+    [100, 3_000],
+    [800, 400],
+  ]) {
+    const day = oneBus([
+      [0, from],
+      [30_000, to],
+      [60_000, to],
+      [90_000, to],
+    ]);
+    assert.deepEqual(
+      day.tracks[0].pts.map((p) => p.along),
+      [from, to, to, to],
+    );
+    const mid = busesAt(day, FROZEN_NOW + 7_500)[0];
+    assert.ok(mid.jumping && Math.abs(mid.alpha - 0.5) < 1e-9, `${from} to ${to}: fading out, not sliding`);
+    assert.equal(placeAt(day.tracks[0], day.routes.D2.path, FROZEN_NOW + 7_500).along, from);
+  }
+});
+
+test('round a loop, a step back across its start is a step back, not a lap', () => {
+  const path = oneBus([], 'D1').routes.D1.path;
+  // A bus waiting at the terminal, read either side of the line's start, 100 m apart.
+  const day = oneBus(
+    [
+      [0, 60],
+      [26_000, Math.floor(path.total) - 40],
+      [60_000, 159],
+    ],
+    'D1',
+  );
+  assert.equal(day.tracks[0].pts.length, 3);
+  const mid = placeAt(day.tracks[0], path, FROZEN_NOW + 13_000);
+  assert.equal(mid.alpha, 1);
+  assert.ok(mid.along > 0 && mid.along < 60, `between the readings, the short way: ${mid.along}`);
 });
 
 test("the timeline's chart counts each bus once per slice it was seen in", () => {
