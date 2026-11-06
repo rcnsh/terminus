@@ -231,51 +231,6 @@ interface LegLeave {
   change?: BusChange;
 }
 
-function forLeg(
-  leg: Leg,
-  sa: StopArrivals | undefined,
-  graph: Graph,
-  arriveBy: ArriveBy,
-  nowMs: number,
-  risk?: CrowdRisk,
-): LegLeave | null {
-  const walk = walkMs(leg);
-  const venueWalkS = venueWalkOf(arriveBy, leg);
-  const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + leg.rideS) * 1000;
-  const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + venueWalkS) * 1000;
-  const earliest = nowMs + readyS(leg) * 1000;
-  const at = (d: Departure, late: boolean, note: string | null): LegLeave => ({
-    ms: d.earliest - walk,
-    // Be at the stop as the window opens; it gets you there by its end.
-    board: d.earliest,
-    arrive: arriveAfter(d.latest),
-    estimated: d.kind === 'estimate',
-    stale: d.kind === 'stale',
-    late,
-    note,
-    ...(late && d.opens ? { opens: true as const } : {}),
-  });
-
-  // The buses that get you there on time; with no live times, windows that
-  // end as late as they can, at the latest you can board.
-  const sb = serviceBoard(graph, sa, leg.svc, nowMs);
-  const fits = departuresFrom(graph, sb, leg.svc, { now: nowMs, from: earliest, until: latestBoard, around: latestBoard }).filter(
-    (d) => d.latest <= latestBoard && !d.partial,
-  );
-  if (fits.length) {
-    let b = fits[fits.length - 1];
-    const crowd = crowdCheck(leg, b.latest, arriveBy, risk);
-    // Often packed, or you asked for a bus earlier: take the one before, when there is one.
-    const earlier = (crowd.earlier || arriveBy.oneEarlier === true) && fits.length > 1;
-    if (earlier) b = fits[fits.length - 2];
-    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : (crowd.note ?? (earlier ? m().oneEarlierNote : null));
-    return at(b, false, note);
-  }
-  // Nothing gets you there on time: the first bus you can catch.
-  const first = nextDeparture(graph, sb, leg.svc, earliest, nowMs);
-  return first ? at(first, true, null) : null;
-}
-
 /** A bus at a stop, as a leave-by plans it. With a live time all three are
  *  that time; without, the bus is somewhere in a headway. */
 interface Bus {
@@ -299,6 +254,55 @@ const busOf = (d: Departure): Bus => ({
   stale: d.kind === 'stale',
   ...(d.opens ? { opens: true as const } : {}),
 });
+
+function forLeg(
+  leg: Leg,
+  sa: StopArrivals | undefined,
+  graph: Graph,
+  arriveBy: ArriveBy,
+  nowMs: number,
+  risk?: CrowdRisk,
+): LegLeave | null {
+  const walk = walkMs(leg);
+  const venueWalkS = venueWalkOf(arriveBy, leg);
+  const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + leg.rideS) * 1000;
+  const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + venueWalkS) * 1000;
+  const earliest = nowMs + readyS(leg) * 1000;
+  const at = (d: Departure, late: boolean, note: string | null): LegLeave => {
+    const { atStop, board, latest, estimated, stale, opens } = busOf(d);
+    return {
+      ms: atStop - walk,
+      // Be at the stop as the window opens; it gets you there by its end.
+      board,
+      arrive: arriveAfter(latest),
+      estimated,
+      stale,
+      late,
+      note,
+      // Only late does the start set when to leave (leaveBy): on time, you leave for the bus you'd wait for.
+      ...(late && opens ? { opens } : {}),
+    };
+  };
+
+  // The buses that get you there on time; with no live times, windows that
+  // end as late as they can, at the latest you can board.
+  const sb = serviceBoard(graph, sa, leg.svc, nowMs);
+  const fits = departuresFrom(graph, sb, leg.svc, { now: nowMs, from: earliest, until: latestBoard, around: latestBoard }).filter(
+    (d) => d.latest <= latestBoard && !d.partial,
+  );
+  if (fits.length) {
+    let b = fits[fits.length - 1];
+    const crowd = crowdCheck(leg, b.latest, arriveBy, risk);
+    // Often packed, or you asked for a bus earlier: take the one before, when there is one.
+    const earlier = (crowd.earlier || arriveBy.oneEarlier === true) && fits.length > 1;
+    if (earlier) b = fits[fits.length - 2];
+    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : (crowd.note ?? (earlier ? m().oneEarlierNote : null));
+    return at(b, false, note);
+  }
+  // Nothing gets you there on time: the first bus you can catch.
+  const first = nextDeparture(graph, sb, leg.svc, earliest, nowMs);
+  return first ? at(first, true, null) : null;
+}
 
 /** The first bus you can be at the stop for by `fromMs`. */
 function firstBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, nowMs: number): Bus | null {
