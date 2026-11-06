@@ -28,17 +28,23 @@ for (const id of ['version', 'dl-version']) {
   if (box && !box.firstChild) render(html`<${Version} />`, box);
 }
 
-// "How to install" opens as a card over the space under the hero (its CSS is
-// index.html's), so opening it moves nothing. Like the download menu, a click
-// anywhere else or Esc closes it.
+// "How to install" opens as a card over what's under it (its CSS is
+// index.html's), so opening it moves nothing. Like the download menu, a tap
+// anywhere else, Esc, or focus moving on closes it. A pointerdown, as iOS
+// sends no click for a tap on plain text or space.
 const install = document.getElementById('install');
-document.addEventListener('click', (e) => {
+document.addEventListener('pointerdown', (e) => {
   if (install.open && !install.contains(e.target)) install.open = false;
+});
+install.addEventListener('focusout', (e) => {
+  if (e.relatedTarget && !install.contains(e.relatedTarget)) install.open = false;
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || !install.open) return;
+  // Focus goes back to the summary only from inside the card: elsewhere it stays, and the page doesn't jump to the hero.
+  const inside = install.contains(document.activeElement);
   install.open = false;
-  install.querySelector('summary').focus();
+  if (inside) install.querySelector('summary').focus();
 });
 
 // The header's download menu, placed under its button. It closes on scroll
@@ -67,8 +73,6 @@ document.addEventListener('keydown', (e) => {
     });
     document.getElementById('dl-install').addEventListener('click', (e) => {
       e.preventDefault();
-      // Not the click that closes the card as it bubbles.
-      e.stopPropagation();
       close();
       install.open = true;
       install.querySelector('ol').scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'center' });

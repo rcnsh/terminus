@@ -52,9 +52,12 @@
   .tile svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
   .hero-copy { padding-bottom: 56px; }
-  /* The steps open as a card over the hills under the hero, out of the flow,
-     so opening them moves nothing on the page. landing.js closes it on a
-     click elsewhere or Esc. */
+  /* The steps open as a card out of the flow, so opening them moves nothing
+     on the page: over the hills under the hero, or over the phone when the
+     hero is one column. The hero rises over the page below while it's open,
+     or the card's lower part would sit under it, its link unclickable.
+     landing.js closes it on a tap elsewhere, Esc, or focus leaving it. */
+  .top:has(.install[open]) { position: relative; z-index: 2; }
   .install { position: relative; z-index: 3; margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
   .install summary { cursor: pointer; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; width: fit-content; }
   .install ol { position: absolute; top: calc(100% + 6px); left: 0; width: min(30rem, calc(100vw - 32px)); box-sizing: border-box; margin: 0; padding: 16px 20px 18px 2.4rem; display: grid; gap: 8px;
@@ -355,8 +358,8 @@
         <div class="sign">
           <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>KR MRT<svg class="plate-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></strong><span class="plate-walk">3 min walk</span><svg class="plate-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg></div>
           <div class="sign-head"><span></span><span></span><span>Next</span><span>Then</span><span>After</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#8e44c9">D2</span><span class="to">via <b>UTown</b></span><span class="t pick">2<small>min</small></span><span class="t">14</span><span class="t">26</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="to">via <b>CLB</b></span><span class="t pick">~9<small>min</small></span><span class="t">~21</span><span class="t">–</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#8e44c9">D2</span><span class="to">via <b>UTown</b></span><span class="t pick">2<small> min</small></span><span class="t">14</span><span class="t">26</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="to">via <b>CLB</b></span><span class="t pick">~9<small> min</small></span><span class="t">~21</span><span class="t">–</span></div>
         </div>
       </div>
       <div><h3>The right side of the road</h3><p>It picks the stop going your way, even when the one across the road is closer. Or check anywhere with one tap.</p></div>
@@ -406,9 +409,9 @@
         <div class="sign">
           <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>UTown<svg class="plate-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></strong><span class="plate-walk">1 min walk</span><svg class="plate-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg></div>
           <div class="sign-head"><span></span><span></span><span>Next</span><span>Then</span><span>After</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span><span class="to">to <b>Kent Vale</b></span><span class="t pick">1<small>min</small></span><span class="t">13</span><span class="t">25</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#ec4fa0;--svc-ink:#1c1917">D1</span><span class="to">via <b>CLB</b></span><span class="t pick">6<small>min</small></span><span class="t">18</span><span class="t">30</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#f57c1f;--svc-ink:#1c1917">R1</span><span class="to">to <b>PGP</b></span><span class="t pick">~11<small>min</small></span><span class="t">~23</span><span class="t">–</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span><span class="to">to <b>Kent Vale</b></span><span class="t pick">1<small> min</small></span><span class="t">13</span><span class="t">25</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#ec4fa0;--svc-ink:#1c1917">D1</span><span class="to">via <b>CLB</b></span><span class="t pick">6<small> min</small></span><span class="t">18</span><span class="t">30</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#f57c1f;--svc-ink:#1c1917">R1</span><span class="to">to <b>PGP</b></span><span class="t pick">~11<small> min</small></span><span class="t">~23</span><span class="t">–</span></div>
         </div>
       </div>
       <figcaption><h3>On the web</h3><p>Every bus near you, and the campus map, in any browser. Add it to your home screen like an app.</p></figcaption>
