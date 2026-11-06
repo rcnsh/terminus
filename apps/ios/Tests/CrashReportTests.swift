@@ -75,3 +75,30 @@ import Testing
     store.removeAll()
     #expect(store.pending().isEmpty)
 }
+
+@Test func anExceptionsStackReadsLikeMetricKitsAndMarksItsCrash() throws {
+    // The addresses of a real crash (NotificationDelegate, 3.8.0): Terminus loaded at 0x100214000.
+    let images: [String: UInt] = ["Terminus": 0x1_0021_4000, "UIKitCore": 0x1_9375_0000]
+    let image = { (a: UInt) in images.filter { a >= $0.value }.max { $0.value < $1.value }.map { (name: $0.key, base: $0.value) } }
+    let stack = CrashReport.frames(addresses: [0x1_94ca_3468, 0x1_004a_ca94, 0x10], image: { $0 < 0x1_0000_0000 ? nil : image($0) })
+    #expect(stack == "UIKitCore +0x1553468 (0x194ca3468)\nTerminus +0x298a94 (0x1004aca94)\n??? (0x10)")
+    #expect(CrashReport.ownFrame(in: stack, app: "Terminus") == "(0x1004aca94)")
+    #expect(CrashReport.ownFrame(in: stack, app: "Other") == nil)
+
+    // The real stack names the binaries it ran through.
+    let here = CrashReport.frames(addresses: Thread.callStackReturnAddresses.map(\.uintValue), image: CrashReport.image(of:))
+    #expect(!here.isEmpty && !here.contains("???"))
+
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("crash-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = CrashReportStore(dir: dir)
+    store.markException("(0x1004aca94)")
+    let metricKit = "libsystem_kernel.dylib +0xb1fc (0x24b82a1fc)\nUIKitCore +0x1286cf4 (0x194cb0cf4)\nTerminus +0x298a94 (0x1004aca94)"
+    #expect(!store.takeException(in: "Terminus +0x298a94 (0x2004aca94)"), "another launch's crash")
+    #expect(store.takeException(in: metricKit), "the same crash, as MetricKit tells it")
+    #expect(!store.takeException(in: metricKit), "once only")
+    #expect(store.pending().isEmpty, "the marks aren't reports")
+    store.markException("(0x1004aca94)")
+    store.removeAll()
+    #expect(!store.takeException(in: metricKit), "turned off, the marks go with the reports")
+}
