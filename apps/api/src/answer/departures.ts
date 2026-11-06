@@ -25,8 +25,13 @@ const PROJECT_MS = 86_400_000;
 
 /** One bus of a service leaving a stop. */
 export interface Departure {
-  /** Which bus: the live bus's plate (or its place in the feed's list), or `<anchor>+n` for an estimate. */
+  /**
+   * Which bus: the live bus's plate (or its place in the feed's list), or
+   * the nth estimate after its anchor (`<plate>+n`, `reach+n`, `around+n`,
+   * `opens@<ms>+n`). The same for every caller asking of the same board.
+   */
   id: string;
+  /** A timetabled time (LTA's, or a first bus before the hours) is an estimate with its feed row. */
   kind: 'live' | 'stale' | 'estimate';
   /**
    * When it leaves, epoch ms. A time from the feed is one instant, and so
@@ -49,7 +54,7 @@ export interface DepartureWindow {
   now: number;
   /** When you can be at the stop: no bus that has gone by then. */
   from: number;
-  /** No bus leaving after this; a day after `from` when absent. */
+  /** No bus leaving after this; never more than a day after now. */
   until?: number;
   /** With no live time to step from, a time the estimates fall either side of (a bus already chosen). */
   around?: number;
@@ -139,12 +144,12 @@ export function departuresFrom(graph: Graph, board: StopArrivals | undefined, sv
   let opens = false;
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
-  if (starts !== null && starts <= t) [t, fixed, anchor, opens] = [starts, [], 'opens', true];
+  if (starts !== null && starts <= t) [t, fixed, anchor, opens] = [starts, [], `opens@${starts}`, true];
   for (let n = 1, i = 0; out.length < max && t <= until; n++, i++) {
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
       if (s === null || s > until) break;
-      [t, fixed, anchor, opens, n, i] = [s, [], 'opens', true, 1, 0];
+      [t, fixed, anchor, opens, n, i] = [s, [], `opens@${s}`, true, 1, 0];
     }
     // A bus may still come before the service closes, not after.
     const closes = serviceEndsAt(graph, svc, t);

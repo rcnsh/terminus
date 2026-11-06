@@ -29,10 +29,6 @@ import {
 } from '../src/push/apns.ts';
 import { nudgeUser, pushAudience, pushEnabled, remindUser, setPushToken, updateLive } from '../src/push/push.ts';
 import { fromB64url } from '../src/push/webpush.ts';
-import { withoutMeasuredHeadways } from './_headways.mjs';
-
-// How a headway guess is used, not how long it is: one guess for every shuttle.
-withoutMeasuredHeadways();
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
 const HEX = 'ab'.repeat(32);
