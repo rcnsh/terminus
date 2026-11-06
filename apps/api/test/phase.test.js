@@ -23,6 +23,7 @@ import { LEAVE_GAP_MS, cardFor } from '../src/answer/card.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
 import { withoutMeasuredHeadways } from './_headways.mjs';
+import { onRide, rideLength } from './_ride.mjs';
 
 // Guessed times stand for a bus within a headway; the goldens' one headway keeps that fixed.
 withoutMeasuredHeadways();
@@ -233,19 +234,39 @@ test('for every golden trip, the phase holds until changesAt and differs at it, 
       next: iso(end + 12 * MIN),
     }).look;
     const stop = GRAPH.stops.find((s) => s.code === (plan.stopCode ?? answer.stop.code));
-    const places = { nowhere, ...(stop ? { atStop: { lat: stop.lat, lon: stop.lon } } : {}) };
+    // On the bus's road near the end of the ride, where a location sees you on it.
+    const road = (() => {
+      try {
+        return plan.stopCode && plan.alightCode
+          ? onRide(plan.svc, plan.stopCode, plan.alightCode, rideLength(plan.svc, plan.stopCode, plan.alightCode) - 100)
+          : null;
+      } catch {
+        return null;
+      }
+    })();
+    const places = { nowhere, ...(stop ? { atStop: { lat: stop.lat, lon: stop.lon } } : {}), ...(road ? { onRoad: road } : {}) };
     for (const [signal, make] of Object.entries(SIGNALS)) {
       for (const [where, at] of Object.entries(places)) {
         const classAtMs = answer.timing?.classAt ? Date.parse(answer.timing.classAt) : null;
-        const trip = tripOf(answer, { ...make(plan, leave), at, classAtMs });
-        const what = async (ms) => shown((await tripPhase(trip, ms, feed)).verdict);
+        const made = make(plan, leave);
+        // A request that sees you on the bus has the planner save it on the plan (seenOn): later ones start from that.
+        let seenFrom = Infinity;
+        const tripAt = (ms) => tripOf(answer, { ...made, ...(ms > seenFrom ? { bus: { ...made.bus, seen: true } } : {}), at, classAtMs });
+        const what = async (ms) => shown((await tripPhase(tripAt(ms), ms, feed)).verdict);
         const from = leave - 25 * MIN;
         const to = Math.max(end + RIDE_GRACE_MS, leave + 50 * MIN) + 15 * MIN;
         const times = [];
         for (let t = from; t <= to; t += 20_000) times.push(t);
-        const seen = await Promise.all(times.map(what));
+        const seen = [];
+        const changes = [];
+        for (const t of times) {
+          const { verdict, changesAt } = await tripPhase(tripAt(t), t, feed);
+          if (verdict.kind === 'seen' && verdict.seenNow && seenFrom === Infinity) seenFrom = t;
+          seen.push(shown(verdict));
+          changes.push(changesAt);
+        }
         for (const [i, t] of times.entries()) {
-          const { changesAt } = await tripPhase(trip, t, feed);
+          const changesAt = changes[i];
           const label = `${name}, ${signal}, ${where}, at ${iso(t)}`;
           const until = changesAt?.at ?? Infinity;
           assert.ok(until > t, `${label}: changes after now`);

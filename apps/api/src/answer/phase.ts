@@ -226,13 +226,15 @@ async function changesOf<V>(
  */
 function remembered(look: Lookups): { now: Lookups; later: Lookups } {
   const asked = new Map<string, Promise<unknown>>();
+  // By the bus, whether or not it has been seen ridden (see tripPhase).
+  const keyOf = (name: string, { seen: _seen, ...b }: Plan) => `${name}:${JSON.stringify(b)}`;
   const keep = <T>(name: string, b: Plan, ask: () => Promise<T>): Promise<T> => {
-    const k = `${name}:${JSON.stringify(b)}`;
+    const k = keyOf(name, b);
     if (!asked.has(k)) asked.set(k, ask());
     return asked.get(k) as Promise<T>;
   };
   const kept = <T>(name: string, b: Plan, otherwise: T): Promise<T> =>
-    (asked.get(`${name}:${JSON.stringify(b)}`) as Promise<T> | undefined) ?? Promise.resolve(otherwise);
+    (asked.get(keyOf(name, b)) as Promise<T> | undefined) ?? Promise.resolve(otherwise);
   return {
     now: {
       liveArrival: (b) => keep('live', b, () => look.liveArrival(b)),
@@ -262,12 +264,24 @@ export async function tripPhase(t: TripIn, nowMs: number, look: Lookups): Promis
   let planned: Promise<TripPlan> | undefined;
   const asNow: TripIn = { ...t, planned: () => (planned ??= t.planned()) };
   // The answer, too, stays the one for now; and isn't worked out for later if now didn't need it.
-  const asLater: TripIn = { ...t, planned: () => planned ?? Promise.reject(new Error('not planned now')) };
+  // A bus seen ridden now stays seen, as the planner saves it on the plan
+  // (`seenOn`): a later moment is no time to ask whether you could have walked there.
+  let seenNow = false;
+  const asLater: TripIn = {
+    ...t,
+    planned: async () => {
+      if (!planned) throw new Error('not planned now');
+      const p = await planned;
+      return seenNow && p.bus ? { ...p, bus: { ...p.bus, seen: true } } : p;
+    },
+  };
   let first = true;
   const { now, next } = await changesOf(
-    (c) => {
-      const v = first ? phaseAt(asNow, c, feed.now) : phaseAt(asLater, c, feed.later);
+    async (c) => {
+      if (!first) return phaseAt(asLater, c, feed.later);
       first = false;
+      const v = await phaseAt(asNow, c, feed.now);
+      seenNow = v.kind === 'seen' && v.seenNow;
       return v;
     },
     nowMs,
@@ -322,9 +336,9 @@ async function phaseAt(t: TripIn, c: Clock, look: Lookups): Promise<Verdict> {
     if (phaseFor(answer, undefined, c, t.at) === 'waiting') return { kind: 'missed' };
     // Seen on it, now or by an earlier request (noted on the plan, so a
     // device without a location follows the phone). On a trip that changes
-    // buses, on the second bus's road once it has left. A location is taken
-    // as it is: seenOnBus at a later moment asks whether you could have
-    // walked there since, and once seen the plan says so (`seen`).
+    // buses, on the second bus's road once it has left. seenOnBus compares
+    // the time itself (could you have walked there since?); once it says so,
+    // the plan does (`seen`), at later moments too (tripPhase).
     const onSecond = (b: Plan) =>
       Boolean(b.change?.board && c.reached(Date.parse(b.change.board)) && seenOnBus(b.change, lat!, lon!, c.ms));
     const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, c.ms) || onSecond(bus));
