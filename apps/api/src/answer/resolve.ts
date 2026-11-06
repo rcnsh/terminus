@@ -712,6 +712,8 @@ export function nearbyRow(r: BoardRow, nowMs: number, guessed: Departure[] = [])
     for (const d of guessed) {
       if (later.length >= NEARBY_LATER) break;
       if (d.kind !== 'estimate' || d.arrival) continue;
+      // Past its last bus, the next are when it starts again: not "then".
+      if (d.opens) break;
       const etaS = Math.round((d.earliest - nowMs) / 1000);
       later.push({ etaS, quality: 'scheduled', eta: etaText(etaS, 'scheduled') });
     }

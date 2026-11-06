@@ -133,6 +133,25 @@ test('no estimate is due after the service closes: the bus before the close was 
     ds.map((d) => d.kind),
     ['live'],
   );
+  // Nor on Nearby, whose row would otherwise run on to tomorrow's first buses.
+  const all = departuresFrom(GRAPH, board('PGP', now, 'D2', [at('2026-08-27T22:50')]), 'D2', { now, from: now });
+  const r = {
+    svc: 'D2',
+    etaS: 600,
+    quality: 'live',
+    ambiguousBerth: false,
+    later: [],
+    color: null,
+    towards: [],
+    via: [],
+    crowd: null,
+    endsAt: new Date(at('2026-08-27T23:00')).toISOString(),
+    running: true,
+    eta: '10 min',
+    laterText: null,
+    toText: '',
+  };
+  assert.deepEqual(nearbyRow(r, now, all).later, []);
 });
 
 test('with its hours unknown, a service is guessed for, as far as a day ahead', () => {
