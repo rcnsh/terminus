@@ -126,7 +126,9 @@ function attention(s, d) {
   else if (d.crashReports) out.push(['info', `${plural(d.crashReports, 'error report')} from the apps this week.`, '#/crashes']);
   if (s.feedback?.last7d) out.push(['info', `${plural(s.feedback.last7d, 'report')} from users this week.`, '#/reports']);
   if (s.eta?.error) out.push(['bad', `Arrival times: ${s.eta.error}`, '#/arrivals']);
-  const off = SWITCHES.filter(([k]) => !s.collect?.[k]).map(([, t]) => t.toLowerCase());
+  // Lower case mid-sentence, but not a word that is all capitals (API).
+  const lower = (t) => t.replace(/\S+/g, (w) => (w === w.toUpperCase() ? w : w.toLowerCase()));
+  const off = SWITCHES.filter(([k]) => !s.collect?.[k]).map(([, t]) => lower(t));
   if (off.length) out.push(['info', `Not collecting ${off.join(', ')}.`, '#/collection']);
   return out;
 }
@@ -394,7 +396,7 @@ export function Accounts({ s, d }) {
 
 /* ----------------------------------------------------------------- Devices */
 
-export function Devices({ s }) {
+export function Devices({ s, d }) {
   const devices = (s.devices ?? []).map((x) => ({ ...x, key: x.platform, share: share(x.active7, x.total) }));
   const clients = (s.clients ?? []).map((c) => {
     const [p, v] = String(c.client).split('/');
@@ -468,7 +470,95 @@ export function Devices({ s }) {
         />
       <//>
     </div>
+    <${ApiKeys} s=${s} d=${d} />
     <${Legacy} s=${s} />
+  `;
+}
+
+/**
+ * Every API key with whose it is (admin.ts apiKeys.list), beside the
+ * requests each made (analytics.keys and keyRoutes, keyuse.ts): today so
+ * far, and the 7 full Singapore days to yesterday, as the dashboard's
+ * other weeks are. Requests from a key not in the list (revoked, or past
+ * the 500 most lately used) have no owner to show, so they are only totalled.
+ */
+export function keyRows(s, d14) {
+  const an = s.analytics && !s.analytics.error ? s.analytics : null;
+  const today = d14.at(-1);
+  const week = new Set(d14.slice(-8, -1));
+  const use = new Map();
+  for (const r of an?.keys ?? []) {
+    const on = day(r);
+    if (on !== today && !week.has(on)) continue;
+    const n = Number(r.n) || 0;
+    const u = use.get(r.keyId) ?? { all: 0, today: 0, n7: 0, limited7: 0 };
+    u.all += n;
+    if (on === today) u.today += n;
+    else {
+      u.n7 += n;
+      if (r.outcome === 'limited') u.limited7 += n;
+    }
+    use.set(r.keyId, u);
+  }
+  // Commonest first, so the first row seen for a key is its top route.
+  const top = new Map();
+  for (const r of an?.keyRoutes ?? []) if (!top.has(r.keyId)) top.set(r.keyId, r.route);
+  const rows = (s.apiKeys?.list ?? []).map((k) => {
+    const u = use.get(k.id);
+    use.delete(k.id);
+    return { ...k, key: k.id, today: u?.today ?? 0, n7: u?.n7 ?? 0, limited7: u?.limited7 ?? 0, route: top.get(k.id) ?? '' };
+  });
+  return { rows, unlisted: sum([...use.values()].map((u) => u.all)), counted: Boolean(an?.keys?.length) };
+}
+
+function ApiKeys({ s, d }) {
+  const [q, setQ] = useState('');
+  const { rows, unlisted, counted } = useMemo(() => keyRows(s, d.d14), [s, d.d14]);
+  // Counts already recorded stay in view after the switch is turned off.
+  const counting = Boolean(d.an && (s.collect?.keys || counted));
+  const needle = q.trim().toLowerCase();
+  const shown = rows.filter(
+    (r) => !needle || [r.name, r.email ?? 'no email', r.userId.slice(0, 8), r.hint].some((x) => String(x).toLowerCase().includes(needle)),
+  );
+  const sub = !s.analytics
+    ? 'Requests per key need Analytics Engine connected.'
+    : s.analytics.error
+      ? `Requests per key can’t be read: ${s.analytics.error}`
+      : `${s.collect?.keys ? 'Requests made with each key, by Singapore day: today so far, and the 7 full days before; turned away means its rate limit refused them; the commonest route counts the same 8 days.' : `Not counting requests: turn on “API key requests” under Collection to count them.${counted ? ' The counts below are from before it was turned off.' : ''}`}${unlisted ? ` ${plural(unlisted, 'request')} in those 8 days came from keys not listed here (revoked, or past the 500 most lately used).` : ''}${s.analytics.keysCut ? ' Too many rows came back to count them all: these may be short.' : ''}`;
+  return html`
+    <${Card}
+      title="API keys"
+      sub=${sub}
+      tools=${rows.length > 8 && html`<${Search} value=${q} onChange=${setQ} placeholder="Search name, owner, last four" />`}
+    >
+      <${Table}
+        key=${counting ? 'counts' : 'keys'}
+        cols=${[
+          { key: 'name', label: 'Name' },
+          {
+            key: 'email',
+            label: 'Owner',
+            sort: (r) => r.email ?? '',
+            cell: (r) => r.email ?? html`<span class="muted">No email (account ${r.userId.slice(0, 8)})</span>`,
+          },
+          { key: 'hint', label: 'Ends in', cell: (r) => html`<code>${`…${r.hint}`}</code>` },
+          { key: 'created', label: 'Made', fmt: (v) => ago(v) },
+          { key: 'lastUsed', label: 'Last used', sort: (r) => r.lastUsed ?? '', fmt: (v) => (v ? ago(v) : 'Never') },
+          ...(counting
+            ? [
+                { key: 'today', label: 'Today', num: true },
+                { key: 'n7', label: '7 days to yesterday', num: true, meter: true },
+                { key: 'limited7', label: 'Turned away, 7 days', num: true },
+                { key: 'route', label: 'Most asked', cell: (r) => (r.route ? html`<code>${r.route}</code>` : '—') },
+              ]
+            : []),
+        ]}
+        rows=${shown}
+        sort=${counting ? { key: 'n7', dir: 'desc' } : { key: 'lastUsed', dir: 'desc' }}
+        limit=${25}
+        empty=${rows.length ? 'No key matches.' : 'No API keys yet.'}
+      />
+    <//>
   `;
 }
 
@@ -1177,6 +1267,11 @@ export const SWITCHES = [
     'settings',
     'Settings',
     'How many accounts used this month have each setting, and how many devices take notifications. Counted from the profiles already kept; only the totals are stored.',
+  ],
+  [
+    'keys',
+    'API key requests',
+    'Each request made with an API key, counted against that key by route, and whether its rate limit turned it away. The key and nothing else from the request.',
   ],
 ];
 

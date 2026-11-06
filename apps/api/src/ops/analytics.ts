@@ -25,7 +25,7 @@
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
  *                       | 'active' | 'apperror' | 'tripwake' | 'legacy' | 'settings'
-                       | 'next'
+                       | 'next' | 'apikey'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll);
@@ -57,9 +57,10 @@
  *   double12 tookMs          'next' rows: ms from the request's start to its answer built
  *
  *   index1  stop code (the sampling key); 'error', 'timelapse', 'signal', 'active',
- *           'apperror', 'tripwake', 'legacy', 'settings' and 'next' rows use their kind
+ *           'apperror', 'tripwake', 'legacy', 'settings' and 'next' rows use their
+ *           kind; 'apikey' rows the key's id
  *
- * Six kinds give the columns their own meaning:
+ * Seven kinds give the columns their own meaning:
  *
  *   'active' (usage.ts logActive), once a Singapore day, counts only:
  *     blob2 scope 'all' | 'app' | 'version';  blob3 the app (web, android,
@@ -92,8 +93,14 @@
  *     double1..11 are 0, no blobs past blob1. A row for every answer, a bus
  *     in it or not, so its quantiles are what opening the app costs.
  *
- * No row holds an account, email, IP address, device or install id, or
- * coordinates. An answer row's
+ *   'apikey' (keyuse.ts), one request made with an API key, only while the
+ *     operator collects `keys`: blob2 the key's id (api_keys.id);  blob3 the
+ *     keyed route ("/api/next"), never a query;  blob4 'ok' | 'limited'
+ *     (turned away by the key's rate limit);  double1 1.
+ *
+ * Apart from 'apikey' rows, whose key id the dashboard joins to its owner
+ * while the key exists, no row holds an account, email, IP address, device
+ * or install id, or coordinates. An answer row's
  * stop is the one nearest the caller when a location was sent, and its
  * destination comes from the timetable: the privacy policy says so.
  * ---------------------------------------------------------------------------
@@ -327,6 +334,23 @@ export function logSetting(env: Env, r: SettingRow): void {
     env.AE!.writeDataPoint({ blobs: ['settings', r.setting, r.value, r.day], doubles: [r.n, r.of], indexes: ['settings'] });
   } catch {
     // Same rule as above: a lost count never stops the cron.
+  }
+}
+
+/** One request made with an API key (keyuse.ts). */
+export interface KeyUseRow {
+  keyId: string;
+  route: string;
+  outcome: 'ok' | 'limited';
+}
+
+export function logKeyUse(env: Env, r: KeyUseRow): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    // Indexed by key, so Analytics Engine samples each key apart: a busy one never thins out a quiet one's counts.
+    env.AE!.writeDataPoint({ blobs: ['apikey', r.keyId, r.route, r.outcome], doubles: [1], indexes: [r.keyId] });
+  } catch {
+    // Same rule as above: a lost count never stops a request.
   }
 }
 

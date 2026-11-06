@@ -58,7 +58,7 @@
   <div class="wrap narrow band-title">
     <a class="back" href="/privacy/">← Privacy in short</a>
     <h1>The full privacy policy</h1>
-    <p>Last updated 22 October 2026</p>
+    <p>Last updated 6 November 2026</p>
   </div>
   <div data-horizon data-low></div>
 </section>
@@ -82,7 +82,7 @@
       <li><strong>How each trip went</strong>: for 35 days, one word per trip per day: on the bus, missed it, not going, or arrived. It is kept with the trip it was about (the class's day, time and stop, or the trip home) and the date, never the time it happened or a location. It is what suggests leaving a bus earlier for a class you often miss, or stopping reminders for one you keep skipping. What you choose there is kept, with the class's name, until you change it.</li>
       <li><strong>Reports you send</strong>: when you tell terminus an answer was wrong, or send feedback, your note and the answer you were looking at (which can name the stop nearest you) are kept with your account for a year, to check against what the buses did. The note is also emailed to the person who runs terminus, without your email address or the answer.</li>
       <li><strong>Your devices</strong>: the name each paired device reported (its model, for example "Google Pixel 8", "iPhone 16" or "MacBook Pro"; a Mac set up with a version before 2.5.0 sent the computer's own name, which stays until you remove that device or delete the account), which app and app version it runs, when it was added and when it was last used, and, for a device that takes notifications, its push address: a Firebase address for the Android app; for the iPhone app, the push token Apple gave it, the token of a trip's Live Activity while one runs, and the language its notifications are worded in; or for the web app the address your browser's push service gave it (Apple's, Google's, Microsoft's or Mozilla's) and the keys to encrypt for it. Sign-in and device tokens are stored only as one-way hashes. A pairing code is kept as it is for the 10 minutes it works.</li>
-      <li><strong>API keys you make</strong>: each key's name, its last four characters, and when it was made and last used. The key itself is stored only as a one-way hash.</li>
+      <li><strong>API keys you make</strong>: each key's name, its last four characters, and when it was made and last used. The key itself is stored only as a one-way hash. When the person who runs terminus turns it on, each request made with a key is also recorded against that key: when it was made, its route (for example /api/next) and whether it was turned away for asking too often, with nothing else from the request. These records are kept by Cloudflare, not with your account, so they aren't in the file you can download; once the key is revoked or the account deleted, they no longer lead back to it.</li>
     </ul>
 
     <h2 id="s2">Using terminus without an email</h2>
@@ -129,12 +129,12 @@
       <li>Sign-in links and requests expire after 15 minutes, and pairing codes after 10. A browser session ends 30 days after it was last used, and at most 180 days after you signed in for an account with an email. Paired devices are signed out after 90 days without use.</li>
       <li>Accounts without an email are deleted 60 days after they were last used.</li>
       <li>Reports are deleted after a year.</li>
-      <li>The statistics about answers, the daily counts, the counts of old requests and crash reports are kept three months by Cloudflare.</li>
+      <li>The statistics about answers, the daily counts, the counts of old requests, the requests made with API keys and crash reports are kept three months by Cloudflare.</li>
       <li>How each trip went is kept 35 days. <strong>Clear trip history</strong> (in the app's settings, or on the account page) deletes it sooner without touching the rest of your account; today's trip still goes at midnight.</li>
     </ul>
 
     <h2 id="s6">Your controls</h2>
-    <p>On the <a href="/account">account page</a> you can see and edit everything above, download it all as a file (today's trip included), sign out every device, or delete your account. The apps can see and remove your devices too. An account with an email is deleted from the account page. An account without an email is managed from its app, or on the website from the account page in that browser; either can export or delete it.</p>
+    <p>On the <a href="/account">account page</a> you can see and edit everything above, download it all as a file (today's trip included; the requests made with your API keys aren't in it), sign out every device, or delete your account. The apps can see and remove your devices too. An account with an email is deleted from the account page. An account without an email is managed from its app, or on the website from the account page in that browser; either can export or delete it.</p>
 
     <h2 id="s7">Contact</h2>
     <p>Questions or requests about your data under Singapore's Personal Data Protection Act: <a href="mailto:privacy@terminus.run">privacy@terminus.run</a>.</p>

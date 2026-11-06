@@ -70,6 +70,7 @@ apps/api/
                       the timelapse; crash reports (/api/errors), scrubbed, with no one on them
     legacy.ts, settings.ts  What still uses the old address and paths, by app version and
                       route; how many accounts have each setting, daily totals
+    keyuse.ts         Requests made with each API key, for the dashboard's API keys table
     etamodel.ts, etashadow.ts  An arrival-time model (segment medians, the feed's usual
                       error, a blend), pure; run in shadow by the cron with ETA_MODEL=shadow,
                       answering no one (docs/eta-model.md)

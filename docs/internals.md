@@ -159,9 +159,9 @@ anything else (a script with an API key, a page open since before) gets a
 | `GET /api/stops/pairs` | Each stop with its opposite stop, and where the buses on each side go next. Cached hard. |
 | `GET /api/health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid`, `config.pushWeb` and `config.pushIos`: push set up with a usable key, or for APNs all four settings). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` mints a real token and says what came back, and `?versions=1` says what the version updater would find today in the app stores (see "The version string is a kill switch"); without it both are ignored. |
 | `GET /api/status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time sends no emails by turns; the outage ends at the first of the two. Only a check between 07:00 and 23:30 Singapore time can confirm one (`OUTAGE_HOURS`): no bus runs outside it, and `feed` says `maintenance` instead, with no incident and no email. A refused uNivUS version (10009) is the exception: it confirms an outage at any hour, as it needs fixing before the buses run. `cause` says why the feed is down (`version` or `feed`), and the page says so. Failures at night still count, so a feed still failing at 07:00 is down from then, and an outage under way at 23:30 lasts until the feed answers. `feed` (like `/api/health` and the card's notice) follows the last check, though: one good check and it says `up` again, rather than "down" for 15 minutes with the feed back. The [status page](../apps/web/public/status) shows it. |
-| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts, the week's crash reports and the last day's `/api/me/next` times (`next`: median and 95th percentile, ms), from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored; `model`, the arrival-time model's days in shadow, `eta/model/*.json` without their weight grids). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
+| `GET /api/admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day, and the timelapse recorder's polls by what they cost NUS, the daily active counts, the week's crash reports and the last day's `/api/me/next` times (`next`: median and 95th percentile, ms) and the requests made with each API key (`keys` by day, `keyRoutes` by route), from Analytics Engine when `ANALYTICS_TOKEN` and `CF_ACCOUNT_ID` are set; `collect`, the switches below; `eta`, arrival times scored; `model`, the arrival-time model's days in shadow, `eta/model/*.json` without their weight grids; `apiKeys.list`, every API key with its owner's email). Needs `x-health-token` (`HEALTH_TOKEN` or a passkey session); anything else gets a 404. |
 | `GET /api/admin/appversion` | `{version}`: the uNivUS version string the Worker sends NUS (`config:appVersion`, else the `NEXTBUS_APP_VERSION` secret), for the weekly scrape. Needs `x-health-token`: the operator's, or `SCRAPE_TOKEN`, which opens this route and nothing else. 404 without one; 503 when the Worker has no version. |
-| `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`; see Analytics). Operator only, like `/api/admin/stats`. |
+| `POST /api/admin/collect` | `{name, on}`: turns one of the operator's statistics on or off (`active`, `eta`, `errors`, `legacy`, `settings`, `keys`; see Analytics). Operator only, like `/api/admin/stats`. |
 | `POST /api/admin/crashes/dismiss` | `{fingerprint}`: hides a crash report from the dashboard until it's reported again (Analytics Engine can't delete one). Operator only. |
 | `POST /api/admin/reports/delete` | `{id}`: deletes one user report ("This was wrong" or a stop suggestion) from D1 for good. Operator only. |
 | `POST /api/errors` | A crash or error report from an app or the website: platform, version, OS, type, message, stack, `fatal`. No account or device id; scrubbed, then kept in Analytics Engine while `errors` is on, dropped otherwise. Always 204 for a well-formed report. Limited per IP (`RL_PUBLIC`). |
@@ -2096,7 +2096,7 @@ the fix commands naming the beta's KV namespace (`KV_NAMESPACE_IDS`, kept in
 step with `cloudflare.config.ts` by a test), and each run while its feed is
 down is counted on its dashboard as the error `cron feed down`.
 
-**The operator's switches.** Five statistics are collected only once
+**The operator's switches.** Six statistics are collected only once
 turned on, on the dashboard (`src/ops/collect.ts`, KV `config:collect:<name>`,
 off when unset or unreadable):
 
@@ -2154,6 +2154,12 @@ off when unset or unreadable):
   (`settingsOf`: a missing setting is its default, a list is `some` or
   `none`, never its contents), with Android phones and web apps that have a
   push address. Only the totals are written.
+- `keys` ([`src/ops/keyuse.ts`](../apps/api/src/ops/keyuse.ts)): each request to a keyed
+  route made with an API key writes, in `waitUntil`, one row: the key's id,
+  the route (KEYED's paths hold no ids) and `ok` or `limited` (its rate
+  limit refused it), indexed by the key's id so Analytics Engine samples
+  each key apart. The dashboard joins the id to `api_keys` for the name
+  and the owner's email, so a revoked key's rows are only counted.
 
 ## Known weaknesses
 
@@ -2565,11 +2571,12 @@ src/map/pairs.ts           /api/stops/pairs
 src/ops/analytics.ts       Analytics Engine logging: decisions and arrivals, errors
                            (logError, logCronError), timelapse polls (logPoll), Trip wakes
                            (logTripWake)
-src/ops/collect.ts         The dashboard's switches for five statistics, off until turned on
+src/ops/collect.ts         The dashboard's switches for six statistics, off until turned on
 src/ops/usage.ts           Daily active counts; src/ops/eta.ts the feed's arrival times scored
                            against the timelapse; src/ops/apperrors.ts crash reports (/api/errors)
 src/ops/legacy.ts          Requests on the old address and paths, by app version and route;
-                           src/ops/settings.ts how many accounts have each setting, daily
+                           src/ops/settings.ts how many accounts have each setting, daily;
+                           src/ops/keyuse.ts requests made with each API key
 src/ops/etamodel.ts        The arrival-time model (pure); src/ops/etashadow.ts runs it in shadow
                            beside eta.ts when ETA_MODEL is shadow (docs/eta-model.md)
 src/ops/monitor.ts         The cron: feed health, incidents, housekeeping, arming trips,

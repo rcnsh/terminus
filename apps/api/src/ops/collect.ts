@@ -14,6 +14,9 @@
  *   app version and route (legacy.ts). Nothing about who sent them.
  * - `settings`: how many active accounts have each setting, once a day
  *   (settings.ts). Totals only, from the profiles D1 already keeps.
+ * - `keys`: each request made with an API key, counted against that key by
+ *   route and whether its rate limit turned it away (keyuse.ts). The key's
+ *   id and nothing else from the request.
  *
  * Each is KV `config:collect:<name>`, "on" or "off". Unset is off, and so is
  * KV failing to answer: nothing new is collected until the operator turns
@@ -24,7 +27,7 @@ import type { Env } from '../types.ts';
 import { isOperator } from './admin.ts';
 import { json } from '../http.ts';
 
-export const COLLECTORS = ['active', 'eta', 'errors', 'legacy', 'settings'] as const;
+export const COLLECTORS = ['active', 'eta', 'errors', 'legacy', 'settings', 'keys'] as const;
 export type Collector = (typeof COLLECTORS)[number];
 
 const keyOf = (name: Collector) => `config:collect:${name}`;
@@ -70,7 +73,7 @@ export async function handleCollect(req: Request, env: Env, nowMs: number): Prom
   const body = (await req.json().catch(() => null)) as { name?: unknown; on?: unknown } | null;
   const name = COLLECTORS.find((c) => c === body?.name);
   if (!name || typeof body?.on !== 'boolean')
-    return json({ error: 'name must be active, eta, errors, legacy or settings, and on true or false' }, 400);
+    return json({ error: 'name must be active, eta, errors, legacy, settings or keys, and on true or false' }, 400);
   await env.KV.put(keyOf(name), body.on ? 'on' : 'off');
   switchMemo.get(env.KV)?.delete(name);
   // KV may still read the old value back for a while: say what was just set.
