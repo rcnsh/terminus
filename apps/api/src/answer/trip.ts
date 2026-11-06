@@ -340,6 +340,9 @@ export interface TripUpdate {
   basis?: Record<string, number>;
   /** Wake at `at` (no later than a wake already pending) to push the card. */
   watch?: { userId: string; at: number };
+  /** The day's card a tap pushed to the other devices, so the next wake
+   *  doesn't push it again (me.ts tapNudge). */
+  pushed?: { key: string | null; phase: string; gone?: boolean };
 }
 
 /**

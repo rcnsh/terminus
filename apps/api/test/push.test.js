@@ -356,6 +356,52 @@ test('a step made while a request waits for the feed is kept: the request does n
   assert.equal(day.plans?.[key], undefined, 'and the plan from before it is not put back');
 });
 
+test('a step made while the Trip object wakes is pushed once: by the step, not again by the wake after', async () => {
+  const feed = heldFeed();
+  const { call, phone, mac, next, fcm, TRIPS, clock, alarm, wakeUntil } = await setup({ wrap: feed.wrap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  // Time to go is pushed for the planned bus.
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due'],
+  );
+  const now = await next(mac);
+  const key = now.card.step?.trip;
+  const to = now.card.step?.later;
+  assert.ok(key && to, 'the card offers a later bus');
+  const storage = () => [...TRIPS.instances.values()][0].storage._map;
+
+  // The next wake waits for the feed; "Later bus" on the Mac meanwhile.
+  clock(Date.now() + 30_000);
+  storage().set('wakeAt', Date.now());
+  feed.hold();
+  const woke = TRIPS.fireAlarms();
+  await feed.asked('the wake');
+  const stepped = call('/api/me/step', { method: 'POST', token: mac, body: { trip: key, to } });
+  while (!storage().get('day').steps?.[key]) await new Promise((r) => setImmediate(r));
+  feed.release();
+  await woke;
+  const out = await (await stepped).json();
+  assert.notEqual(out.card.phase, 'due', 'the later bus is not yet time to go');
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due', out.card.phase],
+    'the step tells the phone about the later bus, and the stale wake says nothing',
+  );
+
+  // The wake after it works out the same card the step pushed: nothing new to say.
+  assert.equal(alarm(), Date.now() + 30_000);
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  assert.deepEqual(
+    fcm.sent.map((m) => m.data.phase),
+    ['due', out.card.phase],
+    'the later bus is pushed once',
+  );
+});
+
 test('a request whose plan a step made stale does not arm its wake either', async () => {
   const feed = heldFeed();
   const { call, phone, next, TRIPS, clock } = await setup({ wrap: feed.wrap });

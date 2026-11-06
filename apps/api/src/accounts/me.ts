@@ -65,6 +65,7 @@ import {
   PLATE_WINDOW_S,
   SIGNALS,
   type TripRecord,
+  type TripUpdate,
   clearTrip,
   laterChange,
   leaveOf,
@@ -74,7 +75,7 @@ import {
   sgtDate,
   updateTrip,
 } from '../answer/trip.ts';
-import { type AnswerIn, nudgeUser, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
+import { type AnswerIn, type Nudge, nudgeUser, pushEnabled, setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from '../push/apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '../push/webpush.ts';
 import {
@@ -819,24 +820,24 @@ export const ME_ROUTES: MeRoute[] = [
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
-        const { body: out, tripOver } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
+        const { body: out, tripOver, shown } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
         const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
-        ctx.waitUntil(
-          nudgeUser(
-            env,
-            session.user.id,
-            {
-              phase: out.card.phase,
-              urgent: false,
-              remind: out.card.remind !== false,
-              answer: out,
-              answerIn,
-              clockChosen: profile.clock !== 'auto',
-              tripOver,
-            },
-            nowMs,
-            session.tokenHash,
-          ),
+        tapNudge(
+          env,
+          ctx,
+          session.user.id,
+          {
+            phase: out.card.phase,
+            urgent: false,
+            remind: out.card.remind !== false,
+            answer: out,
+            answerIn,
+            clockChosen: profile.clock !== 'auto',
+            tripOver,
+          },
+          nowMs,
+          session.tokenHash,
+          shown,
         );
         return json(out);
       }
@@ -937,27 +938,27 @@ export const ME_ROUTES: MeRoute[] = [
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      const { body: out, tripOver } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
+      const { body: out, tripOver, shown } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
       // A tap here changes the other phones' cards now, not at their next
       // refresh; an iPhone pushed in the other language gets the card in its
       // own, and one whose trip the tap ended has its Live Activity ended.
       const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
-      ctx.waitUntil(
-        nudgeUser(
-          env,
-          session.user.id,
-          {
-            phase: out.card.phase,
-            urgent: false,
-            remind: out.card.remind !== false,
-            answer: out,
-            answerIn,
-            clockChosen: profile.clock !== 'auto',
-            tripOver,
-          },
-          nowMs,
-          session.tokenHash,
-        ),
+      tapNudge(
+        env,
+        ctx,
+        session.user.id,
+        {
+          phase: out.card.phase,
+          urgent: false,
+          remind: out.card.remind !== false,
+          answer: out,
+          answerIn,
+          clockChosen: profile.clock !== 'auto',
+          tripOver,
+        },
+        nowMs,
+        session.tokenHash,
+        shown,
       );
       return json(out);
     },
@@ -990,17 +991,17 @@ export const ME_ROUTES: MeRoute[] = [
           ? { ...query, at, place: null, to: trip.slice(3) }
           : { ...query, at };
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      const out = await nextBody(env, ctx, deps, rider, asked, nowMs);
+      const { body: out, shown } = await nextTrip(env, ctx, deps, rider, asked, nowMs);
       // The other devices' cards and the leave reminder follow now, not at their next refresh.
       const answerIn = rewordFor(env, ctx, deps, rider, asked, nowMs);
-      ctx.waitUntil(
-        nudgeUser(
-          env,
-          session.user.id,
-          { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
-          nowMs,
-          session.tokenHash,
-        ),
+      tapNudge(
+        env,
+        ctx,
+        session.user.id,
+        { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
+        nowMs,
+        session.tokenHash,
+        shown,
       );
       return json(out);
     },
@@ -1606,7 +1607,40 @@ async function nextTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Ri
     );
   }
   // A place or stop asked for has no trip key either, but the day's trip goes on.
-  return { body, tripOver: trip.key === null && !ask.place && !ask.to };
+  const isPlan = !ask.place && !ask.to;
+  // The day's card, as the Trip object's wake works it out (tapNudge); a place's or a stop's isn't.
+  const shown: TripUpdate['pushed'] = isPlan
+    ? { key: trip.key, phase: body.card.phase, ...(body.card.gone ? { gone: true } : {}) }
+    : undefined;
+  return { body, tripOver: trip.key === null && isPlan, shown };
+}
+
+/**
+ * A tap's nudge to the user's other devices, noted in the Trip object as
+ * pushed once a device has it (or none could be sent to), as a wake notes
+ * its own: the wake after the tap (one the tap made stale is 30 s on) then
+ * doesn't push the same card again. Not time to go or a missed bus: those
+ * are the wake's to push loudly, starting a Live Activity, and a tap's
+ * nudge is quiet. Never throws.
+ */
+function tapNudge(
+  env: Env,
+  ctx: ExecutionContext,
+  userId: string,
+  nudge: Nudge,
+  nowMs: number,
+  exceptTokenHash: string,
+  shown: TripUpdate['pushed'],
+): void {
+  const note = shown && shown.phase !== 'due' && shown.phase !== 'missed' && pushEnabled(env) ? shown : undefined;
+  ctx.waitUntil(
+    nudgeUser(env, userId, nudge, nowMs, exceptTokenHash).then(async (out) => {
+      if (!note || (out.sent === 0 && out.failed > 0)) return;
+      await updateTrip(env, userId, { pushed: note }, nowMs).catch((err: unknown) =>
+        console.error('trip push not noted', err instanceof Error ? err.message : typeof err),
+      );
+    }),
+  );
 }
 
 /**

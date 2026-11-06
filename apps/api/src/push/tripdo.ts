@@ -208,6 +208,14 @@ export class Trip {
         changed = true;
       }
     }
+    if (u.pushed) {
+      // What the phones were last told of the trip; a Live Activity's state
+      // and starts are the wake's own, and stay.
+      const now: Pushed = { ...(await this.storage.get<Pushed>('pushed')), key: u.pushed.key, phase: u.pushed.phase };
+      if (u.pushed.gone) now.gone = true;
+      else delete now.gone;
+      await this.storage.put('pushed', now);
+    }
     if (changed) await this.storage.put('day', next);
     await this.arm(u.deleteAt);
     return next;
