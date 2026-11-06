@@ -465,3 +465,4 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 @media (prefers-reduced-motion: reduce) {
   .dash *, .dash *::before, .dash *::after { animation: none !important; transition: none !important; }
 }
+.muted { color: var(--muted); }

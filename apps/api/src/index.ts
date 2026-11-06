@@ -46,6 +46,7 @@ import { GRAPH, GRAPH_PUBLIC, oppositeOf } from './answer/graph.ts';
 import { appSiteAssociation, markBeta, movedApi, movedPage } from './site/site.ts';
 import { isBeta, linkOrigin } from './origin.ts';
 import { noteLegacy } from './ops/legacy.ts';
+import { noteKeyUse } from './ops/keyuse.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer/answer.ts';
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
 import type { Lang } from './i18n.ts';
@@ -546,7 +547,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           : caller?.kind === 'account'
             ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
             : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
-      if (bucket.rl && !(await bucket.rl.limit({ key: bucket.key })).success) {
+      const limited = Boolean(bucket.rl && !(await bucket.rl.limit({ key: bucket.key })).success);
+      // KEYED's paths hold no ids, so the route is the path as sent.
+      if (caller?.kind === 'key') noteKeyUse(env, ctx, caller.keyId, url.pathname, limited ? 'limited' : 'ok');
+      if (limited) {
         return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, {
           'retry-after': '60',
         });

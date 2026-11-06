@@ -9,6 +9,8 @@
  * null and the page says how to turn them on. `collect` is the switches for
  * what's collected (collect.ts), `eta` the arrival times scored (eta.ts),
  * `model` the arrival-time model's days in shadow (etashadow.ts).
+ * `apiKeys.list` is every key with its owner's email, for the dashboard
+ * to set beside the requests each made (`analytics.keys`).
  */
 
 import type { Env } from '../types.ts';
@@ -20,8 +22,13 @@ import { collectState } from './collect.ts';
 import { json } from '../http.ts';
 import { etaSummary } from './eta.ts';
 import { shadowSummary } from './etashadow.ts';
+import { sgtDate } from '../timetable/calendar.ts';
 
 const DAY = 86_400_000;
+/** API keys the dashboard lists, most lately used first: five an account, so this is every key for a long while. */
+const KEYS_LISTED = 500;
+/** Rows of each per-key query: the 500 keys' two outcomes on 9 days is 9,000. */
+const KEY_ROWS = 10_000;
 
 /** HEALTH_TOKEN itself, or an operator session that hasn't run out. */
 export async function isOperator(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
@@ -75,7 +82,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const [upstream, incidents, analytics, collect, eta, model] = await Promise.all([
     readUpstream(env),
     readIncidents(env),
-    analyticsStats(env, fetchImpl),
+    analyticsStats(env, nowMs, fetchImpl),
     collectState(env),
     etaSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
     shadowSummary(env, nowMs).catch((err) => ({ error: err instanceof Error ? err.message : String(err) })),
@@ -104,7 +111,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const d30 = nowMs - 30 * DAY;
   // One pass over each table, and every query in one round trip: the counts read whole tables.
   // SUM of a comparison counts the rows where it's true (NULL counts none).
-  const [u, p, s, k, f, o, dev, cli, sign, fb] = await db.batch([
+  const [u, p, s, k, f, o, dev, cli, sign, fb, kl] = await db.batch([
     db
       .prepare(
         `SELECT COUNT(*) AS total, SUM(created > ?1) AS new7, SUM(created > ?2) AS new30,
@@ -164,6 +171,11 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       `SELECT f.id, f.created, f.kind, f.reason, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
     ),
+    // Every key and whose it is: the email, or none for an account without one.
+    db.prepare(
+      `SELECT k.id, k.name, k.hint, k.created, k.last_used AS lastUsed, k.user_id AS userId, u.email
+         FROM api_keys k JOIN users u ON u.id = k.user_id ORDER BY k.last_used IS NULL, k.last_used DESC LIMIT ${KEYS_LISTED}`,
+    ),
   ]);
   const row = (r: D1Result) => (r.results?.[0] ?? {}) as Record<string, number | null>;
   const n = (v: number | null | undefined) => v ?? 0;
@@ -195,6 +207,15 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const [withTimetable, withHome] = [profiles.withTimetable, profiles.withHome].map(n);
   const [active1, active7, web7] = [sessions.active1, sessions.active7, sessions.web7].map(n);
   const [keys, keysUsed7] = [apiKeys.total, apiKeys.used7].map(n);
+  const keyList = kl.results as Array<{
+    id: string;
+    name: string;
+    hint: string;
+    created: number;
+    lastUsed: number | null;
+    userId: string;
+    email: string | null;
+  }>;
   const fb7 = n(row(f).n);
   const onboarded30 = n(row(o).n);
 
@@ -215,7 +236,15 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     devices,
     clients,
     signups,
-    apiKeys: { total: keys, used7d: keysUsed7 },
+    apiKeys: {
+      total: keys,
+      used7d: keysUsed7,
+      list: keyList.map((key) => ({
+        ...key,
+        created: new Date(key.created).toISOString(),
+        lastUsed: key.lastUsed === null ? null : new Date(key.lastUsed).toISOString(),
+      })),
+    },
     feedback: {
       last7d: fb7,
       latest: feedback.map((f) => ({
@@ -247,51 +276,65 @@ const CRASH_ROWS = 100;
  *  recorder's polls by what each cost NUS (logPoll), the daily active counts
  *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
  *  something on its way out (legacy.ts), the settings' counts
- *  (settings.ts) and how long /api/me/next took in the last day, from
- *  Analytics Engine's SQL API. */
-async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
+ *  (settings.ts), how long /api/me/next took in the last day and the
+ *  requests made with each API key per day (keyuse.ts), from Analytics
+ *  Engine's SQL API. */
+async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
+  // The per-key counts cover today and the 7 Singapore days before it, both queries alike.
+  const keysFrom = sgtDate(nowMs - 7 * DAY);
   try {
-    const [dismissed, [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings, nextMs]] =
-      await Promise.all([
-        dismissedCrashes(env),
-        Promise.all([
-          // _sample_interval: each row may stand for several, at high volume. Days are Singapore's, as the
-          // dashboard's are; 15 of them, so it can compare two full weeks and still chart today.
-          sql(`SELECT ${SG_DAY} AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
+    const [
+      dismissed,
+      [daily, quality, errors, timelapse, active, appErrors, appErrorVersions, legacy, settings, nextMs, keyUse, keyRoutes],
+    ] = await Promise.all([
+      dismissedCrashes(env),
+      Promise.all([
+        // _sample_interval: each row may stand for several, at high volume. Days are Singapore's, as the
+        // dashboard's are; 15 of them, so it can compare two full weeks and still chart today.
+        sql(`SELECT ${SG_DAY} AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '15' DAY AND blob1 IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
-          sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'answer' GROUP BY quality ORDER BY n DESC`),
-          sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
-          sql(`SELECT ${SG_DAY} AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT ${SG_DAY} AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 = 'timelapse' GROUP BY day, outcome ORDER BY day`),
-          // One row per day and name: max() in case a day was ever counted twice.
-          sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
+        // One row per day and name: max() in case a day was ever counted twice.
+        sql(`SELECT blob4 AS day, blob2 AS scope, blob3 AS name, max(double1) AS d1, max(double2) AS d7, max(double3) AS d30 FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'active' GROUP BY day, scope, name ORDER BY day`),
-          sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
+        sql(`SELECT blob4 AS fingerprint, blob2 AS platform, blob5 AS type, blob6 AS message, blob7 AS stack,
                   SUM(_sample_interval) AS n, SUM(_sample_interval * double2) AS fatal, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, platform, type, message, stack ORDER BY n DESC LIMIT ${CRASH_ROWS}`),
-          sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT blob4 AS fingerprint, blob3 AS version, blob8 AS os, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'apperror'
            GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT ${CRASH_ROWS * 5}`),
-          // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
-          sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
+        // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
+        sql(`SELECT blob2 AS what, blob3 AS client, blob4 AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'legacy'
            GROUP BY what, client, route ORDER BY n DESC LIMIT 100`),
-          // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
-          sql(`SELECT blob4 AS day, blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of FROM ${dataset}
+        // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
+        sql(`SELECT blob4 AS day, blob2 AS setting, blob3 AS value, max(double1) AS n, max(double2) AS of FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND blob1 = 'settings' GROUP BY day, setting, value ORDER BY day`),
-          // How long /api/me/next took over the last 24 hours (logNextTook).
-          sql(`SELECT quantileExactWeighted(0.5)(double12, _sample_interval) AS p50,
+        // How long /api/me/next took over the last 24 hours (logNextTook).
+        sql(`SELECT quantileExactWeighted(0.5)(double12, _sample_interval) AS p50,
                   quantileExactWeighted(0.95)(double12, _sample_interval) AS p95, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '1' DAY AND blob1 = 'next'`),
-        ]),
-      ]);
+        // Requests made with each API key (keyuse.ts), per Singapore day and whether its limit turned them away,
+        // over today and the 7 days before (9 days back, then the Singapore days): at most two rows per key a day.
+        sql(`SELECT blob2 AS keyId, ${SG_DAY} AS day, blob4 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '9' DAY AND blob1 = 'apikey' AND ${SG_DAY} >= '${keysFrom}'
+           GROUP BY keyId, day, outcome ORDER BY day DESC LIMIT ${KEY_ROWS}`),
+        // And by route over the same days, for each key's commonest: one row per key and keyed route.
+        sql(`SELECT blob2 AS keyId, blob3 AS route, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '9' DAY AND blob1 = 'apikey' AND ${SG_DAY} >= '${keysFrom}'
+           GROUP BY keyId, route ORDER BY n DESC LIMIT ${KEY_ROWS}`),
+      ]),
+    ]);
     return {
       daily,
       quality,
@@ -302,6 +345,10 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
       legacy,
       settings,
       next: nextTook(nextMs),
+      keys: keyUse,
+      keyRoutes,
+      // At the limit, the oldest days or the rarest routes were left out: the dashboard says its counts may be short.
+      keysCut: keyUse.length >= KEY_ROWS || keyRoutes.length >= KEY_ROWS,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

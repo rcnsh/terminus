@@ -2146,7 +2146,8 @@ export function paths(): Record<string, unknown> {
               },
               analytics: {
                 type: ['object', 'null'],
-                description: 'Answers and errors per day, from Analytics Engine; null when it is not configured.',
+                description:
+                  'Answers and errors per day, the requests made with each API key per day and outcome (`keys`) and by route (`keyRoutes`), from Analytics Engine; null when it is not configured.',
               },
               accounts: { type: 'object', additionalProperties: { type: 'integer' } },
               apps: { type: 'object', additionalProperties: { type: 'integer' } },
@@ -2172,7 +2173,30 @@ export function paths(): Record<string, unknown> {
                 },
               },
               signups: { type: 'array', items: { type: 'object', properties: { day: { type: 'string' }, n: { type: 'integer' } } } },
-              apiKeys: { type: 'object', additionalProperties: { type: 'integer' } },
+              apiKeys: {
+                type: 'object',
+                description:
+                  'How many API keys there are (`total`), how many were used in the last 7 days (`used7d`), and every key, most lately used first, with whose it is (`email`, null for an account without one). Requests made with each key are in `analytics.keys`.',
+                properties: {
+                  total: { type: 'integer' },
+                  used7d: { type: 'integer' },
+                  list: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                        hint: { type: 'string', description: 'The key’s last four characters.' },
+                        created: { type: 'string', format: 'date-time' },
+                        lastUsed: { type: ['string', 'null'], format: 'date-time' },
+                        userId: { type: 'string' },
+                        email: { type: ['string', 'null'] },
+                      },
+                    },
+                  },
+                },
+              },
               feedback: { type: 'object', description: 'Reports in the last week, and the latest 25 with their notes and answers.' },
               collect: {
                 type: 'object',
@@ -2183,6 +2207,7 @@ export function paths(): Record<string, unknown> {
                   errors: { type: 'boolean' },
                   legacy: { type: 'boolean' },
                   settings: { type: 'boolean' },
+                  keys: { type: 'boolean' },
                 },
               },
               eta: {
@@ -2206,13 +2231,16 @@ export function paths(): Record<string, unknown> {
         tags: ['Service'],
         summary: 'Turn one of the operator’s statistics on or off',
         description:
-          'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive), `errors` (crash and error reports from the apps and the website, POST /api/errors), `legacy` (requests that still use the old address, the API’s old paths or too old an app, by app version and route) and `settings` (how many active accounts have each setting, once a day). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
+          'The switches for what terminus collects beyond its answers: `active` (how many accounts used it each day, by app and version, counted from the sessions already kept), `eta` (the feed’s arrival times against when the timelapse recorder saw each bus arrive), `errors` (crash and error reports from the apps and the website, POST /api/errors), `legacy` (requests that still use the old address, the API’s old paths or too old an app, by app version and route), `settings` (how many active accounts have each setting, once a day) and `keys` (each request made with an API key, counted against that key by route and whether its rate limit turned it away). Each is off until turned on. Answers every switch. Answers 404 without the operator token.',
         operationId: 'adminCollect',
         security: [{ operator: [] }],
         requestBody: jsonBody({
           type: 'object',
           required: ['name', 'on'],
-          properties: { name: { type: 'string', enum: ['active', 'eta', 'errors', 'legacy', 'settings'] }, on: { type: 'boolean' } },
+          properties: {
+            name: { type: 'string', enum: ['active', 'eta', 'errors', 'legacy', 'settings', 'keys'] },
+            on: { type: 'boolean' },
+          },
         }),
         responses: {
           '200': ok({
@@ -2223,6 +2251,7 @@ export function paths(): Record<string, unknown> {
               errors: { type: 'boolean' },
               legacy: { type: 'boolean' },
               settings: { type: 'boolean' },
+              keys: { type: 'boolean' },
             },
           }),
           '400': errorResponse('No such switch, or `on` is not true or false.'),
