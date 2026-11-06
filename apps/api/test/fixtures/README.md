@@ -21,6 +21,10 @@ The API's own. Those every client reads are in [/fixtures](../../../../fixtures)
   position), which `normalizePublic()` reads as `scheduled`.
 - `calendar/`: NUSMods' and data.gov.sg's real replies on 3 October 2026,
   cut to the fields the code reads, for the calendar refresh's tests.
+- `ae-sql.json`: every Analytics Engine query the dashboard and the ETA job
+  send, as they were before the row layout was declared in
+  `src/analytics-rows.ts`, so `analytics-rows.test.js` fails when one
+  changes by a byte.
 - `migrations.sha256`: the hash of every migration already applied, so
   `deploy.test.js` fails when one is edited.
 

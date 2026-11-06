@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { makeKV } from './_stubs.mjs';
 import { adminStats, isOperator, nextTook, timingSafeEqual } from '../src/ops/admin.ts';
+import { COL } from '../src/analytics-rows.ts';
 
 test('the dashboard asks Analytics Engine with the token, and says so when it fails', async () => {
   const asked = [];
@@ -13,7 +14,8 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   const env = { KV: makeKV(), ANALYTICS_TOKEN: 'ae-token', CF_ACCOUNT_ID: 'acct' };
   const s = await adminStats(env, Date.now(), fetchImpl);
   assert.equal(asked.length, 12);
-  assert.match(asked[9].sql, /quantileExactWeighted\(0\.95\)\(double12, _sample_interval\)[\s\S]*blob1 = 'next'/, "/api/me/next's times");
+  assert.ok(asked[9].sql.includes(`quantileExactWeighted(0.95)(${COL.next.tookMs}, _sample_interval)`), "/api/me/next's times");
+  assert.match(asked[9].sql, /blob1 = 'next'/);
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
   // The dashboard lines these up with Singapore days (parts.js lastDays), and compares two full weeks besides today.
   for (const i of [0, 3]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) AS day/);
@@ -24,12 +26,16 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   assert.match(asked[8].sql, /blob1 = 'settings'/, "the settings' daily counts");
   assert.match(
     asked[10].sql,
-    /blob2 AS keyId[\s\S]*blob1 = 'apikey'[\s\S]*GROUP BY keyId, day, outcome/,
+    new RegExp(`${COL.apikey.keyId} AS keyId[\\s\\S]*blob1 = 'apikey'[\\s\\S]*GROUP BY keyId, day, outcome`),
     'the requests made with each API key, by day',
   );
   // Both cover today and the 7 Singapore days before it.
   for (const i of [10, 11]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) >= '\d{4}-\d\d-\d\d'/);
-  assert.match(asked[11].sql, /blob3 AS route[\s\S]*blob1 = 'apikey'[\s\S]*GROUP BY keyId, route/, "and each key's routes");
+  assert.match(
+    asked[11].sql,
+    new RegExp(`${COL.apikey.route} AS route[\\s\\S]*blob1 = 'apikey'[\\s\\S]*GROUP BY keyId, route`),
+    "and each key's routes",
+  );
   assert.ok(
     asked.every((a) => a.url === 'https://api.cloudflare.com/client/v4/accounts/acct/analytics_engine/sql' && a.auth === 'Bearer ae-token'),
   );
@@ -77,7 +83,7 @@ test('dismissed crashes are left out before the dashboard takes its 25', async (
   }));
   // Analytics Engine as it would answer: the commonest crashes, up to the query's LIMIT.
   const fetchImpl = async (_url, init) => {
-    const crashes = /blob5 AS type/.test(init.body);
+    const crashes = init.body.includes(`${COL.apperror.type} AS type`);
     return new Response(JSON.stringify({ data: crashes ? rows.slice(0, Number(/LIMIT (\d+)/.exec(init.body)[1])) : [] }));
   };
   // The ten commonest, dismissed after their last report.

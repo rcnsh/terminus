@@ -84,7 +84,7 @@ test('an analytics write that throws is swallowed by every logger', () => {
   assert.doesNotThrow(() => logError(env, '/api/me/devices/abc'));
   assert.doesNotThrow(() => logCronError(env, 'upstream'));
   assert.doesNotThrow(() => logPoll(env, 'upstream', 'D2', 3));
-  assert.equal(tries, 4, 'each one tried to write');
+  assert.equal(tries, 5, 'each row tried to write: the answer, its arrival, and the three others');
 });
 
 test("a trip's state that can't be read is logged and the answer goes on without it", async () => {

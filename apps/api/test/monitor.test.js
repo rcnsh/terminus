@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { makeKV } from './_stubs.mjs';
+import { makeKV, named } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
 import {
@@ -424,7 +424,10 @@ test('cron: a failed step is counted with the errors on the dashboard', async ()
   console.error = () => {};
   await runCron(e, 1000);
   console.error = orig;
-  const failed = rows.filter((r) => r.blobs[0] === 'error').map((r) => r.blobs[1]);
+  const failed = rows
+    .map(named)
+    .filter((r) => r.kind === 'error')
+    .map((r) => r.route);
   assert.ok(failed.includes('cron upstream'), failed.join());
   assert.ok(rows.every((r) => r.indexes[0] === 'error'));
 });
