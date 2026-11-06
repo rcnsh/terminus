@@ -58,6 +58,7 @@ import {
   seenOnBus,
   signalOf,
   tripEnd,
+  tripRev,
 } from './trip.ts';
 import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from './plan.ts';
 import { stepsPastLeave } from './step.ts';
@@ -666,6 +667,7 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   const plan = trip.seenOn ?? (trip.planChanged ? trip.plan : null);
   if (plan && trip.key && (trip.phase !== 'idle' || plan.located)) update.plans = { [trip.key]: plan };
   else if (trip.planDropped && trip.key) update.plans = { [trip.key]: null };
+  if (update.plans && trip.key) update.basis = { [trip.key]: tripRev(day, trip.key) };
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !ask.place && !ask.to;
@@ -778,7 +780,11 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
     // answer is the next way there from where you are.
     if (onBus === 'missed')
       return { answer: await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12), trip: { key, phase: 'missed', rec, undo } };
-    if (onBus) return { answer: onBus.answer, trip: { key, phase: onBus.phase, rec: { ...rec, boarded: onBus.b }, undo } };
+    if (onBus)
+      return {
+        answer: onBus.answer,
+        trip: { key, phase: onBus.phase, rec: { ...rec, boarded: onBus.b }, undo, ...(onBus.ends ? { rideEnd: onBus.ends } : {}) },
+      };
     // The bus you were on should have got you there by now.
     return { answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped), trip: { key, phase: 'arrived', rec, undo } };
   }
@@ -861,6 +867,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
             undo,
             assumed: true,
             plan: onBus.b,
+            ...(onBus.ends ? { rideEnd: onBus.ends } : {}),
             ...(seenNow ? { seenOn: { ...bus, seen: true as const } } : {}),
           },
         };
@@ -885,7 +892,7 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
    * first bus, then the change stop (`waiting`), then the second; `missed`
    * when you're still at the change stop once the second bus has left.
    */
-  async function riding(b: Plan): Promise<{ answer: MeAnswer; b: Plan; phase: Phase } | 'missed' | null> {
+  async function riding(b: Plan): Promise<{ answer: MeAnswer; b: Plan; phase: Phase; ends?: string } | 'missed' | null> {
     const c = b.change;
     if (c) {
       // Before the second bus leaves, the feed can say the first is still on its way.
@@ -925,9 +932,10 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
     // bus after it, or it's running late. A time in the past is no answer,
     // so the next bus of the service due at your stop is the guess, marked
     // as one; with nothing due, the card says only where to get off.
+    // The ride still ends RIDE_GRACE_MS after the arrival that passed (`ends`), not the guess's.
     const later = await nextArrival(env, ctx, deps, b, nowMs);
     const guess = { ...b, arrive: later };
-    return { answer: ridingAnswer(nowMs, dest, guess, false, places, h12, profile), b: guess, phase: 'riding' };
+    return { answer: ridingAnswer(nowMs, dest, guess, false, places, h12, profile), b: guess, phase: 'riding', ends: cur.arrive! };
   }
 }
 

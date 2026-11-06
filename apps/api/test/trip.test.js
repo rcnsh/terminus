@@ -23,6 +23,8 @@ import {
   sgtDate,
 } from '../src/answer/trip.ts';
 import { Trip } from '../src/push/tripdo.ts';
+import { tripCardFor } from '../src/accounts/me.ts';
+import { answerFor, collectArrivals } from '../src/answer/answer.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/answer/resolve.ts';
 import { clockAt } from '../src/clock.ts';
@@ -677,6 +679,37 @@ test('once the arrival has passed and no bus is due, the card says only where to
   assert.equal(later.arriveAt, undefined);
   assert.equal(later.timing, null);
   assert.match(later.detail, /^Off at UTown$/);
+});
+
+test('a trip home taken to be riding wakes the Trip object when its bus arrives, with no later bus due', async () => {
+  // The way home from UTown is the D2; once its arrival passes, no D2 is due at PGP to guess with.
+  const feed = { UTOWN: [{ name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low' }] };
+  feed.PGP = [{ name: 'R2', arrivalTime: '2', nextArrivalTime: '12', passengers: 'low' }];
+  const profile = { home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] };
+  const { env, phone, next, TRIPS, clock } = await setup(profile, { feed });
+  clock(FROZEN_NOW + 125 * 60_000);
+  const due = await next(phone);
+  assert.equal(due.card.phase, 'due');
+  const key = 'home:660';
+  const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
+  const dayOf = async () => (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
+  const plan = (await dayOf()).plans?.[key];
+  assert.equal(plan?.svc, 'D2');
+  // Seen on the bus by a location: taken to be riding, with no signal.
+  const seen = { ...plan, seen: true };
+  await trip.fetch('https://trip/update', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(Date.now()), plans: { [key]: seen }, deleteAt: endOfDayMs(Date.now()) }),
+  });
+  const arrive = Date.parse(plan.arrive);
+  clock(arrive + 60_000);
+
+  const card = await tripCardFor(env, makeCtx(), { answerFor, collectArrivals }, userOf(env), await dayOf(), Date.now(), async () => {});
+  assert.equal(card.key, key);
+  assert.equal(card.phase, 'riding');
+  assert.equal(card.answer.arriveAt, undefined, 'no later bus to guess with');
+  // The ride counts as over RIDE_GRACE_MS after the arrival it passed: the wake is then, so the trip's end is pushed.
+  assert.equal(card.wakeAt, arrive + RIDE_GRACE_MS);
 });
 
 /* What terminus learns from the answers (outcomes.ts). */
