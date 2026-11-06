@@ -940,6 +940,26 @@ test("the Trip object words each iPhone's alert and Live Activity in its own clo
   for (const p of live) assert.doesNotMatch(words(p), AMPM);
 });
 
+test("a step on another device that leaves no trip ends the iPhone's Live Activity at once", async () => {
+  const { apple, wrap, extra } = await fakeApple();
+  const { call, phone, mac, next, wakeUntil } = await setup({ push: false, wrap, extra });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  const first = await next(phone);
+  await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
+  // Not on campus from the Mac (which ends that Live Activity), an iPhone
+  // still running one, then "Best bus" on the class: the answer has no trip left.
+  await call('/api/me/signal', { method: 'POST', token: mac, body: { kind: 'away' } });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
+  apple.length = 0;
+  const out = await (await call('/api/me/step', { method: 'POST', token: mac, body: { trip: first.card.step.trip, to: null } })).json();
+  assert.equal(out.card.phase, 'idle');
+  assert.deepEqual(
+    apple.filter((p) => p.type === 'liveactivity').map((p) => p.body.aps.event),
+    ['end'],
+  );
+});
+
 test('with no class left today, a running Live Activity is ended', async () => {
   const { apple, wrap, extra } = await fakeApple();
   const { call, cookie, phone, next, wakeUntil, alarm, clock, TRIPS } = await setup({ push: false, wrap, extra });

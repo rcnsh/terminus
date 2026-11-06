@@ -105,7 +105,7 @@ const tripOverOf = (key: string | null, ask: Ask) => key === null && !ask.place 
  * as the Trip object's wake works it out (a place's or a stop's isn't), for
  * nudgeOthers to note as pushed.
  */
-export async function requestAnswer(
+async function requestAnswer(
   env: Env,
   ctx: ExecutionContext,
   deps: MeDeps,
@@ -165,7 +165,7 @@ export async function answerRequest(
  * bus: those are the wake's to push loudly, starting a Live Activity, and a
  * request's nudge is quiet. Never throws.
  */
-export function nudgeOthers(
+function nudgeOthers(
   env: Env,
   ctx: ExecutionContext,
   userId: string,

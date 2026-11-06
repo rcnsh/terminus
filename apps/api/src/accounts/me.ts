@@ -57,7 +57,7 @@ import {
   reimportReason,
 } from '../timetable/profile.ts';
 import { askOf, hour12, planned, resolveTo } from '../answer/next.ts';
-import { answerRequest, loadRider, nudgeOthers, prefsFor, requestAnswer, reword, tripDay } from '../answer/rider.ts';
+import { answerRequest, loadRider, prefsFor, tripDay } from '../answer/rider.ts';
 import { dayPlan } from '../timetable/day.ts';
 import {
   PLATE_WINDOW_S,
@@ -940,18 +940,7 @@ export const ME_ROUTES: MeRoute[] = [
           : { ...query, at };
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
       // The other devices' cards and the leave reminder follow now, not at their next refresh.
-      const { body: out, shown } = await requestAnswer(env, ctx, deps, rider, asked, nowMs);
-      const answerIn = reword(env, ctx, deps, rider, asked, nowMs);
-      nudgeOthers(
-        env,
-        ctx,
-        session.user.id,
-        { phase: out.card.phase, urgent: false, remind: out.card.remind !== false, answer: out, answerIn },
-        nowMs,
-        session.tokenHash,
-        shown,
-      );
-      return json(out);
+      return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
     },
   },
   {
