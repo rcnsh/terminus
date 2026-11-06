@@ -76,7 +76,7 @@ function startupModules(entry) {
 
 /** What [page]'s module scripts load at startup, the scripts themselves left out (the page names them already). */
 function pageModules(page) {
-  const entries = [...read(page).matchAll(/<script type="module" src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+  const entries = [...read(page).matchAll(/<script type="module" src="([^"]+)"[^>]*><\/script>/g)].map((m) => m[1]);
   assert.ok(entries.length, `${page} has a module script`);
   const all = new Set(entries.flatMap(startupModules));
   for (const e of entries) all.delete(e);

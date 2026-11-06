@@ -9,6 +9,10 @@
 // far, and live or an estimate), data-shuttle="no" (an empty road) and
 // data-drive (shuttles drive across, over and over, each a service at random).
 // A page's script can draw one itself with drawHorizon().
+// A page loads this in its <head> with blocking="render": a module runs after
+// the page's first paint otherwise, so each load showed the bare sky for a
+// frame before the stars, moon and hills. It still runs once the page is
+// parsed, so the markup above is there to find.
 import { html, render } from './ui.js';
 import { DriveToggle, Horizon, NightSky } from '/account/sky.js';
 import { LIVERY } from '/account/livery.js';
