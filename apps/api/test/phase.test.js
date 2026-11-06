@@ -114,6 +114,16 @@ test('on a later bus home than planned, you are home once that bus has had time 
   assert.equal((await tripPhase(trip, changesAt.at, fixtureFeed().look)).verdict.kind, 'home');
 });
 
+test("on a bus home whose arrival nobody knows, you are home by the plan's, not an hour after the class", async () => {
+  const now = FROZEN_NOW;
+  const plan = { svc: 'D2', board: iso(now - 30 * MIN), arrive: iso(now - 20 * MIN) };
+  const rec = { kind: 'boarded', at: now - 30 * MIN, boarded: { ...plan, arrive: null } };
+  const homeBy = dayState({ date: '2026-08-27', trips: { 'home:660': rec }, plans: { 'home:660': plan } }).homeBy.get('home:660');
+  assert.equal(homeBy, Date.parse(plan.arrive) + HOME_GRACE_MS);
+  const trip = tripOf(leaveAt(now - 35 * MIN), { bus: plan, rec, home: { lastEndMs: now - 60 * MIN, homeBy } });
+  assert.equal((await tripPhase(trip, homeBy, fixtureFeed().look)).verdict.kind, 'home');
+});
+
 test('a rule that throws at a later moment fails the call: it is not taken as a change', async () => {
   const now = FROZEN_NOW;
   // A trip home whose home-by reads once, then throws: a bug in a rule, only at later moments.
