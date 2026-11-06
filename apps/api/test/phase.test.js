@@ -6,7 +6,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { CHANGE_GRACE_MS, DUE_MS, RIDE_GRACE_MS, answerPhase, phaseOf, secondLeavesMs, shown, tripPhase } from '../src/answer/phase.ts';
+import {
+  CHANGE_GRACE_MS,
+  DUE_MS,
+  HOME_GRACE_MS,
+  RIDE_GRACE_MS,
+  answerPhase,
+  phaseOf,
+  secondLeavesMs,
+  shown,
+  tripPhase,
+} from '../src/answer/phase.ts';
 import { planOfLeave } from '../src/answer/plan.ts';
 import { laterChange, tripEnd } from '../src/answer/trip.ts';
 import { LEAVE_GAP_MS, cardFor } from '../src/answer/card.ts';
@@ -201,8 +211,13 @@ const SIGNALS = {
   boarded: (plan, now) => ({ bus: plan, rec: { kind: 'boarded', at: now, boarded: plan } }),
   left: (plan, now) => ({ bus: plan, rec: { kind: 'left', at: now } }),
   missed: (plan, now) => ({ bus: plan, rec: { kind: 'missed', at: now } }),
-  // A trip home, its last class ending ten minutes before the leave-by.
-  home: (plan, now) => ({ bus: plan, home: { lastEndMs: now - 10 * MIN, homeBy: now + 24 * 60 * MIN } }),
+  // A trip home, its last class ending ten minutes before the leave-by,
+  // home by its bus's arrival and HOME_GRACE_MS, or without one HOME_BY_MIN after the class.
+  home: (plan, now) => ({
+    bus: plan,
+    home: { lastEndMs: now - 10 * MIN, homeBy: Date.parse(tripEnd(plan) ?? plan.board) + HOME_GRACE_MS },
+  }),
+  homeUnplanned: (plan, now) => ({ bus: plan, home: { lastEndMs: now - 10 * MIN } }),
 };
 
 test('for every golden trip, the phase holds until changesAt and differs at it, with a location and without', async () => {
@@ -225,7 +240,7 @@ test('for every golden trip, the phase holds until changesAt and differs at it, 
         const trip = tripOf(answer, { ...make(plan, leave), at, classAtMs });
         const what = async (ms) => shown((await tripPhase(trip, ms, feed)).verdict);
         const from = leave - 25 * MIN;
-        const to = end + RIDE_GRACE_MS + 15 * MIN;
+        const to = Math.max(end + RIDE_GRACE_MS, leave + 50 * MIN) + 15 * MIN;
         const times = [];
         for (let t = from; t <= to; t += 20_000) times.push(t);
         const seen = await Promise.all(times.map(what));

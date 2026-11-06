@@ -10,7 +10,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, needsWatch, saveSignals, seenOnBus, sgtDate } from '../src/answer/trip.ts';
-import { ASSUME_MS, DUE_MS, RIDE_GRACE_MS, WAIT_EARLY_MS } from '../src/answer/phase.ts';
+import { ASSUME_MS, DUE_MS, HOME_GRACE_MS, RIDE_GRACE_MS, WAIT_EARLY_MS } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { tripCardFor } from '../src/accounts/me.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
@@ -996,6 +996,27 @@ test('there for the last class: the way home is shown, but not "Time to get goin
   assert.equal(inClass.card.phaseText, null);
   t.clock(FROZEN_NOW + 121 * 60_000); // 11:01, the class is over
   assert.notEqual((await t.next(t.phone)).card.phase, 'idle');
+});
+
+test('after the last class, with no location, the trip home is over once its bus has had time to get you home, and the Trip object wakes then', async () => {
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
+  await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
+  t.clock(FROZEN_NOW + 121 * 60_000); // 11:01, the class is over
+  const first = await t.next(t.phone);
+  t.clock(Date.parse(first.leave.at) - 60_000);
+  const due = await t.next(t.phone);
+  assert.equal(due.card.phase, 'due');
+  // Its bus gone, and nothing says whether you're on it.
+  t.clock(Date.parse(due.leave.board) + ASSUME_MS + 60_000);
+  const gone = await wakeCard(t.env, t.TRIPS);
+  assert.equal(gone.key, 'home:660');
+  assert.equal(gone.answer.card.gone, true);
+  const trip = t.TRIPS.get([...t.TRIPS.instances.keys()][0]);
+  const plan = (await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json()).plans['home:660'];
+  const home = Date.parse(plan.arrive) + HOME_GRACE_MS;
+  assert.equal(gone.wakeAt, home);
+  t.clock(home);
+  assert.equal((await wakeCard(t.env, t.TRIPS)).key, null, 'home by now');
 });
 
 test('in the last class, the Trip object wakes as it ends, to say it is time to go home', async () => {

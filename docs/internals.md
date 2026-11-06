@@ -709,7 +709,9 @@ change and once the second bus has gone (`changesAt`).
   `VAPID_PRIVATE_KEY` usable, or APNs's settings all there), a card served on a class day asks the
   Trip object to wake at the trip's `changesAt` (phase.ts): only when its
   phase, `gone` or the trip itself changes (due, leave-by, the bus taken to
-  have gone, the change of buses, the ride's end, the class's trip over),
+  have gone, the change of buses, the ride's end, the class's trip over,
+  the last class ending for the trip home, and with no location, home by
+  its bus's arrival and `HOME_GRACE_MS` or `HOME_BY_MIN` after the class),
   not at `staleAt`. At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking

@@ -302,7 +302,7 @@ async function phaseAt(t: TripIn, c: Clock, look: Lookups): Promise<Verdict> {
   if (t.classAtMs != null && c.reached(t.classAtMs + LATE_GRACE_MIN * 60_000)) return { kind: 'past' };
   // No location, and long enough since the last class to be home by now:
   // its planned bus has got you there, or with none planned, HOME_BY_MIN.
-  if (t.home && lat === null && c.ms >= (t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000)) return { kind: 'home' };
+  if (t.home && lat === null && c.reached(t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000)) return { kind: 'home' };
   if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, t.at, c, look) };
 
   const { fresh, answer, bus } = await t.planned();
