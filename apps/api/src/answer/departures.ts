@@ -357,7 +357,12 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   return out;
 }
 
-/** The first of `svc`'s departures you can be at the stop for by `fromMs`; null when there is none within a day. */
+/**
+ * The first of `svc`'s departures you can be at the stop for by `fromMs`;
+ * null when there is none within a day of then. A day of `fromMs`, not of
+ * now: a trip's second bus, after a first bus days ahead, is looked for
+ * when the first gets you to it.
+ */
 export function nextDeparture(
   graph: Graph,
   board: StopArrivals | ServiceBoard | undefined,
@@ -365,5 +370,5 @@ export function nextDeparture(
   fromMs: number,
   nowMs: number,
 ): Departure | null {
-  return departuresFrom(graph, board, svc, { now: nowMs, from: fromMs, max: 1 })[0] ?? null;
+  return departuresFrom(graph, board, svc, { now: nowMs, from: fromMs, until: Math.max(nowMs, fromMs) + PROJECT_MS, max: 1 })[0] ?? null;
 }

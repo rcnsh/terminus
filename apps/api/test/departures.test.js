@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
-import { departuresFrom } from '../src/answer/departures.ts';
+import { departuresFrom, nextDeparture } from '../src/answer/departures.ts';
 import { headwayFor } from '../src/answer/hours.ts';
 import { nearbyRow, readyS, scoreLeg, scoreOptions } from '../src/answer/resolve.ts';
 import { departureOf, departures, leaveBy } from '../src/answer/leave.ts';
@@ -313,6 +313,15 @@ test('a class a day or more ahead counts on a window that ends at the latest you
   assert.ok(friday.length > 50, `${friday.length} on the Friday`);
   for (const d of friday)
     assert.ok(d.latest - d.earliest <= 2 * Math.max(60, headwayFor(GRAPH, 'D2', d.earliest)) * 1000, hhmmss(d.earliest));
+});
+
+test("a trip's second bus a day or more ahead is looked for from when the first gets you to it", () => {
+  // P runs 08:20 to 17:25 on weekdays, about hourly; the first bus gets you to KR-MRT at 12:29:49 tomorrow.
+  const now = at('2026-08-27T10:00');
+  const from = at('2026-08-28T12:29:49');
+  const d = nextDeparture(GRAPH, board('KR-MRT', now, 'P', []), 'P', from, now);
+  assert.ok(d, 'a bus, though more than a day after now');
+  assert.deepEqual([d.earliest, d.latest], [from, from + Math.max(60, headwayFor(GRAPH, 'P', from)) * 1000]);
 });
 
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
