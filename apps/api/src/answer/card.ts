@@ -11,7 +11,7 @@
 import type { Arrival, BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from '../types.ts';
 import { clockAt, slackText } from '../clock.ts';
 import { type Plan, type Phase, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
-import { DUE_MS, changesAt } from './phase.ts';
+import { type Change, DUE_MS } from './phase.ts';
 import type { Suggestion } from '../accounts/outcomes.ts';
 import type { StepTarget } from './step.ts';
 import { GRAPH } from './graph.ts';
@@ -70,9 +70,9 @@ export interface TripView {
   planChanged?: boolean;
   /** The remembered plan was a guess this request's location replaced with a walk (the caller deletes it). */
   planDropped?: boolean;
-  /** On the bus past its arrival, with the card guessing at a later one:
-   *  the arrival that passed, which the ride still ends RIDE_GRACE_MS after. */
-  rideEnd?: string;
+  /** When the trip's phase next changes by itself (phase.ts): the Trip
+   *  object wakes then to push. Absent outside a trip. */
+  changesAt?: Change | null;
   /** False when the user turned reminders off for this trip. */
   remind?: boolean;
   /** Something terminus has learned and offers to change (outcomes.ts). */
@@ -908,7 +908,8 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
 
   // The next moment this card changes by itself: the trip's next phase, or
   // the answer going stale, whichever is sooner.
-  const phaseAt = changesAt(a, trip, nowMs, LEAVE_GAP_MS);
+  const c = trip.changesAt;
+  const phaseAt = c ? (c.leave ? Math.max(c.at, nowMs + LEAVE_GAP_MS) : c.at) : null;
   const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null]
     .filter((m): m is number => m !== null && m > nowMs)
     .sort((x, y) => x - y)[0];

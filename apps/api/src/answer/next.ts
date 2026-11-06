@@ -53,7 +53,17 @@ import {
   tripEnd,
   tripRev,
 } from './trip.ts';
-import { AT_STOP_M, type Aboard, type Lookups, type TripIn, type TripPlan, changesAt, phaseAt, phaseFor, secondLeavesMs } from './phase.ts';
+import {
+  AT_STOP_M,
+  type Aboard,
+  type Lookups,
+  type TripIn,
+  type TripPlan,
+  answerPhase,
+  phaseOf,
+  secondLeavesMs,
+  tripPhase,
+} from './phase.ts';
 import { SAME_BUS_MS, choosePlan, planOfLeave, sameBus } from './plan.ts';
 import { stepsPastLeave } from './step.ts';
 import { m } from '../i18n.ts';
@@ -429,8 +439,9 @@ const rideSvc = (b: Plan): string => b.route ?? b.svc;
 
 /**
  * When the bus you're on reaches your stop, from the feed: the same plate in
- * that stop's arrivals. Null without a plate, or once it's no longer listed
- * there (it has arrived, or the feed dropped it); the tap's estimate is used then.
+ * that stop's arrivals, past or not (phase.ts reads it as of its own time).
+ * Null without a plate, or once it's no longer listed there (it has
+ * arrived, or the feed dropped it); the tap's estimate is used then.
  */
 export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Plan, nowMs: number): Promise<string | null> {
   if (!b.plate || !b.alightCode) return null;
@@ -440,8 +451,7 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
   // A loop can list the same bus twice at one stop; the first pass is the one.
   const etas = sa.arrivals.filter((x) => x.plate === b.plate && x.svc === rideSvc(b) && x.etaS !== null).map((x) => x.etaS!);
   if (!etas.length) return null;
-  const at = feed.fetchedAt + Math.min(...etas) * 1000;
-  return at > nowMs ? isoSeconds(at) : null;
+  return isoSeconds(feed.fetchedAt + Math.min(...etas) * 1000);
 }
 
 /**
@@ -670,7 +680,7 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   const card = cardFor(full, hour12(ask.h12, profile), trip, await feedDownSince(env, nowMs), nowMs);
   // Push: have the Trip object wake when this card next changes, to tell the
   // phones, unless it already wakes about then or sooner.
-  const wakeAt = changesAt(full, trip, nowMs);
+  const wakeAt = trip.changesAt?.at ?? null;
   if (wakeAt !== null && pushEnabled(env) && needsWatch(day, wakeAt, nowMs) && classesOn(profile, nowMs).length) {
     update.watch = { userId, at: wakeAt };
   }
@@ -720,7 +730,8 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, false, stepOf('home:evening'));
       const r = signalOf(day, 'home:evening');
       const shown = { ...answer, warning: lastBusWarning(GRAPH, answer, nowMs) };
-      return { answer: shown, trip: { key: 'home:evening', phase: phaseFor(shown, r, nowMs, at), rec: r, undo } };
+      const { phase, changesAt } = await answerPhase(shown, r, at, nowMs);
+      return { answer: shown, trip: { key: 'home:evening', phase, rec: r, undo, changesAt } };
     }
     return idle(restAnswer(GRAPH, profile, nowMs, places, h12));
   }
@@ -813,13 +824,12 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
     classAtMs: dest.why === 'class' && dest.trip ? classStartMs(dest.trip, nowMs) : null,
     planned,
   };
-  const v = await phaseAt(trip, nowMs, feedLookups(env, ctx, deps, nowMs));
+  const { verdict: v, changesAt } = await tripPhase(trip, nowMs, feedLookups(env, ctx, deps, nowMs));
   // The answer on the bus you're on: at the change stop, the second bus to catch.
   const aboard = (on: Aboard) =>
     on.phase === 'waiting'
       ? changeAnswer(nowMs, dest, on.b, on.live, places, h12, profile)
       : ridingAnswer(nowMs, dest, on.b, on.live, places, h12, profile);
-  const rideEnd = (on: Aboard) => (on.phase === 'riding' && on.ends ? { rideEnd: on.ends } : {});
 
   switch (v.kind) {
     case 'home':
@@ -831,27 +841,36 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
       if (on === 'missed')
         return {
           answer: await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12),
-          trip: { key, phase: 'missed', rec, undo },
+          trip: { key, phase: 'missed', rec, undo, changesAt },
         };
-      if (on) return { answer: aboard(on), trip: { key, phase: on.phase, rec: { ...rec!, boarded: on.b }, undo, ...rideEnd(on) } };
+      if (on) return { answer: aboard(on), trip: { key, phase: on.phase, rec: { ...rec!, boarded: on.b }, undo, changesAt } };
       // The bus you were on should have got you there by now.
-      return { answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped), trip: { key, phase: 'arrived', rec, undo } };
+      return {
+        answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped),
+        trip: { key, phase: 'arrived', rec, undo, changesAt },
+      };
     }
     case 'there':
       // Seen at the class's stop before it starts: the same answer the next
       // request gives once this one has noted it reached (reachedEarly), not the
       // bare "You're here" that would flip to it a moment later.
-      return { answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped), trip: { key, phase: 'arrived', rec, undo } };
+      return {
+        answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped),
+        trip: { key, phase: 'arrived', rec, undo, changesAt },
+      };
   }
 
   const { fresh, answer, bus, save, drop } = await planned();
   const warned = (a: MeAnswer) => (home ? { ...a, warning: lastBusWarning(GRAPH, a, nowMs) } : a);
-  if (v.kind === 'held') return { answer: warned(answer), trip: { key, phase: 'idle', rec, undo } };
+  if (v.kind === 'held') return { answer: warned(answer), trip: { key, phase: 'idle', rec, undo, changesAt } };
   const flags = { ...(save ? { planChanged: true } : {}), ...(drop ? { planDropped: true } : {}) };
   switch (v.kind) {
     case 'missed':
       // Missed, and the answer is the next way there.
-      return { answer: fresh, trip: { key, phase: 'missed', rec, undo, ...flags, assumed: true, plan: bus, planChanged: false } };
+      return {
+        answer: fresh,
+        trip: { key, phase: 'missed', rec, undo, ...flags, assumed: true, plan: bus, planChanged: false, changesAt },
+      };
     case 'seen':
       return {
         answer: aboard(v.on),
@@ -861,14 +880,15 @@ async function plannedTrip(env: Env, ctx: ExecutionContext, deps: MeDeps, rider:
           undo,
           assumed: true,
           plan: v.on.b,
-          ...rideEnd(v.on),
           ...(v.seenNow ? { seenOn: { ...bus!, seen: true as const } } : {}),
+          changesAt,
         },
       };
     case 'gone':
-      return { answer: warned(fresh), trip: { key, phase: v.phase, rec, undo, plan: bus, gone: true } };
+      return { answer: warned(fresh), trip: { key, phase: v.phase, rec, undo, plan: bus, gone: true, changesAt } };
   }
-  return { answer: warned(answer), trip: { key, phase: v.phase, rec, undo, ...flags, ...(bus ? { plan: bus } : {}) } };
+  // `past` never comes now (see phaseAt): worded as the plan if it did.
+  return { answer: warned(answer), trip: { key, phase: phaseOf(v), rec, undo, ...flags, ...(bus ? { plan: bus } : {}), changesAt } };
 }
 
 /** The phase's feed lookups (phase.ts), from the cached feed. */

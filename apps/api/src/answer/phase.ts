@@ -1,6 +1,5 @@
 /**
- * A trip's phase: which one it's in now (`phaseAt`), and when it next
- * changes by itself (`changesAt`).
+ * A trip's phase: which one it's in now, and when it next changes by itself.
  *
  *   idle → due → heading → waiting → riding → arrived
  *                 └──────────┴──→ missed → (replanned) → due
@@ -10,13 +9,18 @@
  * wakes to push (tripdo.ts), from the answer (its leave-by, whether you're
  * there), the trip's signal and plan (trip.ts), where the request is, and,
  * for the bus you're on, the feed, read through `Lookups` only when a rule
- * needs it. The planner (next.ts) words the answer for the phase. The
- * whole story is in internals.md, "Trips".
+ * needs it. The planner (next.ts) words the answer for the phase.
+ *
+ * The rules are `phaseAt`, in order, and every moment one compares the time
+ * with goes through its `Clock`. So a transition is its condition and its
+ * time at once: `tripPhase` reads the phase now from the rules, and when it
+ * next changes from the same rules, at the first of those moments where
+ * they say something else. The Trip object wakes then; a moment missed
+ * would be a push missed. See internals.md, "The trip engine".
  */
 
 import type { MeAnswer } from '../types.ts';
-import type { TripView } from './card.ts';
-import { type Phase, type Plan, type TripRecord, seenOnBus, tripEnd } from './trip.ts';
+import { type Phase, type Plan, type TripRecord, seenOnBus } from './trip.ts';
 import { haversineM } from '../geo.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
@@ -60,7 +64,8 @@ export function secondLeavesMs(c: Plan): number | null {
  * phase does (rule 2). next.ts's reads the cached feed; tests' read fixtures.
  */
 export interface Lookups {
-  /** When the bus `b` (by its plate) reaches the stop you get off at, ISO, or null when the feed doesn't say. */
+  /** When the bus `b` (by its plate) reaches the stop you get off at, ISO,
+   *  past or not, or null when the feed doesn't list it there. */
   liveArrival(b: Plan): Promise<string | null>;
   /** The second bus of `b`, a trip that changes buses, as the feed has it at its stop (`live`), else as planned. */
   secondBus(b: Plan): Promise<{ change: Plan; live: boolean }>;
@@ -94,13 +99,15 @@ export interface TripIn {
 }
 
 /** On a bus: riding it, or at the change stop of a trip that changes buses (`waiting`). */
-export type Aboard = { phase: 'riding'; b: Plan; live: boolean; ends?: string } | { phase: 'waiting'; b: Plan; live: boolean };
+export type Aboard = { phase: 'riding' | 'waiting'; b: Plan; live: boolean };
 
 /** On a bus, still at the change stop once the second bus has gone (`missed`), or there by now (null). */
 export type OnBus = Aboard | 'missed' | null;
 
 /** Which rule a trip's phase came from, with what the planner needs to word it. */
 export type Verdict =
+  /** A class trip LATE_GRACE_MIN after the class started: the planner has moved on to the next trip. */
+  | { kind: 'past' }
   /** A trip home with no location, long enough after the last class to be home. */
   | { kind: 'home' }
   /** Said to be on a bus. */
@@ -121,6 +128,7 @@ export type Verdict =
 /** The phase a verdict shows. */
 export function phaseOf(v: Verdict): Phase {
   switch (v.kind) {
+    case 'past':
     case 'home':
     case 'held':
       return 'idle';
@@ -139,54 +147,201 @@ export function phaseOf(v: Verdict): Phase {
 }
 
 /**
- * The trip's phase at `nowMs`. The rules in order; the first that holds
- * decides. A signal wins over the clock: once you say you're on the bus, it
- * doesn't matter that the leave-by passed.
+ * What a phone is told about a verdict: the trip (another one or none, for
+ * `past` and `home`), its phase, whether the bus has gone, and which bus of
+ * a trip that changes buses you're on. Two verdicts alike here are the same
+ * card to push (tripdo.ts compares the trip, phase and `gone`).
  */
-export async function phaseAt(t: TripIn, nowMs: number, look: Lookups): Promise<Verdict> {
+export function shown(v: Verdict): string {
+  if (v.kind === 'past' || v.kind === 'home') return v.kind;
+  const on = v.kind === 'aboard' || v.kind === 'seen' ? v.on : null;
+  const bus = on && on !== 'missed' ? (on.b.change ? 'first' : 'last') : '';
+  return `${phaseOf(v)}:${v.kind === 'gone' ? 'gone' : ''}:${bus}`;
+}
+
+/**
+ * The time a rule is asked about, and the moments it compares that with.
+ * Every comparison with the time in the rules goes through `reached`, so a
+ * rule can't move the phase at a time `changesAt` doesn't know of.
+ */
+export interface Clock {
+  readonly ms: number;
+  /** Whether `atMs` has come; a later one is noted as a moment the phase
+   *  can change. `leave`: it moves with the leave-by (see LEAVE_GAP_MS). */
+  reached(atMs: number, leave?: boolean): boolean;
+}
+
+/** A clock at `ms`, noting each later moment it's asked about in `noted` (true when one moves with the leave-by). */
+function clockAt(ms: number, noted: Map<number, boolean>): Clock {
+  return {
+    ms,
+    reached(atMs, leave = false) {
+      if (Number.isFinite(atMs) && atMs > ms) noted.set(atMs, noted.get(atMs) === true || leave);
+      return ms >= atMs;
+    },
+  };
+}
+
+/** The next time a trip's phase changes by itself. `leave`: a leave-by's moment, which slides with it. */
+export interface Change {
+  at: number;
+  leave: boolean;
+}
+
+/** How many moments `changesOf` tries before taking the next to be a change: far more than a day's trip has. */
+const MAX_MOMENTS = 64;
+
+/**
+ * Where `decide` says something else than it does at `nowMs`: the first
+ * moment it compares the time with at which the rules give another verdict,
+ * trying each in turn, and the moments that one compares with. Between two
+ * moments every comparison comes out the same, so nothing changes there.
+ * `decide` throws at a moment it can't say without a call it didn't need
+ * at `nowMs`; that moment counts as a change.
+ */
+async function changesOf<V>(
+  decide: (c: Clock) => Promise<V>,
+  nowMs: number,
+  same: (a: V, b: V) => boolean,
+): Promise<{ now: V; next: Change | null }> {
+  const noted = new Map<number, boolean>();
+  const now = await decide(clockAt(nowMs, noted));
+  for (let i = 0; noted.size; i++) {
+    const at = Math.min(...noted.keys());
+    const next = { at, leave: noted.get(at)! };
+    noted.delete(at);
+    if (i >= MAX_MOMENTS) return { now, next };
+    const more = new Map<number, boolean>();
+    const then = await decide(clockAt(at, more)).catch(() => null);
+    if (then === null || !same(now, then)) return { now, next };
+    for (const [m, leave] of more) noted.set(m, noted.get(m) === true || leave);
+  }
+  return { now, next: null };
+}
+
+/**
+ * The feed's answers as they came for `nowMs`, so a later moment is
+ * worked out from the same feed, and from no more of it: a lookup not
+ * asked for now is taken as the plan's times, rather than called (rule 2).
+ */
+function remembered(look: Lookups): { now: Lookups; later: Lookups } {
+  const asked = new Map<string, Promise<unknown>>();
+  const keep = <T>(name: string, b: Plan, ask: () => Promise<T>): Promise<T> => {
+    const k = `${name}:${JSON.stringify(b)}`;
+    if (!asked.has(k)) asked.set(k, ask());
+    return asked.get(k) as Promise<T>;
+  };
+  const kept = <T>(name: string, b: Plan, otherwise: T): Promise<T> =>
+    (asked.get(`${name}:${JSON.stringify(b)}`) as Promise<T> | undefined) ?? Promise.resolve(otherwise);
+  return {
+    now: {
+      liveArrival: (b) => keep('live', b, () => look.liveArrival(b)),
+      secondBus: (b) => keep('second', b, () => look.secondBus(b)),
+      nextArrival: (b) => keep('next', b, () => look.nextArrival(b)),
+    },
+    later: {
+      liveArrival: (b) => kept('live', b, null),
+      secondBus: (b) => kept('second', b, { change: b.change!, live: false }),
+      nextArrival: (b) => kept('next', b, null),
+    },
+  };
+}
+
+/**
+ * A trip's phase at `nowMs` (the verdict, which the planner words), and when
+ * it next changes by itself, or null when it won't.
+ *
+ * The change counts only what this caller can see: where it is is taken to
+ * stay where it is now, so a request without a location (the Trip object's
+ * wake) never counts a moment only a location makes a change (at the stop,
+ * seen on the bus), and one with a location does. The feed is taken to say
+ * what it says now (see `remembered`).
+ */
+export async function tripPhase(t: TripIn, nowMs: number, look: Lookups): Promise<{ verdict: Verdict; changesAt: Change | null }> {
+  const feed = remembered(look);
+  let planned: Promise<TripPlan> | undefined;
+  const asNow: TripIn = { ...t, planned: () => (planned ??= t.planned()) };
+  // The answer, too, stays the one for now; and isn't worked out for later if now didn't need it.
+  const asLater: TripIn = { ...t, planned: () => planned ?? Promise.reject(new Error('not planned now')) };
+  let first = true;
+  const { now, next } = await changesOf(
+    (c) => {
+      const v = first ? phaseAt(asNow, c, feed.now) : phaseAt(asLater, c, feed.later);
+      first = false;
+      return v;
+    },
+    nowMs,
+    (a, b) => shown(a) === shown(b),
+  );
+  return { verdict: now, changesAt: next };
+}
+
+/** The phase of a trip that is only its answer (the way home in the evening), and when it next changes. */
+export async function answerPhase(
+  a: MeAnswer,
+  rec: TripRecord | undefined,
+  at: At,
+  nowMs: number,
+): Promise<{ phase: Phase; changesAt: Change | null }> {
+  const { now, next } = await changesOf(
+    async (c) => phaseFor(a, rec, c, at),
+    nowMs,
+    (x, y) => x === y,
+  );
+  return { phase: now, changesAt: next };
+}
+
+/**
+ * The trip's phase at the clock's time. The rules in order; the first that
+ * holds decides. A signal wins over the clock: once you say you're on the
+ * bus, it doesn't matter that the leave-by passed.
+ */
+async function phaseAt(t: TripIn, c: Clock, look: Lookups): Promise<Verdict> {
   const { lat, lon } = t.at;
+  // Never at the request's own time: the planner (nextClass) has moved on by then.
+  if (t.classAtMs != null && c.reached(t.classAtMs + LATE_GRACE_MIN * 60_000)) return { kind: 'past' };
   // No location, and long enough since the last class to be home by now:
   // its planned bus has got you there, or with none planned, HOME_BY_MIN.
-  if (t.home && lat === null && nowMs >= (t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000)) return { kind: 'home' };
-  if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, t.at, nowMs, look) };
+  if (t.home && lat === null && c.ms >= (t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000)) return { kind: 'home' };
+  if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, t.at, c, look) };
 
   const { fresh, answer, bus } = await t.planned();
   // Seen at the class's stop before it starts.
-  if (fresh.arrived && t.classAtMs != null && nowMs < t.classAtMs) return { kind: 'there' };
+  if (fresh.arrived && t.classAtMs != null && !c.reached(t.classAtMs)) return { kind: 'there' };
   // Still in the day's last class: the way home is the answer, but that trip
   // hasn't started ("Time to get going" in the middle of a lecture), and
   // nothing about its bus is assumed until the class ends.
-  if (t.home && !t.rec && nowMs < t.home.lastEndMs) return { kind: 'held' };
+  if (t.home && !t.rec && c.ms < t.home.lastEndMs) return { kind: 'held' };
 
   // Nobody said what happened and the bus left a while ago. Only where you
   // are can say whether you caught it; never assumed without that, or
   // someone still at the stop (with no fix, or a rough one) is told they're
   // on a bus. Nothing is asked either.
-  if (!t.rec && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
+  if (!t.rec && bus?.board && !answer.arrived && c.reached(Date.parse(bus.board) + ASSUME_MS)) {
     // Still at the stop now (this request's location), not just earlier: missed.
-    if (phaseFor(answer, undefined, nowMs, t.at) === 'waiting') return { kind: 'missed' };
+    if (phaseFor(answer, undefined, c, t.at) === 'waiting') return { kind: 'missed' };
     // Seen on it, now or by an earlier request (noted on the plan, so a
-    // device without a location follows the phone).
-    // On a trip that changes buses, on the second bus's road once it has left.
-    const onSecond = (b: Plan) => Boolean(b.change?.board && nowMs >= Date.parse(b.change.board) && seenOnBus(b.change, lat!, lon!, nowMs));
-    const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, nowMs) || onSecond(bus));
+    // device without a location follows the phone). On a trip that changes
+    // buses, on the second bus's road once it has left. A location is taken
+    // as it is: seenOnBus at a later moment asks whether you could have
+    // walked there since, and once seen the plan says so (`seen`).
+    const onSecond = (b: Plan) => Boolean(b.change?.board && c.ms >= Date.parse(b.change.board) && seenOnBus(b.change, lat!, lon!, c.ms));
+    const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, c.ms) || onSecond(bus));
     if (bus.seen || seenNow) {
-      const on = await onBus(bus, t.at, nowMs, look);
+      const on = await onBus(bus, t.at, c, look);
       if (on && on !== 'missed') return { kind: 'seen', on, seenNow };
     }
     // Not known: the next way there, which is what you need if you missed
     // it, and says only that the bus has gone if you didn't. Under way
     // either way: never "Time to get going" to someone who may be on board.
-    const phase = phaseFor(fresh, undefined, nowMs, t.at);
+    const phase = phaseFor(fresh, undefined, c, t.at);
     return { kind: 'gone', phase: phase === 'idle' || phase === 'due' ? 'heading' : phase };
   }
-  return { kind: 'plan', phase: phaseFor(answer, t.rec, nowMs, t.at) };
+  return { kind: 'plan', phase: phaseFor(answer, t.rec, c, t.at) };
 }
 
-/**
- * The phase of a planned trip, from its answer and the latest signal.
- */
-export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number, at: At): Phase {
+/** The phase of a planned trip, from its answer and the latest signal. */
+function phaseFor(a: MeAnswer, rec: TripRecord | undefined, c: Clock, at: At): Phase {
   if (a.arrived) return 'arrived';
   if (rec?.kind === 'boarded') return 'riding';
   if (rec?.kind === 'missed') return 'missed';
@@ -196,112 +351,60 @@ export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number
   // whatever the clock says. Not hours before it (you may live by that
   // stop), and not at any other stop (riding past one is not waiting at it).
   const code = a.leave?.stopCode ?? a.stop.code;
-  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || nowMs >= leaveAt - WAIT_EARLY_MS)) {
+  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || c.ms >= leaveAt - WAIT_EARLY_MS)) {
     const s = indexGraph(GRAPH).byCode.get(code);
     if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
   }
   if (rec?.kind === 'left') return 'heading';
   if (leaveAt === null) return 'idle';
-  if (nowMs >= leaveAt) return 'heading';
-  if (nowMs >= leaveAt - DUE_MS) return 'due';
+  if (c.reached(leaveAt, true)) return 'heading';
+  if (c.reached(leaveAt - DUE_MS, true)) return 'due';
   return 'idle';
 }
 
 /**
- * Where a trip that changes buses is: on the first bus until it gets to the
- * change (`first`), at the change stop until the second bus has left
- * (`change`), then on the second. A trip on one bus is always `first`.
- * `firstLate`: the feed still has the first bus on its way to the change.
- * The second bus's time should be the feed's where it has one (secondBus in
- * next.ts), so a bus still due there keeps you at the change.
- */
-export function rideStage(b: Plan, nowMs: number, firstLate = false): 'first' | 'change' | 'second' {
-  if (!b.change) return 'first';
-  if (firstLate || !b.arrive || nowMs < Date.parse(b.arrive)) return 'first';
-  const leaves = secondLeavesMs(b.change);
-  if (leaves === null || nowMs < leaves + CHANGE_GRACE_MS) return 'change';
-  return 'second';
-}
-
-/**
  * On the bus `b` while it should still be on its way, with the feed's
- * arrival when there is one. On a trip that changes buses, the first bus,
- * then the change stop (`waiting`), then the second; `missed` when you're
- * still at the change stop once the second bus has left; null once the
- * ride is over.
+ * arrival when there is one. On a trip that changes buses: the first bus
+ * until it gets to the change, then the change stop (`waiting`) until the
+ * second bus has left, by the feed at the change stop where it has the bus
+ * (so a bus still due there keeps you at the change), then the second.
+ * `missed` when you're still at the change stop once the second bus has
+ * left; null once the ride is over.
  */
-async function onBus(b: Plan, at: At, nowMs: number, look: Lookups): Promise<OnBus> {
-  const c = b.change;
-  if (c) {
-    // Before the second bus leaves, the feed can say the first is still on its way.
-    const leaves = secondLeavesMs(c);
-    const before = leaves === null || nowMs < leaves + CHANGE_GRACE_MS;
-    const live = before ? await look.liveArrival(b) : null;
-    if (rideStage(b, nowMs, live !== null) === 'first') {
-      const cur = live ? { ...b, arrive: live } : b;
-      return { phase: 'riding', b: cur, live: live !== null };
-    }
+async function onBus(b: Plan, at: At, c: Clock, look: Lookups): Promise<OnBus> {
+  const second = b.change;
+  if (second) {
+    // Before the second bus leaves, the feed can say the first is still on its way to the change.
+    const leaves = secondLeavesMs(second);
+    const before = leaves === null || !c.reached(leaves + CHANGE_GRACE_MS);
+    const live = before ? await liveBy(b, c, look) : null;
+    if (live !== null || !b.arrive || !c.reached(Date.parse(b.arrive)))
+      return { phase: 'riding', b: live ? { ...b, arrive: live } : b, live: live !== null };
     // Off the first bus: the feed at the change stop says whether the
     // second bus has left, not the plan's time alone.
-    const second = await look.secondBus(b);
-    const cur = { ...b, change: second.change };
-    if (rideStage(cur, nowMs) === 'change') return { phase: 'waiting', b: cur, live: second.live };
-    const gone = secondLeavesMs(cur.change);
-    const s = c.stopCode ? indexGraph(GRAPH).byCode.get(c.stopCode) : undefined;
-    if (
-      s &&
-      gone !== null &&
-      at.lat !== null &&
-      at.lon !== null &&
-      haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M &&
-      nowMs >= gone + ASSUME_MS
-    )
+    const fed = await look.secondBus(b);
+    const cur = { ...b, change: fed.change };
+    const gone = secondLeavesMs(fed.change);
+    if (gone === null || !c.reached(gone + CHANGE_GRACE_MS)) return { phase: 'waiting', b: cur, live: fed.live };
+    const s = second.stopCode ? indexGraph(GRAPH).byCode.get(second.stopCode) : undefined;
+    if (s && at.lat !== null && at.lon !== null && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M && c.ms >= gone + ASSUME_MS)
       return 'missed';
-    return onBus(cur.change, at, nowMs, look);
+    return onBus(fed.change, at, c, look);
   }
-  const live = await look.liveArrival(b);
-  const cur = live ? { ...b, arrive: live } : b;
-  const arrive = cur.arrive ? Date.parse(cur.arrive) : null;
-  if (arrive === null || nowMs < arrive) return { phase: 'riding', b: cur, live: live !== null };
-  if (nowMs >= arrive + RIDE_GRACE_MS) return null;
+  const live = await liveBy(b, c, look);
+  const arrive = live ?? b.arrive;
+  if (arrive === null || !c.reached(Date.parse(arrive)))
+    return { phase: 'riding', b: live ? { ...b, arrive: live } : b, live: live !== null };
+  if (c.reached(Date.parse(arrive) + RIDE_GRACE_MS)) return null;
   // That arrival has passed and nothing says you're there: you caught the
   // bus after it, or it's running late. A time in the past is no answer,
   // so the next bus of the service due at your stop is the guess, marked
   // as one; with nothing due, the card says only where to get off.
-  // The ride still ends RIDE_GRACE_MS after the arrival that passed (`ends`), not the guess's.
-  const later = await look.nextArrival(b);
-  return { phase: 'riding', b: { ...b, arrive: later }, live: false, ends: cur.arrive! };
+  return { phase: 'riding', b: { ...b, arrive: await look.nextArrival(b) }, live: false };
 }
 
-/**
- * When the trip's phase next changes by itself: due, the leave-by, the
- * planned bus taken to have gone (ASSUME_MS after it left, when nothing
- * said otherwise), the class starting, the ride ending. Null outside a trip. The Trip object
- * wakes at this to push; the card's nextChangeAt also counts going stale.
- */
-export function changesAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGapMs = 0): number | null {
-  if (!trip.key) return null;
-  const marks: number[] = [];
-  const l = a.leave ?? null;
-  const plan = trip.plan ?? null;
-  // Not as the bus leaves: nothing changes then (`gone` is ASSUME_MS on).
-  if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board) + ASSUME_MS);
-  // A trip that changes buses: at the change, once the second bus has left
-  // (with you on it, or still at the stop: missed), and the trip's end.
-  const twoBus = trip.rec?.boarded ?? plan;
-  const c = twoBus?.change;
-  if (twoBus && c) {
-    if (twoBus.arrive) marks.push(Date.parse(twoBus.arrive));
-    const leaves = secondLeavesMs(c);
-    if (leaves !== null) marks.push(leaves + CHANGE_GRACE_MS, leaves + ASSUME_MS);
-    const end = tripEnd(twoBus);
-    if (end) marks.push(Date.parse(end) + RIDE_GRACE_MS);
-  }
-  // The leave-by's marks, no sooner than `leaveGapMs` from now (see LEAVE_GAP_MS).
-  if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
-  if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
-  const onBus = trip.rec?.boarded ?? (trip.assumed ? plan : null);
-  const rideEnd = trip.rideEnd ?? onBus?.arrive;
-  if (trip.phase === 'riding' && onBus && rideEnd) marks.push(Date.parse(rideEnd) + RIDE_GRACE_MS);
-  return marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0] ?? null;
+/** The feed's arrival for the bus you're on, while it's still to come. */
+async function liveBy(b: Plan, c: Clock, look: Lookups): Promise<string | null> {
+  const live = await look.liveArrival(b);
+  return live !== null && !c.reached(Date.parse(live)) ? live : null;
 }

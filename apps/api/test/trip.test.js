@@ -10,7 +10,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, needsWatch, saveSignals, seenOnBus, sgtDate } from '../src/answer/trip.ts';
-import { ASSUME_MS, RIDE_GRACE_MS, phaseFor } from '../src/answer/phase.ts';
+import { ASSUME_MS, RIDE_GRACE_MS } from '../src/answer/phase.ts';
 import { Trip } from '../src/push/tripdo.ts';
 import { tripCardFor } from '../src/accounts/me.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
@@ -383,25 +383,6 @@ test('/api/me/day on a free day says what is next', async () => {
   assert.equal(day.note, 'Next: CS2030 @ COM1, tomorrow 10:00');
 });
 
-test('phases follow the clock until a signal says otherwise', () => {
-  const now = FROZEN_NOW;
-  const leaveAt = (ms) => ({
-    asOf: new Date(now).toISOString(),
-    stop: { code: 'PGP' },
-    leave: { at: new Date(ms).toISOString(), svc: 'D2' },
-    arrived: false,
-  });
-  const nowhere = { lat: null, lon: null };
-  assert.equal(phaseFor(leaveAt(now + 10 * 60_000), undefined, now, nowhere), 'idle');
-  assert.equal(phaseFor(leaveAt(now + 4 * 60_000), undefined, now, nowhere), 'due');
-  assert.equal(phaseFor(leaveAt(now - 60_000), undefined, now, nowhere), 'heading');
-  const pgp = GRAPH.stops.find((s) => s.code === 'PGP');
-  assert.equal(phaseFor(leaveAt(now + 10 * 60_000), undefined, now, { lat: pgp.lat, lon: pgp.lon }), 'waiting', 'at the stop');
-  assert.equal(phaseFor(leaveAt(now - 60_000), { kind: 'boarded', at: now }, now, nowhere), 'riding');
-  assert.equal(phaseFor(leaveAt(now - 60_000), { kind: 'missed', at: now }, now, nowhere), 'missed');
-  assert.equal(phaseFor({ ...leaveAt(now), arrived: true }, undefined, now, nowhere), 'arrived');
-});
-
 test('on the bus only where a location shows it: on its road, further on than a walk since it left', () => {
   // The A2 from PGP Foyer to Opp HSSML, as on a real trip: 894 m of road.
   const board = FROZEN_NOW;
@@ -721,6 +702,18 @@ test('heading for the bus, the Trip object next wakes when the bus is taken to h
   assert.equal(card.phase, 'heading');
   // Nothing changes as the bus leaves; ASSUME_MS later the card says it has gone.
   assert.equal(card.wakeAt, board + ASSUME_MS);
+});
+
+test('after "Missed it", the Trip object next wakes when the class\'s trip is over, not at each later bus', async () => {
+  const { env, phone, next, signal, TRIPS } = await setup();
+  await next(phone);
+  const missed = await (await signal(phone, { kind: 'missed', trip: FIRST })).json();
+  assert.equal(missed.card.phase, 'missed');
+  const card = await wakeCard(env, TRIPS);
+  assert.equal(card.phase, 'missed');
+  // The next bus's leave-by changes nothing: missed stays missed. GEA1000
+  // starts at 10:00, and the trip moves on to the next one LATE_GRACE_MIN later.
+  assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'));
 });
 
 /* What terminus learns from the answers (outcomes.ts). */
