@@ -10,25 +10,9 @@
 import { Icon, html, reducedMotion, store, useEffect, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { t } from './dom.js';
 import { PHASES, parallax, phaseAt } from './daylight.js';
+import { STARS, starTop } from '../assets/stars.js';
 
 export { phaseAt } from './daylight.js';
-
-/** Where the stars sit: across (0–1), down (0–1 of the room above the words), and how bright. */
-const STARS = [
-  [0.06, 0.3, 0.7],
-  [0.17, 0.62, 0.5],
-  [0.29, 0.18, 0.8],
-  [0.38, 0.8, 0.4],
-  [0.47, 0.42, 0.6],
-  [0.55, 0.1, 0.5],
-  [0.63, 0.68, 0.45],
-  [0.72, 0.28, 0.7],
-  [0.84, 0.88, 0.4],
-  [0.92, 0.5, 0.55],
-  [0.11, 0.95, 0.35],
-  [0.33, 1, 0.4],
-  [0.58, 0.98, 0.3],
-];
 
 /**
  * A few stars and a crescent moon. Fixed, so they never twinkle into a
@@ -37,7 +21,7 @@ const STARS = [
  */
 export const NightSky = ({ from = 0 }) => html`
   <span class="night-sky" aria-hidden="true">
-    ${STARS.map(([x, y, a], i) => x >= from && html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: `calc(${(y * 0.82).toFixed(3)} * var(--room, 108px) + 4px)`, opacity: a }}></span>`)}
+    ${STARS.map(([x, y, a], i) => x >= from && html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: starTop(y), opacity: a }}></span>`)}
     <span class="moon"></span>
   </span>
 `;

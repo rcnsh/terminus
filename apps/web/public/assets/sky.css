@@ -95,6 +95,12 @@
    keeps the room, so nothing below it moves when it appears. */
 .sky-panel [data-horizon]:empty { height: 115px; }
 .sky-panel [data-horizon][data-low]:empty { height: 52px; }
+/* It comes a moment after the page is drawn, so it (and its pause button)
+   fades in rather than popping up under the stars, which are there from
+   the start (stars.js). */
+.sky-panel [data-horizon] > * { animation: horizon-in 0.35s ease-out; }
+@keyframes horizon-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sky-panel [data-horizon] > * { animation: none; } }
 .sky-panel .horizon svg { display: block; }
 .sky-panel .horizon .far { fill: var(--h-far); }
 .sky-panel .horizon .tree { fill: var(--h-tree); }
