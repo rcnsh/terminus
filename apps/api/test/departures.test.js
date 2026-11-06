@@ -13,6 +13,7 @@ import { nearbyRow, scoreLeg, scoreOptions } from '../src/answer/resolve.ts';
 import { departureOf, departures, leaveBy } from '../src/answer/leave.ts';
 import { withSteps } from '../src/answer/answer.ts';
 import { SAME_BUS_MS } from '../src/answer/plan.ts';
+import { STEP } from '../src/config.ts';
 import { ON_TIME_SLACK_S } from '../src/timetable/profile.ts';
 
 /** An instant from a Singapore wall-clock time, "2026-08-27T19:40". */
@@ -210,4 +211,18 @@ test('a chosen bus from long ago is no guide to the estimates, and costs nothing
   const old = departuresFrom(GRAPH, sa, 'D2', { now, from: now, until: now + 3600_000, around: Date.parse('1970-01-01T00:00:00Z') });
   assert.ok(performance.now() - started < 100, `${Math.round(performance.now() - started)} ms`);
   assert.deepEqual(old, plain);
+});
+
+test('with a bus chosen and no live times, the card\'s own bus is still the one "Later" counts from', () => {
+  const now = at('2026-08-27T16:00');
+  const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
+  const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
+  const options = scoreOptions(GRAPH, candidates, byStop, now);
+  const f = { options, candidates, byStop, graph: GRAPH, arriveBy: null, walkAllS: null, nowMs: now };
+  const departsAt = new Date(now + options[0].boardS * 1000).toISOString();
+  const target = { svc: 'D2', stop: 'PGP', board: '2026-08-27T08:58:58Z' };
+  const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target }, false, now);
+  const later = s.steps?.later;
+  // Never a bus you'd leave for more than STEP.laterMaxS after the card's own (leave now, 16:00).
+  assert.ok(!later || Date.parse(later.board) - 80_000 <= now + STEP.laterMaxS * 1000, later?.board);
 });

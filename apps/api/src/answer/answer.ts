@@ -229,8 +229,9 @@ export function withSteps(
   const all = departures(f, until, step.target);
   const best = f.options[0];
   // The headline among them by which bus it is: with no live time its card
-  // shows the middle of its window, the departures its start.
-  const headline = !walking && best && answer.departsAt ? departureOf(all, best) : null;
+  // shows the middle of its window, the departures its start. Its
+  // estimates are named as the card has them, not around a chosen bus.
+  const headline = !walking && best && answer.departsAt ? departureOf(step.target ? departures(f, until, null) : all, best) : null;
   const own = answer.leave ? (answer.leave.svc ? answer.leave : null) : headline;
   const s = stepFrom({ trip: step.trip, own, all, target: step.target, lastArriveMs, nowMs });
   if (!s) return { steps: null };
