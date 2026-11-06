@@ -20,7 +20,7 @@
  */
 
 import type { MeAnswer } from '../types.ts';
-import { type Phase, type Plan, type TripRecord, seenOnBus } from './trip.ts';
+import { type Phase, type Plan, type TripRecord, seenOnBus, tripEnd } from './trip.ts';
 import { haversineM } from '../geo.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
@@ -388,16 +388,22 @@ export async function tripPhase(
   return { verdict: now, changesAt: next, wakesAt };
 }
 
-/** The phase of a trip that is only its answer (the way home in the evening), and when it next changes, as tripPhase. */
+/**
+ * The phase of a trip that is only its answer (the way home in the evening),
+ * and when it next changes, as tripPhase. On the bus you said you caught,
+ * riding until it has had RIDE_GRACE_MS past the trip's end by the plan
+ * (no feed read), then there.
+ */
 export async function answerPhase(
   a: MeAnswer,
   rec: TripRecord | undefined,
   at: At,
   nowMs: number,
 ): Promise<{ phase: Phase; changesAt: Change | null; wakesAt: Change | null }> {
+  const end = rec?.kind === 'boarded' && rec.boarded ? tripEnd(rec.boarded) : null;
   const from = (w: Where) =>
     changesOf(
-      async (c) => phaseFor(a, rec, c, w),
+      async (c) => (end === null ? phaseFor(a, rec, c, w) : c.reached(Date.parse(end) + RIDE_GRACE_MS) ? 'arrived' : 'riding'),
       nowMs,
       (x, y) => x === y,
     );

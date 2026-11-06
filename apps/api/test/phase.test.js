@@ -234,6 +234,20 @@ test('a request whose location decides nothing works out the next change once, a
   assert.equal(asked, 1);
 });
 
+test('the evening trip home, on the bus you said, rides until that bus has got you there, then is over', async () => {
+  const now = FROZEN_NOW;
+  const pgp = GRAPH.stops.find((s) => s.code === 'PGP');
+  const boarded = { svc: 'D2', board: iso(now - 5 * MIN), arrive: iso(now + 10 * MIN) };
+  const rec = { kind: 'boarded', at: now - 5 * MIN, boarded };
+  const at = { lat: pgp.lat + 0.01, lon: pgp.lon };
+  const riding = await answerPhase(leaveAt(now - 10 * MIN), rec, at, now);
+  assert.equal(riding.phase, 'riding');
+  const end = Date.parse(boarded.arrive) + RIDE_GRACE_MS;
+  assert.deepEqual(riding.changesAt, { at: end, leave: false });
+  assert.deepEqual(riding.wakesAt, { at: end, leave: false });
+  assert.equal((await answerPhase(leaveAt(now - 10 * MIN), rec, at, end)).phase, 'arrived');
+});
+
 /* On a bus: one, or two with a change (transfer.ts). */
 
 /** A leave-by for K at PGP to Kent Vale, then P to College Green. */
