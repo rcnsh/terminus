@@ -40,8 +40,6 @@ export const RIDE_GRACE_MS = 10 * 60_000;
 export const ASSUME_MS = 3 * 60_000;
 /** How long after the second bus's time it's taken to have left with you on it. */
 export const CHANGE_GRACE_MS = 30_000;
-/** A trip home's bus has had this long past its arrival to get you indoors. */
-export const HOME_GRACE_MS = 10 * 60_000;
 
 /**
  * The latest the second bus of a trip that changes buses can leave: its

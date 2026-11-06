@@ -15,7 +15,6 @@ import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { indexGraph, rideSpan, rideStops } from './resolve.ts';
-import { HOME_GRACE_MS } from './phase.ts';
 import { routeColor, shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -341,6 +340,9 @@ export function endOfDayMs(nowMs: number): number {
 export function signalOf(day: DayRecord | null, key: string): TripRecord | undefined {
   return day?.trips[key];
 }
+
+/** A trip home's bus has had this long past its arrival to get you indoors. */
+export const HOME_GRACE_MS = 10 * 60_000;
 
 /** Keys reached or skipped today, and when each planned trip home has got you there, for the planner. */
 export function dayState(day: DayRecord | null): {

@@ -10,7 +10,6 @@ import {
   ASSUME_MS,
   CHANGE_GRACE_MS,
   DUE_MS,
-  HOME_GRACE_MS,
   LEAVE_GAP_MS,
   RIDE_GRACE_MS,
   answerPhase,
@@ -20,7 +19,7 @@ import {
   tripPhase,
 } from '../src/answer/phase.ts';
 import { planOfLeave } from '../src/answer/plan.ts';
-import { dayState, laterChange, tripEnd } from '../src/answer/trip.ts';
+import { HOME_GRACE_MS, dayState, laterChange, tripEnd } from '../src/answer/trip.ts';
 import { cardFor } from '../src/answer/card.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
@@ -416,4 +415,23 @@ test('for every golden trip, the phase holds until changesAt and differs at it, 
   }
   assert.ok(checked > 10_000, `${checked} moments checked`);
   assert.ok(apart > 100, `${apart} moments where the object wakes other than the card changes`);
+});
+
+test('nothing phase.ts imports leads back to it: the trip engine imports one way', () => {
+  const src = new URL('../src/', import.meta.url);
+  const start = new URL('answer/phase.ts', src).href;
+  /** A module's imports that run (not `import type`), as URLs. */
+  const importsOf = (href) =>
+    [...fs.readFileSync(new URL(href), 'utf8').matchAll(/^\s*(?:import|export)\s+(?!type\s)[^'"]*?from\s+'(\.[^']+)'/gm)].map(
+      (m) => new URL(m[1], href).href,
+    );
+  const seen = new Set();
+  const todo = importsOf(start);
+  while (todo.length) {
+    const href = todo.pop();
+    assert.notEqual(href, start, 'an import leads back to phase.ts');
+    if (seen.has(href)) continue;
+    seen.add(href);
+    todo.push(...importsOf(href));
+  }
 });
