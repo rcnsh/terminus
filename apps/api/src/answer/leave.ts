@@ -14,17 +14,8 @@
 
 import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopArrivals } from '../types.ts';
 import { PUBLIC, TRANSFER, WALK } from '../config.ts';
-import {
-  beforeOpening,
-  feedFor,
-  headwayFor,
-  inService,
-  legRideS,
-  readyS,
-  resolveBerths,
-  serviceClosedAt,
-  serviceResumesAt,
-} from './resolve.ts';
+import { headwayFor, inService, legRideS, readyS, serviceClosedAt, serviceResumesAt } from './resolve.ts';
+import { type Departure, PROJECT_MS, type Quirks, departuresFrom, liveBuses, nextDeparture } from './departures.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
 import { busChange, isoSeconds, shortStop } from './format.ts';
@@ -240,9 +231,6 @@ interface LegLeave {
   change?: BusChange;
 }
 
-/** How far ahead a bus is looked for: past a day it's no bus. */
-const PROJECT_MS = 86_400_000;
-
 function forLeg(
   leg: Leg,
   sa: StopArrivals | undefined,
@@ -260,9 +248,7 @@ function forLeg(
   // A guessed bus only while the service runs, by its published hours.
   const runs = (ms: number) => inService(graph, leg.svc, ms);
 
-  const live = liveBuses(leg.svc, Boolean(leg.paid), sa, graph, nowMs);
-
-  if (!live.length) {
+  if (!liveBuses(graph, leg.svc, sa, nowMs).length) {
     // No live times: arrive a whole headway early and a bus is sure to come.
     // With no live times the bus is somewhere in that headway: `board` is
     // when you reach the stop. Often packed: one more headway early.
@@ -309,13 +295,15 @@ function forLeg(
   }
 
   const earliest = nowMs + readyS(leg) * 1000;
-  const buses = live.filter((b) => b.at >= earliest);
-  // Past the last live time, one headway at a time, while the service runs.
-  const last = live[live.length - 1].at;
-  for (let t = last + headway; (t <= latestBoard || !buses.length) && t <= last + PROJECT_MS; t += headway) {
-    if (!runs(t)) break;
-    if (t >= earliest) buses.push({ at: t, estimated: true, stale: false });
-  }
+  const hold = { holdHeadway: latestBoard };
+  const buses = departuresFrom(graph, sa, leg.svc, { now: nowMs, from: earliest, until: latestBoard }, hold).map((d) => ({
+    at: d.earliest,
+    estimated: d.kind === 'estimate',
+    stale: d.kind === 'stale',
+  }));
+  // Nothing in time: the first bus you can catch.
+  const next = buses.length ? null : nextDeparture(graph, sa, leg.svc, earliest, nowMs, hold);
+  if (next) buses.push({ at: next.earliest, estimated: next.kind === 'estimate', stale: next.kind === 'stale' });
   if (!buses.length) return null;
 
   const fits = buses.filter((b) => b.at <= latestBoard);
@@ -356,69 +344,31 @@ interface Bus {
   opens?: true;
 }
 
-/**
- * A service's buses at a stop: its live times, from the feed this service
- * came from (at a shelter two feeds answer for). Each time keeps what it is:
- * a public bus's timetabled one (LTA's Monitored 0) is an estimate, and one
- * from a stale feed an old reading, however exact.
- */
-function liveBuses(
-  svc: string,
-  paid: boolean,
-  sa: StopArrivals | undefined,
-  graph: Graph,
-  nowMs: number,
-): Array<{ at: number; estimated: boolean; stale: boolean }> {
-  const feed = feedFor(sa, paid);
-  if (!sa || !feed || feed.available === false) return [];
-  return beforeOpening(graph, svc, resolveBerths(sa.arrivals.filter((a) => a.svc === svc)).usable, feed.fetchedAt, nowMs)
-    .filter((a) => a.etaS != null)
-    .map((a) => ({ at: feed.fetchedAt + (a.etaS as number) * 1000, estimated: a.scheduled === true, stale: feed.stale && !a.scheduled }))
-    .sort((a, b) => a.at - b.at);
-}
+const busOf = (d: Departure): Bus => ({
+  atStop: d.earliest,
+  board: d.earliest,
+  latest: d.latest,
+  estimated: d.kind === 'estimate',
+  stale: d.kind === 'stale',
+  ...(d.opens ? { opens: true as const } : {}),
+});
 
-/**
- * The first bus at or after `fromMs`: a live one, or one a headway on from
- * the last, while it runs. `headwayMs` holds the headway to one figure.
- */
-function firstBus(graph: Graph, svc: string, live: ReturnType<typeof liveBuses>, fromMs: number, headwayMs?: number): Bus | null {
-  const headwayAt = (ms: number) => headwayMs ?? Math.max(60, headwayFor(graph, svc, ms)) * 1000;
-  const runs = (ms: number) => inService(graph, svc, ms);
-  const b = live.find((x) => x.at >= fromMs);
-  if (b) return { atStop: b.at, board: b.at, latest: b.at, estimated: b.estimated, stale: b.stale };
-  if (live.length) {
-    const last = live[live.length - 1].at;
-    const headway = headwayAt(last);
-    let t = last + headway;
-    if (t < fromMs) t += Math.ceil((fromMs - t) / headway) * headway;
-    return runs(t) ? { atStop: t, board: t, latest: t, estimated: true, stale: false } : null;
-  }
-  // No live times: there by `fromMs`, and a bus within a headway, once it runs.
-  let t = fromMs;
-  let opens = false;
-  if (!runs(t)) {
-    const s = serviceResumesAt(graph, svc, t);
-    if (s === null || s > t + PROJECT_MS) return null;
-    t = s;
-    opens = true;
-  }
-  return { atStop: t, board: t, latest: t + headwayAt(t), estimated: true, stale: false, ...(opens ? { opens: true as const } : {}) };
+/** The first bus you can be at the stop for by `fromMs`. */
+function firstBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, nowMs: number, quirks?: Quirks): Bus | null {
+  const d = nextDeparture(graph, sa, svc, fromMs, nowMs, quirks);
+  return d ? busOf(d) : null;
 }
 
 /** The latest bus leaving by `byMs` that you can be at the stop for by `fromMs`. */
-function lastBus(graph: Graph, svc: string, live: ReturnType<typeof liveBuses>, fromMs: number, byMs: number): Bus | null {
-  const headway = Math.max(60, headwayFor(graph, svc, byMs)) * 1000;
-  const runs = (ms: number) => inService(graph, svc, ms);
-  if (live.length) {
-    const buses = live.filter((b) => b.at >= fromMs && b.at <= byMs);
-    for (let t = live[live.length - 1].at + headway; t <= byMs && runs(t); t += headway)
-      if (t >= fromMs) buses.push({ at: t, estimated: true, stale: false });
-    const b = buses[buses.length - 1];
-    return b ? { atStop: b.at, board: b.at, latest: b.at, estimated: b.estimated, stale: b.stale } : null;
+function lastBus(graph: Graph, svc: string, sa: StopArrivals | undefined, fromMs: number, byMs: number, nowMs: number): Bus | null {
+  if (liveBuses(graph, svc, sa, nowMs).length) {
+    const b = departuresFrom(graph, sa, svc, { now: nowMs, from: fromMs, until: byMs }, { holdHeadway: byMs }).at(-1);
+    return b ? busOf(b) : null;
   }
   // No live times: a whole headway early, and one is sure to come in time.
+  const headway = Math.max(60, headwayFor(graph, svc, byMs)) * 1000;
   const at = byMs - headway;
-  return at >= fromMs && runs(byMs) ? { atStop: at, board: at, latest: byMs, estimated: true, stale: false } : null;
+  return at >= fromMs && inService(graph, svc, byMs) ? { atStop: at, board: at, latest: byMs, estimated: true, stale: false } : null;
 }
 
 /** The second bus of a trip that changes buses, timed: the first gets you to the change at `reachMs`. */
@@ -455,8 +405,6 @@ function forTransfer(
   const walk = walkMs(leg);
   const ride1 = leg.rideS * 1000;
   const change = (t.crossS + TRANSFER.changeBufferS) * 1000;
-  const live1 = liveBuses(leg.svc, false, sa1, graph, nowMs);
-  const live2 = liveBuses(t.svc, false, sa2, graph, nowMs);
   const after = (b2: Bus) => b2.latest + (t.rideS + venueWalkS) * 1000;
 
   const done = (b1: Bus, b2: Bus, late: boolean): LegLeave => ({
@@ -473,14 +421,14 @@ function forTransfer(
 
   const earliest1 = nowMs + readyS(leg) * 1000;
   const by2 = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + t.rideS) * 1000;
-  const last2 = lastBus(graph, t.svc, live2, earliest1 + ride1 + change, by2);
-  const last1 = last2 && lastBus(graph, leg.svc, live1, earliest1, last2.atStop - change - ride1);
+  const last2 = lastBus(graph, t.svc, sa2, earliest1 + ride1 + change, by2, nowMs);
+  const last1 = last2 && lastBus(graph, leg.svc, sa1, earliest1, last2.atStop - change - ride1, nowMs);
   if (last1) {
-    const b2 = firstBus(graph, t.svc, live2, last1.latest + ride1 + change);
+    const b2 = firstBus(graph, t.svc, sa2, last1.latest + ride1 + change, nowMs);
     if (b2) return done(last1, b2, false);
   }
-  const b1 = firstBus(graph, leg.svc, live1, earliest1);
-  const b2 = b1 && firstBus(graph, t.svc, live2, b1.latest + ride1 + change);
+  const b1 = firstBus(graph, leg.svc, sa1, earliest1, nowMs);
+  const b2 = b1 && firstBus(graph, t.svc, sa2, b1.latest + ride1 + change, nowMs);
   if (!b1 || !b2) return null;
   return done(b1, b2, after(b2) > arriveBy.atMs - ON_TIME_SLACK_S * 1000);
 }
@@ -508,24 +456,32 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
       : [];
   const out: Leave[] = [];
   for (const { leg, endS } of legs) {
-    const live = liveBuses(leg.svc, Boolean(leg.paid), f.byStop.get(leg.stop.code), f.graph, f.nowMs);
+    const sa = f.byStop.get(leg.stop.code);
     const t = leg.change;
-    const live2 = t ? liveBuses(t.svc, false, f.byStop.get(t.stop.code), f.graph, f.nowMs) : [];
+    const sa2 = t ? f.byStop.get(t.stop.code) : undefined;
     const walk = walkMs(leg);
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
-    let from = f.nowMs + readyS(leg) * 1000;
+    const from = f.nowMs + readyS(leg) * 1000;
     // Guessed buses a whole number of headways from the chosen one, so it
     // stays among them: one headway for them all, the chosen bus's.
-    let headway: number | undefined;
-    if (!live.length && anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code) {
-      const at = Date.parse(anchor.board);
-      headway = Math.max(60, headwayFor(f.graph, leg.svc, at)) * 1000;
-      from = at - Math.floor((at - from) / headway) * headway;
-    }
-    let b = firstBus(f.graph, leg.svc, live, from, headway);
-    for (let n = 0; b && b.atStop <= untilMs && n < MAX_DEPARTURES; n++) {
-      const b2 = t ? firstBus(f.graph, t.svc, live2, b.latest + leg.rideS * 1000 + (t.crossS + TRANSFER.changeBufferS) * 1000) : null;
+    const chosen = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
+    const buses = departuresFrom(
+      f.graph,
+      sa,
+      leg.svc,
+      { now: f.nowMs, from, until: untilMs, max: MAX_DEPARTURES, ...(chosen !== undefined ? { around: chosen } : {}) },
+      chosen !== undefined && !liveBuses(f.graph, leg.svc, sa, f.nowMs).length ? { holdHeadway: chosen } : {},
+    );
+    let prev: number | null = null;
+    for (const d of buses) {
+      // Two live times at the same instant are one bus.
+      if (d.earliest === prev) continue;
+      prev = d.earliest;
+      const b = busOf(d);
+      const b2 = t
+        ? firstBus(f.graph, t.svc, sa2, b.latest + leg.rideS * 1000 + (t.crossS + TRANSFER.changeBufferS) * 1000, f.nowMs)
+        : null;
       if (t && !b2) break;
       out.push({
         at: isoSeconds(b.atStop - walk),
@@ -544,8 +500,6 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
         ...paidOf(leg),
         ...(t && b2 ? { change: changeOf(t, b.latest + leg.rideS * 1000, b2) } : {}),
       });
-      // The next bus: a live one after this, or a headway on from a guessed one.
-      b = firstBus(f.graph, leg.svc, live, b.latest > b.atStop ? b.latest : b.atStop + 1, headway);
     }
   }
   return out;

@@ -41,8 +41,15 @@ test('nearbyRow: a bus due in a minute is shown as it comes, whatever the walk t
   assert.equal('tooSoon' in r.later[0], false);
 });
 
-test('nearbyRow: a shuttle with two buses from the feed gets a third, a headway on, as an estimate', () => {
-  const r = nearbyRow(row(4 * 60, [16 * 60]), NOW, 12 * 60);
+/** Estimated departures every `gapS` after `etaS` from now, as departures.ts gives them. */
+const guesses = (etaS, gapS, n = 3) =>
+  Array.from({ length: n }, (_, i) => {
+    const t = NOW + (etaS + (i + 1) * gapS) * 1000;
+    return { id: `x+${i + 1}`, kind: 'estimate', earliest: t, latest: t };
+  });
+
+test('nearbyRow: a shuttle with two buses from the feed gets a third, its next estimate', () => {
+  const r = nearbyRow(row(4 * 60, [16 * 60]), NOW, guesses(16 * 60, 12 * 60));
   assert.deepEqual(
     r.later.map((b) => [b.etaS, b.quality]),
     [
@@ -53,8 +60,8 @@ test('nearbyRow: a shuttle with two buses from the feed gets a third, a headway 
   assert.match(r.later[1].eta, /^~/);
 });
 
-test('nearbyRow: one bus from the feed gets two guessed after it', () => {
-  const r = nearbyRow(row(4 * 60), NOW, 10 * 60);
+test('nearbyRow: one bus from the feed gets two estimates after it', () => {
+  const r = nearbyRow(row(4 * 60), NOW, guesses(4 * 60, 10 * 60));
   assert.deepEqual(
     r.later.map((b) => b.etaS),
     [14 * 60, 24 * 60],
@@ -63,18 +70,18 @@ test('nearbyRow: one bus from the feed gets two guessed after it', () => {
 
 test('nearbyRow: no bus is guessed past the last one, or for a public bus, or with no time', () => {
   const ends = { ...row(4 * 60, [16 * 60]), endsAt: new Date(NOW + 20 * 60_000).toISOString() };
-  assert.equal(nearbyRow(ends, NOW, 12 * 60).later.length, 1);
-  assert.equal(nearbyRow({ ...row(4 * 60, [16 * 60]), paid: true }, NOW, 12 * 60).later.length, 1);
-  assert.equal(nearbyRow(row(null), NOW, 12 * 60).later.length, 0);
+  assert.equal(nearbyRow(ends, NOW, guesses(16 * 60, 12 * 60)).later.length, 1);
+  assert.equal(nearbyRow({ ...row(4 * 60, [16 * 60]), paid: true }, NOW, guesses(16 * 60, 12 * 60)).later.length, 1);
+  assert.equal(nearbyRow(row(null), NOW, guesses(0, 12 * 60)).later.length, 0);
 });
 
 test('nearbyRow: with no end time (outside its hours, or hours unknown) nothing is guessed', () => {
-  const r = nearbyRow({ ...row(4 * 60), endsAt: null }, NOW, 10 * 60);
+  const r = nearbyRow({ ...row(4 * 60), endsAt: null }, NOW, guesses(4 * 60, 10 * 60));
   assert.deepEqual(r.later, []);
 });
 
 test('nearbyRow: laterText names the buses the row now has, guessed ones too', () => {
-  const r = nearbyRow(row(4 * 60), NOW, 10 * 60);
+  const r = nearbyRow(row(4 * 60), NOW, guesses(4 * 60, 10 * 60));
   assert.equal(r.laterText, thenText(r.later));
   assert.match(r.laterText, /14/);
 });

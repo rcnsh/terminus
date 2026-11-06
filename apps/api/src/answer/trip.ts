@@ -20,7 +20,8 @@ import { haversineM } from '../geo.ts';
 import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
-import { headwayFor, indexGraph, rideSpan, rideStops } from './resolve.ts';
+import { indexGraph, rideSpan, rideStops } from './resolve.ts';
+import { nextDeparture } from './departures.ts';
 import { routeColor, shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -199,7 +200,9 @@ export const CHANGE_GRACE_MS = 30_000;
 export function secondLeavesMs(c: Plan): number | null {
   if (!c.board) return null;
   const at = Date.parse(c.board);
-  return c.estimated ? at + Math.max(60, headwayFor(GRAPH, c.svc, at)) * 1000 : at;
+  if (!c.estimated) return at;
+  // A bus within a headway of when you get there, as any estimate with no live time to step from.
+  return nextDeparture(GRAPH, undefined, c.svc, at, at)?.latest ?? at;
 }
 
 /**

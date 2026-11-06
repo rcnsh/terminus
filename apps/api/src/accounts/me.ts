@@ -91,7 +91,8 @@ import {
 } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from '../timetable/nusmods.ts';
 import { termName } from '../timetable/calendar.ts';
-import { boardAsOf, boardAt, displayName, headwayFor, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
+import { NEARBY_LATER, boardAsOf, boardAt, displayName, indexGraph, nearbyDest, nearbyRow } from '../answer/resolve.ts';
+import { departuresFrom } from '../answer/departures.ts';
 import { stopVia, viaText } from '../answer/via.ts';
 import { haversineM } from '../geo.ts';
 import { isoSeconds } from '../answer/format.ts';
@@ -1723,7 +1724,7 @@ function nearbyStop<T extends object>(
     via,
     viaText: viaText(via),
     board: board.map((r) => ({
-      ...nearbyRow(r, nowMs, headwayFor(graph, r.svc, nowMs)),
+      ...nearbyRow(r, nowMs, departuresFrom(graph, sa, r.svc, { now: nowMs, from: nowMs, max: NEARBY_LATER + 3 }, { holdHeadway: nowMs })),
       ...nearbyDest(idx, r.svc, stop.code, r.via, r.towards),
     })),
   };
