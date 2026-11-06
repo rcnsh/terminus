@@ -59,6 +59,7 @@ import {
 import { askOf, hour12, planned, resolveTo } from '../answer/next.ts';
 import { answerRequest, loadRider, prefsFor, tripDay } from '../answer/rider.ts';
 import { dayPlan } from '../timetable/day.ts';
+import { unlogged } from '../answer/answer.ts';
 import {
   PLATE_WINDOW_S,
   type PlateLookup,
@@ -807,7 +808,8 @@ export const ME_ROUTES: MeRoute[] = [
         const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
         return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
       }
-      const now = await planned(env, ctx, deps, { userId: session.user.id, profile, day, prefs: NO_PREFS }, here, nowMs);
+      // Not logged: the answer this signal sends back is the one that counts.
+      const now = await planned(env, ctx, unlogged(deps), { userId: session.user.id, profile, day, prefs: NO_PREFS }, here, nowMs);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
