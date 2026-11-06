@@ -24,7 +24,7 @@
 //   background. A changed one replaces it, and the pages are told to read
 //   it again; a 401 there is passed on, as it would have been in front.
 
-const SHELL = 'shell-v22';
+const SHELL = 'shell-v23';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -61,6 +61,7 @@ const SHELL_FILES = [
   '/assets/theme.js',
   '/assets/i18n.js',
   '/assets/sky-phase.js',
+  '/assets/stars.js',
   // The fonts too, so the app looks the same offline.
   '/assets/fonts.css',
   '/assets/fonts/inter-latin.woff2',

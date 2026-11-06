@@ -15,6 +15,7 @@
 <script src="/assets/sky-phase.js"></script>
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/assets/sky.css">
+<script type="module" src="/assets/stars.js" blocking="render"></script>
 <script src="/assets/i18n.js"></script>
 <style>
   /* Any address the website doesn't have (the Worker's sitePage): the sky,
@@ -37,7 +38,6 @@
 <link rel="modulepreload" href="/account/dom.js">
 <link rel="modulepreload" href="/account/livery.js">
 <link rel="modulepreload" href="/account/sky.js">
-<script type="module" src="/assets/sky-page.js" blocking="render"></script>
 </head>
 <body>
 <section class="sky-panel lost">
@@ -53,5 +53,6 @@
   </main>
   <div data-horizon data-stop data-shuttle="no"></div>
 </section>
+<script type="module" src="/assets/sky-page.js"></script>
 </body>
 </html>

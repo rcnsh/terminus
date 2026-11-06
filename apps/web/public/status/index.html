@@ -17,6 +17,7 @@
 <script src="/assets/i18n.js"></script>
 <script src="/assets/sky-phase.js"></script>
 <link rel="stylesheet" href="/assets/sky.css">
+<script type="module" src="/assets/stars.js" blocking="render"></script>
 <style>
   /* The feed's state is the picture: a live shuttle in its colour on the
      road when NUS's feed answers, the same bus in outline (the apps' sign
@@ -64,7 +65,6 @@
 <link rel="modulepreload" href="/account/livery.js">
 <link rel="modulepreload" href="/account/sky.js">
 <link rel="modulepreload" href="/status/outages.js">
-<script type="module" src="/assets/sky-page.js" blocking="render"></script>
 </head>
 <body>
 <section class="sky-panel head">
@@ -89,6 +89,7 @@
     <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/docs">API</a><a href="/account">Account</a></nav>
   </div>
 </footer>
+<script type="module" src="/assets/sky-page.js"></script>
 <script type="module" src="/status/status.js"></script>
 </body>
 </html>
