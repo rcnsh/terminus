@@ -41,59 +41,56 @@ export interface LogInput {
 }
 
 export function logAnswer(env: Env, input: LogInput): void {
+  // writeRow checks too; this saves building rows nobody keeps.
   if (!analyticsEnabled(env)) return;
-  try {
-    const { answer, best } = input;
-    const stop = answer.stop.code || 'none';
-    const hadCoords = input.hadCoords ? 1 : 0;
+  const { answer, best } = input;
+  const stop = answer.stop.code || 'none';
+  const hadCoords = input.hadCoords ? 1 : 0;
 
-    writeRow(env, 'answer', {
+  writeRow(env, 'answer', {
+    stop,
+    svc: best?.svc ?? '',
+    dest: input.dest ?? '',
+    quality: answer.quality,
+    crowd: best?.arrival?.crowd ?? '',
+    berth: best?.arrival?.berth ?? '',
+    via: best?.change?.stop.code ?? '',
+    svc2: best?.change?.svc ?? '',
+    boardS: best?.boardS ?? -1,
+    rideS: best?.rideS ?? -1,
+    totalS: best?.totalS ?? -1,
+    hops: best?.hops ?? -1,
+    walkS: best?.walkS ?? -1,
+    confidence: answer.stop.confidence,
+    ambiguousBerth: best?.ambiguousBerth ? 1 : 0,
+    hadCoords,
+    walkAllS: input.walkAllS ?? -1,
+    changeWaitS: best?.change ? best.change.boardS - best.change.reachS - best.change.crossS : -1,
+  });
+
+  // The segment-time seed. Every arrival at the chosen stop, with its plate.
+  for (const a of answer.arrivals.slice(0, MAX_ARRIVAL_ROWS)) {
+    if (a.etaS == null) continue; // "no bus" carries no timing information
+    writeRow(env, 'arrival', {
       stop,
-      svc: best?.svc ?? '',
+      svc: a.svc,
       dest: input.dest ?? '',
       quality: answer.quality,
-      crowd: best?.arrival?.crowd ?? '',
-      berth: best?.arrival?.berth ?? '',
-      via: best?.change?.stop.code ?? '',
-      svc2: best?.change?.svc ?? '',
-      boardS: best?.boardS ?? -1,
-      rideS: best?.rideS ?? -1,
-      totalS: best?.totalS ?? -1,
-      hops: best?.hops ?? -1,
-      walkS: best?.walkS ?? -1,
+      plate: a.plate ?? '',
+      crowd: a.crowd ?? '',
+      berth: a.berth ?? '',
+      etaS: a.etaS,
+      // The answer's own columns, which an arrival doesn't have: -1 as an answer without a bus writes them.
+      boardS: -1,
+      rideS: -1,
+      totalS: -1,
+      hops: -1,
+      walkS: -1,
       confidence: answer.stop.confidence,
-      ambiguousBerth: best?.ambiguousBerth ? 1 : 0,
+      ambiguousBerth: 0,
       hadCoords,
-      walkAllS: input.walkAllS ?? -1,
-      changeWaitS: best?.change ? best.change.boardS - best.change.reachS - best.change.crossS : -1,
+      walkAllS: -1,
     });
-
-    // The segment-time seed. Every arrival at the chosen stop, with its plate.
-    for (const a of answer.arrivals.slice(0, MAX_ARRIVAL_ROWS)) {
-      if (a.etaS == null) continue; // "no bus" carries no timing information
-      writeRow(env, 'arrival', {
-        stop,
-        svc: a.svc,
-        dest: input.dest ?? '',
-        quality: answer.quality,
-        plate: a.plate ?? '',
-        crowd: a.crowd ?? '',
-        berth: a.berth ?? '',
-        etaS: a.etaS,
-        // The answer's own columns, which an arrival doesn't have: -1 as an answer without a bus writes them.
-        boardS: -1,
-        rideS: -1,
-        totalS: -1,
-        hops: -1,
-        walkS: -1,
-        confidence: answer.stop.confidence,
-        ambiguousBerth: 0,
-        hadCoords,
-        walkAllS: -1,
-      });
-    }
-  } catch {
-    // Deliberately swallowed. Losing a metric is not worth losing an answer.
   }
 }
 
@@ -114,26 +111,22 @@ const MAX_BOARD_ROWS = 16;
  */
 export async function logBoard(env: Env, sa: StopArrivals): Promise<void> {
   if (!analyticsEnabled(env) || !(await collectingMemo(env, 'eta'))) return;
-  try {
-    const lagS = Math.max(0, (Date.now() - sa.fetchedAt) / 1000);
-    let n = 0;
-    for (const a of sa.arrivals) {
-      // A board's "no bus" and a timetabled first bus aren't a bus on the road to check.
-      if (a.etaS == null || !a.plate || a.scheduled) continue;
-      if (++n > MAX_BOARD_ROWS) break;
-      writeRow(env, 'board', {
-        stop: sa.code,
-        svc: a.svc,
-        dest: '',
-        quality: 'live',
-        plate: a.plate,
-        crowd: a.crowd ?? '',
-        berth: a.berth ?? '',
-        etaS: Math.max(0, a.etaS - lagS),
-      });
-    }
-  } catch {
-    // Same rule as above: logging never breaks a response.
+  const lagS = Math.max(0, (Date.now() - sa.fetchedAt) / 1000);
+  let n = 0;
+  for (const a of sa.arrivals) {
+    // A board's "no bus" and a timetabled first bus aren't a bus on the road to check.
+    if (a.etaS == null || !a.plate || a.scheduled) continue;
+    if (++n > MAX_BOARD_ROWS) break;
+    writeRow(env, 'board', {
+      stop: sa.code,
+      svc: a.svc,
+      dest: '',
+      quality: 'live',
+      plate: a.plate,
+      crowd: a.crowd ?? '',
+      berth: a.berth ?? '',
+      etaS: Math.max(0, a.etaS - lagS),
+    });
   }
 }
 
@@ -152,15 +145,10 @@ export function logNextTook(env: Env, tookMs: number): void {
  * a query string can hold coordinates. Nothing else is filled in.
  */
 export function logError(env: Env, path: string): void {
-  if (!analyticsEnabled(env)) return;
-  try {
-    // /api/me/devices/abc123 is one route, not one per device.
-    const parts = path.split('/');
-    const route = parts.slice(0, parts[1] === 'api' ? 4 : 3).join('/') || '/';
-    writeRow(env, 'error', { route });
-  } catch {
-    // Same rule as above: logging never breaks a response.
-  }
+  // /api/me/devices/abc123 is one route, not one per device.
+  const parts = path.split('/');
+  const route = parts.slice(0, parts[1] === 'api' ? 4 : 3).join('/') || '/';
+  writeRow(env, 'error', { route });
 }
 
 /**
