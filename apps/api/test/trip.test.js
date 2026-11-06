@@ -726,6 +726,19 @@ test('after "Missed it", the Trip object next wakes when the class\'s trip is ov
   assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'));
 });
 
+test('there early for a class, the Trip object still wakes when the plan moves on, for the trip after it', async () => {
+  const { env, phone, next, signal, TRIPS, clock } = await setup();
+  await next(phone);
+  await signal(phone, { kind: 'arrived', trip: FIRST });
+  const there = await wakeCard(env, TRIPS);
+  assert.equal(there.key, FIRST);
+  assert.equal(there.phase, 'arrived');
+  // Nothing about the trip itself changes again; the timetable's next moment is GEA1000 starting.
+  assert.equal(there.wakeAt, Date.parse('2026-08-27T10:00:00+08:00'));
+  clock(there.wakeAt);
+  assert.equal((await wakeCard(env, TRIPS)).key, SECOND);
+});
+
 test('at the stop well before the leave-by, the card says when it turns to waiting there; the Trip object, with no location, does not', async () => {
   const { env, phone, next, TRIPS, clock } = await setup();
   const first = await next(phone);

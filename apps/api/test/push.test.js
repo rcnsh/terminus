@@ -215,6 +215,35 @@ test('a request from near the stop, with a long walk from home, still has the Tr
   assert.equal(fcm.sent[0].android.priority, 'HIGH');
 });
 
+test('through a long gap, the Trip object alone wakes for the class after it and pushes its time to go', async () => {
+  // GEA1000 09:00-10:00, then CS2030 at 15:00: long enough to go home in between, and back from 14:00.
+  const gap = {
+    ...PROFILE,
+    manual: [
+      { day: THU, arriveByMin: 540, endMin: 600, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' },
+      { day: THU, arriveByMin: 900, endMin: 960, to: 'COM3', label: 'CS2030 @ COM1', venue: '' },
+    ],
+  };
+  const { call, cookie, phone, next, fcm, TRIPS, clock, alarm } = await setup();
+  await call('/api/me/profile', { method: 'PUT', cookie, body: gap });
+  await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  clock(at(10, 16));
+  await next(phone);
+  // No device asks again: the object's own wakes, until the class.
+  const woke = [];
+  while (alarm() !== undefined && alarm() < at(15, 0)) {
+    clock(Math.max(alarm(), Date.now()));
+    woke.push(Date.now());
+    await TRIPS.fireAlarms();
+  }
+  assert.ok(
+    woke.some((t) => t >= at(14, 0)),
+    'awake once the trip is the next class',
+  );
+  const after = fcm.sent.filter((_, i) => i > 0).map((m) => m.data.phase);
+  assert.ok(after.includes('due'), `time to go for CS2030 (pushed: ${fcm.sent.map((m) => m.data.phase).join(' ')})`);
+});
+
 /**
  * A feed that answers only when the test lets it, so a POST can land while a
  * request or a wake waits for it. `asked()` fails fast when nothing asks the

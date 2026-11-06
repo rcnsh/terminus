@@ -719,7 +719,9 @@ change and once the second bus has gone (`changesAt`).
   have gone, the change of buses, the ride's end, the class's trip over,
   the last class ending for the trip home, and with no location, home by
   its bus's arrival and `HOME_GRACE_MS` or `HOME_BY_MIN` after the class),
-  not at `staleAt`. At each wake it works out the card
+  not at `staleAt`. A trip whose phase won't change again by itself (a long
+  gap's way home once its bus has gone, there early for a class) wakes it
+  when the plan moves on (`refreshAt`), for the next trip's "due". At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking
   push it stops. The day's `watch` is the wake pending, absent once it

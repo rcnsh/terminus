@@ -675,7 +675,8 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !ask.place && !ask.to;
-  const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
+  const planMoves = isPlan ? planChangesAt(profile, nowMs) : null;
+  const full: MeAnswer = planMoves !== null ? { ...answer, refreshAt: isoSeconds(planMoves) } : answer;
   // The display-ready card, in the account's 12- or 24-hour choice, else the client's.
   const card = cardFor(full, hour12(ask.h12, profile), trip, await feedDownSince(env, nowMs), nowMs);
   // Push: have the Trip object wake when the trip next changes as it sees
@@ -686,7 +687,12 @@ export async function nextFor(env: Env, ctx: ExecutionContext, deps: MeDeps, rid
   // It wakes now to work out its own moments: a wake too early only
   // reschedules, one too late misses the push.
   const fromHere = !trip.seenOn && trip.key !== null && update.plans?.[trip.key]?.located === true;
-  const wakeAt = fromHere ? nowMs : (trip.wakesAt?.at ?? null);
+  const phaseWake = fromHere ? nowMs : (trip.wakesAt?.at ?? null);
+  // A trip whose phase won't change again by itself (a long gap's way home
+  // once its bus has gone, there early for a class): when the plan moves on,
+  // since the timetable gives the next trip then and nothing else would wake
+  // the object for its "due".
+  const wakeAt = phaseWake ?? (trip.key !== null ? planMoves : null);
   if (wakeAt !== null && pushEnabled(env) && needsWatch(day, wakeAt, nowMs) && classesOn(profile, nowMs).length) {
     update.watch = { userId, at: wakeAt };
   }
