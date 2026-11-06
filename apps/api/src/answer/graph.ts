@@ -8,7 +8,8 @@ import graphJson from '../../data/stops.json' with { type: 'json' };
 import serviceHoursJson from '../../data/service-hours.json' with { type: 'json' };
 import oppositesJson from '../../data/opposites.json' with { type: 'json' };
 import publicJson from '../../data/public.json' with { type: 'json' };
-import type { Graph, Stop } from '../types.ts';
+import headwaysJson from '../../data/headways.json' with { type: 'json' };
+import type { Graph, HeadwaysByTime, Stop } from '../types.ts';
 import { mergeServiceHours } from './resolve.ts';
 import { type PublicData, withPublic } from './public.ts';
 
@@ -41,6 +42,9 @@ export const GRAPH = {
   ...SCRAPED,
   stops: mergeOpposites(SCRAPED.stops, oppositesJson.pairs),
   serviceHours: mergeServiceHours(SCRAPED.serviceHours, serviceHoursJson as Record<string, unknown>),
+  // Measured from the recorder's days (scripts/data/measure_headways.mjs): the feed gives no headways.
+  headwayS: { ...SCRAPED.headwayS, ...headwaysJson.usualS },
+  headwaysByTime: headwaysJson.byTime as Record<string, HeadwaysByTime>,
 } as Graph;
 
 /**

@@ -13,6 +13,10 @@ import { Trip } from '../src/push/tripdo.ts';
 import { armTrips, remindTerm } from '../src/ops/monitor.ts';
 import { DUE_MS, endOfDayMs, sgtDate } from '../src/answer/trip.ts';
 import { remindUser } from '../src/push/push.ts';
+import { withoutMeasuredHeadways } from './_headways.mjs';
+
+// How a headway guess is used, not how long it is: one guess for every shuttle.
+withoutMeasuredHeadways();
 
 const BASE = 'https://bus.example.test';
 const THU = 4;

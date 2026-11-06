@@ -14,6 +14,10 @@ import { leaveBy } from '../src/answer/leave.ts';
 import { isPublic } from '../src/answer/public.ts';
 import { withLang } from '../src/i18n.ts';
 import { TRANSFER, WALK } from '../src/config.ts';
+import { withoutMeasuredHeadways } from './_headways.mjs';
+
+// How a headway guess is used, not how long it is: one guess for every shuttle.
+withoutMeasuredHeadways();
 
 const idx = indexGraph(GRAPH);
 const stop = (code) => idx.byCode.get(code);

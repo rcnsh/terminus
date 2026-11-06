@@ -6,6 +6,10 @@ import { GRAPH, mergeOpposites } from '../src/answer/graph.ts';
 import { candidateStops, legRideS } from '../src/answer/resolve.ts';
 import { RIDE } from '../src/config.ts';
 import oppositesJson from '../data/opposites.json' with { type: 'json' };
+import { withoutMeasuredHeadways } from './_headways.mjs';
+
+// How a headway guess is used, not how long it is: one guess for every shuttle.
+withoutMeasuredHeadways();
 
 const stop = (code, name, lat, lon, opposite = null) => ({ code, name, longName: name, lat, lon, opposite });
 

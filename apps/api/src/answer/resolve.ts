@@ -16,6 +16,7 @@ import type {
   Arrival,
   Candidate,
   Crowd,
+  DayKind,
   FeedState,
   Graph,
   GraphIndex,
@@ -37,7 +38,7 @@ import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from '../i18n.ts';
 import { viaFrom } from './via.ts';
-import { type HomeWalk, residenceStops } from './residences.ts';
+import { type HomeWalk, atHome, residenceStops } from './residences.ts';
 
 export { haversineM };
 
@@ -271,7 +272,10 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
 
   // `startS`: without coordinates, the walk to where `footM` starts from.
   let base: Array<{ stop: Stop; distM: number; footM: number; startS?: number }>;
-  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input)) : null;
+  const hw = homeWalk(input);
+  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, hw) : null;
+  // In the residence you live in, the walk to your stop is the one you set.
+  const yours = Boolean(hw && atHome(input.lat, input.lon, hw.stops));
   if (home) {
     base = home;
   } else if (input.lat != null && input.lon != null) {
@@ -346,8 +350,10 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
     // Starting from home or a room without coordinates: that walk comes
     // first, and a crossing to the far side's stop after it.
     // Standing at the stop by where the phone is, there's no walk to it:
-    // a few metres of GPS drift mustn't cost you the bus pulling in.
-    if (atStop(input, idx, stop)) return { stop, distM, walkS: 0, here: true as const, legs };
+    // a few metres of GPS drift mustn't cost you the bus pulling in. Not
+    // inside the residence you live in: there the walk is from your room
+    // (residences.ts), which a fix by the stop can't see.
+    if (!yours && atStop(input, idx, stop)) return { stop, distM, walkS: 0, here: true as const, legs };
     const walkS = input.lat != null ? Math.round(foot / speed) : (startS ?? input.originWalkS ?? 0) + Math.round(foot / speed);
     return { stop, distM, walkS, legs };
   });
@@ -401,13 +407,21 @@ export function mergeServiceHours(
   return out;
 }
 
-/** The window `hours` gives the SGT day `ms` falls on: Sunday hours on public holidays. */
-function windowOn(hours: ServiceHours, ms: number): ServiceHours['weekday'] | undefined {
-  const { day } = sgt(ms);
+/** The timetable the SGT day `ms` falls on runs: Sunday's on public holidays. */
+export function dayKindOf(ms: number): DayKind {
+  return kindOn(sgt(ms).day, termDay(ms).holiday);
+}
+
+function kindOn(day: number, holiday: string | null): DayKind {
   // NUS runs the Sunday timetable on public holidays. Without this a holiday
   // morning gets a headway guess for services that are not running.
-  const sunday = day === 0 || termDay(ms).holiday !== null;
-  return sunday ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
+  if (day === 0 || holiday !== null) return 'sunday';
+  return day === 6 ? 'saturday' : 'weekday';
+}
+
+/** The window `hours` gives the SGT day `ms` falls on: Sunday hours on public holidays. */
+function windowOn(hours: ServiceHours, ms: number): ServiceHours['weekday'] | undefined {
+  return hours[dayKindOf(ms)];
 }
 
 /** A window's open and close in minutes, or null when it isn't a usable window. */
@@ -571,8 +585,41 @@ export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBe
   return { usable: notEnding, ambiguousBerth: distinct.size > 1 };
 }
 
-export function headwayFor(graph: Graph, svc: string): number {
-  return graph.headwayS?.[svc] ?? DEFAULT_HEADWAY_S;
+/**
+ * The gap between `svc`'s buses, s: the headway a guess counts in. At
+ * `atMs`, the measured one for that hour, day kind and period
+ * (data/headways.json), else the nearest hour measured that day, else the
+ * service's usual one. In a period nothing was recorded in (the vacation
+ * runs its own timetable), or past the calendar, never shorter than
+ * DEFAULT_HEADWAY_S or term time's: too short a headway tells someone to
+ * leave too late. Without a time (a route's cost before any fetch), the
+ * usual one.
+ */
+export function headwayFor(graph: Graph, svc: string, atMs?: number): number {
+  const usual = graph.headwayS?.[svc] ?? DEFAULT_HEADWAY_S;
+  const byTime = atMs === undefined ? undefined : graph.headwaysByTime?.[svc];
+  if (!byTime || atMs === undefined) return usual;
+  const { kind, holiday } = termDay(atMs);
+  const period = kind === 'unknown' ? undefined : byTime[kind === 'vacation' ? 'vacation' : 'term'];
+  if (!period) return Math.max(DEFAULT_HEADWAY_S, usual);
+  const { day, hour } = sgt(atMs);
+  const measured = period[kindOn(day, holiday)];
+  return measured ? nearestHour(measured, hour) : usual;
+}
+
+/**
+ * That hour's headway, or the nearest hour's: the hours too quiet to measure
+ * are the early and late ones, which run like their neighbours, not like the
+ * day's median. On a tie, the longer.
+ */
+function nearestHour(day: { all: number; hours: Record<string, number> }, hour: number): number {
+  let best = day.all;
+  let dist = Infinity;
+  for (const [h, s] of Object.entries(day.hours)) {
+    const d = Math.abs(Number(h) - hour);
+    if (d < dist || (d === dist && s > best)) [best, dist] = [s, d];
+  }
+  return best;
 }
 
 /**
@@ -999,8 +1046,9 @@ export function scoreLeg(
     // after the last listed, a headway apart, that you can reach. Not
     // once the service has closed: the feed still lists its last buses,
     // and there is no bus after them to guess (below).
-    const headway = headwayFor(graph, leg.svc);
-    boardS = (etas[etas.length - 1].etaS as number) + headway;
+    const lastS = etas[etas.length - 1].etaS as number;
+    const headway = headwayFor(graph, leg.svc, fetchedAt + lastS * 1000);
+    boardS = lastS + headway;
     if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
     if (pastEnd(boardS)) return null; // that was the last bus
     quality = 'scheduled';
@@ -1013,7 +1061,7 @@ export function scoreLeg(
     // it does, or after you reach the stop, whichever is later.
     const startS = (opens - fetchedAt) / 1000;
     opensInS = Math.max(0, startS - earliest);
-    boardS = Math.max(earliest, startS) + headwayFor(graph, leg.svc) / 2;
+    boardS = Math.max(earliest, startS) + headwayFor(graph, leg.svc, opens) / 2;
     quality = 'scheduled';
   } else {
     // You'd reach the stop after the last bus.
@@ -1023,7 +1071,7 @@ export function scoreLeg(
     // graph still says this service goes where you are going -- but
     // boardS here is only an ordering key. The formatter must never
     // print a time for an 'unknown' option.
-    boardS = earliest + headwayFor(graph, leg.svc) / 2;
+    boardS = earliest + headwayFor(graph, leg.svc, nowMs) / 2;
     if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
     quality = available ? 'scheduled' : 'unknown';
   }
