@@ -187,6 +187,8 @@ const leave = (svc, stop, at, board, arrive) => ({
   arrive: new Date(arrive).toISOString(),
   note: null,
 });
+/** One of `departures`' leave-bys: with which bus it is (leave.ts `Departing`). */
+const dep = (svc, stop, at, board, arrive) => ({ ...leave(svc, stop, at, board, arrive), bus: `${svc}|${stop}|${board}` });
 const T = Date.parse('2026-08-27T01:00:00Z');
 const MIN = 60_000;
 
@@ -202,15 +204,15 @@ test('a chosen bus the feed has moved a little is the same bus; one it no longer
 });
 
 test('a step never gets you there sooner going later, or later going earlier', () => {
-  const own = leave('D2', 'PGP', T + 10 * MIN, T + 14 * MIN, T + 30 * MIN);
+  const own = dep('D2', 'PGP', T + 10 * MIN, T + 14 * MIN, T + 30 * MIN);
   const all = [
-    leave('D2', 'PGP', T, T + 4 * MIN, T + 20 * MIN),
+    dep('D2', 'PGP', T, T + 4 * MIN, T + 20 * MIN),
     // Leaves earlier but gets there after: not "earlier".
-    leave('A1', 'PGP', T + 5 * MIN, T + 9 * MIN, T + 40 * MIN),
+    dep('A1', 'PGP', T + 5 * MIN, T + 9 * MIN, T + 40 * MIN),
     own,
     // Leaves later and gets there sooner: not "later" from here either.
-    leave('R2', 'PGPR', T + 12 * MIN, T + 15 * MIN, T + 25 * MIN),
-    leave('D2', 'PGP', T + 20 * MIN, T + 24 * MIN, T + 40 * MIN),
+    dep('R2', 'PGPR', T + 12 * MIN, T + 15 * MIN, T + 25 * MIN),
+    dep('D2', 'PGP', T + 20 * MIN, T + 24 * MIN, T + 40 * MIN),
   ];
   const s = stepFrom({ trip: 'k', own, all, target: null, lastArriveMs: null, nowMs: T - MIN });
   assert.deepEqual(s.steps.earlier, targetOf(all[0]));
@@ -220,7 +222,7 @@ test('a step never gets you there sooner going later, or later going earlier', (
   const far = stepFrom({
     trip: 'k',
     own,
-    all: [own, leave('D2', 'PGP', T + 80 * MIN, T + 84 * MIN, T + 100 * MIN)],
+    all: [own, dep('D2', 'PGP', T + 80 * MIN, T + 84 * MIN, T + 100 * MIN)],
     target: null,
     lastArriveMs: null,
     nowMs: T,
@@ -231,12 +233,12 @@ test('a step never gets you there sooner going later, or later going earlier', (
 test('a step is never to the bus already shown, though a late leave-by is now and its departure a little after', () => {
   // Late for a class: the leave-by is now, the same R2 among the departures leaves a minute on.
   const own = leave('R2', 'PGP', T, T + 6 * MIN, T + 15 * MIN);
-  const all = [leave('R2', 'PGP', T + MIN, T + 6 * MIN, T + 15 * MIN), leave('D2', 'PGP', T + 9 * MIN, T + 14 * MIN, T + 23 * MIN)];
+  const all = [dep('R2', 'PGP', T + MIN, T + 6 * MIN, T + 15 * MIN), dep('D2', 'PGP', T + 9 * MIN, T + 14 * MIN, T + 23 * MIN)];
   const s = stepFrom({ trip: 'k', own, all, target: null, lastArriveMs: null, nowMs: T });
   assert.deepEqual(s.steps.later, targetOf(all[1]));
   assert.equal(s.steps.earlier, null);
   // Another R2 two minutes behind it (bunched) is a different bus: still the later one.
-  const bunched = [all[0], leave('R2', 'PGP', T + 3 * MIN, T + 8 * MIN, T + 17 * MIN), all[1]];
+  const bunched = [all[0], dep('R2', 'PGP', T + 3 * MIN, T + 8 * MIN, T + 17 * MIN), all[1]];
   const b = stepFrom({ trip: 'k', own, all: bunched, target: null, lastArriveMs: null, nowMs: T });
   assert.deepEqual(b.steps.later, targetOf(bunched[1]));
 });

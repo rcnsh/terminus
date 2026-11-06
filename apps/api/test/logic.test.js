@@ -13,17 +13,15 @@ import {
   confidence,
   haversineM,
   indexGraph,
-  hhmmToMin,
-  mergeServiceHours,
-  inService,
   pickAlt,
   reach,
   rideStops,
-  resolveBerths,
   scoreOptions,
   nearestStop,
   walkAllTheWayS,
 } from '../src/answer/resolve.ts';
+import { hhmmToMin, mergeServiceHours, inService } from '../src/answer/hours.ts';
+import { resolveBerths } from '../src/answer/departures.ts';
 import {
   arrivalsProblem,
   arrivalsUnread,
@@ -1493,7 +1491,7 @@ test('inside a residence, only its own stops are offered, walked by the paths (P
 });
 
 test("a window that crosses midnight still runs after it, by yesterday's hours", async () => {
-  const { serviceEndsAt } = await import('../src/answer/resolve.ts');
+  const { serviceEndsAt } = await import('../src/answer/hours.ts');
   const graph = { ...realGraph, serviceHours: { X: { weekday: ['07:00', '01:00'], saturday: ['08:00', '23:00'], sunday: null } } };
   const sgt = (d, h, m) => Date.UTC(2026, 7, d, h - 8, m); // August 2026, SGT
   assert.equal(inService(graph, 'X', sgt(29, 0, 30)), true, "Sat 00:30: Friday's service");

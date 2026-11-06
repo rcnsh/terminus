@@ -12,8 +12,8 @@ import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import { candidateStops, confidence, haversineM, indexGraph, nearestStop, pickAlt, scoreOptions, wholeWalk } from './resolve.ts';
 import { logAnswer, logBoard } from '../ops/analytics.ts';
-import { type LeaveInput, departures, leaveBy } from './leave.ts';
-import { sameAs, stepFrom } from './step.ts';
+import { type LeaveInput, departureOf, departures, leaveBy, publicLeave } from './leave.ts';
+import { stepFrom } from './step.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { planTransfers } from './transfer.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
@@ -215,7 +215,7 @@ export async function answerFor(
  * place of the leave-by's. The server's own bus is the leave-by's; with
  * none (a trip whose bus goes within a minute), the headline bus.
  */
-function withSteps(
+export function withSteps(
   answer: Answer,
   f: LeaveInput,
   step: NonNullable<ResolveInput['step']>,
@@ -228,14 +228,17 @@ function withSteps(
   const until = lastArriveMs ?? Math.max(firstMs, nowMs) + STEP.laterMaxS * 1000 + STEP_WALK_MS;
   const all = departures(f, until, step.target);
   const best = f.options[0];
-  const headline =
-    !walking && best && answer.departsAt
-      ? (all.find((l) => sameAs(l, { svc: best.svc, stop: best.stop.code, board: answer.departsAt! })) ?? null)
-      : null;
-  const own = answer.leave ? (answer.leave.svc ? answer.leave : null) : headline;
+  // The headline among them by which bus it is: with no live time its card
+  // shows the middle of its window, the departures its start.
+  const headline = !walking && best && answer.departsAt ? departureOf(all, best) : null;
+  // Without a class the leave-by is for that same bus, so it's told from a
+  // chosen one by which bus it is: by time, a guess's card time (the middle
+  // of its window, from now) comes within SAME_BUS_MS of the next bus.
+  const leave = answer.leave && !f.arriveBy && headline ? { ...answer.leave, bus: headline.bus } : answer.leave;
+  const own = leave ? (leave.svc ? leave : null) : headline;
   const s = stepFrom({ trip: step.trip, own, all, target: step.target, lastArriveMs, nowMs });
   if (!s) return { steps: null };
-  return s.steps.moved ? { steps: s.steps, leave: s.leave } : { steps: s.steps };
+  return s.steps.moved ? { steps: s.steps, leave: publicLeave(s.leave) } : { steps: s.steps };
 }
 
 /** More than any walk to a stop: how far past the latest leave-by a bus may leave. */

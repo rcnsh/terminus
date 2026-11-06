@@ -1,5 +1,5 @@
 /**
- * Measured headways: how headwayFor (resolve.ts) picks one for a time, how
+ * Measured headways: which one an estimate counts at a time (departures.ts), how
  * scripts/data/measure_headways.mjs measures them from the recorder's
  * passings, and that data/headways.json is a file headwayFor can read.
  */
@@ -7,8 +7,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH } from '../src/answer/graph.ts';
-import { candidateStops, dayKindOf, headwayFor } from '../src/answer/resolve.ts';
+import { candidateStops } from '../src/answer/resolve.ts';
+import { dayKindOf, headwayFor } from '../src/answer/hours.ts';
 import { departures, leaveBy } from '../src/answer/leave.ts';
+import { departuresFrom } from '../src/answer/departures.ts';
 import { residenceAt } from '../src/answer/residences.ts';
 import { DEFAULT_HEADWAY_S } from '../src/config.ts';
 import { MIN_GAPS, headwaysOf, periodOf } from '../scripts/data/measure_headways.mjs';
@@ -33,22 +35,35 @@ const graph = {
   },
 };
 
-test('a headway for a time is that hour, else the nearest hour that day, else the usual one', () => {
-  assert.equal(headwayFor(graph, 'D2', THU_0930), 340, 'the hour');
-  assert.equal(headwayFor(graph, 'D2', THU_2130), 600, 'an hour without its own: the nearest, not the day’s median');
-  assert.equal(headwayFor(graph, 'D2', SAT), 450, 'Saturday not measured: the usual');
-  assert.equal(headwayFor(graph, 'D2', SUN), 1200, 'a day with no hours of its own: its median');
-  assert.equal(headwayFor(graph, 'D2', HOLIDAY), 1200, 'a public holiday runs Sunday hours');
-  assert.equal(headwayFor(graph, 'D2'), 450, 'no time: the usual');
+/** The headway an estimate counts after a live bus of `svc` at `atMs`, in seconds (departures.ts). */
+const headwayAfter = (g, svc, atMs) => {
+  const sa = {
+    code: 'X',
+    fetchedAt: atMs,
+    stale: false,
+    available: true,
+    arrivals: [{ svc, etaS: 0, crowd: null, plate: 'A', berth: null }],
+  };
+  const [live, next] = departuresFrom(g, sa, svc, { now: atMs, from: atMs });
+  return (next.earliest - live.earliest) / 1000;
+};
+
+test('an estimate counts the hour it steps from, else the nearest hour that day, else the usual headway', () => {
+  assert.equal(headwayAfter(graph, 'D2', THU_0930), 340, 'the hour');
+  assert.equal(headwayAfter(graph, 'D2', THU_2130), 600, 'an hour without its own: the nearest, not the day’s median');
+  assert.equal(headwayAfter(graph, 'D2', SAT), 450, 'Saturday not measured: the usual');
+  assert.equal(headwayAfter(graph, 'D2', SUN), 1200, 'a day with no hours of its own: its median');
+  assert.equal(headwayAfter(graph, 'D2', HOLIDAY), 1200, 'a public holiday runs Sunday hours');
+  assert.equal(headwayFor(graph, 'D2'), 450, 'a cost with no time: the usual');
 });
 
 test('the vacation uses its own headways; where none were measured, never shorter than term time’s or the one guess for all', () => {
-  assert.equal(headwayFor(graph, 'K', VACATION), 3000);
-  assert.equal(headwayFor(graph, 'D2', VACATION), DEFAULT_HEADWAY_S, 'not term time’s 7 min');
+  assert.equal(headwayAfter(graph, 'K', VACATION), 3000);
+  assert.equal(headwayAfter(graph, 'D2', VACATION), DEFAULT_HEADWAY_S, 'not term time’s 7 min');
   const termOnly = { ...graph, headwaysByTime: { K: { term: graph.headwaysByTime.K.term } } };
-  assert.equal(headwayFor(termOnly, 'K', VACATION), 2400, 'not 12 min for a bus every 40');
-  assert.equal(headwayFor(graph, 'K', at('2035-01-01T09:00')), 2400, 'past the calendar: not the vacation’s');
-  assert.equal(headwayFor(graph, 'A1', THU_0930), DEFAULT_HEADWAY_S, 'a service never measured');
+  assert.equal(headwayAfter(termOnly, 'K', VACATION), 2400, 'not 12 min for a bus every 40');
+  assert.equal(headwayAfter(graph, 'K', at('2035-01-01T09:00')), 2400, 'past the calendar: not the vacation’s');
+  assert.equal(headwayAfter(graph, 'A1', THU_0930), DEFAULT_HEADWAY_S, 'a service never measured');
 });
 
 test('the day kinds and periods are the ones the service hours use', () => {

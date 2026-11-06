@@ -371,7 +371,7 @@ export interface ServiceHours {
   sunday?: DayWindow;
 }
 
-/** The kind of day a timetable runs on: Sunday hours on public holidays too (resolve.ts dayKindOf). */
+/** The kind of day a timetable runs on: Sunday hours on public holidays too (hours.ts dayKindOf). */
 export type DayKind = 'weekday' | 'saturday' | 'sunday';
 
 /**
@@ -502,6 +502,8 @@ export interface ScoredOption {
   totalS: number;
   quality: Quality;
   arrival: Arrival | null;
+  /** Which of its service's departures from the stop it is (departures.ts `id`); for a change of bus, the first. */
+  bus?: string;
   /** When the arrivals behind this were fetched (epoch ms): how old a stale time is. */
   fetchedAt: number;
   /** The instant `boardS` and `totalS` count from (epoch ms): the request's now. */

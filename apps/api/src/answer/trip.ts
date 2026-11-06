@@ -20,7 +20,8 @@ import { haversineM } from '../geo.ts';
 import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
-import { headwayFor, indexGraph, rideSpan, rideStops } from './resolve.ts';
+import { indexGraph, rideSpan, rideStops } from './resolve.ts';
+import { headwayMs } from './departures.ts';
 import { routeColor, shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -199,7 +200,11 @@ export const CHANGE_GRACE_MS = 30_000;
 export function secondLeavesMs(c: Plan): number | null {
   if (!c.board) return null;
   const at = Date.parse(c.board);
-  return c.estimated ? at + Math.max(60, headwayFor(GRAPH, c.svc, at)) * 1000 : at;
+  if (!c.estimated) return at;
+  // A bus within a headway of the guess. Not bounded by the hours: the
+  // guess was made for a bus that runs, and a time pushed past the close
+  // (laterChange) would otherwise wait for the next morning's.
+  return at + headwayMs(GRAPH, c.svc, at);
 }
 
 /**

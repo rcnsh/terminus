@@ -7,17 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
-import {
-  candidateStops,
-  indexGraph,
-  pickAlt,
-  scoreOptions,
-  serviceEndsAt,
-  serviceResumesAt,
-  shuttleRideS,
-  walkAllTheWayS,
-  wholeWalk,
-} from '../src/answer/resolve.ts';
+import { candidateStops, indexGraph, pickAlt, scoreOptions, shuttleRideS, walkAllTheWayS, wholeWalk } from '../src/answer/resolve.ts';
+import { serviceEndsAt, serviceResumesAt } from '../src/answer/hours.ts';
 import { leaveBy } from '../src/answer/leave.ts';
 import { walkVerdict } from '../src/answer/format.ts';
 import { mergeFeeds } from '../src/answer/answer.ts';

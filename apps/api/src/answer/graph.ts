@@ -10,7 +10,7 @@ import oppositesJson from '../../data/opposites.json' with { type: 'json' };
 import publicJson from '../../data/public.json' with { type: 'json' };
 import headwaysJson from '../../data/headways.json' with { type: 'json' };
 import type { Graph, HeadwaysByTime, Stop } from '../types.ts';
-import { mergeServiceHours } from './resolve.ts';
+import { mergeServiceHours } from './hours.ts';
 import { type PublicData, withPublic } from './public.ts';
 
 /**

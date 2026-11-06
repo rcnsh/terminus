@@ -17,7 +17,8 @@
 
 import type { Candidate, Graph, GraphIndex, Leg, ResolveInput, Stop } from '../types.ts';
 import { TRANSFER, WALK } from '../config.ts';
-import { type Target, bestLeg, candidateStops, headwayFor, indexGraph, legRideS, reach, targetsFor } from './resolve.ts';
+import { type Target, bestLeg, candidateStops, indexGraph, legRideS, reach, targetsFor } from './resolve.ts';
+import { headwayFor } from './hours.ts';
 import { isPublic } from './public.ts';
 import { stopFootM } from './walk.ts';
 
