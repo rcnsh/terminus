@@ -33,7 +33,8 @@ apps/api/
     answer.ts         Stops near you, arrivals, the best option, worded
     card.ts           What every client shows, worded once (the card's lines)
     plan.ts, leave.ts Which bus a trip is about; when to set off
-    trip.ts           Today's trip signals, the day's state, a signal applied (applySignal)
+    trip.ts           Today's trip signals and the day's state, kept in the Trip object
+    signal.ts         A signal applied to the day (applySignal): the trip's record, its outcome
     phase.ts          A trip's phase now, and when it next changes (the Trip object's wake)
     resolve.ts        Stop + bus choice: haversine, directional pairing, scoring
     departures.ts     A service's buses from a stop: its feed rows and berths, live times, then

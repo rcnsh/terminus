@@ -1,12 +1,12 @@
 /**
- * A signal applied to the day (applySignal in trip.ts): the record "On it",
+ * A signal applied to the day (applySignal in signal.ts): the record "On it",
  * "Missed it", "Not going", "I'm there" or undo leaves for the trip, and the
  * outcome it records. No HTTP, no feed: the plate lookup is passed in.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { applySignal } from '../src/answer/trip.ts';
+import { applySignal } from '../src/answer/signal.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z'); // Thursday 09:00 in Singapore

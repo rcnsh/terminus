@@ -51,18 +51,8 @@ import { answerRequest, loadRider, prefsFor, tripDay } from '../answer/rider.ts'
 import { dayPlan } from '../timetable/day.ts';
 import { type MeDeps, unlogged } from '../answer/answer.ts';
 import { getProfile, pinnable } from './profiles.ts';
-import {
-  PLATE_WINDOW_S,
-  type PlateLookup,
-  SIGNALS,
-  type TripRecord,
-  applySignal,
-  clearTrip,
-  loadDay,
-  saveSignals,
-  sgtDate,
-  updateTrip,
-} from '../answer/trip.ts';
+import { PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, loadDay, saveSignals, sgtDate, updateTrip } from '../answer/trip.ts';
+import { type PlateLookup, applySignal } from '../answer/signal.ts';
 import { setLiveToken, setPushToken, setStartToken } from '../push/push.ts';
 import { formatApnsToken, looksApns, parseApnsToken } from '../push/apns.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '../push/webpush.ts';

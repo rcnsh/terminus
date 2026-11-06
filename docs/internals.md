@@ -568,7 +568,7 @@ same answer in another language or clock, for an iPhone) saves nothing.
 The nudge is built from the card in that one place; the wake adds only
 what it alone knows (urgent, Live Activity starts, its language). A
 signal's change to the day is one pure function (`applySignal` in
-trip.ts): from the answer planned before it (not logged), the day and a
+`src/answer/signal.ts`, apart from trip.ts's storage): from the answer planned before it (not logged), the day and a
 plate lookup, the trip's new record and its outcome. The route saves the
 record, then the outcome in D1, and only then answers, so the trip
 choices it reads include the outcome.
