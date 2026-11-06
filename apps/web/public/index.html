@@ -72,6 +72,17 @@
 
   /* The app's Now, inside the phone: the same parts as app.js draws. */
   .phone { width: min(300px, 78vw); padding: 9px; border-radius: 46px; background: #0c0a09; box-shadow: 0 30px 60px -20px rgb(28 25 23 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.08) inset; }
+  /* The phone stands in the hero's sky, which gives what's in it the sky's
+     ink (sky.css), but Now's sky ends at its horizon: under it the app is in
+     the page's own colours, as app.css scopes them. Kept here as the page
+     has them (a var() is resolved where it's declared), then given back to
+     the screen; its own sky-panel takes the sky's again. */
+  :root { --page-surface: var(--surface); --page-surface-2: var(--surface-2); --page-ink: var(--ink); --page-muted: var(--muted); --page-faint: var(--faint);
+    --page-line: var(--line); --page-line-strong: var(--line-strong); --page-accent: var(--accent); --page-accent-soft: var(--accent-soft);
+    --page-good: var(--good); --page-warn: var(--warn); --page-bad: var(--bad); }
+  .screen { --surface: var(--page-surface); --surface-2: var(--page-surface-2); --ink: var(--page-ink); --muted: var(--page-muted); --faint: var(--page-faint);
+    --line: var(--page-line); --line-strong: var(--page-line-strong); --accent: var(--page-accent); --accent-soft: var(--page-accent-soft);
+    --good: var(--page-good); --warn: var(--page-warn); --bad: var(--page-bad); }
   .screen { border-radius: 38px; overflow: hidden; background: var(--bg); color: var(--ink); font-size: 13px; line-height: 1.45; display: flex; flex-direction: column; aspect-ratio: 9 / 19.5; }
   .screen .sky-panel { --sky-room: 120px; --moon: 22px; --moon-top: 50px; }
   .pn-status { display: flex; justify-content: space-between; padding: 11px 24px 0; font-size: 11px; font-weight: 600; }
