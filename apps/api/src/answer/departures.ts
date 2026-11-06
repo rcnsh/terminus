@@ -14,6 +14,12 @@ import { isPublic } from './public.ts';
 /** How far ahead of now a bus is looked for: past a day it's no bus, whatever the hours say (or don't). */
 const PROJECT_MS = 86_400_000;
 
+/**
+ * The headway a guess counts at `ms`, in ms: the measured one for that
+ * hour, never under a minute. Every estimate here steps by it.
+ */
+export const headwayMs = (graph: Graph, svc: string, ms: number): number => Math.max(60, headwayFor(graph, svc, ms)) * 1000;
+
 /** The next hour after `ms`, when a headway can change: Singapore is a whole number of hours ahead of UTC. */
 const nextHour = (ms: number) => (Math.floor(ms / 3_600_000) + 1) * 3_600_000;
 
@@ -194,7 +200,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   const max = w.max ?? Infinity;
   // Each estimate counts the headway in force at the bus before it, so the
   // card, the leave-by and Nearby step the same way across an hour.
-  const headwayAt = (ms: number) => Math.max(60, headwayFor(graph, svc, ms)) * 1000;
+  const headwayAt = (ms: number) => headwayMs(graph, svc, ms);
   const runs = (ms: number) => inService(graph, svc, ms);
   const live = boardOf(graph, board, svc, w.now).live;
   const out: Departure[] = [];

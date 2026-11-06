@@ -21,7 +21,7 @@ import { MAX_FIX_ACC_M, WALK, sgt } from '../config.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { indexGraph, rideSpan, rideStops } from './resolve.ts';
-import { nextDeparture } from './departures.ts';
+import { headwayMs } from './departures.ts';
 import { routeColor, shapeFor } from '../map/campus.ts';
 import { alongNear } from '../map/buses.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -201,8 +201,10 @@ export function secondLeavesMs(c: Plan): number | null {
   if (!c.board) return null;
   const at = Date.parse(c.board);
   if (!c.estimated) return at;
-  // A bus within a headway of when you get there, as any estimate with no live time to step from.
-  return nextDeparture(GRAPH, undefined, c.svc, at, at)?.latest ?? at;
+  // A bus within a headway of the guess. Not bounded by the hours: the
+  // guess was made for a bus that runs, and a time pushed past the close
+  // (laterChange) would otherwise wait for the next morning's.
+  return at + headwayMs(GRAPH, c.svc, at);
 }
 
 /**

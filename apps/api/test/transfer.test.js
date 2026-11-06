@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
+import { headwayFor } from '../src/answer/hours.ts';
 import { candidateStops, indexGraph, pickAlt, scoreOptions, targetsFor, worseOf } from '../src/answer/resolve.ts';
 import { planTransfers, transferRoutes } from '../src/answer/transfer.ts';
 import { buildAnswer } from '../src/answer/format.ts';
@@ -429,6 +430,20 @@ test('a guessed second bus keeps you at the change for a headway, and a later on
   assert.equal(rideStage(guess, latest + CHANGE_GRACE_MS), 'second');
   const due = { ...plan, change: { ...plan.change, board: new Date(board + 120_000).toISOString() } };
   assert.equal(rideStage(due, board + CHANGE_GRACE_MS), 'change', 'the feed still has the second bus due');
+});
+
+test('a guessed second bus past the close, or on a day it does not run, still leaves a headway after its time', () => {
+  // D2 closes at 23:00 on a weekday: a second bus guessed for 23:05, pushed past it by a later first bus.
+  const board = Date.parse('2026-08-27T23:05:00+08:00');
+  const headway = Math.max(60, headwayFor(GRAPH, 'D2', board)) * 1000;
+  const change = { svc: 'D2', stop: 'UTOWN', board: new Date(board).toISOString(), estimated: true };
+  assert.equal(secondLeavesMs(change), board + headway, 'not the next morning');
+  // R1 does not run on Christmas Day.
+  const xmas = Date.parse('2026-12-25T12:00:00+08:00');
+  assert.equal(
+    secondLeavesMs({ ...change, svc: 'R1', board: new Date(xmas).toISOString() }),
+    xmas + Math.max(60, headwayFor(GRAPH, 'R1', xmas)) * 1000,
+  );
 });
 
 test('boarding a later first bus that misses the planned second one moves the second to when you get there, as a guess', () => {
