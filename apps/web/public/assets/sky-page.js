@@ -1,20 +1,17 @@
-// The horizon and the night on the website's own pages (sky.css), drawn by
-// sky.js as on Now; the hour is already on the page (sky-phase.js). A page
+// The horizon on the website's own pages (sky.css), drawn by sky.js as on
+// Now; the hour (sky-phase.js) and the stars and moon (stars.js) are already
+// on the page before its first paint, and the hills fade in. A page
 // asks for them in its markup, so it needs no script of its own for them:
 //   <section class="sky-panel">          the sky, at this hour
-//     <div data-stars></div>             the stars and the moon, at night
+//     <div data-stars></div>             the stars and the moon, at night (stars.js)
 //     <div data-horizon></div>           the hills, the road and a shuttle
 // data-horizon takes data-low (just the hills), data-stop (your stop's
 // sign), data-bus="#34a853 0.4 live" (a bus coming up to it: its colour, how
 // far, and live or an estimate), data-shuttle="no" (an empty road) and
 // data-drive (shuttles drive across, over and over, each a service at random).
 // A page's script can draw one itself with drawHorizon().
-// A page loads this in its <head> with blocking="render": a module runs after
-// the page's first paint otherwise, so each load showed the bare sky for a
-// frame before the stars, moon and hills. It still runs once the page is
-// parsed, so the markup above is there to find.
 import { html, render } from './ui.js';
-import { DriveToggle, Horizon, NightSky } from '/account/sky.js';
+import { DriveToggle, Horizon } from '/account/sky.js';
 import { LIVERY } from '/account/livery.js';
 
 /**
@@ -43,7 +40,6 @@ function fromMarkup(el) {
 }
 
 for (const el of document.querySelectorAll('[data-horizon]')) drawHorizon(el, fromMarkup(el));
-for (const el of document.querySelectorAll('[data-stars]')) render(html`<${NightSky} />`, el);
 
 // Scrolled past the top, a laptop's trackpad (and a phone) pulls the page
 // down and shows the colour behind it, which would be the page's own (near
