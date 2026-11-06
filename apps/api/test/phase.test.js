@@ -112,6 +112,26 @@ test('on a later bus home than planned, you are home once that bus has had time 
   assert.equal((await tripPhase(trip, changesAt.at, fixtureFeed().look)).verdict.kind, 'home');
 });
 
+test('a rule that throws at a later moment fails the call: it is not taken as a change', async () => {
+  const now = FROZEN_NOW;
+  // A trip home whose home-by reads once, then throws: a bug in a rule, only at later moments.
+  const breaking = () => {
+    let reads = 0;
+    return {
+      lastEndMs: now - 60 * MIN,
+      get homeBy() {
+        if (reads++ > 0) throw new TypeError('a bug');
+        return now + 30 * MIN;
+      },
+    };
+  };
+  await assert.rejects(tripPhase(tripOf(leaveAt(now + 10 * MIN), { home: breaking() }), now, fixtureFeed().look), TypeError);
+  // With a location, the object's view from nowhere is the one that reads it.
+  const pgp = GRAPH.stops.find((s) => s.code === 'PGP');
+  const located = tripOf(leaveAt(now + 10 * MIN), { home: breaking(), at: { lat: pgp.lat + 0.01, lon: pgp.lon } });
+  await assert.rejects(tripPhase(located, now, fixtureFeed().look), TypeError);
+});
+
 test('a class trip is over LATE_GRACE_MIN after the class starts: the next trip is planned then', async () => {
   const now = FROZEN_NOW;
   const classAtMs = now + 20 * MIN;

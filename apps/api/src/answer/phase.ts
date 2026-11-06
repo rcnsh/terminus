@@ -193,13 +193,24 @@ export interface Change {
 /** How many moments `changesOf` tries before taking the next to be a change: far more than a day's trip has. */
 const MAX_MOMENTS = 64;
 
+/** Thrown by a later moment's rules for the answer this request didn't plan (see tripPhase). */
+class NotPlanned extends Error {}
+
+/** `otherwise` for NotPlanned. Anything else is a bug in a rule, which fails the request rather than passing for a change. */
+const onlyNotPlanned =
+  <T>(otherwise: T) =>
+  (e: unknown): T => {
+    if (e instanceof NotPlanned) return otherwise;
+    throw e;
+  };
+
 /**
  * Where `decide` says something else than it does at `nowMs`: the first
  * moment it compares the time with at which the rules give another verdict,
  * trying each in turn, and the moments that one compares with. Between two
  * moments every comparison comes out the same, so nothing changes there.
- * `decide` throws at a moment it can't say without a call it didn't need
- * at `nowMs`; that moment counts as a change.
+ * `decide` throws NotPlanned at a moment it can't say without a call it
+ * didn't need at `nowMs`; that moment counts as a change.
  */
 async function changesOf<V>(
   decide: (c: Clock) => Promise<V>,
@@ -214,7 +225,7 @@ async function changesOf<V>(
     noted.delete(at);
     if (i >= MAX_MOMENTS) return { now, next };
     const more = new Map<number, boolean>();
-    const then = await decide(clockAt(at, more)).catch(() => null);
+    const then = await decide(clockAt(at, more)).catch(onlyNotPlanned(null));
     if (then === null || !same(now, then)) return { now, next };
     for (const [m, leave] of more) noted.set(m, noted.get(m) === true || leave);
   }
@@ -282,7 +293,7 @@ export async function tripPhase(
   const asLater: TripIn = {
     ...t,
     planned: async () => {
-      if (!planned) throw new Error('not planned now');
+      if (!planned) throw new NotPlanned();
       const p = await planned;
       return seenNow && p.bus ? { ...p, bus: { ...p.bus, seen: true } } : p;
     },
@@ -308,7 +319,7 @@ export async function tripPhase(
     (a, b) => shown(a) === shown(b),
   )
     .then((r) => r.next)
-    .catch(() => next);
+    .catch(onlyNotPlanned(next));
   return { verdict: now, changesAt: next, wakesAt };
 }
 
