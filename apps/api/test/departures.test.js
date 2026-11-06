@@ -231,6 +231,23 @@ test('a bus the feed lists twice is two departures, each its own, and so are the
   assert.deepEqual(ids, ['P1', 'P1@2', 'P1@2+1', 'P1@2+2']);
 });
 
+test('no departure leaves after `until`: a window that ends past it is left out, before the service starts too', () => {
+  const now = at('2026-08-27T06:30');
+  for (const until of [at('2026-08-27T08:30'), at('2026-08-27T07:16'), at('2026-08-27T07:15')]) {
+    for (const around of [undefined, until]) {
+      const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', []), 'D2', {
+        now,
+        from: now + 80_000,
+        until,
+        ...(around ? { around } : {}),
+      });
+      for (const d of ds) assert.ok(d.latest <= until, `${hhmmss(d.earliest)}–${hhmmss(d.latest)} past ${hhmmss(until)}`);
+    }
+  }
+  const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', []), 'D2', { now, from: now, until: at('2026-08-27T08:30') });
+  assert.ok(ds.length > 3 && ds.at(-1).latest > at('2026-08-27T08:30') - 3 * headwayFor(GRAPH, 'D2', now) * 1000, 'up to it');
+});
+
 test('a chosen bus from long ago is no guide to the estimates, and costs nothing to ignore', () => {
   const now = at('2026-08-27T16:00');
   const sa = board('PGP', now, 'D2', []);

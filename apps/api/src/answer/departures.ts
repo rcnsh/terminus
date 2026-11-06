@@ -64,7 +64,10 @@ export interface DepartureWindow {
   now: number;
   /** When you can be at the stop: no bus that has gone by then. */
   from: number;
-  /** No bus leaving after this; never more than a day after now. */
+  /**
+   * No bus leaving after this: a window ends by it (its `latest`), so a
+   * bus due in it has left by then. Never more than a day after now.
+   */
   until?: number;
   /** With no live time to step from, a time the estimates fall either side of (a bus already chosen). */
   around?: number;
@@ -294,10 +297,10 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
   // Not started yet, and starting before you get there: from its start.
   const starts = last || runs(w.now) ? null : serviceResumesAt(graph, svc, w.now);
   if (starts !== null && starts <= t) startAt(starts);
-  for (let n = 1, i = 0; out.length < max && t <= until; n++, i++) {
+  for (let n = 1, i = 0; out.length < max && t < until; n++, i++) {
     if (!runs(t)) {
       const s = serviceResumesAt(graph, svc, t);
-      if (s === null || s > until) break;
+      if (s === null || s >= until) break;
       startAt(s);
       [n, i] = [1, 0];
     }
@@ -306,6 +309,8 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
     // A bus may still come before the service closes, not after.
     const closes = serviceEndsAt(graph, svc, t);
     const end = Math.min(i + 1 < fixed.length ? fixed[i + 1] : t + headwayAt(t), closes ?? Infinity);
+    // Its bus may leave as late as the window's end: past `until`, it and every one after.
+    if (end > until) break;
     if (end >= w.from) {
       out.push({
         id: `${anchor}+${n}`,

@@ -288,7 +288,7 @@ function forLeg(
   // end as late as they can, at the latest you can board.
   const sb = serviceBoard(graph, sa, leg.svc, nowMs);
   const fits = departuresFrom(graph, sb, leg.svc, { now: nowMs, from: earliest, until: latestBoard, around: latestBoard }).filter(
-    (d) => d.latest <= latestBoard && !d.partial,
+    (d) => !d.partial,
   );
   if (fits.length) {
     let b = fits[fits.length - 1];
@@ -313,7 +313,7 @@ function firstBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, n
 /** The latest bus leaving by `byMs` that you can be at the stop for by `fromMs`. */
 function lastBus(graph: Graph, svc: string, sa: ServiceBoard, fromMs: number, byMs: number, nowMs: number): Bus | null {
   const b = departuresFrom(graph, sa, svc, { now: nowMs, from: fromMs, until: byMs, around: byMs })
-    .filter((d) => d.latest <= byMs && !d.partial)
+    .filter((d) => !d.partial)
     .at(-1);
   return b ? busOf(b) : null;
 }
