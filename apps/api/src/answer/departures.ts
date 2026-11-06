@@ -27,8 +27,11 @@ const nextHour = (ms: number) => (Math.floor(ms / 3_600_000) + 1) * 3_600_000;
 export interface Departure {
   /**
    * Which bus: the live bus's plate (or its place in the feed's list), or
-   * the nth estimate after its anchor (`<plate>+n`, `reach+n`, `around+n`,
-   * `opens@<ms>+n`). The same for every caller asking of the same board.
+   * the nth estimate after its anchor (`<plate>+n`, `reach+n`,
+   * `opens@<ms>+n`). The same for every caller asking of the same board:
+   * the nth bus after you reach the stop is `reach+n` whether or not the
+   * windows are lined up on a chosen bus, so the card's is found among
+   * the steps.
    */
   id: string;
   /** A timetabled time (LTA's, or a first bus before the hours) is an estimate with its feed row. */
@@ -266,7 +269,7 @@ export function departuresFrom(graph: Graph, board: StopArrivals | ServiceBoard 
     partial = fixed[0] < w.from;
     t = Math.max(fixed[0], w.from);
   }
-  let anchor = fixed.length ? 'around' : 'reach';
+  let anchor = 'reach';
   let opens = false;
   // The windows around a chosen bus to carry on with after the start's own.
   let resume: number[] = [];

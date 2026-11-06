@@ -287,7 +287,7 @@ test('with no live times, after "Later", "Earlier" still goes back to the bus be
   const now = at('2026-08-27T19:10');
   const later = answerAt(now, null).later;
   assert.ok(later);
-  for (const s of [5, 60]) {
+  for (const s of [5, 60, 300]) {
     const steps = answerAt(now + s * 1000, later);
     assert.ok(steps?.moved, `${s} s on: still the bus chosen`);
     assert.ok(steps.earlier, `${s} s on: a bus before it`);

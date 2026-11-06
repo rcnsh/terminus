@@ -122,7 +122,11 @@ export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
   // The server's own answer, or a walk that has since come to beat the chosen bus: still that bus.
   const own = targetOf(f.own) ? f.own! : found;
   if (!own) return null;
-  const moved = found !== null && !sameAs(found, targetOf(own)!);
+  // Two of the departures are the same bus only when they are one; the
+  // server's own leave-by isn't among them, and is matched by time.
+  const among = (l: Leave) => f.all.includes(l);
+  const same = (a: Leave, b: Leave) => (among(a) && among(b) ? a === b : sameAs(a, targetOf(b)!));
+  const moved = found !== null && !same(found, own);
   const pick = moved ? found! : own;
   const lastLeaveMs = f.lastArriveMs === null ? atMs(own) + STEP.laterMaxS * 1000 : null;
   const fits = (l: Leave) =>
@@ -132,7 +136,7 @@ export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
   // Never the bus itself: when you're late its leave-by is now, and the same
   // bus among the departures leaves a little after. Only that one: another
   // of its service minutes behind (bunched) is still a step.
-  const self = closestSame(f.all, targetOf(pick)!);
+  const self = among(pick) ? pick : closestSame(f.all, targetOf(pick)!);
   const other = (l: Leave) => l !== self;
   const later =
     f.all
