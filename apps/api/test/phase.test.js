@@ -168,6 +168,30 @@ test('on a bus home that the feed has running late, the trip home is not over at
   );
 });
 
+test('on a bus home seen ridden that the feed has running late, the Trip object does not wake at the home-by to say you are home', async () => {
+  const now = FROZEN_NOW;
+  // Seen on the A2 from PGP by an earlier request; due at Opp HSSML in 2 min, the feed has it there in 30.
+  const plan = {
+    svc: 'A2',
+    stop: 'PGP',
+    stopCode: 'PGP',
+    alightCode: 'HSSML-OPP',
+    board: iso(now - 8 * MIN),
+    arrive: iso(now + 2 * MIN),
+    seen: true,
+  };
+  const homeBy = dayState({ date: '2026-08-27', trips: {}, plans: { 'home:660': plan } }).homeBy.get('home:660');
+  const live = now + 30 * MIN;
+  const trip = tripOf(leaveAt(now - 15 * MIN), { bus: plan, home: { lastEndMs: now - 60 * MIN, homeBy } });
+  const feed = fixtureFeed({ live: { A2: iso(live) } });
+  const { verdict, changesAt, wakesAt } = await tripPhase(trip, now, feed.look);
+  assert.equal(verdict.kind, 'seen');
+  assert.ok(homeBy < live);
+  assert.deepEqual(changesAt, { at: live, leave: false });
+  assert.deepEqual(wakesAt, changesAt);
+  assert.deepEqual(feed.asked, ['live A2']);
+});
+
 test('a class trip is over LATE_GRACE_MIN after the class starts: the next trip is planned then', async () => {
   const now = FROZEN_NOW;
   const classAtMs = now + 20 * MIN;

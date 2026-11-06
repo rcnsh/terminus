@@ -135,6 +135,9 @@ export interface TripIn {
   classAtMs?: number | null;
   /** The answer and its bus, worked out only when a rule needs them (once). */
   planned(): Promise<TripPlan>;
+  /** The plan's bus when it's seen ridden and already planned, with no
+   *  planning; null otherwise (tripPhase gives it for later moments). */
+  seenBus?(): Promise<Plan | null>;
 }
 
 /** On a bus: riding it, or at the change stop of a trip that changes buses (`waiting`). */
@@ -360,6 +363,10 @@ export async function tripPhase(
       const p = await planned;
       return seenNow && p.bus ? { ...p, bus: { ...p.bus, seen: true } } : p;
     },
+    seenBus: async () => {
+      const bus = planned ? (await planned).bus : null;
+      return bus && (bus.seen || seenNow) ? bus : null;
+    },
   };
   let first = true;
   const here = whereOf(t.at);
@@ -424,13 +431,15 @@ async function phaseAt(t: TripIn, w: Where, c: Clock, look: Lookups, known: Look
   if (t.classAtMs != null && c.reached(t.classAtMs + LATE_GRACE_MIN * 60_000)) return { kind: 'past' };
   // No location, and long enough since the last class to be home by now:
   // its planned bus has got you there, or with none planned, HOME_BY_MIN.
-  // On a bus the feed has running later than that, not before the feed has
-  // it there, where `onBus` ends the ride: the feed only as read already, so
-  // a request that hasn't read it goes by the plan, with no call.
+  // On a bus the feed has running later than that (said, or seen ridden),
+  // not before the feed has it there, where `onBus` ends the ride: the feed
+  // only as read already, so a request that hasn't read it goes by the
+  // plan, with no call.
   if (t.home && w.located) w.decided = true;
   else if (t.home) {
     const by = t.home.homeBy ?? t.home.lastEndMs + HOME_BY_MIN * 60_000;
-    const there = t.rec?.kind === 'boarded' && t.rec.boarded ? await knownArrival(t.rec.boarded, known) : null;
+    const onIt = t.rec?.kind === 'boarded' ? (t.rec.boarded ?? null) : t.rec ? null : ((await t.seenBus?.()) ?? null);
+    const there = onIt ? await knownArrival(onIt, known) : null;
     if (c.reached(there === null ? by : Math.max(by, there))) return { kind: 'home' };
   }
   if (t.rec?.kind === 'boarded' && t.rec.boarded) return { kind: 'aboard', on: await onBus(t.rec.boarded, w, c, look) };
