@@ -22,7 +22,7 @@ import { loadCalendar } from '../timetable/calendarsync.ts';
 import type { Env } from '../types.ts';
 import { type Plan, type DayRecord, type TripUpdate, endOfDayMs, sgtDate, tripRev } from '../answer/trip.ts';
 import type { MeDeps } from '../answer/answer.ts';
-import { answerWake } from '../answer/rider.ts';
+import { answerWake, nudgeOf } from '../answer/rider.ts';
 import { type Delivered, nudgeUser, pushAudience, retryLiveStart, updateLive } from './push.ts';
 import { type LiveActivityState, apnsEnabled, liveActivityState } from './apns.ts';
 import { type Lang, withLang } from '../i18n.ts';
@@ -368,7 +368,7 @@ export class Trip {
     // Logged as a wake that pushed nothing, keeping the leave-by last seen:
     // this card's is from the day that's gone, and the next wake's shift is from that one.
     if (stale) {
-      if (card) log(false, card.phase, card.quality, null);
+      if (card) log(false, card.answer.card.phase, card.answer.quality, null);
       return { next: nowMs + MIN_WAKE_GAP_MS, seen: { at: nowMs, leaveAt: before?.leaveAt ?? null } };
     }
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
@@ -402,9 +402,9 @@ export class Trip {
       : last?.started;
     const now: Pushed = {
       key: card.key,
-      phase: card.phase,
+      phase: card.answer.card.phase,
       at: nowMs,
-      ...(card.gone ? { gone: true } : {}),
+      ...(card.answer.card.gone ? { gone: true } : {}),
       live: JSON.stringify(live),
       ...(started ? { started } : {}),
     };
@@ -444,7 +444,7 @@ export class Trip {
       const out = await nudgeUser(
         env,
         userId,
-        card.nudge({ urgent, lang, phaseChanged: last?.phase !== now.phase, startLive, startedFor: new Set(now.started?.sessions) }),
+        nudgeOf(card, { urgent, lang, phaseChanged: last?.phase !== now.phase, startLive, startedFor: new Set(now.started?.sessions) }),
         nowMs,
       );
       if (startLive && now.started) now.started = withStarts(now.started, out);
@@ -477,7 +477,7 @@ export class Trip {
     // The trip is over but its end didn't go: with no next change to wake
     // for, the wake is tried again, as a failed one is.
     if (unsent && !card.key) throw new Error('trip end not sent');
-    log(changed, now.phase, card.quality, card.leaveAt);
+    log(changed, now.phase, card.answer.quality, card.leaveAt);
     const seen = { at: nowMs, leaveAt: card.leaveAt };
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.

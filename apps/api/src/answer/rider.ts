@@ -79,8 +79,8 @@ interface Answered {
 /** What only a wake knows: how loud to be, and the Live Activities it starts (tripdo.ts). */
 export type WakeNudge = Pick<Nudge, 'urgent' | 'lang' | 'phaseChanged' | 'startLive' | 'startedFor'>;
 
-/** The nudge for an answer: the one place a card becomes what the devices are pushed. */
-function nudgeOf(a: Answered, wake: WakeNudge = { urgent: false }): Nudge {
+/** The nudge for an answer: the one place a card becomes what the devices are pushed. A wake adds what only it knows. */
+export function nudgeOf(a: Answered, wake: WakeNudge = { urgent: false }): Nudge {
   return {
     phase: a.answer.card.phase,
     remind: a.answer.card.remind !== false,
@@ -191,18 +191,12 @@ export function reword(env: Env, ctx: ExecutionContext, deps: MeDeps, rider: Rid
   return (l, h12) => withLang(l, () => nextFor(env, ctx, unlogged(deps), rider, { ...ask, h12 }, nowMs)).then((r) => r.body);
 }
 
-/** The card the Trip object works out when it wakes. */
+/** The card the Trip object works out when it wakes. Its phase and the rest are read from `answer`, and its nudge is nudgeOf's, so none is kept twice. */
 export interface WakeCard extends Answered {
   key: string | null;
-  phase: string;
-  gone: boolean;
-  remind: boolean;
   wakeAt: number | null;
-  /** The leave-by and how sure the answer is, for the wake's freshness log (tripdo.ts). */
+  /** The leave-by, for the wake's freshness log (tripdo.ts). */
   leaveAt: number | null;
-  quality: string;
-  /** The nudge for this card, with what only the wake knows. */
-  nudge: (wake: WakeNudge) => Nudge;
 }
 
 /**
@@ -230,22 +224,14 @@ export async function answerWake(
   const ask = { ...DAY_ASK, h12: opts.h12 ?? false };
   const { body, trip, update, wakeAt } = await nextFor(env, ctx, unlogged(deps), rider, ask, nowMs);
   for (const [key, plan] of Object.entries(update.plans ?? {})) if (plan) ctx.waitUntil(opts.savePlan(key, plan));
-  const answered: Answered = {
+  return {
     answer: body,
     // A wake always asks for the day's plan.
     tripOver: trip.key === null,
     clockChosen: profile.clock !== 'auto',
     answerIn: reword(env, ctx, opts.rewordDeps ?? deps, rider, ask, nowMs),
-  };
-  return {
-    ...answered,
     key: trip.key,
-    phase: body.card.phase,
-    gone: body.card.gone,
-    remind: body.card.remind !== false,
     wakeAt,
     leaveAt: body.leave?.at ? Date.parse(body.leave.at) : null,
-    quality: body.quality,
-    nudge: (wake) => nudgeOf(answered, wake),
   };
 }
