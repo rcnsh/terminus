@@ -7,9 +7,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import {
+  ASSUME_MS,
   CHANGE_GRACE_MS,
   DUE_MS,
   HOME_GRACE_MS,
+  LEAVE_GAP_MS,
   RIDE_GRACE_MS,
   answerPhase,
   phaseOf,
@@ -19,7 +21,7 @@ import {
 } from '../src/answer/phase.ts';
 import { planOfLeave } from '../src/answer/plan.ts';
 import { dayState, laterChange, tripEnd } from '../src/answer/trip.ts';
-import { LEAVE_GAP_MS, cardFor } from '../src/answer/card.ts';
+import { cardFor } from '../src/answer/card.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
 import { withoutMeasuredHeadways } from './_headways.mjs';
@@ -179,6 +181,20 @@ test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 
   const later = { ...answer, leave: { ...answer.leave, at: iso(now + 90_000) } };
   const { phase, changesAt } = await answerPhase(later, undefined, nowhere, now);
   assert.equal(Date.parse(cardFor(later, false, { key: 'k', phase, changesAt }, null, now).nextChangeAt), now + 90_000);
+});
+
+test('the 30 s a sliding leave-by waits never skips a change that does not slide: the bus going', async () => {
+  const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { card: _card, refreshAt: _r, ...answer } = fixture;
+  const now = Date.parse(answer.asOf);
+  // Leave in 5 s; the plan's bus left long enough ago to count as gone in 20 s.
+  const sliding = { ...answer, leave: { ...answer.leave, at: iso(now + 5_000) } };
+  const bus = { ...planOfLeave(answer.leave, false, answer.dest.to), board: iso(now + 20_000 - ASSUME_MS) };
+  const { verdict, changesAt } = await tripPhase(tripOf(sliding, { bus }), now, fixtureFeed().look);
+  assert.equal(phaseOf(verdict), 'due');
+  assert.equal(changesAt.at, now + 5_000, 'the Trip object keeps the exact time');
+  const card = cardFor(sliding, false, { key: 'k', phase: phaseOf(verdict), changesAt }, null, now);
+  assert.equal(Date.parse(card.nextChangeAt), now + 20_000);
 });
 
 /* On a bus: one, or two with a change (transfer.ts). */

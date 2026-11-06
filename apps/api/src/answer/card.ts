@@ -11,7 +11,7 @@
 import type { Arrival, BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from '../types.ts';
 import { clockAt, slackText } from '../clock.ts';
 import { type Plan, type Phase, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
-import { type Change, DUE_MS } from './phase.ts';
+import { type Change, DUE_MS, LEAVE_GAP_MS } from './phase.ts';
 import type { Suggestion } from '../accounts/outcomes.ts';
 import type { StepTarget } from './step.ts';
 import { GRAPH } from './graph.ts';
@@ -776,15 +776,6 @@ function slotOf(text: string, make: (t: string) => string): string | null {
     : null;
 }
 
-/**
- * The soonest the card asks to be fetched again for its leave-by. A late bus
- * keeps sliding the leave-by a few seconds ahead of now, and refetching at it
- * would poll every few seconds. The client already says "Leave now" itself
- * once `leave.at` passes, so this only delays the server's phase words (due,
- * heading) by up to this much; the Trip object and the Mac wait 30 s too.
- */
-export const LEAVE_GAP_MS = 30_000;
-
 /** A stop's short name, from its code. */
 const stopName = (code: string | null | undefined) => {
   const s = code ? indexGraph(GRAPH).byCode.get(code) : undefined;
@@ -910,9 +901,10 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
   }
 
   // The next moment this card changes by itself: the trip's next phase, or
-  // the answer going stale, whichever is sooner.
+  // the answer going stale, whichever is sooner. A leave-by's no sooner than
+  // LEAVE_GAP_MS, unless a change that doesn't slide comes first.
   const c = trip.changesAt;
-  const phaseAt = c ? (c.leave ? Math.max(c.at, nowMs + LEAVE_GAP_MS) : c.at) : null;
+  const phaseAt = c ? (c.leave ? Math.min(Math.max(c.at, nowMs + LEAVE_GAP_MS), c.firm ?? Infinity) : c.at) : null;
   const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null]
     .filter((m): m is number => m !== null && m > nowMs)
     .sort((x, y) => x - y)[0];

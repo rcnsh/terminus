@@ -184,10 +184,25 @@ function clockAt(ms: number, noted: Map<number, boolean>): Clock {
   };
 }
 
-/** The next time a trip's phase changes by itself. `leave`: a leave-by's moment, which slides with it. */
+/**
+ * The soonest the card asks to be fetched again for its leave-by. A late bus
+ * keeps sliding the leave-by a few seconds ahead of now, and refetching at it
+ * would poll every few seconds. The client already says "Leave now" itself
+ * once `leave.at` passes, so this only delays the server's phase words (due,
+ * heading) by up to this much; the Trip object and the Mac wait 30 s too.
+ */
+export const LEAVE_GAP_MS = 30_000;
+
+/**
+ * The next time a trip's phase changes by itself. `leave`: a leave-by's
+ * moment, which slides with it. `firm`, with `leave`: a change at a moment
+ * that doesn't slide (the bus going) sooner than LEAVE_GAP_MS from now, which
+ * the card's wait for the leave-by mustn't skip.
+ */
 export interface Change {
   at: number;
   leave: boolean;
+  firm?: number;
 }
 
 /** How many moments `changesOf` tries before taking the next to be a change: far more than a day's trip has. */
@@ -211,6 +226,9 @@ const onlyNotPlanned =
  * moments every comparison comes out the same, so nothing changes there.
  * `decide` throws NotPlanned at a moment it can't say without a call it
  * didn't need at `nowMs`; that moment counts as a change.
+ *
+ * A first change that slides with the leave-by goes on to the first that
+ * doesn't (`firm`), within LEAVE_GAP_MS of now.
  */
 async function changesOf<V>(
   decide: (c: Clock) => Promise<V>,
@@ -219,17 +237,25 @@ async function changesOf<V>(
 ): Promise<{ now: V; next: Change | null }> {
   const noted = new Map<number, boolean>();
   const now = await decide(clockAt(nowMs, noted));
+  let next: Change | null = null;
+  let was = now;
   for (let i = 0; noted.size; i++) {
     const at = Math.min(...noted.keys());
-    const next = { at, leave: noted.get(at)! };
+    const leave = noted.get(at)!;
     noted.delete(at);
-    if (i >= MAX_MOMENTS) return { now, next };
+    if (next && at >= nowMs + LEAVE_GAP_MS) break;
+    if (i >= MAX_MOMENTS) return { now, next: next ?? { at, leave } };
     const more = new Map<number, boolean>();
     const then = await decide(clockAt(at, more)).catch(onlyNotPlanned(null));
-    if (then === null || !same(now, then)) return { now, next };
-    for (const [m, leave] of more) noted.set(m, noted.get(m) === true || leave);
+    if (then === null || !same(was, then)) {
+      if (next && !leave) return { now, next: { ...next, firm: at } };
+      next ??= { at, leave };
+      if (then === null || !leave) break;
+      was = then;
+    }
+    for (const [m, l] of more) noted.set(m, noted.get(m) === true || l);
   }
-  return { now, next: null };
+  return { now, next };
 }
 
 /**
