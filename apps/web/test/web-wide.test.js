@@ -35,6 +35,16 @@ test("Now's sky, the horizon and Settings' bands reach the page's edges beside t
   assert.match(css, /\.map-tab \{[^}]*inset: 0 0 calc\(var\(--tabbar-h\) \+ env\(safe-area-inset-bottom\)\) var\(--rail-w\)/);
 });
 
+test("Now's Today column ends where the card's does, not at the page's padding", () => {
+  assert.match(wideRule(read('app/app.css'), '.app-main.split > .now-side'), /grid-column: 2 \/ 3;/);
+});
+
+test('Settings keeps to the 560 column under 800, as Now and Stops do, and takes the window from 800', () => {
+  const css = read('app/app.css');
+  assert.match(css, /\n\.settings-tab \{ max-width: 560px; padding-bottom: 32px; \}/);
+  assert.match(wideRule(css, '.settings-tab'), /max-width: none;/);
+});
+
 test('every part of the app switches to two panes at the same width', () => {
   const queries = (src) => [...src.matchAll(/min-width: (\d+)px/g)].map((m) => Number(m[1]));
   for (const file of ['app/app.js', 'app/buses.js']) assert.deepEqual([...new Set(queries(read(file)))], [800], file);

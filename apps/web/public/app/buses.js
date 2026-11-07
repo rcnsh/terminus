@@ -378,6 +378,8 @@ let split = false;
  */
 function openFromHome(hash) {
   if (!split) return go(hash);
+  // Already open: nothing redraws, so the trail its Back reads stays as it is.
+  if (location.hash === hash) return;
   trail.length = 0;
   location.hash = hash;
 }

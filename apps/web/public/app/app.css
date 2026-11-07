@@ -628,7 +628,8 @@ button.svc-tag { cursor: pointer; }
 /* Settings (account/settings.js). Its title ("Settings", or a page's with a
    back arrow) takes the header's place, at the header's height, so the top
    of the screen stays put between tabs. */
-.settings-tab { padding-bottom: 32px; }
+/* In the 560 column under 800, as Now and Stops; its bands still run edge to edge. */
+.settings-tab { max-width: 560px; padding-bottom: 32px; }
 body.on-settings > .nav { display: none; }
 .settings-tab .settings { padding-top: 0; }
 /* The list starts at the very top here, so it sticks there: at 16px (as on the
@@ -885,13 +886,14 @@ body.app > .nav { max-width: 560px; }
   body.app.now-split > .nav { max-width: 1072px; }
   .app-main.split {
     position: relative; max-width: 1072px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px;
-    min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 16px + var(--side-h, 0px) + 32px);
+    min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 32px);
   }
   .app-main.split > * { grid-column: 1 / -1; }
   .app-main.split > :is(.go-later, .go-later-form) { grid-column: 1; }
   /* Whatever comes after the horizon in the card, however deep the card puts it. */
   .app-main.split .app-card :is(.horizon ~ *, :has(.horizon) ~ *) { max-width: calc(50% - 24px); }
-  .app-main.split > .now-side { grid-column: 2; position: absolute; inset: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 16px) 0 auto; display: grid; gap: 12px; align-content: start; }
+  /* Both lines named: an absolute item's auto end would be the padding edge, past the column. */
+  .app-main.split > .now-side { grid-column: 2 / 3; position: absolute; inset: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px) 0 auto; display: grid; gap: 12px; align-content: start; }
   .now-side .card-foot { margin-top: 4px; }
 }
 
