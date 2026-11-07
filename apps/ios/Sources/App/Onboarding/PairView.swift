@@ -55,7 +55,7 @@ struct PairView: View {
                     .accessibilityIdentifier("pair.scan")
                 }
             }
-            .padding(.horizontal, 20)
+            .column(gutter: 20)
             .padding(.bottom, 16)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -63,7 +63,7 @@ struct PairView: View {
             Button(model.pairing ? L("Pairing…") : L("Pair")) { model.pair(code) }
                 .buttonStyle(.primary)
                 .disabled(code.count < SignInCode.length || model.pairing)
-                .padding(.horizontal, 20)
+                .column(gutter: 20)
                 .padding(.vertical, 10)
                 .background(Color.page)
                 .accessibilityIdentifier("pair.pair")

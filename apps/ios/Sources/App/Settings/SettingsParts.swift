@@ -43,7 +43,7 @@ struct SettingsScaffold<Content: View>: View {
                         }
                     }
                 VStack(alignment: .leading, spacing: 22) { content }
-                    .padding(.horizontal, 16)
+                    .column()
                     .padding(.top, 14)
                     .padding(.bottom, 40)
             }
@@ -87,7 +87,7 @@ struct SettingsScaffold<Content: View>: View {
                 .font(back ? .title2.weight(.bold) : .largeTitle.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
         }
-        .padding(.horizontal, 16)
+        .column()
         .padding(.top, back ? 4 : 10)
     }
 }

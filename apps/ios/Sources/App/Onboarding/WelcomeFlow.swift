@@ -137,7 +137,7 @@ struct WelcomeView: View {
             .font(.subheadline.weight(.medium))
             .padding(.top, 6)
         }
-        .padding(.horizontal, 24)
+        .column(gutter: 24)
         .padding(.bottom, 12)
     }
 }

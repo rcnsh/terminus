@@ -8,6 +8,20 @@ import UIKit
 /// The rows a stop's sheet shows before "Show more", so the map stays in view.
 private let peekRows = 3
 
+/// How wide the map is before its sheet floats in a corner, and how wide the
+/// sheet is then: the web app's.
+let mapSheetFloatsFrom: CGFloat = 700
+let mapSheetWidth: CGFloat = 360
+
+extension EnvironmentValues {
+    /// The sheet floats in the map's corner (a wide screen), rounded all
+    /// round, rather than lying across its bottom.
+    @Entry var mapSheetFloats = false
+    /// How tall a floating sheet may be, footer and all: the map's height
+    /// under the pills and their status lines, less a margin.
+    @Entry var mapSheetRoom: CGFloat = 600
+}
+
 /// The frame a stop's sheet and a bus's share: a grab handle; a `lead` tile
 /// beside the title, `sub` and close; a line of `facts`; then `content` (a
 /// SectionBand and its rows), edge to edge; then the `footer`'s buttons under
@@ -44,7 +58,17 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
     /// How tall the header and rows are, for the sheet to be no taller.
     @State private var contentHeight: CGFloat = 200
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.mapSheetFloats) private var floats
+    @Environment(\.mapSheetRoom) private var room
+    /// How tall the footer's buttons are, for a floating sheet to fit its room.
+    @State private var footerHeight: CGFloat = 69
     @AccessibilityFocusState private var titleFocused: Bool
+
+    private var shape: UnevenRoundedRectangle {
+        let bottom: CGFloat = floats ? 20 : 0
+        return UnevenRoundedRectangle(
+            topLeadingRadius: 20, bottomLeadingRadius: bottom, bottomTrailingRadius: bottom, topTrailingRadius: 20, style: .continuous)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,26 +89,32 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
                 HStack(spacing: 8) { footer() }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.height + 1
+                    } action: {
+                        footerHeight = $0
+                    }
             }
         }
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous))
+        .clipShape(shape)
         // The shadow is the sheet's own, not cast by each band and row inside it.
         // Pulled up, it runs on below the sheet, so no gap opens under it.
         .background {
-            UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous)
+            shape
                 .fill(Color.surface)
-                .padding(.bottom, dragged < 0 ? -lift : 0)
+                .padding(.bottom, dragged < 0 && !floats ? -lift : 0)
                 .shadow(color: .black.opacity(0.16), radius: 12, y: -2)
         }
         .overlay(
-            UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20, style: .continuous).strokeBorder(Color.line, lineWidth: 0.5)
+            shape.strokeBorder(Color.line, lineWidth: 0.5)
         )
         .onGeometryChange(for: CGFloat.self) {
             $0.size.height
         } action: {
             sheetHeight = $0
         }
-        .offset(y: Fling.rubber(dragged, limit: lift))
+        // Floating, it has no room above it to lift into.
+        .offset(y: floats ? max(0, dragged) : Fling.rubber(dragged, limit: lift))
         // VoiceOver moves to its title when it opens, or shows another stop or bus.
         // Back from another tab mid-fling, it's in place again rather than parked off the screen.
         .onAppear {
@@ -95,9 +125,12 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
         .onDisappear { gone = true }
     }
 
-    /// No taller than about half the screen, so the map stays in view above it.
+    /// Across the bottom, no taller than about half the window, so the map
+    /// stays in view above it; floating beside the map, the room it has
+    /// under the pills, less the footer.
     private var maxHeight: CGFloat {
-        let h = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 800
+        if floats { return max(80, room - (footerShown ? footerHeight : 0)) }
+        let h = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.bounds.height ?? 800
         return min(460, h * 0.5)
     }
 

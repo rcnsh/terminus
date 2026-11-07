@@ -35,7 +35,7 @@ struct BusLinePage: View {
                         .id("top")
                         // One stack, so the padding goes round the whole of it and not round each part.
                         VStack(alignment: .leading, spacing: 0) { content(line, color, now) }
-                            .padding(.horizontal, 16)
+                            .column()
                             .padding(.bottom, 24)
                     }
                 }
@@ -78,7 +78,7 @@ struct BusLinePage: View {
         // The line drawn from the campus data while it comes: only its summary is a bar.
         let waiting = line == nil && !model.lineFailed.contains(key) && LineSkeleton.stops(svc, campus: model.campus) != nil
         return SkyHeading(svc: svc, line: line, color: color, waiting: waiting)
-            .padding(.horizontal, 16)
+            .column()
             .padding(.top, 8)
     }
 

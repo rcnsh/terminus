@@ -22,7 +22,7 @@ struct SignInView: View {
                     Text(model.title)
                         .font(.largeTitle.bold())
                         .accessibilityAddTraits(.isHeader)
-                        .padding(.horizontal, 20)
+                        .column(gutter: 20)
                         .padding(.top, 8)
                 }
                 VStack(alignment: .leading, spacing: 22) {
@@ -32,7 +32,7 @@ struct SignInView: View {
                     case .choose(let email): ChooseStep(model: model, email: email, done: done)
                     }
                 }
-                .padding(.horizontal, 16)
+                .column()
                 .padding(.top, 20)
                 .padding(.bottom, 32)
                 .animation(.default, value: model.step)

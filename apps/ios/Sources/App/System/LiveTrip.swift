@@ -22,6 +22,11 @@ import UIKit
 
     static var allowed: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
+    /// Whether this device has Live Activities at all: an iPad has none, so
+    /// its Settings don't offer one (`allowed` is false there, and also on a
+    /// phone where they're turned off, which Settings still offers).
+    static var supported: Bool { UIDevice.current.userInterfaceIdiom == .phone }
+
     private static var d: UserDefaults { Shared.defaults }
 
     /// The activity for `a`: started, updated or ended. One step at a time:
