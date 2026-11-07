@@ -58,10 +58,17 @@ struct NowView: View {
                             let shows = NowShows.of(app, now: ServerClock.now)
                             VStack(alignment: .leading, spacing: 0) {
                                 Room(height: shows.room, phase: phase, scrolled: scrolled)
-                                // Wide, the head tops the card's half; alone, the card is in the page's column.
-                                NowHead(shows: shows, now: ServerClock.now)
-                                    .frame(maxWidth: beside ? (wideColumnWidth - 32 - Self.halvesGap) / 2 : nil, alignment: .leading)
-                                    .column(width: beside ? wideColumnWidth : columnWidth)
+                                if beside {
+                                    // The head tops the card's half, as wide as the half under it.
+                                    HStack(alignment: .top, spacing: Self.halvesGap) {
+                                        NowHead(shows: shows, now: ServerClock.now).frame(maxWidth: .infinity, alignment: .leading)
+                                        Color.clear.frame(maxWidth: .infinity).frame(height: 0)
+                                    }
+                                    .column(width: wideColumnWidth)
+                                } else {
+                                    NowHead(shows: shows, now: ServerClock.now)
+                                        .column()
+                                }
                                 Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
                             }
                         }
