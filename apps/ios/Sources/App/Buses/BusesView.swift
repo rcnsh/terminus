@@ -18,7 +18,7 @@ struct BusesView: View {
                 // The home beside the page open from it; the pages opened from that push in its pane.
                 ListDetail {
                     // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
-                    NavigationStack { BusesHome() }
+                    NavigationStack { BusesHome().listPaneRoot() }
                 } detail: {
                     NavigationStack(path: pagesOver) {
                         Group {

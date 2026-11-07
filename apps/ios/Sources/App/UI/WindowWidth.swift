@@ -79,6 +79,13 @@ struct ListDetail<List: View, Detail: View>: View {
     }
 }
 
+extension View {
+    /// The list pane's root, inside its navigation stack. The stack hands
+    /// it the whole window's trailing inset (the Duo's status bar and tab
+    /// rail), though the pane is nowhere near that edge.
+    func listPaneRoot() -> some View { ignoresSafeArea(.container, edges: .trailing) }
+}
+
 /// A wide detail pane with nothing open: its own band of the sky at the
 /// top, so the sky reads across the window, and what to do, centred, muted.
 struct PaneEmpty: View {
