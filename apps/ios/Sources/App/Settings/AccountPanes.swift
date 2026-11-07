@@ -69,7 +69,7 @@ struct SettingsDevicesPane: View {
                     .horizontal, 4)
             }
             .sheet(isPresented: Binding(get: { model.pairCode != nil }, set: { if !$0 { model.closePairCode() } })) {
-                if let code = model.pairCode { SettingsPairCodeSheet(code: code) { model.closePairCode() } }
+                if let code = model.pairCode { SettingsPairCodeSheet(code: code) { model.closePairCode() }.centredSheet() }
             }
             .alert(
                 removing.map { L("Remove %@?", $0.name ?? settingsPlatformName($0.platform) ?? L("this device")) } ?? "",

@@ -48,7 +48,7 @@ struct SettingsView: View {
         .onChange(of: app.session) { _, _ in model.reset() }
         // "Add your email": the email sign-in, which keeps this phone's setup.
         .onReceive(NotificationCenter.default.publisher(for: .settingsSignIn)) { _ in signingIn = true }
-        .sheet(isPresented: $signingIn, onDismiss: { Task { await model.refresh() } }) { SignInSheet() }
+        .sheet(isPresented: $signingIn, onDismiss: { Task { await model.refresh() } }) { SignInSheet().centredSheet() }
         // A NUSMods link shared into the app: straight to Timetable, to import it.
         .onReceive(NotificationCenter.default.publisher(for: .settingsImportTimetable)) { n in
             guard let link = n.object as? String else { return }
@@ -71,6 +71,8 @@ private struct SettingsList: View {
     @Environment(AppModel.self) private var app
     @Environment(Prefs.self) private var prefs
     @Environment(\.dynamicTypeSize) private var type
+    /// In the 360 list pane, a row's value goes under its name, so nothing is cut off.
+    @Environment(\.listPane) private var listPane
 
     var body: some View {
         SettingsScaffold(title: L("Settings"), back: false) {
@@ -152,7 +154,7 @@ private struct SettingsList: View {
                     .frame(width: 32, height: 32)
                     .background(Color.brandSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .accessibilityHidden(true)
-                if type.isAccessibilitySize {
+                if type.isAccessibilitySize || listPane {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(page.title).foregroundStyle(Color.ink)
                         said

@@ -25,7 +25,7 @@ struct BusesView: View {
                             if let first = model.path.first {
                                 page(first).environment(\.paneRoot, true)
                             } else {
-                                PaneEmpty(text: L("Choose a stop or a service."), band: model.homeBand)
+                                PaneEmpty(text: L("Choose a stop or a service."))
                             }
                         }
                         .id(model.path.first)
@@ -169,12 +169,6 @@ struct BusesHome: View {
                     .column()
                 }
                 .busBandEnd()
-                // Wide, the empty pane beside it draws its band as tall, so the horizon runs straight across.
-                .onGeometryChange(for: CGFloat.self) {
-                    $0.size.height
-                } action: {
-                    if !searching { model.homeBand = $0 }
-                }
                 if searching {
                     BusSearchResults(query: query) { hit in
                         query = ""
@@ -206,7 +200,7 @@ struct BusesHome: View {
         // The pinned stop showing and its neighbours, at most every 15 s (the
         // API's own cache), while the home is on screen: none while searching or
         // with a page over it (a phone); wide, beside the open page, it's still in view.
-        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins):\(model.pinFocus ?? "")") {
+        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins):\(model.pinFocus ?? ""):\(model.stopBeside ?? "")") {
             if !searching { await model.refreshPinned() }
         }
         // The lines' buses out, from when the list is first on screen, at most once a minute
@@ -353,6 +347,8 @@ private struct PinnedPager: View {
                     svc in
                     model.open(.line(svc: svc, from: code))
                 }
+                // Wide, open beside the home.
+                .chosenCard(model.chosen == .stop(code), radius: 14)
                 // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                 if cells.joined().contains(where: { $0.mark == "~" }) {
                     Text(L("~ is a guess from the timetable, not a live time."))
@@ -487,6 +483,7 @@ private struct ServiceList: View {
     /// Set once the list is on screen.
     @Binding var seen: Bool
     @Environment(BusesModel.self) private var model
+    @Environment(\.listPane) private var listPane
     /// The widest badge, so every one is as wide.
     @State private var badge: CGFloat = 0
 
@@ -563,14 +560,40 @@ private struct ServiceList: View {
         .skeletonSpoken()
     }
 
-    private func row(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
+    @ViewBuilder private func row(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
+        if listPane {
+            paneRow(svc, color: color, name: name, via: via, count: count)
+        } else {
+            phoneRow(svc, color: color, name: name, via: via, count: count)
+        }
+    }
+
+    private func badge(_ svc: String, _ color: String?) -> some View {
+        BusChip(svc: svc, color: color, width: badge)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                badge = max(badge, $0)
+            }
+    }
+
+    @ViewBuilder private func out(_ count: LineCount?) -> some View {
+        if let count {
+            HStack(spacing: 6) {
+                if BusLines.showsDot(count) { BusLiveDot() }
+                Text(verbatim: count.outText).font(.subheadline).foregroundStyle(Color.muted)
+            }
+            .fixedSize()
+        }
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
+    }
+
+    private func phoneRow(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
         HStack(spacing: 12) {
-            BusChip(svc: svc, color: color, width: badge)
-                .onGeometryChange(for: CGFloat.self) {
-                    $0.size.width
-                } action: {
-                    badge = max(badge, $0)
-                }
+            badge(svc, color)
             VStack(alignment: .leading, spacing: 2) {
                 if let name { Text(verbatim: name).font(.body.weight(.semibold)).foregroundStyle(Color.ink) }
                 if let via { Text(verbatim: via).font(.subheadline).foregroundStyle(Color.muted) }
@@ -578,16 +601,34 @@ private struct ServiceList: View {
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            if let count {
-                HStack(spacing: 6) {
-                    if BusLines.showsDot(count) { BusLiveDot() }
-                    Text(verbatim: count.outText).font(.subheadline).foregroundStyle(Color.muted)
-                }
-                .fixedSize()
-            }
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
+            out(count)
+            chevron
         }
         .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 10)
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
+    }
+
+    /// In the 360 list pane: the name across the row on a line of its own,
+    /// the stops it passes under it beside the buses out, so neither wraps much.
+    private func paneRow(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
+        HStack(spacing: 10) {
+            badge(svc, color)
+            VStack(alignment: .leading, spacing: 2) {
+                if let name { Text(verbatim: name).font(.body.weight(.semibold)).foregroundStyle(Color.ink) }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let via { Text(verbatim: via).font(.subheadline).foregroundStyle(Color.muted) }
+                    Spacer(minLength: 0)
+                    out(count)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            chevron
+        }
+        .padding(.leading, 12)
         .padding(.trailing, 10)
         .padding(.vertical, 10)
         .frame(minHeight: 56)
