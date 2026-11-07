@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -44,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,6 +68,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -160,8 +165,10 @@ internal fun SettingsScreen(
     // A NUSMods link shared into the app: straight to Timetable, to import it.
     LaunchedEffect(state.sharedLink) { if (state.sharedLink != null) open = SettingsPage.Timetable }
     LaunchedEffect(Unit) { toList.collect { open = null } }
-    // A page's own back is PageStack's, which a back gesture can seek; the list's leaves Settings.
-    BackHandler(enabled = open == null, onBack = onClose)
+    // Wide, the list and a page side by side, the first page in the list open until another is.
+    val wide = windowWidth() == Width.Wide
+    // A page's own back is PageStack's, which a back gesture can seek; the list's leaves Settings, as does the wide layout's.
+    BackHandler(enabled = wide || open == null, onBack = onClose)
 
     // Edge to edge, the insets inside, so the list's sky can reach the top.
     val top = insets.calculateTopPadding()
@@ -174,29 +181,56 @@ internal fun SettingsScreen(
         notices?.showSnackbar(Notice(said, duration = SnackbarDuration.Long))
         account.clearMessage()
     }
+    val page: @Composable (SettingsPage, Boolean) -> Unit = { page, back ->
+        SettingsPagePane(page, top, bottom, back = if (back) ({ open = null }) else null) {
+            SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
+        }
+    }
+    if (wide) {
+        // The account's tile heads the list.
+        val shown = open ?: SettingsPage.Account
+        Row(Modifier.fillMaxSize()) {
+            Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) { SettingsList(state, main, top, bottom, chosen = shown) { open = it } }
+            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Box(Modifier.weight(1f).fillMaxHeight()) { key(shown) { page(shown, false) } }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize()) {
-        PageStack(listOfNotNull(open), onBack = { open = null }, Modifier.weight(1f)) { page ->
-            if (page == null) {
-                SettingsList(state, main, top, bottom) { open = it }
-            } else {
-                Column(Modifier.fillMaxSize().padding(bottom = bottom)) {
-                    // The title in a slim band of the list's sky, scrolling away with the page; the page itself plain.
-                    val phase = skyPhase()
-                    val scroll = rememberScrollState()
-                    Box(Modifier.weight(1f)) {
-                        Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                            SkyBand(phase, top) {
-                                BackHeader(stringResource(page.title)) { open = null }
-                            }
-                            Column(Modifier.padding(horizontal = 16.dp)) {
-                                SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
-                                Spacer(Modifier.height(32.dp))
-                            }
+        PageStack(listOfNotNull(open), onBack = { open = null }, Modifier.weight(1f)) { shown ->
+            if (shown == null) SettingsList(state, main, top, bottom) { open = it } else page(shown, true)
+        }
+    }
+}
+
+/**
+ * One page of Settings, [content] under its title in a slim band of the list's sky, scrolling away with the page; the page itself plain, in
+ * the column. With [back], a back arrow before the title; wide, the page is beside the list and has none.
+ */
+@Composable
+private fun SettingsPagePane(page: SettingsPage, top: Dp, bottom: Dp, back: (() -> Unit)?, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(bottom = bottom)) {
+        val phase = skyPhase()
+        val scroll = rememberScrollState()
+        Box(Modifier.weight(1f)) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                SkyBand(phase, top) {
+                    if (back != null) BackHeader(stringResource(page.title), back)
+                    else
+                        TabHeader {
+                            Text(
+                                stringResource(page.title),
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.semantics { heading() },
+                            )
                         }
-                        StatusStrip(phase, top, scroll)
-                    }
+                }
+                Column(Modifier.column().padding(horizontal = 16.dp)) {
+                    content()
+                    Spacer(Modifier.height(32.dp))
                 }
             }
+            StatusStrip(phase, top, scroll)
         }
     }
 }
@@ -208,7 +242,14 @@ internal fun SettingsScreen(
  * as a page does. [top] and [bottom]: the status bar's and the tab bar's room.
  */
 @Composable
-private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bottom: Dp, onOpen: (SettingsPage) -> Unit) {
+private fun SettingsList(
+    state: AccountState,
+    main: MainViewModel,
+    top: Dp,
+    bottom: Dp,
+    chosen: SettingsPage? = null,
+    onOpen: (SettingsPage) -> Unit,
+) {
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
     val phase = skyPhase()
@@ -218,10 +259,10 @@ private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bott
             SkyBand(phase, top) {
                 TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
             }
-            Column(Modifier.padding(horizontal = 16.dp)) {
+            Column(Modifier.column().padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(12.dp))
-                AccountTile(state, ui, onOpen)
-                SettingsGround(state, ui, profile, onOpen)
+                AccountTile(state, ui, chosen == SettingsPage.Account, onOpen)
+                SettingsGround(state, ui, profile, chosen, onOpen)
             }
         }
         StatusStrip(phase, top, scroll)
@@ -230,10 +271,10 @@ private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bott
 
 /** Who you are: your email (or that you're not signed in) and your devices, opening Account. */
 @Composable
-private fun AccountTile(state: AccountState, ui: UiState, onOpen: (SettingsPage) -> Unit) {
+private fun AccountTile(state: AccountState, ui: UiState, chosen: Boolean, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
-    LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth()) {
+    LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth().semantics { selected = chosen }, chosen = chosen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val email = state.email
             if (email != null) {
@@ -286,7 +327,7 @@ private val GROUPS =
 
 /** Under the horizon: the groups of pages, and About. */
 @Composable
-private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, onOpen: (SettingsPage) -> Unit) {
+private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, chosen: SettingsPage?, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
     // What isn't set yet says what to do, in the accent: no home stop, no
@@ -304,8 +345,12 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
             Group(null) {
                 group.forEachIndexed { i, (page, icon) ->
                     if (i > 0) RowDivider()
+                    // Wide, the page open beside the list is marked as chosen.
+                    val on = page == chosen
                     Row(
                         Modifier.fillMaxWidth()
+                            .then(if (on) Modifier.background(c.secondaryContainer) else Modifier)
+                            .semantics { selected = on }
                             .clickable(role = Role.Button) { onOpen(page) }
                             .heightIn(min = 56.dp)
                             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -354,7 +399,14 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     }
     // About, as a link under the groups.
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
-        TextButton(onClick = { onOpen(SettingsPage.About) }) { Text(stringResource(R.string.about)) }
+        val on = chosen == SettingsPage.About
+        TextButton(
+            onClick = { onOpen(SettingsPage.About) },
+            colors = if (on) ButtonDefaults.textButtonColors(containerColor = c.secondaryContainer) else ButtonDefaults.textButtonColors(),
+            modifier = Modifier.semantics { selected = on },
+        ) {
+            Text(stringResource(R.string.about))
+        }
     }
     Spacer(Modifier.height(16.dp))
 }
