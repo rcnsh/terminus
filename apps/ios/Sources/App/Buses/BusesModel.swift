@@ -58,8 +58,13 @@ final class BusesModel {
     /// Wide: the home and its page side by side, so the home opens a page in place of the one open.
     var split = false
 
-    /// How tall the home's band of sky is, for the empty pane beside it.
-    var homeBand: CGFloat?
+    /// Wide, a stop whose page shows alone beside the home, its own side: its
+    /// page's refresh asks for it and fills its pinned card too, so the home's
+    /// pinned refresh leaves it out and each stop is asked for once per 15 s.
+    var stopBeside: String? {
+        guard split, path.count == 1, case .stop(let code) = path[0], pageBoard(code) == code else { return nil }
+        return code
+    }
 
     /// The page open beside the home, its row marked as chosen; none when the home has the screen.
     var chosen: BusRoute? { split ? path.first : nil }
@@ -244,6 +249,7 @@ final class BusesModel {
                 answeredAt[code] = Date()
                 boards[code] = b
                 failed.remove(code)
+                if code == stopBeside { fillPinned(code, from: b) }
             } catch {
                 guard current(s) else { return }
                 if refused(error, token) { return }
@@ -273,7 +279,7 @@ final class BusesModel {
     /// Walked from where you are only when the phone already may say.
     func refreshPinned(force: Bool = false) async {
         guard let token else { return }
-        let window = BusPinned.window(shownPins, selected: pinSelected)
+        let window = BusPinned.window(shownPins, selected: pinSelected).filter { $0 != stopBeside || pinned[$0] == nil }
         let codes = BusPinned.toFetch(window, now: Date(), gap: Self.minGapS, force: force) { asked["pin:" + $0] }
         guard !codes.isEmpty else { return }
         let now = Date()
@@ -324,6 +330,29 @@ final class BusesModel {
     }
 
     /// A pinned stop as it stands at `now`, its times counted down since it came.
+    /// A pinned stop's card, from its page's board: the same buses, fresher.
+    /// The board has fewer buses after the next than the card shows (/me/stops
+    /// adds a guess from the timetable): those stay, counted down.
+    private func fillPinned(_ code: String, from board: Board) {
+        guard var stop = pinned[code] else { return }
+        let now = ServerClock.now
+        let gone = Int(now.timeIntervalSince(pinnedGot[code] ?? now))
+        stop.board = board.rows.map { row in
+            guard let old = stop.board.first(where: { $0.svc == row.svc }), old.later.count > row.later.count else { return row }
+            var r = row
+            r.later += old.later[row.later.count...].map {
+                var l = $0
+                l.etaS -= gone
+                return l
+            }.filter { $0.etaS > (r.later.last?.etaS ?? r.etaS ?? 0) }
+            return r
+        }
+        pinned[code] = stop
+        pinnedGot[code] = now
+        asked["pin:" + code] = asked[code]
+        answeredAt["pin:" + code] = answeredAt[code]
+    }
+
     func pinnedStop(_ code: String, now: Date) -> NearbyStop? {
         pinned[code]?.aged(got: pinnedGot[code], now: now)
     }
@@ -407,7 +436,9 @@ final class BusesModel {
     /// When the timed refresh brings new times for `key`: at its next run, or
     /// the one after when that's too soon after `key` was last asked.
     private func nextUpdate(_ key: String) -> Date? {
-        guard let at = key.hasPrefix("pin:") ? nextPinsAt : nextTimedAt, at > Date() else { return nil }
+        // A pinned stop open beside the home is refreshed by its page's loop.
+        let pins = key.hasPrefix("pin:") && key != stopBeside.map { "pin:" + $0 }
+        guard let at = pins ? nextPinsAt : nextTimedAt, at > Date() else { return nil }
         let last = asked[key] ?? .distantPast
         return at.timeIntervalSince(last) < Self.minGapS ? at.addingTimeInterval(BusTimes.refreshS) : at
     }
@@ -449,6 +480,7 @@ final class BusesModel {
         await loadProfile()
         if pinsState == .failed { return .failed }
         guard let code = pinFocus else { return .upToDate(nextInS: nil) }
+        if code == stopBeside { return await pulled("pin:" + code) { await refreshPage(code, force: true) } }
         return await pulled("pin:" + code) { await refreshPinned(force: true) }
     }
 
