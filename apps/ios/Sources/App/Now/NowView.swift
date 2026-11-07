@@ -31,8 +31,8 @@ struct NowView: View {
     /// Today has something in it: an entry, or one just removed with its Undo.
     private var hasDay: Bool { (app.day.map { !$0.items.isEmpty } ?? false) || app.removed != nil }
 
-    /// The sky's words: the wide column when wide, else the page's.
-    private var skyWidth: CGFloat { width.panes ? wideColumnWidth : columnWidth }
+    /// The sky's words: the wide column beside Today; else, the card alone, the page's.
+    private var skyWidth: CGFloat { beside ? wideColumnWidth : columnWidth }
 
     var body: some View {
         let phase = sky.phase
@@ -161,7 +161,7 @@ struct NowView: View {
                 if addEmail { (addEmail, signingIn) = (false, true) }
             }
         ) { ReportSheet(addEmail: $addEmail) }
-        .sheet(isPresented: $signingIn) { SignInSheet() }
+        .sheet(isPresented: $signingIn) { SignInSheet().centredSheet() }
         .sheet(isPresented: $goingLater) { GoLaterSheet() }
     }
 
