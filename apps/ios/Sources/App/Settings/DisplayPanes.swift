@@ -24,15 +24,18 @@ struct SettingsNotificationsPane: View {
                 label: L("Notify me when to leave for class"), sub: L("A reminder 5 minutes before you need to leave"),
                 isOn: Binding(get: { leave }, set: { setLeave($0) }), id: "settings.leaveAlerts")
         }
-        SettingsGroup(
-            title: L("During a trip"), hint: L("Your bus and a countdown on the Lock Screen and in the Dynamic Island, until you arrive.")
-        ) {
-            SettingSwitch(
-                label: L("Live Activity during trips"), sub: L("The next bus and a countdown, until you arrive"),
-                isOn: Binding(get: { live }, set: { setLive($0) }), id: "settings.liveActivity")
-        }
         .onAppear(perform: check)
         .onChange(of: phase) { _, p in if p == .active { check() } }
+        if LiveTrip.supported {
+            SettingsGroup(
+                title: L("During a trip"),
+                hint: L("Your bus and a countdown on the Lock Screen and in the Dynamic Island, until you arrive.")
+            ) {
+                SettingSwitch(
+                    label: L("Live Activity during trips"), sub: L("The next bus and a countdown, until you arrive"),
+                    isOn: Binding(get: { live }, set: { setLive($0) }), id: "settings.liveActivity")
+            }
+        }
     }
 
     private func setLeave(_ on: Bool) {

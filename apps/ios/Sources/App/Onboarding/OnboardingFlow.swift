@@ -22,6 +22,9 @@ struct OnboardingFlow: View {
             }
             .padding(.leading, 8)
             .padding(.trailing, 16)
+            // Over the step's column, as wide as it is.
+            .frame(maxWidth: columnWidth)
+            .frame(maxWidth: .infinity)
             .padding(.top, 12)
             .padding(.bottom, 4)
             if model.profile == nil {
@@ -65,7 +68,7 @@ struct OnboardingFlow: View {
             }
             .shimmering()
             .skeletonSpoken()
-            .padding(.horizontal, 20)
+            .column(gutter: 20)
             .padding(.top, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -169,8 +172,7 @@ struct SetupPage<Content: View, Buttons: View>: View {
                             .accessibilityIdentifier("setup.message")
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
+                .column(gutter: 20)
                 .padding(.top, 14)
                 .padding(.bottom, 24)
             }
@@ -179,7 +181,7 @@ struct SetupPage<Content: View, Buttons: View>: View {
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             buttons
-                .padding(.horizontal, 20)
+                .column(gutter: 20)
                 .padding(.top, 10)
                 .padding(.bottom, 8)
                 .background(Color.page)

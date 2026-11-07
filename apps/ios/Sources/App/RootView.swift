@@ -62,6 +62,12 @@ struct MainTabs: View {
                 .tabItem { Label(L("Settings"), systemImage: "gearshape") }
                 .tag(Tab.settings)
         }
+        .onGeometryChange(for: Bool.self) {
+            // One side only: a landscape iPhone's notch and corners inset both.
+            $0.safeAreaInsets.top == 0 && ($0.safeAreaInsets.leading == 0) != ($0.safeAreaInsets.trailing == 0)
+        } action: {
+            StatusBar.beside = $0
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { n in
             if let t = n.object as? Tab { app.tab = t }
         }

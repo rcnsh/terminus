@@ -38,7 +38,20 @@ struct SectionLabel: View {
     }
 }
 
+/// How wide the page's words and cards go, gutters included: the web app's
+/// column. On a wider screen (an iPad, an iPhone Duo open) they sit in the
+/// middle and the sky goes on to the edges.
+let columnWidth: CGFloat = 560
+
 extension View {
+    /// The page's column: `gutter` points in from each side, centred and no
+    /// wider than `columnWidth`, its content to the leading edge.
+    func column(gutter: CGFloat = 16) -> some View {
+        padding(.horizontal, gutter)
+            .frame(maxWidth: columnWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+    }
+
     /// A card on the page: the surface colour, a hairline and rounded corners.
     func cardStyle(padding: CGFloat = 16, radius: CGFloat = 18) -> some View {
         self.padding(padding)

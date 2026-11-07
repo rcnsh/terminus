@@ -18,6 +18,10 @@ struct MapTab: View {
     /// How much of the map the pills and the sheet cover, for the camera.
     @State private var topCover: CGFloat = 0
     @State private var sheetCover: CGFloat = 0
+    /// Wide enough for the sheet to float in the corner rather than lie across the bottom.
+    @State private var wide = false
+    /// Where the map's room ends at the bottom, in the window: a floating sheet's foot is 16 points above it.
+    @State private var bottom: CGFloat = 800
     /// Location was refused: "Show where you are" offers Settings.
     @State private var locationOff = false
 
@@ -30,7 +34,7 @@ struct MapTab: View {
             if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: dark, still: reduceMotion,
-                    cover: UIEdgeInsets(top: topCover, left: 0, bottom: sheetCover, right: 0), shown: active,
+                    cover: cover, shown: active,
                     drawn: .init(
                         selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet,
                         me: map.me,
@@ -56,13 +60,30 @@ struct MapTab: View {
                 top(campus)
             }
         }
+        .onGeometryChange(for: Bool.self) {
+            $0.size.width >= mapSheetFloatsFrom
+        } action: {
+            wide = $0
+        }
+        .onGeometryChange(for: CGFloat.self) {
+            $0.frame(in: .global).maxY
+        } action: {
+            bottom = $0
+        }
         .overlay(alignment: .bottomTrailing) {
-            if map.campus != nil, map.sheet == nil {
+            // Under a sheet across the bottom they'd be covered; beside a floating one they stay.
+            if map.campus != nil, map.sheet == nil || wide {
                 controls.padding(.trailing, 12).padding(.bottom, 16)
             }
         }
-        .overlay(alignment: .bottom) {
-            if let campus = map.campus { sheet(campus) }
+        .overlay(alignment: wide ? .bottomLeading : .bottom) {
+            if let campus = map.campus {
+                sheet(campus)
+                    .frame(width: wide ? mapSheetWidth : nil)
+                    .padding(wide ? 16 : 0)
+                    .environment(\.mapSheetFloats, wide)
+                    .environment(\.mapSheetRoom, bottom - topCover - 32)
+            }
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: map.sheet == nil)
         .onAppear { onScreen = true }
@@ -110,6 +131,13 @@ struct MapTab: View {
         #if DEBUG
             .onAppear { DevMap.start(map) }
         #endif
+    }
+
+    /// What the pills and the sheet hide of the map, so a stop it centres on
+    /// is in view: a floating sheet hides its left, one across the bottom its foot.
+    private var cover: UIEdgeInsets {
+        guard wide else { return UIEdgeInsets(top: topCover, left: 0, bottom: sheetCover, right: 0) }
+        return UIEdgeInsets(top: topCover, left: sheetCover > 0 ? mapSheetWidth + 16 : 0, bottom: 0, right: 0)
     }
 
     // MARK: over the map
@@ -180,7 +208,8 @@ struct MapTab: View {
                 EmptyView()
             }
         }
-        .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+        // Floating, it stops short of the bottom: it fades as it slides, so none of it is left to vanish at the end.
+        .transition(reduceMotion ? .opacity : wide ? .move(edge: .bottom).combined(with: .opacity) : .move(edge: .bottom))
         .onGeometryChange(for: CGFloat.self) {
             $0.size.height
         } action: {

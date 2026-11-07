@@ -34,7 +34,8 @@ struct CampusMapView: UIViewRepresentable {
     let dark: Bool
     /// Reduce Motion: buses and the camera jump rather than glide.
     let still: Bool
-    /// How much of the map the pills (top) and the sheet (bottom) cover, in points.
+    /// How much of the map the pills (top) and the sheet (bottom, or left
+    /// where it floats beside the map) cover, in points.
     let cover: UIEdgeInsets
     /// The tab is on screen and the app active: the buses' slides are drawn only then.
     let shown: Bool
@@ -91,6 +92,8 @@ struct CampusMapView: UIViewRepresentable {
         if c.cover != cover {
             c.cover = cover
             c.coverChanged()
+            // Beside a sheet floating on the left, so the sheet doesn't hide it.
+            view.attributionButtonMargins = CGPoint(x: 8 + cover.left, y: 8)
         }
         if c.dark != dark {
             c.dark = dark
@@ -425,9 +428,9 @@ struct CampusMapView: UIViewRepresentable {
                 sw: CLLocationCoordinate2D(latitude: b[1], longitude: b[0]), ne: CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
         }
 
-        /// Room round what's framed: the pills along the top, the sheet at the bottom.
+        /// Room round what's framed: the pills along the top, the sheet at the bottom or the left.
         private func padding(_ side: CGFloat, _ more: CGFloat = 16) -> UIEdgeInsets {
-            UIEdgeInsets(top: cover.top + more, left: side, bottom: cover.bottom + more, right: side)
+            UIEdgeInsets(top: cover.top + more, left: cover.left + side, bottom: cover.bottom + more, right: side)
         }
 
         /// First view: your nearest stop when you're on campus, otherwise the
@@ -501,7 +504,7 @@ struct CampusMapView: UIViewRepresentable {
             let p = view.convert(CLLocationCoordinate2D(latitude: spot.lat, longitude: spot.lon), toPointTo: view)
             let top = cover.top + 24
             let bottom = view.bounds.height - cover.bottom - 24
-            guard bottom > top, p.y < top || p.y > bottom || p.x < 0 || p.x > view.bounds.width else { return }
+            guard bottom > top, p.y < top || p.y > bottom || p.x < cover.left || p.x > view.bounds.width else { return }
             centre(on: spot)
         }
 
@@ -510,12 +513,15 @@ struct CampusMapView: UIViewRepresentable {
         private func centre(on spot: MapModel.Spot, animated: Bool = true) {
             guard let view else { return }
             let zoom = max(view.zoomLevel, 17)
-            // How far above the map's middle the uncovered part's middle is, in
-            // points, then in degrees of latitude at that zoom (the world is 512
-            // points round at zoom 0, its north-south scale cos(lat) of that).
+            // How far above and right of the map's middle the uncovered part's
+            // middle is, in points, then in degrees at that zoom (the world is
+            // 512 points round at zoom 0, its north-south scale cos(lat) of that).
             let up = Double(cover.bottom - cover.top) / 2
-            let lat = spot.lat - up * 360 / (512 * pow(2, zoom)) * cos(spot.lat * .pi / 180)
-            view.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: spot.lon), zoomLevel: zoom, animated: animated && !still)
+            let right = Double(cover.left - cover.right) / 2
+            let degrees = 360 / (512 * pow(2, zoom))
+            let lat = spot.lat - up * degrees * cos(spot.lat * .pi / 180)
+            let lon = spot.lon - right * degrees
+            view.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: lon), zoomLevel: zoom, animated: animated && !still)
         }
 
         // MARK: taps

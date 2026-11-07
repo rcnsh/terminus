@@ -134,7 +134,7 @@ struct BusesHome: View {
                             HomeTitle().padding(.top, 8)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .column()
                 }
                 .busBandEnd()
                 if searching {
@@ -151,7 +151,7 @@ struct BusesHome: View {
                         PinnedStops()
                         ServiceList(seen: $linesSeen)
                     }
-                    .padding(.horizontal, 16)
+                    .column()
                     .padding(.bottom, 24)
                 }
             }
@@ -463,8 +463,8 @@ private struct ServiceList: View {
         .padding(.top, 28)
         .padding(.bottom, 8)
         if let campus = model.campus {
-            // The screen's height, to tell when the list has come up onto it.
-            let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 800
+            // The window's height, to tell when the list has come up onto it.
+            let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.bounds.height ?? 800
             VStack(spacing: 0) {
                 ForEach(Array(campus.services.enumerated()), id: \.element) { i, svc in
                     if i > 0 { Divider().overlay(Color.line) }
@@ -648,9 +648,8 @@ private struct BusSearchResults: View {
                 Divider().overlay(Color.line)
             }
         }
-        .padding(.horizontal, 16)
+        .column()
         .padding(.bottom, 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private func row(_ hit: BusHit, _ campus: BusCampus?) -> some View {
@@ -830,11 +829,11 @@ struct BusStopPage: View {
                 SkyBand(moonLow: true) {
                     VStack(alignment: .leading, spacing: 0) {
                         PullRoom(below: 8)
-                        BusStopHeader(code: code).padding(.horizontal, 16)
+                        BusStopHeader(code: code).column()
                     }
                 }
                 .busBandEnd()
-                BusStopBody(code: code).padding(.horizontal, 16).padding(.bottom, 24)
+                BusStopBody(code: code).column().padding(.bottom, 24)
             }
         }
         .background(Color.page)
