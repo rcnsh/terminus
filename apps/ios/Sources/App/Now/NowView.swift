@@ -12,6 +12,7 @@ struct NowView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.windowWidth) private var width
     private let sky = SkyClock.shared
     private let locator = Locator.shared
     @State private var searching = false
@@ -23,6 +24,15 @@ struct NowView: View {
     @State private var signingIn = false
     @State private var goingLater = false
     @State private var pull = SkyPull()
+
+    /// Wide, with a day to show: the card's steps in the left half, Today in the right.
+    private var beside: Bool { width.panes && hasDay }
+
+    /// Today has something in it: an entry, or one just removed with its Undo.
+    private var hasDay: Bool { (app.day.map { !$0.items.isEmpty } ?? false) || app.removed != nil }
+
+    /// The sky's words: the wide column when wide, else the page's.
+    private var skyWidth: CGFloat { width.panes ? wideColumnWidth : columnWidth }
 
     var body: some View {
         let phase = sky.phase
@@ -41,15 +51,17 @@ struct NowView: View {
                                     .padding(.top, 12)
                             }
                         }
-                        .column()
+                        .column(width: skyWidth)
                         // Comes down a little with a pull; the room opens under it.
                         .pullLead()
                         TimelineView(.periodic(from: .now, by: 1)) { _ in
                             let shows = NowShows.of(app, now: ServerClock.now)
                             VStack(alignment: .leading, spacing: 0) {
                                 Room(height: shows.room, phase: phase, scrolled: scrolled)
+                                // Wide, the head tops the card's half; alone, the card is in the page's column.
                                 NowHead(shows: shows, now: ServerClock.now)
-                                    .column()
+                                    .frame(maxWidth: beside ? (wideColumnWidth - 32 - Self.halvesGap) / 2 : nil, alignment: .leading)
+                                    .column(width: beside ? wideColumnWidth : columnWidth)
                                 Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
                             }
                         }
@@ -66,23 +78,33 @@ struct NowView: View {
                     }
 
                     // The ground.
-                    VStack(alignment: .leading, spacing: 0) {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in
-                            NowGround(shows: NowShows.of(app, now: ServerClock.now), now: ServerClock.now)
+                    if beside {
+                        HStack(alignment: .top, spacing: Self.halvesGap) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                card
+                                goLater
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 0) {
+                                if let day = app.day { DayTimeline(day: day, top: 0) }
+                                footer
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        if !app.showNearby && app.target == .plan, let day = app.day {
-                            DayTimeline(day: day)
+                        .column(width: wideColumnWidth)
+                        .padding(.bottom, 24)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            card
+                            if !app.showNearby && app.target == .plan, let day = app.day {
+                                DayTimeline(day: day)
+                            }
+                            goLater
+                            footer
                         }
-                        if !app.showNearby && app.target != .plan && app.paired {
-                            Button(L("Go later today at…")) { goingLater = true }
-                                .buttonStyle(ChipButtonStyle())
-                                .padding(.top, 14)
-                                .accessibilityIdentifier("goLater")
-                        }
-                        footer
+                        .column()
+                        .padding(.bottom, 24)
                     }
-                    .column()
-                    .padding(.bottom, 24)
                 }
                 .onGeometryChange(for: CGFloat.self) {
                     $0.frame(in: .scrollView).minY
@@ -134,6 +156,26 @@ struct NowView: View {
         ) { ReportSheet(addEmail: $addEmail) }
         .sheet(isPresented: $signingIn) { SignInSheet() }
         .sheet(isPresented: $goingLater) { GoLaterSheet() }
+    }
+
+    /// Between the card's half and Today's.
+    private static let halvesGap: CGFloat = 32
+
+    /// The card's steps and buttons (or Nearby), under the horizon.
+    private var card: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            NowGround(shows: NowShows.of(app, now: ServerClock.now), now: ServerClock.now)
+        }
+    }
+
+    /// A favourite or a place chosen: going there later instead of now.
+    @ViewBuilder private var goLater: some View {
+        if !app.showNearby && app.target != .plan && app.paired {
+            Button(L("Go later today at…")) { goingLater = true }
+                .buttonStyle(ChipButtonStyle())
+                .padding(.top, 14)
+                .accessibilityIdentifier("goLater")
+        }
     }
 
     /// The horizon's road now, with your bus on it only when it stops for you.
