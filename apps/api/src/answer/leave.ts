@@ -421,8 +421,10 @@ export function departureOf(all: Departing[], o: ScoredOption): Departing | null
   return all.find((l) => l.bus === key) ?? null;
 }
 
-/** Past this many buses of one service from one stop, `departures` stops counting: a day's worth. */
+/** Past this many buses of one service from one stop, `departures` stops counting for a trip without a class. */
 const MAX_DEPARTURES = 150;
+/** How far before a class's latest bus `departures` starts counting: its day, and the evening before. */
+const CLASS_LOOKBACK_MS = 86_400_000;
 
 /**
  * Every bus that gets you there, leaving from now until `untilMs`: each
@@ -452,18 +454,25 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
     const walk = walkMs(leg);
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
-    const from = f.nowMs + readyS(leg) * 1000;
+    const ready = f.nowMs + readyS(leg) * 1000;
+    // A class's latest bus, as its leave-by has it (forLeg).
+    const latestBoard = f.arriveBy ? f.arriveBy.atMs - (ON_TIME_SLACK_S + onS + leg.rideS) * 1000 : null;
+    // A class days ahead: its buses are on its day, not the next 150 from now.
+    const from = latestBoard === null ? ready : Math.max(ready, latestBoard - CLASS_LOOKBACK_MS);
     // With no live times, the estimates fall either side of the chosen bus,
     // so it stays among them. One that has left is no longer a choice
-    // (stepFrom), and lines up nothing.
+    // (stepFrom), and lines up nothing. With none chosen, a class's windows
+    // end at its latest bus, as the leave-by's do (leavingBy), so the steps
+    // either side of it are the windows before and after its own.
     const chosenMs = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
     const chosen = chosenMs !== undefined && chosenMs > f.nowMs ? chosenMs : undefined;
+    const around = chosen ?? (latestBoard !== null && !t && latestBoard >= ready ? latestBoard : undefined);
     const buses = departuresFrom(f.graph, sb, leg.svc, {
       now: f.nowMs,
       from,
       until: untilMs,
-      max: MAX_DEPARTURES,
-      ...(chosen !== undefined ? { around: chosen } : {}),
+      ...(latestBoard === null ? { max: MAX_DEPARTURES } : {}),
+      ...(around !== undefined ? { around } : {}),
     });
     let prev: number | null = null;
     for (const d of buses) {
