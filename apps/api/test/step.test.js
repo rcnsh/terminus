@@ -175,6 +175,34 @@ test('a favourite can be stepped too, and an unknown trip is refused', async () 
   assert.equal((await step(phone, FIRST, { svc: 'D2', stop: 'PGP' })).status, 400);
 });
 
+test('with no class today, a favourite or a stop stays on the bus stepped to', async () => {
+  const { phone, next, step } = await setup({ ...PROFILE, manual: [] });
+  for (const [q, trip] of [
+    ['?place=clb', 'place:clb'],
+    ['?to=UTOWN', 'to:UTOWN'],
+  ]) {
+    const a = await next(phone, q);
+    assert.equal(a.card.step.trip, trip);
+    await step(phone, trip, a.card.step.later, 'later', q);
+    const again = await next(phone, q);
+    assert.equal(again.card.step.moved, true, `${trip}: still the later bus`);
+    assert.equal(again.leave.board, a.card.step.later.board);
+  }
+});
+
+test('with no class today, the evening trip home stays on the bus stepped to', async () => {
+  const { phone, next, step, clock } = await setup({ ...PROFILE, manual: [] });
+  // 21:00 on campus, 150 m from the nearest stop; home at PGP.
+  clock(Date.parse('2026-08-27T13:00:00Z'));
+  const q = '?lat=1.292&lon=103.772';
+  const a = await next(phone, q);
+  assert.equal(a.card.step?.trip, 'home:evening');
+  await step(phone, 'home:evening', a.card.step.later, 'later', q);
+  const again = await next(phone, q);
+  assert.equal(again.card.step.moved, true, 'still the later bus');
+  assert.equal(again.leave.board, a.card.step.later.board);
+});
+
 // The planner's parts, on their own.
 
 const leave = (svc, stop, at, board, arrive) => ({

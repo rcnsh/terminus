@@ -535,8 +535,9 @@ export const ME_ROUTES: MeRoute[] = [
         return { ...profile, once };
       });
       if (changed instanceof Response) return changed;
-      const rider = await loadRider(env, session.user.id, nowMs, { profile: changed.profile });
-      return json(await answerRequest(env, ctx, deps, rider, askOf(url), nowMs));
+      const asked = askOf(url);
+      const rider = await loadRider(env, session.user.id, nowMs, { profile: changed.profile, asked });
+      return json(await answerRequest(env, ctx, deps, rider, asked, nowMs));
     },
   },
   {
@@ -658,7 +659,8 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/next',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, GRAPH, session.profileJson);
-      const body = await answerRequest(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile }), askOf(url), nowMs);
+      const asked = askOf(url);
+      const body = await answerRequest(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, asked }), asked, nowMs);
       logNextTook(env, Date.now() - nowMs);
       return json(body);
     },
