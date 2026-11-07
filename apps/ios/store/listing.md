@@ -187,7 +187,7 @@ They're the Play set's five, with its words and its look: each capture from `cap
 1. `1-leave-by.png` "Know when to leave for class": when to leave for the next class, counting down under the morning sky, and the trip below: the walk, then the R2 in its colour.
 2. `2-widget.png` "Your buses, on the home screen": Next bus + favourites over Buses near you (both medium), with both sides of the road.
 3. `3-map.png` "Every bus, live on the map": the campus map with A1 picked: its line, its three buses and its stops on the street map.
-4. `4-buses.png` "What's coming at your stop": the Buses tab at the nearest stop, every service's next two buses, live, with how full they are.
+4. `4-buses.png` "What's coming at your stop": the Stops tab with two pinned stops, COM 3 showing: each service's next three buses, live (a timetable guess marked "~"), and every line below.
 5. `5-on-the-bus.png` "With you all the way": on the R2, with how far along the ride you are, the next stop and the arrival.
 
 The product page's header, `header.png` (3840×1646, under Header and Search Results on the version page; one for both languages, as it has no words): the same landscape from golden hour to night, larger, without phones or words, since the App Store crops it to each screen and sets the app's name beside it. `node apps/ios/store/frame.mjs header` draws it.
