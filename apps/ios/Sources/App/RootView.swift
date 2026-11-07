@@ -15,6 +15,8 @@ struct RootView: View {
                 MainTabs()
             }
         }
+        // The layout follows the window's width, the welcome and setup included.
+        .readsWindowWidth()
         .environment(app)
         .environment(prefs)
         .tint(.brand)
