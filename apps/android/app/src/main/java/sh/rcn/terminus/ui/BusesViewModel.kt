@@ -396,6 +396,9 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun open(route: BusRoute) = _state.update { it.copy(stack = it.stack + route) }
 
+    /** [route] opened from the tab's home: the first page over it, in place of whatever was open (wide, the one beside the list). */
+    fun show(route: BusRoute) = _state.update { it.copy(stack = listOf(route)) }
+
     fun back() = _state.update { it.copy(stack = it.stack.dropLast(1)) }
 
     /** The tab tapped again: back to its home. */

@@ -24,9 +24,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,8 +61,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LongState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -108,6 +113,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -172,6 +178,7 @@ import org.maplibre.compose.map.MapState
 import org.maplibre.compose.map.MapUiOptions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.overlay.LocalViewportInsets
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
 import org.maplibre.compose.sources.GeoJsonData
@@ -207,13 +214,18 @@ private fun Long.color() = Color(this.toInt())
 private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = b[2], north = b[3])
 
 /**
- * How much of the map is covered, in px from its top and bottom edges: by the pills (and the status lines under them) and by the open
- * sheet. Plain state read only when the map moves, so a sheet growing redraws nothing.
+ * How much of the map is covered, in px from its top and bottom edges: by the pills (and the status lines under them) and by the open sheet
+ * across the bottom; or from its left edge, by a sheet floating in the corner ([Widths.floatingSheet]). Plain state read only when the map
+ * moves, so a sheet growing redraws nothing.
  */
 private class MapCover {
     var top by mutableIntStateOf(0)
     var sheet by mutableIntStateOf(0)
+    var left by mutableIntStateOf(0)
 }
+
+/** How tall a floating sheet may be: the room under the pills. Null for a sheet across the bottom. */
+private val LocalSheetRoom = compositionLocalOf<Dp?> { null }
 
 /**
  * The Map tab: the campus's streets, every service's line in its colour, the stops, a pill per service along the top (one at a time: its
@@ -269,10 +281,10 @@ private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover,
     withFrameNanos {}
     var moved = false
     withTimeoutOrNull(CENTRE_FOLLOW_MS) {
-        snapshotFlow { cover.top to cover.sheet }
+        snapshotFlow { Triple(cover.top, cover.sheet, cover.left) }
             .debounce { if (moved) 200L else 0L }
             .takeWhile { !moved || cameraMoveReason != CameraMoveReason.Gesture }
-            .collectLatest { (top, sheet) ->
+            .collectLatest { (top, sheet, left) ->
                 moved = true
                 val view = viewport ?: awaitViewport()
                 val h = view.size.height.value.toDouble()
@@ -282,12 +294,21 @@ private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover,
                 // in dp, then in degrees of latitude at that zoom (the world is
                 // 512 dp round at zoom 0, its north-south scale cos(lat) of that).
                 val up = h / 2 - (topDp + h - sheetDp) / 2
-                val target = Position(longitude = lon, latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)))
+                // And how far right of it, beside a floating sheet, in degrees of longitude.
+                val right = with(density) { left.toDp().value.toDouble() } / 2
+                val target =
+                    Position(
+                        longitude = lon - right * 360 / (512 * 2.0.pow(zoom)),
+                        latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)),
+                    )
                 // With animations off in the phone's settings, it jumps there (the library reads the setting).
                 animateCamera(CameraUpdate(center = target, zoom = zoom), CameraAnimation.Ease.Standard)
             }
     }
 }
+
+/** A floating sheet's margin from the map's edges, and from the pills above it. */
+private val FLOAT_GAP = 16.dp
 
 /** How long after moving to a stop the map keeps it clear of its sheet as that grows. */
 private const val CENTRE_FOLLOW_MS = 2_500L
@@ -325,7 +346,15 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
     var recentre by remember { mutableIntStateOf(0) }
     LaunchedEffect(home) { home.collect { recentre++ } }
     val cover = remember { MapCover() }
-    Box(Modifier.fillMaxSize()) {
+    // From 700 wide the sheet floats in the bottom-left corner, beside the map rather than over its foot.
+    val floats = Widths.floatingSheet(LocalWindowDp.current)
+    val density = LocalDensity.current
+    var height by remember { mutableIntStateOf(0) }
+    LaunchedEffect(ui.sheet == null, floats) {
+        if (ui.sheet == null || floats) cover.sheet = 0
+        if (ui.sheet == null || !floats) cover.left = 0
+    }
+    Box(Modifier.fillMaxSize().onSizeChanged { height = it.height }) {
         when {
             campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre, cover)
             ui.failed ->
@@ -347,7 +376,8 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
                     ui.downloadFailed -> StatusChip(stringResource(R.string.map_download_failed))
                 }
             }
-            if (ui.sheet == null) {
+            // Under a sheet across the bottom it would be covered; beside a floating one it stays.
+            if (ui.sheet == null || floats) {
                 // Lost after a pinch or a fling: one tap back to the whole campus.
                 SmallFloatingActionButton(
                     onClick = { recentre++ },
@@ -359,16 +389,26 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
                 }
             }
             ui.sheet?.let { sheet ->
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { cover.sheet = it.height }) {
-                    when (sheet) {
-                        is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
-                        is MapSheet.Bus ->
-                            ui.buses
-                                .firstOrNull { it.id == sheet.id }
-                                ?.let { bus ->
-                                    val svc = ui.selected.orEmpty()
-                                    BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, campus, actions, sheet)
-                                }
+                val gap = with(density) { FLOAT_GAP.roundToPx() }
+                Box(
+                    if (floats)
+                        Modifier.align(Alignment.BottomStart).padding(FLOAT_GAP).width(Widths.PANE.dp).onSizeChanged {
+                            cover.left = it.width + gap
+                        }
+                    else Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { cover.sheet = it.height }
+                ) {
+                    val room = with(density) { (height - cover.top).toDp() } - FLOAT_GAP * 2
+                    CompositionLocalProvider(LocalSheetRoom provides if (floats) room.coerceAtLeast(120.dp) else null) {
+                        when (sheet) {
+                            is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
+                            is MapSheet.Bus ->
+                                ui.buses
+                                    .firstOrNull { it.id == sheet.id }
+                                    ?.let { bus ->
+                                        val svc = ui.selected.orEmpty()
+                                        BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, campus, actions, sheet)
+                                    }
+                        }
                     }
                 }
             }
@@ -648,7 +688,23 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                     }
                 }
             },
-        overlay = { include(MapOverlay.AttributionOnly) },
+        // The credit, in the bottom-left corner, moves along to clear a floating sheet there.
+        overlay = {
+            val insets = LocalViewportInsets.current
+            val dir = LocalLayoutDirection.current
+            val left = with(LocalDensity.current) { cover.left.toDp() }
+            CompositionLocalProvider(
+                LocalViewportInsets provides
+                    PaddingValues(
+                        start = insets.calculateStartPadding(dir) + left,
+                        top = insets.calculateTopPadding(),
+                        end = insets.calculateEndPadding(dir),
+                        bottom = insets.calculateBottomPadding(),
+                    )
+            ) {
+                include(MapOverlay.AttributionOnly)
+            }
+        },
     )
 }
 
@@ -847,7 +903,9 @@ private fun MapSheetFrame(
     val scope = rememberCoroutineScope()
     // Another stop or bus opened while this one slides off stays open.
     val showing by rememberUpdatedState(focusKey)
-    val y = { if (dragging) Fling.rubber(dragged, lift) else settle.value }
+    // Floating, the sheet has no room above it to lift into.
+    val room = LocalSheetRoom.current
+    val y = { (if (dragging) Fling.rubber(dragged, lift) else settle.value).let { if (room != null) it.coerceAtLeast(0f) else it } }
     LaunchedEffect(focusKey) {
         settle.snapTo(0f)
         runCatching { focus.requestFocus() }
@@ -858,7 +916,7 @@ private fun MapSheetFrame(
     Surface(
         modifier =
             Modifier.fillMaxWidth()
-                .heightIn(max = 480.dp)
+                .heightIn(max = room ?: 480.dp)
                 .onSizeChanged { height = it.height }
                 .offset { IntOffset(0, y().roundToInt()) }
                 // Lifted, the sheet's colour carries on under it, so the map doesn't show through below; over the
@@ -868,7 +926,7 @@ private fun MapSheetFrame(
                     if (y() < 0f) drawRect(surface, Offset(0f, size.height - 1f), Size(size.width, -y() + 1f))
                 }
                 .semantics { paneTitle = paneName },
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        shape = if (room != null) RoundedCornerShape(20.dp) else RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         color = c.surface,
         shadowElevation = 8.dp,
     ) {

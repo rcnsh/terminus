@@ -676,6 +676,7 @@
     <string name="buses_pin_another">Pin another stop</string>
     <string name="buses_pin_another_how">Tap the star on a stop in Nearby or on its page to keep it here.</string>
     <string name="buses_services_hint">Tap one to see its whole line.</string>
+    <string name="buses_choose">Choose a stop or a service.</string>
     <string name="buses_loop_from">Loop from %1$s</string>
     <string name="buses_from_to">%1$s to %2$s</string>
     <string name="buses_pin_stop">Pin %1$s</string>

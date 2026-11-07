@@ -898,7 +898,8 @@ internal fun SkyBand(
         }
     ) {
         Spacer(Modifier.height(top))
-        SkyInk(true, p.lightInk) { Box(if (padded) Modifier.padding(horizontal = 16.dp) else Modifier) { content() } }
+        // In the page's column, as what's under it is; the sky goes on to the edges.
+        SkyInk(true, p.lightInk) { Box(if (padded) Modifier.column().padding(horizontal = 16.dp) else Modifier.column()) { content() } }
         // The moon's own line, under the content, so it never sits on a button;
         // without it ([moonLine] false), the content's last line leaves the right clear for it.
         if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
