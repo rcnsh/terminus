@@ -4,7 +4,8 @@
 // app's sky going from dawn to night along it, its hills, city and road
 // running through, and shuttles, the setting sun and Marina Bay Sands
 // crossing from one to the next. Writes screenshots/ and screenshots/zh/, 1080×1920
-// like the captures (Play's phone limit is a 2:1 ratio).
+// (Play allows up to 2:1 for the whole image). The captures are the Pixel 10 Pro
+// emulator's own screen, 1280×2856, so the phone drawn has a real phone's shape.
 //
 // The home screen's capture is rebuilt around its own pixels: the widgets and
 // the app icons as captured, on a wallpaper of the app's dusk, without the
@@ -26,6 +27,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fonts = join(here, '../../web/public/assets/fonts');
 const W = 1080;
 const H = 1920;
+// The captures' size: the emulator's screen as it is, never resized.
+const CW = 1280;
+const CH = 2856;
 
 // The words, in the listing's order. The headline is two lines, split at
 // "|", so every phone sits at the same height; its part in braces is in the
@@ -113,20 +117,22 @@ const SKIES = {
 };
 
 // Where the phones sit.
-const SCREEN_W = 720;
-const SCREEN_H = Math.round((SCREEN_W * H) / W);
-const PHONE_TOP = 470;
+const SCREEN_W = 620;
+const SCREEN_H = Math.round((SCREEN_W * CH) / CW);
+const PHONE_TOP = 450;
 
 // The home screen's capture (both languages lay it out alike): the two widgets
 // and the four app icons, in its own pixels.
 const HOME = {
   widgets: [
-    { x: 50, y: 367, w: 981, h: 397 },
-    { x: 50, y: 785, w: 981, h: 606 },
+    { x: 59, y: 527, w: 1163, h: 638 },
+    { x: 59, y: 1199, w: 1163, h: 637 },
   ],
-  radius: 63,
-  icons: [158, 413, 668, 923].map((x) => ({ x, y: 1537 })),
-  iconR: 62,
+  radius: 80,
+  icons: [186, 489, 791, 1094].map((x) => ({ x, y: 2399 })),
+  iconR: 91,
+  // How far the icons move down, to where the search bar was.
+  drop: 230,
 };
 
 /**
@@ -239,13 +245,13 @@ function homeScreen(shot) {
   const src = pathToFileURL(shot).href;
   // Each piece is cut a pixel inside its edge, so nothing of the old wallpaper comes with it.
   const crop = (x, y, w, h, r) =>
-    `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${r}px;background:url('${src}') -${x}px -${y}px / ${W}px ${H}px;"></div>`;
+    `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${r}px;background:url('${src}') -${x}px -${y}px / ${CW}px ${CH}px;"></div>`;
   const widgets = HOME.widgets.map((b) => crop(b.x + 1, b.y + 1, b.w - 2, b.h - 2, HOME.radius - 1)).join('');
   // The icons a row lower, where the search bar was.
   const icons = HOME.icons
     .map((p) => {
       const r = HOME.iconR - 1;
-      return `<div style="position:absolute;left:${p.x - r}px;top:${p.y + 150 - r}px;width:${2 * r}px;height:${2 * r}px;border-radius:50%;background:url('${src}') -${p.x - r}px -${p.y - r}px / ${W}px ${H}px;box-shadow:0 6px 18px rgba(0,0,0,0.25);"></div>`;
+      return `<div style="position:absolute;left:${p.x - r}px;top:${p.y + HOME.drop - r}px;width:${2 * r}px;height:${2 * r}px;border-radius:50%;background:url('${src}') -${p.x - r}px -${p.y - r}px / ${CW}px ${CH}px;box-shadow:0 6px 18px rgba(0,0,0,0.25);"></div>`;
     })
     .join('');
   const tree = (cx, gy, s, fill) => `<g transform="translate(${cx} ${gy}) scale(${s})" fill="${fill}">
@@ -256,21 +262,25 @@ function homeScreen(shot) {
     const y = 30 + ((i * 151) % 1100);
     return `<circle cx="${x}" cy="${y}" r="${i % 6 === 0 ? 2.6 : 1.5}" fill="#fff" opacity="${0.25 + (i % 5) * 0.12}"/>`;
   }).join('');
-  const wallpaper = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="position:absolute;inset:0">
+  // Drawn 1080 wide, as tall as the capture's shape, with the hills and the sun at its foot.
+  const VH = Math.round((W * CH) / CW);
+  const wallpaper = `<svg width="${CW}" height="${CH}" viewBox="0 0 ${W} ${VH}" style="position:absolute;inset:0">
     <defs>
       <linearGradient id="hs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1c3a"/><stop offset="0.38" stop-color="#3a3466"/><stop offset="0.62" stop-color="#7a4766"/><stop offset="0.78" stop-color="#e08a62"/></linearGradient>
       <radialGradient id="hg" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffcf9e" stop-opacity="0.7"/><stop offset="1" stop-color="#ffb37a" stop-opacity="0"/></radialGradient>
     </defs>
-    <rect width="${W}" height="${H}" fill="url(#hs)"/>${stars}
+    <rect width="${W}" height="${VH}" fill="url(#hs)"/>${stars}
+    <g transform="translate(0 ${VH - H})">
     <circle cx="700" cy="1500" r="330" fill="url(#hg)"/><circle cx="700" cy="1500" r="120" fill="#ffc48f"/>
     <g fill="#5b4870"><path d="M790 1500 L794 1360 H812 L816 1500Z"/><path d="M834 1500 L838 1356 H856 L860 1500Z"/><path d="M878 1500 L882 1352 H900 L904 1500Z"/><path d="M772 1350 L930 1342 L924 1358 L776 1360Z"/></g>
     <path d="M0 1530 C 160 1470, 300 1500, 460 1488 S 760 1440, 900 1478 S 1040 1500, 1080 1490 V1920 H0Z" fill="#4b3f62"/>
     <path d="M0 1640 C 220 1590, 420 1625, 620 1608 S 960 1580, 1080 1612 V1920 H0Z" fill="#2c2440"/>
     ${tree(120, 1612, 4, '#2c2440')}${tree(960, 1602, 3.4, '#2c2440')}
     <path d="M0 1790 C 260 1750, 520 1770, 760 1758 S 1000 1745, 1080 1760 V1920 H0Z" fill="#17121f"/>
+    </g>
   </svg>`;
-  const wifi = `<svg width="40" height="34" viewBox="0 0 24 20" fill="#fff"><path d="M12 19.5 1 7.6a15.6 15.6 0 0 1 22 0z"/></svg>`;
-  const battery = `<svg width="70" height="34" viewBox="0 0 40 20"><rect x="1" y="2" width="33" height="16" rx="5" fill="#fff"/><rect x="35.5" y="7" width="3" height="6" rx="1.5" fill="#fff"/></svg>`;
+  const wifi = `<svg width="47" height="40" viewBox="0 0 24 20" fill="#fff"><path d="M12 19.5 1 7.6a15.6 15.6 0 0 1 22 0z"/></svg>`;
+  const battery = `<svg width="83" height="40" viewBox="0 0 40 20"><rect x="1" y="2" width="33" height="16" rx="5" fill="#fff"/><rect x="35.5" y="7" width="3" height="6" rx="1.5" fill="#fff"/></svg>`;
   return `<div class="home">${wallpaper}
     <div class="status"><span>9:26</span><span class="sys">${wifi}${battery}</span></div>
     ${widgets}${icons}
@@ -320,11 +330,11 @@ function page(index, lang) {
     .phone::after { top: 372px; height: 160px; }
     .screen { position: relative; width: ${SCREEN_W}px; height: ${SCREEN_H}px; border-radius: 64px; overflow: hidden; background: #000; line-height: 0; }
     .screen > img { width: ${SCREEN_W}px; height: ${SCREEN_H}px; display: block; }
-    .screen::after { content: ''; position: absolute; top: 20px; left: 50%; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; background: #0b0b0c; box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }
-    .home { position: absolute; left: 0; top: 0; width: ${W}px; height: ${H}px; transform: scale(${SCREEN_W / W}); transform-origin: 0 0; line-height: normal; }
-    .home .status { position: absolute; top: 38px; left: 75px; right: 80px; display: flex; justify-content: space-between; align-items: center; color: #fff; font: 500 40px 'Inter', sans-serif; letter-spacing: 0.01em; }
-    .home .sys { display: flex; gap: 14px; align-items: center; }
-    .home .pill { position: absolute; left: 50%; bottom: 28px; width: 284px; height: 10px; margin-left: -142px; border-radius: 5px; background: rgba(255,255,255,0.9); }
+    .screen::after { content: ''; position: absolute; top: 18px; left: 50%; width: 24px; height: 24px; margin-left: -12px; border-radius: 50%; background: #0b0b0c; box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }
+    .home { position: absolute; left: 0; top: 0; width: ${CW}px; height: ${CH}px; transform: scale(${SCREEN_W / CW}); transform-origin: 0 0; line-height: normal; }
+    .home .status { position: absolute; top: 45px; left: 89px; right: 95px; display: flex; justify-content: space-between; align-items: center; color: #fff; font: 500 47px 'Inter', sans-serif; letter-spacing: 0.01em; }
+    .home .sys { display: flex; gap: 17px; align-items: center; }
+    .home .pill { position: absolute; left: 50%; bottom: 33px; width: 337px; height: 12px; margin-left: -168px; border-radius: 6px; background: rgba(255,255,255,0.9); }
   </style></head><body>
     <div class="world"><canvas id="pano" width="${W * SLIDES.length}" height="${H}"></canvas>${phones}</div>
     <div class="words"><h1>${head(words.head)}</h1><p>${words.sub}</p></div>
