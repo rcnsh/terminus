@@ -63,6 +63,7 @@ window.TERMINUS_ZH = {
   'Status checks have paused. Last check: {0}.': '状态检查已暂停。上次检查：{0}。',
   'Choose <strong>Add to Home Screen</strong>.': '选择<strong>添加到主屏幕</strong>。',
   'Choose a stop': '选择车站',
+  'Choose a stop or a service.': '选择一个车站或线路。',
   'Clear trip history': '清除行程记录',
   'Code': '验证码',
   'Complete the check below, then send again.': '完成下面的验证，然后再发送一次。',

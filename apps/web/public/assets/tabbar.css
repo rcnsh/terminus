@@ -1,7 +1,9 @@
-/* The web app's bar along the bottom: Now · Buses · Map · Settings. */
+/* The web app's bar along the bottom: Now · Buses · Map · Settings; a rail
+   down the left edge in a wide window (docs/agents/window-sizes.md). */
 
-/* In rem, so the bar grows with the text in it, and what sits above it (app.css) moves with it. */
-:root { --tabbar-h: 3.75rem; }
+/* In rem, so the bar grows with the text in it, and what sits above it (app.css) moves with it.
+   --rail-w is the rail's width, none under 800. */
+:root { --tabbar-h: 3.75rem; --rail-w: 0px; }
 body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
 .tabbar {
   position: fixed;
@@ -31,3 +33,22 @@ body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); 
 .tabbar a[aria-current="page"] svg { stroke-width: 2.2; color: var(--accent); }
 .tabbar a:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
 
+
+/* Wide: the same four tabs as a rail on the left edge, icons over labels.
+   Nothing sits above a bar any more (--tabbar-h), and the page starts after the rail. */
+@media (min-width: 800px) {
+  :root { --tabbar-h: 0px; --rail-w: calc(88px + env(safe-area-inset-left)); }
+  body.app { padding-left: var(--rail-w); }
+  .tabbar {
+    inset: 0 auto 0 0;
+    width: var(--rail-w);
+    min-height: 0;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: max(16px, env(safe-area-inset-top)) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+    border-top: 0;
+    border-right: 1px solid var(--line);
+  }
+  .tabbar a { flex: none; max-width: none; height: 68px; }
+}

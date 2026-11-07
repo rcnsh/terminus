@@ -1,11 +1,11 @@
 /* Account page, on top of /assets/site.css. */
 
 /* Sign-in: no card. The livery runs edge to edge under the header, and the
-   page itself holds two steps (form, then "check your inbox"): one column on
-   a phone, the words beside the form from 900px. */
+   page itself holds two steps (form, then "check your inbox"), in a column
+   at most 560 wide at every width (docs/agents/window-sizes.md). */
 body:has(.signin) { overflow-x: clip; }
 .signin .livery { height: 110px; margin: 0 calc(50% - 50vw); border-radius: 0; }
-.signin-step { max-width: 28rem; margin: 0 auto; padding-top: 28px; }
+.signin-step { max-width: 528px; margin: 0 auto; padding-top: 28px; }
 .signin h1 { font-size: 2rem; }
 .signin .hint { line-height: 1.5; }
 .signin-intro .hint { font-size: 1rem; margin-top: 10px; }
@@ -18,18 +18,13 @@ body:has(.signin) { overflow-x: clip; }
 .signin-alt { color: var(--muted); font-size: 0.95rem; margin-top: 16px; }
 #sent-step .form-error:empty + .hint.small { margin-top: 16px; }
 .signin-alt .link-btn { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-@media (min-width: 900px) {
-  .signin .livery { height: 160px; }
-  .signin-step { max-width: 60rem; display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: start; padding-top: 64px; }
-  .signin h1 { font-size: 3rem; }
-  .signin-form { margin-top: 4px; }
-}
+@media (min-width: 900px) { .signin .livery { height: 160px; } }
 .form-error { color: var(--bad); font-size: 0.9rem; margin-top: 10px; min-height: 1.4em; }
 .sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
 #sent-step .btn { margin-top: 20px; }
 
 /* Settings (settings.js): a list of groups and their pages. On a phone one
-   at a time, sliding; from 900px (as `wide` in settings.js) side by side. */
+   at a time, sliding; from 800px (as `wide` in settings.js) side by side. */
 .settings { position: relative; overflow-x: clip; padding-top: 8px; }
 .settings-side { display: grid; gap: 16px; align-content: start; min-width: 0; }
 .settings-side .eyebrow, .settings-rail .eyebrow { margin-bottom: 10px; }
@@ -55,7 +50,7 @@ body:has(.signin) { overflow-x: clip; }
 /* A long email on one line, cut short, rather than broken mid-word. */
 .set-account .row-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Every other page as a row in a group, with its icon, and what it has set on
-   the right; side by side (from 900px), under its name, as a sidebar. */
+   the right; side by side (from 800px), under its name, as a sidebar. */
 .set-group { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
 .set-item { min-height: 56px; }
 .set-item .row-text { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -64,7 +59,7 @@ body:has(.signin) { overflow-x: clip; }
 .set-item .row-sum.off { color: var(--warn-ink); font-weight: 600; }
 .set-item .row-sum.todo { color: var(--accent); font-weight: 600; }
 /* Send feedback says what it's for under its name in the sidebar; beside it on a phone there's no room. */
-@media (max-width: 899.98px) { .set-item[data-page="feedback"] .row-sum { display: none; } }
+@media (max-width: 799.98px) { .set-item[data-page="feedback"] .row-sum { display: none; } }
 .set-ico { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
 .set-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Settings' shapes while its code loads (app/app.js SettingsSkeleton), pulsing. */
@@ -94,7 +89,7 @@ body:has(.signin) { overflow-x: clip; }
 .peek.open::before { content: ""; position: fixed; inset: 0; z-index: -1; background: rgb(0 0 0 / 0.45); }
 /* Room under a page's last row for the bar. */
 .settings.page-open:has(.peek) .settings-page:not(.leaving) { padding-bottom: 88px; }
-@media (min-width: 900px) { .peek { display: none; } }
+@media (min-width: 800px) { .peek { display: none; } }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
 /* About: the words, then its links as rows like the list's. */
@@ -212,10 +207,10 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 /* The view sliding away, kept where it was on screen while the new one comes in. */
 .settings .leaving { position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; }
 .settings-page:not(.leaving) { position: relative; z-index: 2; }
-@media (max-width: 899.98px) {
+@media (max-width: 799.98px) {
   .settings.page-open .settings-side:not(.leaving) { display: none; }
 }
-@media (min-width: 900px) {
+@media (min-width: 800px) {
   /* At least 20rem, and wider when the card's trip line needs it: its stops
      don't shrink, so a fixed 20rem let the card spill over the column beside. */
   .settings { display: grid; grid-template-columns: minmax(20rem, min-content) minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -397,7 +392,8 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
    grows, choices change colour. Reduced motion gets none of it. */
 :root { --ob-ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
 
-.onboard { max-width: 34rem; margin: 5vh auto 0; }
+/* In the 560 column at every width, as sign-in. */
+.onboard { max-width: 528px; margin: 5vh auto 0; }
 .onboard.leaving { opacity: 0; transform: translateY(-6px); transition: opacity 0.24s ease-in, transform 0.24s ease-in; }
 .ob-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .ob-count { font: 600 0.75rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
@@ -487,7 +483,7 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 /* "Is this wrong?" under the preview. */
 /* Under the answer, not part of it: no louder than the time beside it. */
 .report-open { font-size: 0.8rem; padding: 8px 0; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
-/* Its sheet: up from the foot of the screen, where the link is; a card in the middle on a wide one. */
+/* Its sheet: up from the foot of the screen, where the link is; from 600 wide a dialog in the middle, at most 560 wide. */
 .report-sheet {
   position: fixed; inset: auto 0 0; width: 100%; max-width: 520px; max-height: min(92dvh, 720px); margin: 0 auto;
   padding: 0; border: 0; border-radius: 24px 24px 0 0; background: var(--surface); color: var(--ink);
@@ -497,7 +493,7 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .report-sheet[open] { animation: report-up 0.22s ease-out; }
 @keyframes report-up { from { transform: translateY(24px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .report-sheet[open] { animation: none; } }
-@media (min-width: 720px) { .report-sheet { inset: 0; margin: auto; height: fit-content; border-radius: 24px; } .report-grab { display: none; } }
+@media (min-width: 600px) { .report-sheet { inset: 0; margin: auto; height: fit-content; border-radius: 24px; } .report-grab { display: none; } }
 .report-inner { padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); }
 .report-inner form, .report-sent { display: grid; gap: 0; }
 .report-grab { width: 32px; height: 4px; border-radius: 2px; background: var(--line-strong); margin: 4px auto 16px; opacity: 0.7; }
