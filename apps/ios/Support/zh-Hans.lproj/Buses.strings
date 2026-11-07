@@ -12,6 +12,7 @@
 "At stop" = "在站";
 "Busy" = "有点挤";
 "Checking…" = "正在查询…";
+"Choose a stop or a service." = "选择车站或线路。";
 "Close" = "关闭";
 "Couldn't update" = "无法更新";
 "Ends here" = "本站为终点站";

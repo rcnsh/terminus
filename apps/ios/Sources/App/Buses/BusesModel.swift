@@ -52,8 +52,22 @@ final class BusesModel {
     private(set) var pinLimit = BusPins.defaultMax
     private(set) var publicBuses = false
 
-    /// The pages opened over the home, the top one last.
+    /// The pages opened over the home, the top one last. When wide, the
+    /// first is the one open beside the home, the rest pushed over it.
     var path: [BusRoute] = []
+    /// Wide: the home and its page side by side, so the home opens a page in place of the one open.
+    var split = false
+
+    /// How tall the home's band of sky is, for the empty pane beside it.
+    var homeBand: CGFloat?
+
+    /// The page open beside the home, its row marked as chosen; none when the home has the screen.
+    var chosen: BusRoute? { split ? path.first : nil }
+
+    /// A stop or line picked on the home: over it, or wide, beside it in place of the one open.
+    func open(_ route: BusRoute) {
+        if split { path = [route] } else { path.append(route) }
+    }
     /// A short note at the foot of the screen: how a pull went, the pins full.
     private(set) var note: String?
     private var noteTask: Task<Void, Never>?

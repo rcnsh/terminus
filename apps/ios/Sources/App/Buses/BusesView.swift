@@ -9,18 +9,37 @@ import UIKit
 struct BusesView: View {
     @State private var model = BusesModel.shared
     @Environment(AppModel.self) private var app
+    @Environment(\.windowWidth) private var width
 
     var body: some View {
         @Bindable var model = model
-        NavigationStack(path: $model.path) {
-            BusesHome()
-                .navigationDestination(for: BusRoute.self) { route in
-                    switch route {
-                    case .stop(let code): BusStopPage(code: code)
-                    case .line(let svc, let from): BusLinePage(svc: svc, from: from)
+        Group {
+            if width.panes {
+                // The home beside the page open from it; the pages opened from that push in its pane.
+                ListDetail {
+                    // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
+                    NavigationStack { BusesHome() }
+                } detail: {
+                    NavigationStack(path: pagesOver) {
+                        Group {
+                            if let first = model.path.first {
+                                page(first).environment(\.paneRoot, true)
+                            } else {
+                                PaneEmpty(text: L("Choose a stop or a service."), band: model.homeBand)
+                            }
+                        }
+                        .id(model.path.first)
+                        .navigationDestination(for: BusRoute.self) { page($0) }
                     }
                 }
+            } else {
+                NavigationStack(path: $model.path) {
+                    BusesHome()
+                        .navigationDestination(for: BusRoute.self) { page($0) }
+                }
+            }
         }
+        .onChange(of: width.panes, initial: true) { _, panes in model.split = panes }
         .environment(model)
         .overlay(alignment: .top) { NoteView(text: model.note) }
         .task(id: app.session) {
@@ -34,6 +53,18 @@ struct BusesView: View {
         }
         // A stop or line picked elsewhere (Now's Nearby, the map): its page, over the tab's home.
         .onChange(of: app.openBuses) { openPicked() }
+    }
+
+    /// The pages pushed over the first in the wide detail pane.
+    private var pagesOver: Binding<[BusRoute]> {
+        Binding(get: { Array(model.path.dropFirst()) }, set: { model.path = Array(model.path.prefix(1)) + $0 })
+    }
+
+    @ViewBuilder private func page(_ route: BusRoute) -> some View {
+        switch route {
+        case .stop(let code): BusStopPage(code: code)
+        case .line(let svc, let from): BusLinePage(svc: svc, from: from)
+        }
     }
 
     private func openPicked() {
@@ -137,13 +168,19 @@ struct BusesHome: View {
                     .column()
                 }
                 .busBandEnd()
+                // Wide, the empty pane beside it draws its band as tall, so the horizon runs straight across.
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.height
+                } action: {
+                    if !searching { model.homeBand = $0 }
+                }
                 if searching {
                     BusSearchResults(query: query) { hit in
                         query = ""
                         focused = false
                         switch hit {
-                        case .service(let s): model.path.append(.line(svc: s, from: nil))
-                        case .stop(let code, _, _, _): model.path.append(.stop(code))
+                        case .service(let s): model.open(.line(svc: s, from: nil))
+                        case .stop(let code, _, _, _): model.open(.stop(code))
                         }
                     }
                 } else {
@@ -289,6 +326,10 @@ private struct PinnedPager: View {
             }
             .padding(.horizontal, -Self.gutter)
         }
+        // Wide, a pinned stop open beside the home (picked on Now, say): its card is the one showing.
+        .onChange(of: model.chosen, initial: true) { _, open in
+            if case .stop(let code) = open, pins.contains(code), model.pinSelected != code { model.pinSelected = code }
+        }
         // Other stops: the tallest is theirs from now. Pages that stay don't resize, so their heights are kept.
         .onChange(of: pins) { tallest = pins.filter { model.pinned[$0] != nil }.compactMap { heights[$0] }.max() ?? 0 }
     }
@@ -312,10 +353,10 @@ private struct PinnedPager: View {
             VStack(alignment: .leading, spacing: 8) {
                 StopSign(
                     stop: stop, cells: cells, cols: cols, note: note, pending: pending, listsStopped: answered != nil,
-                    onStop: { model.path.append(.stop(code)) }
+                    onStop: { model.open(.stop(code)) }
                 ) {
                     svc in
-                    model.path.append(.line(svc: svc, from: code))
+                    model.open(.line(svc: svc, from: code))
                 }
                 // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                 if cells.joined().contains(where: { $0.mark == "~" }) {
@@ -472,11 +513,12 @@ private struct ServiceList: View {
                     let name = route.flatMap { BusLines.name($0, stopName: { campus.stop($0)?.fullName ?? $0 }) }
                     let count = model.lineCounts[svc]
                     Button {
-                        model.path.append(.line(svc: svc, from: nil))
+                        model.open(.line(svc: svc, from: nil))
                     } label: {
                         row(svc, color: campus.color(svc), name: name, via: route?.via, count: count)
                     }
                     .buttonStyle(BusRowPress())
+                    .chosenRow(model.chosen.map { if case .line(svc, _) = $0 { true } else { false } } ?? false)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(BusLines.spoken(svc: svc, name: name, via: route?.via, count: count))
                     .accessibilityAddTraits(.isButton)
