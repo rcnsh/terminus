@@ -1,7 +1,7 @@
 /**
  * The pinned card's height on the Stops tab (apps/web/public/app/buses.js):
- * it keeps the tallest answer, not the skeleton drawn while one comes or the
- * last page, so a one-line "No buses due" at night leaves no gap under it.
+ * it is as tall as the page showing, so a one-line "No buses due", or a stop
+ * pinned beside a taller one, leaves no gap under it.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -76,7 +76,7 @@ test('a skeleton or the last page does not hold the pinned card open over a one-
   render(null, root);
 });
 
-test('the tallest stop unpinned: the card is as tall as the stops left', async () => {
+test('a short stop beside a taller one: the card is as tall as the stop showing', async () => {
   const root = document.getElementById('root');
   B.chosen.set('PGP');
   P.profile.set({ pinnedStops: ['PGP', 'COM3'] });
@@ -84,11 +84,6 @@ test('the tallest stop unpinned: the card is as tall as the stops left', async (
   await settle(20);
   resized();
   const pager = root.querySelector('.bt-pager');
-  assert.equal(pager.style.height, `${BOARD}px`);
-
-  P.profile.set({ pinnedStops: ['PGP'] });
-  await settle(20);
-  resized();
-  assert.equal(pager.style.height, `${NO_BUSES}px`);
+  assert.equal(pager.style.height, `${NO_BUSES}px`, 'PGP showing, not COM3’s taller board');
   render(null, root);
 });

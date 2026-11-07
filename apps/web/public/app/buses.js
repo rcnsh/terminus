@@ -576,8 +576,8 @@ function PinPage({ code, entry, pinned, now }) {
  * The pinned stops: their names as one segmented control, as a stop's
  * page picks its side of the road, over a pager of their signs, one page
  * each and a last one saying how to pin another. Swiping picks the name,
- * and a name picked swipes there. The pager is as tall as its tallest page
- * so far, so nothing under it jumps while swiping.
+ * and a name picked swipes there. The pager is as tall as the page showing,
+ * as on Android and iPhone, so a stop with two services has no gap under it.
  */
 function PinnedStops({ pinned }) {
   const pick = useStore(chosen);
@@ -628,22 +628,15 @@ function PinnedStops({ pinned }) {
     freshenSigns();
   }, [index, pinned.join()]);
 
-  // As tall as the tallest answer so far, so nothing under it jumps while swiping, or as the pages on
-  // screen when they're taller. A skeleton (a row per service) or the last page never holds it open: at
-  // night the answer is one line. The pages off screen overflow it, hidden.
-  const tallest = useRef(0);
+  // As tall as the pages on screen: the one showing, or the two either side mid-swipe. The pages off
+  // screen overflow it, hidden.
   const fit = () => {
     const el = pager.current;
     if (!el) return;
-    for (const page of el.querySelectorAll(':scope > [data-answered]')) tallest.current = Math.max(tallest.current, page.offsetHeight);
     const x = el.scrollLeft / (leftOf(el, 1) || 1);
     const shown = [Math.floor(x), Math.ceil(x)].map((n) => el.children[n]?.offsetHeight ?? 0);
-    el.style.height = `${Math.max(tallest.current, ...shown)}px`;
+    el.style.height = `${Math.max(...shown)}px`;
   };
-  // Other stops: the tallest is theirs from now.
-  useEffect(() => {
-    tallest.current = 0;
-  }, [pinned.join()]);
   // An answer can land at its skeleton's height, so nothing resizes: measured after every render too.
   useEffect(fit);
   useEffect(() => {
@@ -654,7 +647,6 @@ function PinnedStops({ pinned }) {
       // A new width (a phone turned, the tab shown again): the page picked kept in place.
       if (el.clientWidth !== width) {
         width = el.clientWidth;
-        tallest.current = 0;
         el.style.height = '';
         el.scrollLeft = leftOf(el, at.current);
       }
