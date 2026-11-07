@@ -1,5 +1,11 @@
-/* The installed web app: one column, phone first. The card itself is the
-   account page's preview (.widget in account.css). */
+/* The installed web app: one column, phone first, then wider windows by
+   their width (docs/agents/window-sizes.md, at the end of this file). The
+   card itself is the account page's preview (.widget in account.css). */
+
+/* Half the page's width beside the rail (tabbar.css), which is the window's
+   under 800: how far Now's sky, the horizon and Settings' bands reach out
+   from the middle of the column to the page's edges. */
+:root { --half: calc((100vw - var(--rail-w, 0px)) / 2); }
 
 .app-main { max-width: 560px; display: grid; align-content: start; gap: 16px; padding-bottom: 32px; }
 
@@ -412,7 +418,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 /* Full screen above the tab bar; the header steps aside for it. */
 body.on-map { overflow: hidden; }
 body.on-map > .nav, body.on-map #tab-now { display: none; }
-.map-tab { position: fixed; inset: 0 0 calc(var(--tabbar-h) + env(safe-area-inset-bottom)) 0; background: var(--bg); }
+.map-tab { position: fixed; inset: 0 0 calc(var(--tabbar-h) + env(safe-area-inset-bottom)) var(--rail-w); background: var(--bg); }
 /* Sized, not positioned: MapLibre makes it position: relative. */
 .map { width: 100%; height: 100%; }
 .map-top {
@@ -704,7 +710,7 @@ body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-
 body.sky { --end: var(--sky-end, 22.5rem); }
 body.sky #tab-now { position: relative; }
 body.sky #tab-now::before {
-  content: ''; position: absolute; z-index: -1; top: calc(-1 * var(--sky-top, var(--header-h, 0px))); left: calc(50% - 50vw); width: 100vw;
+  content: ''; position: absolute; z-index: -1; top: calc(-1 * var(--sky-top, var(--header-h, 0px))); left: calc(50% - var(--half)); width: calc(2 * var(--half));
   height: calc(var(--end) - 24px); pointer-events: none;
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
@@ -732,7 +738,7 @@ body.sky .sky-head :is(.notice, .warning) { width: fit-content; padding: 4px 10p
    horizon (just the hills). The page's controls stay on the plain page under it. The page
    has a background of its own (it slides over the list), so the band draws
    its sky itself, across the window and up past the page's top. */
-.page-band { position: relative; isolation: isolate; margin: 0 calc(50% - 50vw); padding: 0 calc(50vw - 50%);
+.page-band { position: relative; isolation: isolate; margin: 0 calc(50% - var(--half)); padding: 0 calc(var(--half) - 50%);
   background: linear-gradient(var(--s0), var(--s1) 50%, var(--s2) 86%, var(--s3)); }
 .page-band::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
 .page-band .sky-head { --room: var(--header-h); --moon: 24px; padding-top: 0; }
@@ -753,7 +759,7 @@ body.sky-night .celestial .night-sky { display: block; }
 .day-done.open .done-label { font-size: 2.9rem; letter-spacing: -0.03em; }
 /* The horizon (sky.js Horizon): across the whole window, the near hill in the
    page's colour, the rest in the hour's. */
-.horizon { width: 100vw; height: 115px; margin: 10px calc(50% - 50vw) 0; }
+.horizon { width: calc(2 * var(--half)); height: 115px; margin: 10px calc(50% - var(--half)) 0; }
 .horizon svg { display: block; }
 .horizon .far { fill: var(--h-far); }
 .horizon .tree { fill: var(--h-tree); }
