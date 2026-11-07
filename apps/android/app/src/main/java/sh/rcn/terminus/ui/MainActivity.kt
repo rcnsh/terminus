@@ -23,17 +23,28 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -95,7 +106,7 @@ class MainActivity : ComponentActivity() {
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
-        setContent { TerminusTheme { App(vm, account, map, buses) } }
+        setContent { TerminusTheme { ProvideWindowWidth { App(vm, account, map, buses) } } }
     }
 
     /**
@@ -374,7 +385,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             },
         )
     } else
-        Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 16.dp)) {
+    // Pairing and setup in the page's column at every width, as sign-in is.
+    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().column().padding(horizontal = 16.dp)) {
             when {
                 !state.paired && screen == Screen.Pair -> {
                     BackHandler { screen = Screen.Main }
@@ -471,161 +483,196 @@ private fun Tabs(
         route?.let(buses::open)
         onTab(Tab.Buses)
     }
+    val tabs =
+        listOf(
+            Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
+            Triple(Tab.Buses, R.string.tab_buses, R.drawable.ic_tab_buses),
+            Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
+            Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
+        )
+    val choose = { t: Tab ->
+        if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
+        if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
+        // Stops tapped while on it: back to its home, from a line or a stop.
+        if (t == Tab.Buses && tab == Tab.Buses) buses.home()
+        // Map tapped while on it: the whole campus, nothing open or chosen.
+        if (t == Tab.Map && tab == Tab.Map) map.home()
+        onTab(t)
+    }
+    // From 600 wide the same four tabs are a rail on the leading edge, as Material has it on a large screen.
+    val rail = windowWidth().rail
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
         bottomBar = {
-            NavigationBar {
-                for ((t, label, icon) in
-                    listOf(
-                        Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
-                        Triple(Tab.Buses, R.string.tab_buses, R.drawable.ic_tab_buses),
-                        Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
-                        Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
-                    )) {
-                    NavigationBarItem(
-                        selected = tab == t,
-                        onClick = {
-                            if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
-                            if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
-                            // Stops tapped while on it: back to its home, from a line or a stop.
-                            if (t == Tab.Buses && tab == Tab.Buses) buses.home()
-                            // Map tapped while on it: the whole campus, nothing open or chosen.
-                            if (t == Tab.Map && tab == Tab.Map) map.home()
-                            onTab(t)
-                        },
-                        icon = { Icon(painterResource(icon), contentDescription = null) },
-                        label = { Text(stringResource(label)) },
-                    )
+            if (!rail)
+                NavigationBar {
+                    for ((t, label, icon) in tabs) {
+                        NavigationBarItem(
+                            selected = tab == t,
+                            onClick = { choose(t) },
+                            icon = { Icon(painterResource(icon), contentDescription = null) },
+                            label = { Text(stringResource(label)) },
+                        )
+                    }
                 }
-            }
         },
     ) { inner ->
-        // Back from Stops, Map or Settings goes to Now, as from any other tab bar.
-        BackHandler(enabled = tab != Tab.Now) {
-            onTab(Tab.Now)
-            vm.load(restart = true)
-        }
-        // Switching tabs fades through (out, then in with a slight zoom), and
-        // each tab keeps its saved state while it's away: where Now and
-        // Settings were scrolled to, which page of Settings was open, where
-        // the map was looking.
-        val saved = rememberSaveableStateHolder()
-        AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
-            saved.SaveableStateProvider(t.name) {
-                when (t) {
-                    Tab.Map ->
-                        Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
-                            // The account's places, for "Save as place" on a stop.
-                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                            // Before the stop sheet asks, so its board has them too: after
-                            // each composition, rather than written during it.
-                            val publicBuses = acct.profile?.publicBuses == true
-                            SideEffect { map.publicBuses = publicBuses }
-                            MapScreen(
-                                map,
-                                onGoThere = { code, name ->
-                                    vm.select(Target.Code(code, name))
-                                    onTab(Tab.Now)
-                                },
-                                places =
-                                    PlacesForMap(
-                                        savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
-                                        full = {
-                                            acct.profile.let { p ->
-                                                (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places
-                                            }
+        Row(Modifier.fillMaxSize()) {
+            if (rail)
+                NavigationRail(
+                    windowInsets =
+                        WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)
+                ) {
+                    for ((t, label, icon) in tabs) {
+                        NavigationRailItem(
+                            selected = tab == t,
+                            onClick = { choose(t) },
+                            icon = { Icon(painterResource(icon), contentDescription = null) },
+                            label = { Text(stringResource(label)) },
+                            modifier = Modifier.padding(vertical = 2.dp),
+                        )
+                    }
+                }
+            // Beside the rail, clear of a camera cutout or the navigation buttons on the far side of a phone on its side.
+            Box(
+                Modifier.weight(1f)
+                    .fillMaxHeight()
+                    .then(
+                        if (rail)
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.End)
+                            )
+                        else Modifier
+                    )
+            ) {
+                // Back from Stops, Map or Settings goes to Now, as from any other tab bar.
+                BackHandler(enabled = tab != Tab.Now) {
+                    onTab(Tab.Now)
+                    vm.load(restart = true)
+                }
+                // Switching tabs fades through (out, then in with a slight zoom), and
+                // each tab keeps its saved state while it's away: where Now and
+                // Settings were scrolled to, which page of Settings was open, where
+                // the map was looking.
+                val saved = rememberSaveableStateHolder()
+                AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
+                    saved.SaveableStateProvider(t.name) {
+                        when (t) {
+                            Tab.Map ->
+                                Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
+                                    // The account's places, for "Save as place" on a stop.
+                                    LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                                    // Before the stop sheet asks, so its board has them too: after
+                                    // each composition, rather than written during it.
+                                    val publicBuses = acct.profile?.publicBuses == true
+                                    SideEffect { map.publicBuses = publicBuses }
+                                    MapScreen(
+                                        map,
+                                        onGoThere = { code, name ->
+                                            vm.select(Target.Code(code, name))
+                                            onTab(Tab.Now)
                                         },
-                                        save = { code, name -> account.edit { it.addPlace(name, code) } },
-                                        // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
-                                        remove = { code ->
-                                            var removed: RemovedPlace? = null
-                                            account.edit { removed = it.removePlaceAt(code) }
-                                            removed?.let { r ->
-                                                scope.launch {
-                                                    val undo =
-                                                        snackbars.showSnackbar(
-                                                            Notice(
-                                                                L.s(R.string.favourite_removed, r.label),
-                                                                actionLabel = L.s(R.string.undo),
-                                                            )
-                                                        )
-                                                    if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
+                                        places =
+                                            PlacesForMap(
+                                                savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
+                                                full = {
+                                                    acct.profile.let { p ->
+                                                        (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places
+                                                    }
+                                                },
+                                                save = { code, name -> account.edit { it.addPlace(name, code) } },
+                                                // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
+                                                remove = { code ->
+                                                    var removed: RemovedPlace? = null
+                                                    account.edit { removed = it.removePlaceAt(code) }
+                                                    removed?.let { r ->
+                                                        scope.launch {
+                                                            val undo =
+                                                                snackbars.showSnackbar(
+                                                                    Notice(
+                                                                        L.s(R.string.favourite_removed, r.label),
+                                                                        actionLabel = L.s(R.string.undo),
+                                                                    )
+                                                                )
+                                                            if (undo == SnackbarResult.ActionPerformed) account.edit { it.restorePlace(r) }
+                                                        }
+                                                    }
+                                                },
+                                            ),
+                                        onShowList = { svc, stop ->
+                                            openStops(
+                                                when {
+                                                    stop != null -> BusRoute.Stop(stop)
+                                                    svc != null -> BusRoute.Line(svc, null)
+                                                    else -> null
                                                 }
-                                            }
+                                            )
                                         },
-                                    ),
-                                onShowList = { svc, stop ->
-                                    openStops(
-                                        when {
-                                            stop != null -> BusRoute.Stop(stop)
-                                            svc != null -> BusRoute.Line(svc, null)
-                                            else -> null
-                                        }
                                     )
-                                },
-                            )
+                                }
+                            Tab.Buses ->
+                                Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                                    // The pinned stops are the profile's.
+                                    LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                                    BusesScreen(
+                                        buses,
+                                        insets = inner,
+                                        pins = pins,
+                                        pinsKnown = pinsKnown,
+                                        publicBuses = acct.profile?.publicBuses == true,
+                                        pinLimit = pinLimit,
+                                        onPin = onPin,
+                                        onShowOnMap = { svc ->
+                                            map.show(svc)
+                                            onTab(Tab.Map)
+                                        },
+                                    )
+                                }
+                            // Edge to edge too, the insets inside, so the list's sky can reach the top.
+                            Tab.Settings ->
+                                Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                                    // Its pages offer Undo in the same bar as Today's.
+                                    CompositionLocalProvider(LocalNotices provides snackbars) {
+                                        SettingsScreen(
+                                            acct,
+                                            account,
+                                            vm,
+                                            inner,
+                                            toList = settingsAgain,
+                                            onAddEmail = onAddEmail,
+                                            onSignedOut = onSignedOut,
+                                            onClose = {
+                                                onTab(Tab.Now)
+                                                vm.load(restart = true)
+                                            },
+                                        )
+                                    }
+                                }
+                            // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
+                            Tab.Now ->
+                                Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                                    // The stars need the profile's pins.
+                                    LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                                    // A stop or a row tapped in Nearby: its board or its line, on the Stops tab.
+                                    MainScreen(
+                                        state,
+                                        vm,
+                                        insets = inner,
+                                        email = acct.email,
+                                        onAddEmail = onAddEmail,
+                                        nearby =
+                                            NearbyActions(
+                                                pins,
+                                                pinsKnown,
+                                                pinLimit,
+                                                onPin,
+                                                openStop = { openStops(BusRoute.Stop(it)) },
+                                                openLine = { svc, stop -> openStops(BusRoute.Line(svc, stop)) },
+                                            ),
+                                    )
+                                }
                         }
-                    Tab.Buses ->
-                        Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                            // The pinned stops are the profile's.
-                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                            BusesScreen(
-                                buses,
-                                insets = inner,
-                                pins = pins,
-                                pinsKnown = pinsKnown,
-                                publicBuses = acct.profile?.publicBuses == true,
-                                pinLimit = pinLimit,
-                                onPin = onPin,
-                                onShowOnMap = { svc ->
-                                    map.show(svc)
-                                    onTab(Tab.Map)
-                                },
-                            )
-                        }
-                    // Edge to edge too, the insets inside, so the list's sky can reach the top.
-                    Tab.Settings ->
-                        Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                            // Its pages offer Undo in the same bar as Today's.
-                            CompositionLocalProvider(LocalNotices provides snackbars) {
-                                SettingsScreen(
-                                    acct,
-                                    account,
-                                    vm,
-                                    inner,
-                                    toList = settingsAgain,
-                                    onAddEmail = onAddEmail,
-                                    onSignedOut = onSignedOut,
-                                    onClose = {
-                                        onTab(Tab.Now)
-                                        vm.load(restart = true)
-                                    },
-                                )
-                            }
-                        }
-                    // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
-                    Tab.Now ->
-                        Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                            // The stars need the profile's pins.
-                            LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                            // A stop or a row tapped in Nearby: its board or its line, on the Stops tab.
-                            MainScreen(
-                                state,
-                                vm,
-                                insets = inner,
-                                email = acct.email,
-                                onAddEmail = onAddEmail,
-                                nearby =
-                                    NearbyActions(
-                                        pins,
-                                        pinsKnown,
-                                        pinLimit,
-                                        onPin,
-                                        openStop = { openStops(BusRoute.Stop(it)) },
-                                        openLine = { svc, stop -> openStops(BusRoute.Line(svc, stop)) },
-                                    ),
-                            )
-                        }
+                    }
                 }
             }
         }
