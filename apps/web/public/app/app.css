@@ -894,3 +894,28 @@ body.app > .nav { max-width: 560px; }
   .app-main.split > .now-side { grid-column: 2; position: absolute; inset: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 16px) 0 auto; display: grid; gap: 12px; align-content: start; }
   .now-side .card-foot { margin-top: 4px; }
 }
+
+@media (min-width: 800px) {
+  /* Stops (buses.js BusesTab): the home in a pane 360 wide on the left, and
+     the stop or line opened from it beside it, its words in the 560 column.
+     The home scrolls on its own. A hairline between them; each pane's sky
+     band runs from edge to edge of the pane (50cqw is half the pane), and
+     the page's is at least as tall as the home's, so their hills line up. */
+  .buses-tab:has(> .bt-split) { max-width: none; padding: 0; }
+  .bt-split { display: grid; grid-template-columns: 360px minmax(0, 1fr); min-height: 100dvh; }
+  .bt-list { position: sticky; top: 0; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 32px; border-right: 1px solid var(--line); }
+  .bt-detail { container-type: inline-size; min-width: 0; padding-bottom: 32px; }
+  .bt-detail > :not(.bt-sky) { max-width: 528px; margin-inline: max(16px, calc(50% - 264px)); }
+  .bt-detail .bt-page.alone { padding: 0; }
+  .bt-split .bt-sky-top, .bt-split .bt-page.alone > .bt-sky, .bt-detail > .bt-sky { margin-top: 0; border-radius: 0; }
+  .bt-detail .bt-page.alone > .bt-sky, .bt-detail > .bt-sky { margin-inline: calc(50% - 50cqw); padding: env(safe-area-inset-top) max(16px, calc(50cqw - 264px)) 0; }
+  .bt-detail .bt-sky .sky-head { display: flex; flex-direction: column; justify-content: flex-end; min-height: 126px; }
+  .bt-detail .bt-sky .horizon.low { margin-inline: calc(-1 * max(16px, calc(50cqw - 264px))); }
+  body.sky .bt-detail > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
+  /* Nothing open: the band, and what to do. */
+  .bt-choose { margin-top: 18vh; color: var(--muted); text-align: center; }
+  /* The open stop's sign and the open line's row, marked as Settings marks its open page. */
+  .bt-split .bt-pager-page.open .stop-sign { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .bt-service[aria-current] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .bt-service[aria-current]:hover { background: var(--accent-soft); }
+}

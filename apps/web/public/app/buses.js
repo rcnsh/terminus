@@ -7,12 +7,28 @@
 // job, on Now. A service tapped on a board opens its line (/api/line), and a
 // stop on the line opens its board.
 // Where you are in the tab is in the address (#buses, #buses/stop/YIH,
-// #buses/line/D1/YIH), so Back and a reload keep it.
+// #buses/line/D1/YIH), so Back and a reload keep it. In a wide window the
+// home stays on the left and the stop or line opened from it shows beside
+// it (docs/agents/window-sizes.md).
 //
 // Only the times the API gives are shown: `later` is every later bus the
 // feed reported, and a line shows no times at stops other than yours.
 
-import { Bar, Icon, Skeleton, focusSoon, html, reducedMotion, store, useEffect, useMemo, useRef, useStore, widthOf } from '/assets/ui.js';
+import {
+  Bar,
+  Icon,
+  Skeleton,
+  focusSoon,
+  html,
+  reducedMotion,
+  store,
+  useEffect,
+  useMedia,
+  useMemo,
+  useRef,
+  useStore,
+  widthOf,
+} from '/assets/ui.js';
 import { clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { campus, loadCampus, profile, reloadProfile, togglePin } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
@@ -288,9 +304,10 @@ function refresh({ back = false } = {}) {
 }
 function refreshNow() {
   const r = route.get();
-  if (r.kind === 'line') return loadLine(r.svc, r.stop);
-  if (r.kind === 'stop') return loadBoard(shownCode(r.code));
-  return loadSigns(signWindow());
+  const page = r.kind === 'line' ? loadLine(r.svc, r.stop) : r.kind === 'stop' ? loadBoard(shownCode(r.code)) : null;
+  // The home's pinned stops whenever the home is on screen: beside the page in a wide window.
+  if (!page) return loadSigns(signWindow());
+  return split ? Promise.all([page, loadSigns(signWindow())]) : page;
 }
 
 /**
@@ -353,6 +370,17 @@ function go(hash) {
   trail.push(location.hash);
   location.hash = hash;
 }
+/** The home beside the page (a wide window, BusesTab): set as the tab draws. */
+let split = false;
+/**
+ * A stop or a line picked on the home. Side by side it takes the page's
+ * place rather than going on from it, so the page has no Back.
+ */
+function openFromHome(hash) {
+  if (!split) return go(hash);
+  trail.length = 0;
+  location.hash = hash;
+}
 function back(parent) {
   if (trail.length) {
     trail.pop();
@@ -375,8 +403,8 @@ function onHash() {
   else if (next.kind === 'line') loadLine(next.svc, next.stop);
 }
 
-/** The heading of what the tab shows: the home's title, the stop's or the line's. */
-const headOnScreen = () => document.querySelector('#tab-buses .bt-head');
+/** The heading of what the tab shows: the stop's or the line's (beside the home), else the home's title. */
+const headOnScreen = () => document.querySelector('#tab-buses .bt-detail .bt-head') ?? document.querySelector('#tab-buses .bt-head');
 
 export const stopHash = (code) => `#buses/stop/${encodeURIComponent(code)}`;
 export const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${stop ? `/${encodeURIComponent(stop)}` : ''}`;
@@ -547,14 +575,14 @@ const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got
  * couldn't update, or what a "~" means when one is showing. Before its
  * times come, its plate with its rows as shapes.
  */
-function PinPage({ code, entry, pinned, now }) {
+function PinPage({ code, entry, pinned, now, open }) {
   const s = entry?.s
     ? agedSign(entry.s, entry.got, now)
     : { stop: { code, name: plateName(code) }, walkS: null, available: true, board: [] };
   const note = entry?.s ? null : entry?.gone ? t('No times right now') : (entry?.error ?? null);
   const waiting = !entry?.s && !note;
   return html`
-    <div class="bt-pager-page" role="group" aria-label=${s.stop.name} data-answered=${entry?.s ? '' : undefined}>
+    <div class=${open ? 'bt-pager-page open' : 'bt-pager-page'} role="group" aria-label=${s.stop.name} data-answered=${entry?.s ? '' : undefined}>
       <div class="nearby">
         <${StopSign}
           s=${s}
@@ -562,8 +590,8 @@ function PinPage({ code, entry, pinned, now }) {
           note=${note}
           waiting=${waiting}
           services=${stopOf(code)?.services}
-          onStop=${openStop}
-          onLine=${(svc, at) => go(lineHash(svc, at))}
+          onStop=${(at) => openFromHome(stopHash(at))}
+          onLine=${(svc, at) => openFromHome(lineHash(svc, at))}
         />
         ${entry?.s && entry.error && html`<p class="bt-pin-error"><span class="bt-error">${entry.error}</span></p>`}
         ${!note && anyGuess([s]) && html`<p class="nb-foot">${t('~ is a guess from the timetable, not a live time.')}</p>`}
@@ -581,6 +609,7 @@ function PinPage({ code, entry, pinned, now }) {
  */
 function PinnedStops({ pinned }) {
   const pick = useStore(chosen);
+  const r = useStore(route);
   const all = useStore(signs);
   const now = useStore(tick);
   useStore(campus);
@@ -685,7 +714,7 @@ function PinnedStops({ pinned }) {
       )}
     </div>
     <div class="bt-pager" ref=${pager} onScroll=${onScroll}>
-      ${pinned.map((code) => html`<${PinPage} key=${code} code=${code} entry=${all.get(code)} pinned=${pinned} now=${now} />`)}
+      ${pinned.map((code) => html`<${PinPage} key=${code} code=${code} entry=${all.get(code)} pinned=${pinned} now=${now} open=${r.kind === 'stop' && r.code === code} />`)}
       <div class="bt-pager-page" role="group" aria-label=${t('Pin another stop')}>
         <div class="bt-add">
           <${Icon} paths=${STAR} />
@@ -704,6 +733,8 @@ function PinnedStops({ pinned }) {
  */
 function Lines({ routes }) {
   const counts = useStore(outs);
+  // The line open beside the home, marked as chosen.
+  const open = useStore(route);
   return html`
     <div class="card bt-services">
       ${routes.map(([svc, r]) => {
@@ -717,7 +748,8 @@ function Lines({ routes }) {
           key=${svc}
           class="bt-service"
           aria-label=${[t('Bus {0}', svc), name, via, n?.outText].filter(Boolean).join(t(', '))}
-          onClick=${() => go(lineHash(svc, null))}
+          aria-current=${open.kind === 'line' && open.svc === svc ? 'true' : undefined}
+          onClick=${() => openFromHome(lineHash(svc, null))}
         >
           <span class="bt-service-chip"><${Chip} svc=${svc} color=${r.color} cls="bt-chip" /></span>
           <span class="bt-service-text"><span class="bt-service-name">${name}</span>${via && html`<span class="bt-service-via">${via}</span>`}</span>
@@ -778,7 +810,7 @@ function Find() {
         onPick=${(d) => {
           box.current?.clear();
           box.current?.input?.blur();
-          go(d.kind === 'service' ? lineHash(d.code, null) : stopHash(d.code));
+          openFromHome(d.kind === 'service' ? lineHash(d.code, null) : stopHash(d.code));
         }}
       />
     </div>
@@ -793,6 +825,8 @@ function placeName(hash) {
 
 /** Back, named for where it goes: the page before in the tab, else `parent`. */
 function BackBar({ parent }) {
+  // Beside the home, only a page opened from another page has somewhere to go back to.
+  if (split && parse(trail.at(-1) ?? parent).kind === 'home') return null;
   const label = placeName(trail.at(-1) ?? parent);
   return html`
     <nav class="bt-nav" aria-label=${t('Back')}>
@@ -1021,7 +1055,9 @@ function TabStatus({ r }) {
 export function BusesTab({ visible, locate: where = null }) {
   const r = useStore(route);
   if (where) locate = where;
-  const home = visible && r.kind === 'home';
+  const wide = useMedia('(min-width: 800px)');
+  split = wide;
+  const home = visible && (r.kind === 'home' || wide);
 
   useEffect(() => {
     window.addEventListener('hashchange', onHash);
@@ -1039,7 +1075,7 @@ export function BusesTab({ visible, locate: where = null }) {
     reloadProfile()
       .catch(() => {})
       .then(() => {
-        if (route.get().kind === 'home') freshenSigns();
+        if (route.get().kind === 'home' || split) freshenSigns();
       });
     const now = route.get();
     if (now.kind === 'stop') showBoard(now.code);
@@ -1080,8 +1116,17 @@ export function BusesTab({ visible, locate: where = null }) {
 
   // First, so it stays the same status line whichever page is showing.
   const status = html`<${TabStatus} r=${r} />`;
-  if (r.kind === 'line') return html`${status}<${LinePage} svc=${r.svc} stop=${r.stop} />`;
-  if (r.kind === 'stop') return html`${status}<${StopPage} code=${r.code} />`;
+  const page =
+    r.kind === 'line' ? html`<${LinePage} svc=${r.svc} stop=${r.stop} />` : r.kind === 'stop' ? html`<${StopPage} code=${r.code} />` : null;
   // The search at the top of the sky, the home's own sky running on from it.
-  return html`${status}<div class="bt-sky-top"><${Find} /></div><${Home} />`;
+  const homePane = html`<div class="bt-sky-top"><${Find} /></div><${Home} />`;
+  if (!wide) return html`${status}${page ?? homePane}`;
+  // Side by side: the home, and the page opened from it or what to do with nothing open, under a sky of its own.
+  return html`
+    ${status}
+    <div class="bt-split">
+      <div class="bt-list">${homePane}</div>
+      <div class="bt-detail">${page ?? html`<${Sky} /><p class="bt-choose">${t('Choose a stop or a service.')}</p>`}</div>
+    </div>
+  `;
 }
