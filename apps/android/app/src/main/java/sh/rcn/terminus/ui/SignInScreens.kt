@@ -134,7 +134,8 @@ internal fun WelcomeScreen(
             }
             Spacer(Modifier.height(32.dp))
             Spacer(Modifier.weight(1f))
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // The buttons in the page's column; the livery runs edge to edge.
+            Column(Modifier.column().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 // Said as soon as it shows: it's why nothing happened.
                 message?.let {
                     Text(
@@ -256,6 +257,7 @@ internal fun SignInScreen(
             }
             Column(
                 Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                    .column()
                     .padding(horizontal = 16.dp)
             ) {
                 Groups {
