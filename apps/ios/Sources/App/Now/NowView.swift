@@ -41,7 +41,7 @@ struct NowView: View {
                                     .padding(.top, 12)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .column()
                         // Comes down a little with a pull; the room opens under it.
                         .pullLead()
                         TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -49,7 +49,7 @@ struct NowView: View {
                             VStack(alignment: .leading, spacing: 0) {
                                 Room(height: shows.room, phase: phase, scrolled: scrolled)
                                 NowHead(shows: shows, now: ServerClock.now)
-                                    .padding(.horizontal, 16)
+                                    .column()
                                 Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
                             }
                         }
@@ -81,7 +81,7 @@ struct NowView: View {
                         }
                         footer
                     }
-                    .padding(.horizontal, 16)
+                    .column()
                     .padding(.bottom, 24)
                 }
                 .onGeometryChange(for: CGFloat.self) {

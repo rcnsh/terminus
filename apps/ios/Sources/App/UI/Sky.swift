@@ -170,6 +170,13 @@ enum StatusBar {
         didSet { if inTabs != oldValue { refresh() } }
     }
 
+    /// Whether the status bar sits beside the page rather than above it (an
+    /// iPhone Duo, where it shares a strip with the tab bar). The strip is
+    /// the page's colour, not the sky's, so the theme's icons are the ones that read.
+    static var beside = false {
+        didSet { if beside != oldValue { refresh() } }
+    }
+
     private static func refresh() {
         install()
         for scene in UIApplication.shared.connectedScenes {
@@ -195,7 +202,7 @@ enum StatusBar {
                 let fallback = unsafeBitCast(method_getImplementation(original), to: Getter.self)
                 let block: @convention(block) (AnyObject) -> UIStatusBarStyle = { me in
                     MainActor.assumeIsolated {
-                        switch StatusBar.inTabs ? StatusBar.light : nil {
+                        switch StatusBar.inTabs && !StatusBar.beside ? StatusBar.light : nil {
                         case true?: .lightContent
                         case false?: .darkContent
                         case nil: fallback(me, sel)
