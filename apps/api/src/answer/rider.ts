@@ -15,7 +15,7 @@
 import type { Env, MeAnswer } from '../types.ts';
 import { getProfile } from '../accounts/profiles.ts';
 import { NO_PREFS, type TripPrefs, tripPrefs } from '../accounts/outcomes.ts';
-import { type Profile, classKey, classesOn } from '../timetable/profile.ts';
+import { type Profile, classKey, classesOn, isResting } from '../timetable/profile.ts';
 import { type Ask, DAY_ASK, type Rider, nextFor } from './next.ts';
 import { type DayRecord, type Plan, type TripUpdate, loadDay, updateTrip } from './trip.ts';
 import { type MeDeps, unlogged } from './answer.ts';
@@ -27,9 +27,15 @@ import { withLang } from '../i18n.ts';
 /** /api/me/next's body: the answer and its card. */
 export type NextBody = MeAnswer & { card: Card; walkSpeedMs: number };
 
-/** Today's trip signals, looked up only when there's a trip to track today. */
-export async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number): Promise<DayRecord | null> {
-  if (!env.TRIPS || !classesOn(profile, nowMs).length) return null;
+/**
+ * Today's trip signals, looked up only when there's a trip to track today:
+ * a class, the evening trip home, or a favourite or stop asked for, whose
+ * chosen bus is kept in the day too (step.ts), class or not.
+ */
+export async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number, asked?: Ask): Promise<DayRecord | null> {
+  const tracked =
+    Boolean(asked?.place || asked?.to) || classesOn(profile, nowMs).length > 0 || (profile.home !== null && isResting(profile, nowMs));
+  if (!env.TRIPS || !tracked) return null;
   return loadDay(env, userId, nowMs);
 }
 
@@ -56,11 +62,11 @@ export async function loadRider(
   env: Env,
   userId: string,
   nowMs: number,
-  given: { profile?: Profile; day?: DayRecord | null } = {},
+  given: { profile?: Profile; day?: DayRecord | null; asked?: Ask } = {},
 ): Promise<Rider> {
   const profile = given.profile ?? (await getProfile(env.DB!, userId, GRAPH));
   const [day, prefs] = await Promise.all([
-    given.day !== undefined ? given.day : tripDay(env, userId, profile, nowMs),
+    given.day !== undefined ? given.day : tripDay(env, userId, profile, nowMs, given.asked),
     prefsFor(env.DB!, userId, profile, nowMs),
   ]);
   return { userId, profile, day, prefs };
