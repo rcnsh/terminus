@@ -14,7 +14,16 @@ release.
     `pnpm exec cf auth whoami` says which is in use; a missing token in
     the shell doesn't mean a deploy can't run.
   - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
-    applies the beta D1's migrations the same way.
+    applies the beta D1's migrations the same way, then runs
+    `scripts/deploy/smoke.mjs https://beta.terminus.run --account`: a
+    throwaway account asks for a trip and steps to the later bus. After a
+    production deploy, run `node scripts/deploy/smoke.mjs https://terminus.run`
+    (no `--account`: pages and health only, no account made).
+  - Each deploy is labelled with its commit (`--message`), so which commit
+    is live is the newest message in
+    `pnpm exec cf workers deployments list --worker terminus --per-page 3`
+    (`terminus-beta` for the beta). The Worker name goes in `--worker`, and
+    the output is already JSON.
   - By hand, a migration is applied **before** deploying:
     `pnpm exec cf d1 migrations apply <db-id>` (ids are in
     `cloudflare.config.ts`; `test/deploy.test.js` checks the scripts match).
