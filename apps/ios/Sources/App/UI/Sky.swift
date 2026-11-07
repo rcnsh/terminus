@@ -81,6 +81,9 @@ struct SkyBand<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.colorScheme) private var scheme
     @Environment(\.skyPull) private var pull
+    @Environment(\.listPane) private var listPane
+    @Environment(\.paneBands) private var bands
+    @State private var bandID = UUID()
     private let clock = SkyClock.shared
 
     init(moonLow: Bool = false, moon: Bool = true, @ViewBuilder content: () -> Content) {
@@ -99,11 +102,14 @@ struct SkyBand<Content: View>: View {
         let m = pull?.picture()
         let pulling = m?.open ?? false
         let paint = pull?.paint
+        // Side by side, only the trailing pane draws the moon and stars.
+        let moon = self.moon && !listPane
         VStack(alignment: .leading, spacing: 0) {
             content.skyInk(light: p.lightInk)
             if moonLow { Spacer().frame(height: Self.moonLine) }
             Spacer().frame(height: Self.low)
         }
+        .modifier(MatchedBand(bands: bands, id: bandID, pulling: pulling))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(alignment: .top) {
             GeometryReader { geo in
@@ -148,6 +154,33 @@ struct SkyBand<Content: View>: View {
             // Up under the status bar, and on up past the top for a pull.
             .padding(.top, -600)
             .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Side by side, a band drawn on down to where the lowest of the panes'
+/// bands ends, its words at the top, so the horizons meet. Its own height
+/// counts, not one stretched by a pull, and where its top rests unscrolled.
+private struct MatchedBand: ViewModifier {
+    let bands: PaneBands?
+    let id: UUID
+    let pulling: Bool
+
+    func body(content: Content) -> some View {
+        if let bands {
+            content
+                .onGeometryChange(for: CGSize.self) {
+                    // Where its top rests: in a scroll view, less how far it has scrolled.
+                    let g = $0.frame(in: .global).minY
+                    let s = $0.frame(in: .scrollView).minY
+                    return CGSize(width: g == s ? g : g - s, height: $0.size.height)
+                } action: { v in
+                    if !pulling { bands.set(id, top: v.width, height: v.height) }
+                }
+                .onDisappear { bands.set(id, height: nil) }
+                .frame(minHeight: bands.height(top: bands.top(id)), alignment: .top)
+        } else {
+            content
         }
     }
 }
