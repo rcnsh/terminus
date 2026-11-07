@@ -8,15 +8,36 @@ struct SettingsView: View {
     @State private var model = SettingsModel.shared
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var phase
+    @Environment(\.windowWidth) private var width
     @State private var signingIn = false
 
     var body: some View {
-        NavigationStack(path: $model.path) {
-            SettingsList(model: model)
-                .navigationDestination(for: SettingsPage.self) { page in
-                    SettingsPageView(page: page, model: model)
+        Group {
+            if width.panes {
+                // The list beside the page open from it; a page opened from that pushes in its pane.
+                ListDetail {
+                    // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
+                    NavigationStack { SettingsList(model: model) }
+                } detail: {
+                    NavigationStack(path: model.pagesOver) {
+                        SettingsPageView(page: model.shown, model: model)
+                            .environment(\.paneRoot, true)
+                            .id(model.shown)
+                            .navigationDestination(for: SettingsPage.self) { page in
+                                SettingsPageView(page: page, model: model)
+                            }
+                    }
                 }
+            } else {
+                NavigationStack(path: $model.path) {
+                    SettingsList(model: model)
+                        .navigationDestination(for: SettingsPage.self) { page in
+                            SettingsPageView(page: page, model: model)
+                        }
+                }
+            }
         }
+        .onChange(of: width.panes, initial: true) { _, panes in model.split = panes }
         .overlay(alignment: .bottom) {
             SettingsToast(model: model).animation(.snappy, value: model.message)
         }
@@ -64,10 +85,11 @@ private struct SettingsList: View {
                         }
                     }
                 }
-                Button(L("About")) { model.path.append(.about) }
+                Button(L("About")) { model.open(.about) }
                     .font(.body.weight(.medium))
                     .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity, minHeight: 44)
+                    .chosenRow(model.chosen == .about)
                     .accessibilityIdentifier("settings.about")
             }
         }
@@ -84,7 +106,7 @@ private struct SettingsList: View {
     /// Who you are: your email (or that you're not signed in) and your devices, opening Account.
     private var accountTile: some View {
         Button {
-            model.path.append(.account)
+            model.open(.account)
         } label: {
             HStack(spacing: 12) {
                 if let email = app.email { AccountInitial(email: email) } else { SettingsMark() }
@@ -102,6 +124,7 @@ private struct SettingsList: View {
                 Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
             }
             .padding(16)
+            .chosenRow(model.chosen == .account)
             .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.line))
             .contentShape(RoundedRectangle(cornerRadius: 18))
@@ -120,7 +143,7 @@ private struct SettingsList: View {
                 .foregroundStyle(s.tone == .todo ? Color.brand : s.tone == .off ? Color.warn : Color.muted)
         }
         return Button {
-            model.path.append(page)
+            model.open(page)
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: icon)
@@ -146,6 +169,7 @@ private struct SettingsList: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .frame(minHeight: 56)
+            .chosenRow(model.chosen == page)
             .contentShape(Rectangle())
         }
         .buttonStyle(SettingsTilePressStyle())

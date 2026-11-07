@@ -32,8 +32,30 @@ enum SettingsPage: Hashable {
 final class SettingsModel {
     static let shared = SettingsModel()
 
-    /// The pages open, on top of the list.
+    /// The pages open, on top of the list. When wide, the first is the one
+    /// open beside the list, the rest pushed over it.
     var path: [SettingsPage] = []
+    /// Wide: the list and a page side by side, so the list opens a page in place of the one open.
+    var split = false
+
+    /// Wide, the list's first page is open until another is picked, so the pane beside it is never empty.
+    static let firstPage = SettingsPage.account
+
+    /// The page open beside the list.
+    var shown: SettingsPage { path.first ?? Self.firstPage }
+
+    /// The page whose row is marked as chosen; none when the list has the screen.
+    var chosen: SettingsPage? { split ? shown : nil }
+
+    /// The pages pushed over the first in the wide detail pane.
+    var pagesOver: Binding<[SettingsPage]> {
+        Binding(get: { Array(self.path.dropFirst()) }, set: { self.path = [self.shown] + $0 })
+    }
+
+    /// A page picked in the list: over it, or wide, beside it in place of the one open.
+    func open(_ page: SettingsPage) {
+        if split { path = [page] } else { path.append(page) }
+    }
 
     private(set) var profile: ProfileDoc?
     private(set) var me: Me?
