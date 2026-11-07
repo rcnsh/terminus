@@ -39,7 +39,7 @@ final class SettingsModel {
     var split = false
 
     /// Wide, the list's first page is open until another is picked, so the pane beside it is never empty.
-    static let firstPage = SettingsPage.account
+    static let firstPage = SettingsPage.trips
 
     /// The page open beside the list.
     var shown: SettingsPage { path.first ?? Self.firstPage }

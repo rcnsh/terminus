@@ -48,8 +48,9 @@ final class WindowWidthTests: XCTestCase {
         let m = SettingsModel()
         XCTAssertNil(m.chosen)
         m.split = true
-        XCTAssertEqual(m.shown, .account)
-        XCTAssertEqual(m.chosen, .account)
+        // Your trips, not the account: a first look shouldn't land on Sign out.
+        XCTAssertEqual(m.shown, .trips)
+        XCTAssertEqual(m.chosen, .trips)
         m.open(.about)
         m.pagesOver.wrappedValue = [.licences]
         XCTAssertEqual(m.path, [.about, .licences])
@@ -59,7 +60,21 @@ final class WindowWidthTests: XCTestCase {
         // A page pushed over the first page, when none was picked, keeps it under.
         m.path = []
         m.pagesOver.wrappedValue = [.licences]
-        XCTAssertEqual(m.path, [.account, .licences])
+        XCTAssertEqual(m.path, [.trips, .licences])
+    }
+
+    func testOnlyAStopShowingAloneBesideTheHomeIsLeftToItsPage() {
+        let m = BusesModel()
+        m.path = [.stop("UTOWN")]
+        // On a phone the home isn't on screen with the page.
+        XCTAssertNil(m.stopBeside)
+        m.split = true
+        XCTAssertEqual(m.stopBeside, "UTOWN")
+        // A line pushed over it: the stop's page has stopped refreshing it.
+        m.path.append(.line(svc: "D2", from: "UTOWN"))
+        XCTAssertNil(m.stopBeside)
+        m.path = [.line(svc: "D2", from: nil)]
+        XCTAssertNil(m.stopBeside)
     }
 
     func testSettingsPushesOverTheListOnAPhone() {
