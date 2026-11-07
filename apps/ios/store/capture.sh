@@ -25,8 +25,14 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
 done
 
+# Built once and installed before the grant: a simulator that has never had
+# the app ignores a grant for it, and every scene then shows the location card.
+DD=build/store-dd
+xcodebuild build-for-testing -project terminus.xcodeproj -scheme Terminus -destination "id=$SIM" \
+  -derivedDataPath "$DD" -quiet
+xcrun simctl install "$SIM" "$DD/Build/Products/Debug-iphonesimulator/Terminus.app"
 # The app asks for location on its first launch: answered, as a person would.
-xcrun simctl privacy "$SIM" grant location sh.rcn.terminus 2>/dev/null || true
+xcrun simctl privacy "$SIM" grant location-always sh.rcn.terminus
 
 # The scene's test and its status bar's time. The widgets read the phone's
 # own clock, so their scene shows the real one.
@@ -36,16 +42,23 @@ scene() {
   [ -n "$ONLY" ] && [ "$ONLY" != "$test" ] && return 0
   for lang in en zh; do
     # "clock": the real time, a minute on, when the test takes its shot.
-    shown=$time
-    # frame.mjs redraws the home screen's status bar with it (2-widget.time).
-    [ "$time" = clock ] && shown=$(date -v+1M +%H:%M) && echo "$shown" > "store/captures/$lang/2-widget.time"
-    xcrun simctl status_bar "$SIM" override --time "$shown" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+    # frame.mjs redraws the home screen's status bar with it (2-widget.time),
+    # so the override leaves the time alone: simctl refuses any 00:MM.
+    clock=
+    if [ "$time" = clock ]; then
+      date -v+1M +%H:%M > "store/captures/$lang/2-widget.time"
+    else
+      clock="--time $time"
+    fi
+    # shellcheck disable=SC2086 # $clock is empty or two words
+    xcrun simctl status_bar "$SIM" override $clock --dataNetwork wifi --wifiMode active --wifiBars 3 \
       --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
     TEST_RUNNER_TERMINUS_STUB="http://127.0.0.1:$PORT" \
     TEST_RUNNER_STORE_LANG=$lang \
     TEST_RUNNER_TERMINUS_SHOTS="$PWD/build/store-shots" \
-      xcodebuild test -project terminus.xcodeproj -scheme Terminus -destination "id=$SIM" \
-        -only-testing:"TerminusUITests/StoreShotsUITests/$test" -collect-test-diagnostics never -quiet
+      xcodebuild test-without-building -project terminus.xcodeproj -scheme Terminus -destination "id=$SIM" \
+        -derivedDataPath "$DD" -only-testing:"TerminusUITests/StoreShotsUITests/$test" \
+        -collect-test-diagnostics never -quiet
   done
 }
 # The widgets' scene last: it moves the stub's clock to the real time.
