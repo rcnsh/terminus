@@ -68,6 +68,29 @@ test('dialogs are centred from 600 wide and at most 560 wide; sign-in and setup 
   assert.match(read('pair/index.html'), /main \{ padding-top: 12px; max-width: 560px; \}/);
 });
 
+test('chosen is a rounded fill of the accent and nothing else, and only the trailing pane has a moon', () => {
+  const css = read('app/app.css');
+  const account = read('account/account.css');
+  assert.match(read('assets/site.css'), /--chosen: color-mix\(in srgb, var\(--accent\) 12%, transparent\);/);
+  const stops = /\n {2}\.bt-split :is\(\.bt-service, \.bt-result\)\[aria-current\][^{]*\{([^}]*)\}/.exec(css)[1];
+  assert.match(stops, /border-radius: 12px; background: var\(--chosen\);/);
+  assert.match(css, /\.bt-pager-page\.open \.stop-sign \.plate \{ background: var\(--chosen\); \}/);
+  assert.match(account, /\.settings-row\[aria-current\] \{ background: var\(--chosen\); \}/);
+  // No bar, no outline, no coloured chevron.
+  assert.doesNotMatch(css + account, /aria-current\][^{]*\{[^}]*(box-shadow|border-color|outline)/);
+  assert.doesNotMatch(css + account, /aria-current\] \.chev/);
+  assert.match(css, /\.bt-list \.celestial, \.settings-tab \.settings-side \.celestial \{ display: none; \}/);
+});
+
+test("Elsewhere sits at the trailing end of the chips' row, and the report's foot is placed beside, never moved", () => {
+  const css = read('app/app.css');
+  assert.match(css, /\.app-chips \.chip-search \{[^}]*margin-left: auto;/);
+  assert.match(wideRule(css, '.app-main.split .app-card > .card-foot.card-foot'), /position: absolute;/);
+  // One CardFoot, always in the card: Now going between one column and two doesn't remount the report.
+  const app = read('app/app.js');
+  assert.equal(app.match(/<\$\{CardFoot\} \/>/g).length, 1);
+});
+
 useLang('en');
 page({ url: 'https://terminus.run/app/#buses', html: '<div id="root"></div>' });
 globalThis.ResizeObserver ??= class {
@@ -129,4 +152,45 @@ test('Stops in a wide window: the home beside the page opened from it, Back only
   assert.equal(detail().querySelector('.bt-back'), null);
   render(null, root);
   await settle();
+});
+
+test('Stops search in a wide window: its results take the home pane, as rows with the code and services', async () => {
+  B.route.set({ kind: 'home' });
+  render(html`<${B.BusesTab} visible=${false} />`, root);
+  await settle();
+  B.findText.set('lt');
+  await settle();
+  assert.equal(root.querySelector('.bt-list .bt-no-pins, .bt-list .bt-pins'), null, 'the home gone');
+  const hit = root.querySelector('.bt-list #bt-results .bt-result-stop');
+  assert.equal(hit.querySelector('.bt-result-name').textContent, 'LT13');
+  assert.equal(hit.querySelector('.bt-result-code').textContent, 'LT13');
+  assert.deepEqual(
+    [...hit.querySelectorAll('.svc-tag')].map((x) => x.textContent.trim()),
+    ['A1'],
+  );
+  hit.click();
+  await go(location.hash);
+  assert.equal(location.hash, '#buses/stop/LT13');
+  assert.equal(root.querySelector('.bt-list #bt-results .bt-result-stop').getAttribute('aria-current'), 'true');
+  // Cleared: the home again.
+  B.findText.set('');
+  await settle();
+  assert.equal(root.querySelector('#bt-results'), null);
+  render(null, root);
+  await settle();
+});
+
+test('beside the home, the open pinned stop is asked for by its page alone once its card has times', async () => {
+  P.profile.set({ pinnedStops: ['KTR', 'LT13'] });
+  B.chosen.set('KTR');
+  B.route.set({ kind: 'stop', code: 'KTR' });
+  render(html`<${B.BusesTab} visible=${false} />`, root);
+  await settle();
+  B.signs.set(new Map());
+  assert.deepEqual(B.signsToAsk(), ['KTR', 'LT13'], 'no times yet: asked once');
+  B.signs.set(new Map([['KTR', { s: { stop: { code: 'KTR', name: 'KTR' }, board: [] }, at: Date.now(), got: Date.now() }]]));
+  assert.deepEqual(B.signsToAsk(), ['LT13']);
+  render(null, root);
+  await settle();
+  P.profile.set({ pinnedStops: [] });
 });

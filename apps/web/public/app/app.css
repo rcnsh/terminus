@@ -14,7 +14,7 @@
 .app-card .widget { box-shadow: none; border: 0; padding: 0; background: none; }
 .app-card .widget .chips { display: none; }
 /* One quiet line: "Updated 9:41 · Is this wrong?". */
-:is(.app-card, .now-side) .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin-top: 12px; }
+.app-card .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin-top: 12px; }
 /* Before the first answer, a trip's card as shapes (app.js CardSkeleton):
    its dots and line in the skeleton's colour, faint, so it reads as waiting. */
 .journey.sk-card .line .pt .rail::before { background: var(--sk); border-color: var(--sk); }
@@ -27,12 +27,12 @@
 .bt-service .bt-chip.sk { min-width: 28px; }
 /* As tall as a row's crowd (.bt-crowd), which most rows have. */
 .bt-meta .sk-pill { width: 4.4rem; height: 22px; }
-:is(.app-card, .now-side) .updated { font-size: 0.8rem; }
-:is(.app-card, .now-side) .updated:empty { display: none; }
-:is(.app-card, .now-side) .updated:has(+ .report-open)::after { content: '·'; margin-left: 6px; }
+.app-card .updated { font-size: 0.8rem; }
+.app-card .updated:empty { display: none; }
+.app-card .updated:has(+ .report-open)::after { content: '·'; margin-left: 6px; }
 /* Anything else under them (the report's sheet is out of the flow), on a line of its own. */
-:is(.app-card, .now-side) .card-foot > :not(.report-open, .report-sheet, .updated) { flex-basis: 100%; }
-:is(.app-card, .now-side) .card-foot > p { order: 1; margin: 0; }
+.app-card .card-foot > :not(.report-open, .report-sheet, .updated) { flex-basis: 100%; }
+.app-card .card-foot > p { order: 1; margin: 0; }
 body.is-offline .app-card .widget { opacity: 0.6; }
 /* The day plan's next thing, offline: still the thing to do, so not dimmed (the banner says offline). */
 body.is-offline .app-card .widget.offline-plan { opacity: 1; }
@@ -57,8 +57,8 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
   .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
   .map-pills .dot, .bt-bus { forced-color-adjust: none; }
 }
-/* Elsewhere at the end of the chips, worded so it reads as one more place to go, and the search it opens. */
-.app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px 7px 10px; }
+/* Elsewhere at the trailing end of the chips' row, worded so it reads as one more place to go, and the search it opens. */
+.app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 7px 14px 7px 10px; }
 .app-chips .chip-search[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
 .chip-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .where-box input { width: 100%; }
@@ -882,11 +882,13 @@ body.app > .nav { max-width: 560px; }
      buttons on the left, and Today on the right with the card's foot under
      it. Today starts where the sky ends (sky.js keeps --sky-end and
      --sky-top), out of the flow, so Now is kept at least as tall as it
-     (--side-h, app.js NowSide). */
+     and the foot (--side-h, --foot-h, app.js NowSide). The foot stays in
+     the card and is only placed there, so an open report keeps its draft
+     as Now goes between one column and two. */
   body.app.now-split > .nav { max-width: 1072px; }
   .app-main.split {
     position: relative; max-width: 1072px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px;
-    min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 32px);
+    min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px + var(--foot-h, 0px) + 32px);
   }
   .app-main.split > * { grid-column: 1 / -1; }
   .app-main.split > :is(.go-later, .go-later-form) { grid-column: 1; }
@@ -894,7 +896,21 @@ body.app > .nav { max-width: 560px; }
   .app-main.split .app-card :is(.horizon ~ *, :has(.horizon) ~ *) { max-width: calc(50% - 24px); }
   /* Both lines named: an absolute item's auto end would be the padding edge, past the column. */
   .app-main.split > .now-side { grid-column: 2 / 3; position: absolute; inset: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px) 0 auto; display: grid; gap: 12px; align-content: start; }
-  .now-side .card-foot { margin-top: 4px; }
+  /* Column 2 starts half the padding box plus 8 px in (16 px gutter, 48 px gap). */
+  .app-main.split .app-card > .card-foot.card-foot {
+    position: absolute; top: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px); left: calc(50% + 8px); right: 16px;
+    max-width: none; margin: 0;
+  }
+}
+
+/* A narrow detail pane (800 wide leaves Settings' page about 350): a long
+   value (a residence's name) goes on a line under its name rather than
+   being cut off. Only a pane is a container, so a phone is as it was. */
+@container (max-width: 440px) {
+  .settings-tab .field:has(select.plain) { flex-wrap: wrap; }
+  .settings-tab .field:has(select.plain) > label { flex-basis: 100%; }
+  .settings-tab .field-control:has(> select.plain) { flex-basis: 100%; justify-content: flex-start; }
+  .settings-tab .field-control > select.plain { max-width: 100%; margin-left: -6px; text-align: left; text-align-last: left; }
 }
 
 @media (min-width: 800px) {
@@ -916,10 +932,27 @@ body.app > .nav { max-width: 560px; }
   body.sky .bt-detail > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
   /* Nothing open: the band, and what to do. */
   .bt-choose { margin-top: 18vh; color: var(--muted); text-align: center; }
-  /* The open stop's sign and the open line's row, marked as Settings marks its open page. */
-  .bt-split .bt-pager-page.open .stop-sign { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  .bt-service[aria-current] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-  .bt-service[aria-current]:hover { background: var(--accent-soft); }
+  /* Chosen (window-sizes.md): the open stop's card, the open line's row, a
+     search result that's open: a fill of the accent, rounded, nothing else. */
+  .bt-split .bt-pager-page.open .stop-sign, .bt-split .bt-pager-page.open .stop-sign .plate { background: var(--chosen); }
+  .bt-split :is(.bt-service, .bt-result)[aria-current], .bt-split :is(.bt-service, .bt-result)[aria-current]:hover { border-radius: 12px; background: var(--chosen); }
+  /* Only the trailing pane draws the moon and stars. */
+  .bt-list .celestial, .settings-tab .settings-side .celestial { display: none; }
+  /* The search's results in the home pane (buses.js Results): a stop by name, its code and the services there. */
+  .bt-results { padding: 0; overflow: hidden; }
+  .bt-result-stop { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 8px 11px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .bt-result-stop:first-child { border-top: 0; }
+  .bt-result-stop:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+  .bt-result-text { flex: 1; display: grid; gap: 4px; min-width: 0; }
+  .bt-result-name { font: 600 0.95rem/1.3 var(--font); overflow-wrap: anywhere; }
+  .bt-result-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .bt-result-code { margin-right: 4px; color: var(--muted); font: 600 0.7rem/1 var(--display); letter-spacing: 0.06em; }
+  /* Its own clear button in place of the browser's. */
+  .bt-list .bt-search input { padding-right: 44px; }
+  .bt-list .bt-search input::-webkit-search-cancel-button { display: none; }
+  .bt-search-clear { position: absolute; top: 7px; right: 7px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+  .bt-search-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  body.sky .bt-sky-top .bt-search-clear { color: var(--k-muted); }
 }
 
 @media (min-width: 800px) {

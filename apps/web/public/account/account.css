@@ -217,9 +217,8 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   .settings-side { position: sticky; top: 16px; }
   .page-back { display: none; }
   .page-head { margin-left: 0; }
-  .settings-row[aria-current] { background: var(--accent-soft); }
-  .settings-row.set-account[aria-current] { border-color: var(--accent); }
-  .settings-row[aria-current] .chev { color: var(--accent); }
+  /* Chosen: a fill of the accent, rounded, nothing else (docs/agents/window-sizes.md). */
+  .settings-row[aria-current] { background: var(--chosen); }
   /* The list as a sidebar: plain rows, what each has set under its name, groups apart by a rule. */
   .set-group { border: 0; border-radius: 0; background: none; overflow: visible; display: grid; gap: 2px; }
   .set-group + .set-group { border-top: 1px solid var(--line); padding-top: 12px; }
@@ -227,7 +226,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   .set-item .row-text { display: grid; gap: 1px; }
   .set-item .row-sum { text-align: left; font-size: 0.8rem; }
   .set-item .chev { display: none; }
-  .set-item[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 }
 /* Wider still, on the account page: the list, the page, and the widget it changes, side by side. */
 @media (min-width: 1100px) {
