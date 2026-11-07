@@ -523,3 +523,30 @@ test("on K, a class's Earlier and Later are the windows either side of its leave
     if (steps.earlier) assert.ok(end - Date.parse(steps.earlier.board) >= 2346_000, `${cls}: Earlier a window before`);
   }
 });
+
+test("a class whose latest bus is under a headway off: the steps are the windows after the leave-by's late one", () => {
+  // D2 from PGP, a 60 s walk and the minute to get ready: at the stop by 10:01:20.
+  const now = at('2026-08-27T10:00');
+  const ready = now + readyS({ walkS: 60 }) * 1000;
+  const rideS = 600;
+  for (const afterS of [30, 120, 300]) {
+    const classAt = ready + afterS * 1000 + (ON_TIME_SLACK_S + rideS) * 1000;
+    const { leave, steps } = classSteps('D2', 'PGP', now, classAt, rideS);
+    const end = Date.parse(leave.arrive) - rideS * 1000;
+    assert.ok(steps.later, `${afterS} s: a later bus`);
+    assert.ok(
+      Date.parse(steps.later.board) >= end,
+      `${afterS} s: Later from ${hhmmss(Date.parse(steps.later.board))}, after ${hhmmss(end)}`,
+    );
+  }
+});
+
+test("a class's Earlier is never a window cut short at when you reach the stop: its bus may have gone", () => {
+  const now = at('2026-08-27T10:00');
+  const ready = now + readyS({ walkS: 60 }) * 1000;
+  const rideS = 600;
+  const { leave, steps } = classSteps('D2', 'PGP', now, ready + 600_000 + (ON_TIME_SLACK_S + rideS) * 1000, rideS);
+  const h = headwayFor(GRAPH, 'D2', now) * 1000;
+  if (steps.earlier)
+    assert.ok(Date.parse(leave.board) - Date.parse(steps.earlier.board) >= h, `Earlier from ${hhmmss(Date.parse(steps.earlier.board))}`);
+});

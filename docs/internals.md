@@ -657,10 +657,11 @@ change and once the second bus has gone (`changesAt`).
   drops the trip's plan, so the chosen bus becomes it and every device, the
   leave reminder and Today follow. With no live times the buses it steps
   between fall a headway apart from the chosen one, so it stays put as the
-  clock moves; with none chosen, a class's end at its latest bus as the
-  leave-by's do, so the steps are the windows either side of its own. A
-  class's buses are counted from a day before its latest bus, so one days
-  ahead steps on its own day. When the feed no longer lists that bus, the next of the same
+  clock moves; with none chosen, a class's windows end at its latest bus,
+  as its leave-by's do, so the steps are the windows either side of its
+  own. A class's buses are counted from a few hours before its latest
+  bus, so one days ahead steps on its own day. When the feed no longer
+  lists that bus, the next of the same
   service from the same stop; once it leaves before any bus of that
   service you can still catch (you didn't set off for it), the choice
   lapses and the trip is back on the best bus. Past the leave-by with
