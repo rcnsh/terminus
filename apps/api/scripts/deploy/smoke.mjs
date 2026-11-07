@@ -69,12 +69,13 @@ if (account) {
         body: { trip: first.json.card.step.trip, to: later, dir: 'later', ...AT },
       });
       if (stepped.status !== 200) fail(`/api/me/step is ${stepped.status}`);
-      for (const n of [1, 2]) {
-        const again = await call(`/api/me/next?${ASK}`, { token });
-        const kept = again.json?.card?.step?.moved === true && again.json?.leave?.board === later.board;
-        if (kept) ok(`answer ${n} after "Later bus" keeps the bus chosen`);
-        else fail(`answer ${n} after "Later bus" is back on ${again.json?.leave?.board ?? 'nothing'}, not ${later.board}`);
-      }
+      else
+        for (const n of [1, 2]) {
+          const again = await call(`/api/me/next?${ASK}`, { token });
+          const kept = again.json?.card?.step?.moved === true && again.json?.leave?.board === later.board;
+          if (kept) ok(`answer ${n} after "Later bus" keeps the bus chosen`);
+          else fail(`answer ${n} after "Later bus" is back on ${again.json?.leave?.board ?? 'nothing'}, not ${later.board}`);
+        }
     }
   }
 }
