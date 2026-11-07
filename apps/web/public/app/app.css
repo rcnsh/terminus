@@ -919,3 +919,18 @@ body.app > .nav { max-width: 560px; }
   .bt-service[aria-current] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
   .bt-service[aria-current]:hover { background: var(--accent-soft); }
 }
+
+@media (min-width: 800px) {
+  /* Settings (account/settings.js) as Stops: the list in a pane 360 wide,
+     the open page beside it in the 560 column, each under its own band. */
+  .settings-tab { max-width: none; padding: 0; }
+  .settings-tab .settings { grid-template-columns: 360px minmax(0, 1fr); gap: 0; min-height: 100dvh; }
+  .settings-tab .settings-side { height: 100dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 32px; border-right: 1px solid var(--line); }
+  .settings-tab .settings-side .page-band { margin-inline: -16px; padding-inline: 16px; }
+  .settings-tab .settings-pages { container-type: inline-size; min-width: 0; padding-bottom: 32px; }
+  .settings-tab .settings-page { max-width: 528px; margin-inline: max(16px, calc(50% - 264px)); }
+  .settings-tab .settings-page .page-band { margin-inline: calc(50% - 50cqw); padding-inline: calc(50cqw - 50%); }
+  /* The hills as wide as the band they end, not the page. */
+  .settings-tab .settings-side .page-band .horizon { width: auto; margin-inline: -16px; }
+  .settings-tab .settings-page .page-band .horizon { width: 100cqw; margin-inline: calc(50% - 50cqw); }
+}

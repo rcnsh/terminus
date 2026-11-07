@@ -29,7 +29,7 @@ body:has(.signin) { overflow-x: clip; }
 #sent-step .btn { margin-top: 20px; }
 
 /* Settings (settings.js): a list of groups and their pages. On a phone one
-   at a time, sliding; from 900px (as `wide` in settings.js) side by side. */
+   at a time, sliding; from 800px (as `wide` in settings.js) side by side. */
 .settings { position: relative; overflow-x: clip; padding-top: 8px; }
 .settings-side { display: grid; gap: 16px; align-content: start; min-width: 0; }
 .settings-side .eyebrow, .settings-rail .eyebrow { margin-bottom: 10px; }
@@ -55,7 +55,7 @@ body:has(.signin) { overflow-x: clip; }
 /* A long email on one line, cut short, rather than broken mid-word. */
 .set-account .row-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Every other page as a row in a group, with its icon, and what it has set on
-   the right; side by side (from 900px), under its name, as a sidebar. */
+   the right; side by side (from 800px), under its name, as a sidebar. */
 .set-group { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
 .set-item { min-height: 56px; }
 .set-item .row-text { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -64,7 +64,7 @@ body:has(.signin) { overflow-x: clip; }
 .set-item .row-sum.off { color: var(--warn-ink); font-weight: 600; }
 .set-item .row-sum.todo { color: var(--accent); font-weight: 600; }
 /* Send feedback says what it's for under its name in the sidebar; beside it on a phone there's no room. */
-@media (max-width: 899.98px) { .set-item[data-page="feedback"] .row-sum { display: none; } }
+@media (max-width: 799.98px) { .set-item[data-page="feedback"] .row-sum { display: none; } }
 .set-ico { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
 .set-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Settings' shapes while its code loads (app/app.js SettingsSkeleton), pulsing. */
@@ -94,7 +94,7 @@ body:has(.signin) { overflow-x: clip; }
 .peek.open::before { content: ""; position: fixed; inset: 0; z-index: -1; background: rgb(0 0 0 / 0.45); }
 /* Room under a page's last row for the bar. */
 .settings.page-open:has(.peek) .settings-page:not(.leaving) { padding-bottom: 88px; }
-@media (min-width: 900px) { .peek { display: none; } }
+@media (min-width: 800px) { .peek { display: none; } }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
 /* About: the words, then its links as rows like the list's. */
@@ -212,10 +212,10 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 /* The view sliding away, kept where it was on screen while the new one comes in. */
 .settings .leaving { position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; }
 .settings-page:not(.leaving) { position: relative; z-index: 2; }
-@media (max-width: 899.98px) {
+@media (max-width: 799.98px) {
   .settings.page-open .settings-side:not(.leaving) { display: none; }
 }
-@media (min-width: 900px) {
+@media (min-width: 800px) {
   /* At least 20rem, and wider when the card's trip line needs it: its stops
      don't shrink, so a fixed 20rem let the card spill over the column beside. */
   .settings { display: grid; grid-template-columns: minmax(20rem, min-content) minmax(0, 1fr); gap: 24px; align-items: start; }
