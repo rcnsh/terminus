@@ -10,8 +10,8 @@
     "test": "node --max-old-space-size=2048 --test --test-timeout=120000 test/*.test.js test/worker.smoke.js",
     "typecheck": "tsc --noEmit",
     "dev": "cf dev",
-    "deploy": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374 && cf deploy",
-    "deploy:beta": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933 && cf deploy --mode beta",
+    "deploy": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374 && cf deploy --message \"$(git rev-parse --short HEAD)\"",
+    "deploy:beta": "node scripts/deploy/predeploy.mjs && cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933 && cf deploy --mode beta --message \"$(git rev-parse --short HEAD)\" && node scripts/deploy/smoke.mjs https://beta.terminus.run --account",
     "scrape": "python3 scripts/data/scrape_stops.py",
     "check": "pnpm test && pnpm typecheck"
   },

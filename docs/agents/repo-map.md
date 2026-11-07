@@ -103,7 +103,7 @@ apps/api/
   scripts/dev/        dev-stub.mjs, stub-admin.mjs (its dashboard numbers); shot.mjs
                       (a page's screenshot); render-timelapse.mjs (renders a recorded day
                       headless, by hand), its selectors in render-timelapse-ui.mjs
-  scripts/deploy/     predeploy.mjs (first step of a deploy); vapid-key.mjs (makes the Web Push key, once)
+  scripts/deploy/     predeploy.mjs (first step of a deploy); smoke.mjs (checks a deployed Worker answers); vapid-key.mjs (makes the Web Push key, once)
   scripts/data/       The weekly scrapers (scrape_stops.py, scrape_lta.py, route_shapes.py,
                       fetch_calendar.py), walk_routes.py, check_scraped.py;
                       measure_headways.mjs (data/headways.json from the recorder's days, by hand)
