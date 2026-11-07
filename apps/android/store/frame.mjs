@@ -53,8 +53,8 @@ const SLIDES = [
   {
     file: '4-buses',
     sky: 'dusk',
-    en: { head: 'What’s coming|{at your stop}', sub: 'Every service’s next buses, live, and how full.' },
-    zh: { head: '{你的车站}，|下一班什么时候到', sub: '每条线路的下一班巴士，实时到站，还有多挤。' },
+    en: { head: 'What’s coming|{at your stop}', sub: 'Pin your stops: every service’s next buses, live.' },
+    zh: { head: '{你的车站}，|下一班什么时候到', sub: '固定常用的车站，看每条线路的下一班巴士，实时到站。' },
   },
   {
     file: '5-on-the-bus',
@@ -272,7 +272,7 @@ function homeScreen(shot) {
   const wifi = `<svg width="40" height="34" viewBox="0 0 24 20" fill="#fff"><path d="M12 19.5 1 7.6a15.6 15.6 0 0 1 22 0z"/></svg>`;
   const battery = `<svg width="70" height="34" viewBox="0 0 40 20"><rect x="1" y="2" width="33" height="16" rx="5" fill="#fff"/><rect x="35.5" y="7" width="3" height="6" rx="1.5" fill="#fff"/></svg>`;
   return `<div class="home">${wallpaper}
-    <div class="status"><span>9:27</span><span class="sys">${wifi}${battery}</span></div>
+    <div class="status"><span>9:26</span><span class="sys">${wifi}${battery}</span></div>
     ${widgets}${icons}
     <div class="pill"></div></div>`;
 }

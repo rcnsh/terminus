@@ -64,8 +64,8 @@ const SLIDES = [
   {
     file: '4-buses',
     sky: 'dusk',
-    en: { head: 'What’s coming|{at your stop}', sub: 'Every service’s next buses, live, and how full.' },
-    zh: { head: '{你的车站}，|下一班什么时候到', sub: '每条线路的下一班巴士，实时到站，还有多挤。' },
+    en: { head: 'What’s coming|{at your stop}', sub: 'Pin your stops: every service’s next buses, live.' },
+    zh: { head: '{你的车站}，|下一班什么时候到', sub: '固定常用的车站，看每条线路的下一班巴士，实时到站。' },
   },
   {
     file: '5-on-the-bus',
