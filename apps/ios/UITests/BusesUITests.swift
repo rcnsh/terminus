@@ -210,7 +210,7 @@ final class BusesUITests: XCTestCase {
     }
 
     func testPinnedPages() {
-        // Three stops with different numbers of buses running: the card is the tallest's height throughout.
+        // Three stops with different numbers of buses running: the card is as tall as the stop showing.
         setProfile { $0["pinnedStops"] = ["UTOWN", "KR-MRT", "COM3"] }
         let app = launch()
         openBuses(app)
@@ -218,20 +218,21 @@ final class BusesUITests: XCTestCase {
         let utown = app.buttons["pinned-UTOWN"]
         XCTAssertTrue(utown.isSelected)
         let services = app.buttons["service-A1"]
-        let below = services.frame.minY
         // A name moves the card to its stop.
         app.buttons["pinned-COM3"].tap()
         let com3 = waitForSign(app, "COM3", svc: "D1")
         XCTAssertTrue(app.buttons["pinned-COM3"].waitForSelected())
         XCTAssertTrue(com3.isHittable)
         shot("buses-pinned-com3-en-light", app)
+        let underCom3 = services.frame.minY
         // A swipe moves the name: back to KR MRT.
         app.buttons["nearby.COM3"].swipeRight()
         XCTAssertTrue(app.buttons["pinned-KR-MRT"].waitForSelected())
         waitForSign(app, "KR-MRT")
         shot("buses-pinned-krmrt-en-light", app)
-        // Nothing below moved.
-        XCTAssertEqual(services.frame.minY, below, accuracy: 1)
+        // What's below followed the card: KR MRT has a row more than COM3, so it sits lower.
+        expectation(for: NSPredicate { _, _ in services.frame.minY > underCom3 + 20 }, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
         // Past the last stop, how to pin another.
         app.buttons["pinned-COM3"].tap()
         XCTAssertTrue(app.buttons["pinned-COM3"].waitForSelected())
