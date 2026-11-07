@@ -1519,11 +1519,17 @@ export function MapTab({ visible: on, onGoTo, onSaved }) {
       : open?.stop === code && campusData.get()?.stops.find((s) => s.code === code);
     if (!at || at.lat == null || !map) return;
     centreOn = null;
+    // Clear of the sheet: above it where it lies across the bottom, beside it
+    // where it floats in the corner (from 700 wide, app.css).
+    const sheet = sheetBox.current;
+    const beside = window.matchMedia('(min-width: 700px)').matches;
     const go = () =>
       map.easeTo({
         center: [at.lon, at.lat],
         zoom: Math.max(map.getZoom(), 17),
-        padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 },
+        padding: beside
+          ? { top: 70, bottom: 20, left: (sheet?.offsetWidth ?? 0) + 36, right: 20 }
+          : { top: 70, bottom: (sheet?.offsetHeight ?? 0) + 20 },
         duration: 600,
       });
     // Not loaded: the map is still being built (from Nearby), or a source is
