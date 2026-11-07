@@ -1108,11 +1108,9 @@ function CardSkeleton({ nearby }) {
  * its top is up in the sky and it ends on the horizon, so the sky stays as
  * the chips switch. The sky is the hour's, whatever the card says.
  */
-function CardArea() {
+function CardArea({ foot = true }) {
   const c = useStore(card);
   const to = useStore(target);
-  const when = useStore(updated);
-  const who = useStore(me);
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a =
@@ -1132,11 +1130,22 @@ function CardArea() {
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
-      <div class="card-foot">
-        <div class="updated hint">${when}</div>
-        ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />`}
-      </div>
+      ${foot && html`<${CardFoot} />`}
     </section>
+  `;
+}
+
+/** Under the card ("Updated 9:41 · Is this wrong?"); under Today when they're side by side. */
+function CardFoot() {
+  const c = useStore(card);
+  const to = useStore(target);
+  const when = useStore(updated);
+  const who = useStore(me);
+  return html`
+    <div class="card-foot">
+      <div class="updated hint">${when}</div>
+      ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />`}
+    </div>
   `;
 }
 
@@ -1290,11 +1299,11 @@ function GoLater() {
   `;
 }
 
-/** Today, from /api/me/day: each class with when to leave and how, and the trips home. */
-function Today() {
-  const plan = useStore(day);
-  const gone = useStore(removed);
-  const bar = useStore(undo);
+/**
+ * Today's rows: the day's entries not taken off here (`gone`), and the row
+ * left where one was (`bar`, the undo store), as Today draws them.
+ */
+function todayRows(plan, gone, bar) {
   const items = (plan?.items ?? []).filter((it) => !gone.has(it.key));
   // The entry just taken off keeps its place, as a row saying so with Undo.
   // A failed removal's row sits just above the entry it's about, which is back.
@@ -1304,6 +1313,15 @@ function Today() {
     const next = bar.before === null ? rows.length : rows.findIndex((r) => r.it.key === bar.before);
     rows.splice(next >= 0 ? next : Math.min(bar.at, rows.length), 0, { note: bar });
   }
+  return { items, rows };
+}
+
+/** Today, from /api/me/day: each class with when to leave and how, and the trips home. */
+function Today() {
+  const plan = useStore(day);
+  const gone = useStore(removed);
+  const bar = useStore(undo);
+  const { items, rows } = todayRows(plan, gone, bar);
   if (!rows.length) return null;
   return html`
     <section class="today" aria-labelledby="today-title">
@@ -1522,20 +1540,60 @@ function TabBar() {
   `;
 }
 
+/**
+ * Whether Now is two columns: a wide window (docs/agents/window-sizes.md)
+ * with a day to show, the card on the left and Today on the right with the
+ * card's foot under it. Without a day the card stays in the 560 column. The
+ * body's now-split class widens the header with it (app.css).
+ */
+function useNowSplit() {
+  const wide = useMedia('(min-width: 800px)');
+  const plan = useStore(day);
+  const gone = useStore(removed);
+  const bar = useStore(undo);
+  const split = wide && todayRows(plan, gone, bar).rows.length > 0;
+  useEffect(() => {
+    document.body.classList.toggle('now-split', split);
+  }, [split]);
+  return split;
+}
+
+/**
+ * Today beside the card, under the horizon (app.css, .now-side): out of the
+ * page's flow so it starts where the sky ends, so its height is kept on Now
+ * (--side-h) for Now to be at least as tall.
+ */
+function NowSide() {
+  const box = useRef(null);
+  useEffect(() => {
+    const el = box.current;
+    const tab = el?.closest('main');
+    if (!el || !tab) return;
+    const seen = new ResizeObserver(() => tab.style.setProperty('--side-h', `${el.offsetHeight}px`));
+    seen.observe(el);
+    return () => {
+      seen.disconnect();
+      tab.style.removeProperty('--side-h');
+    };
+  }, []);
+  return html`<div class="now-side" ref=${box}><${Today} /><${CardFoot} /></div>`;
+}
+
 /** The four tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
+  const split = useNowSplit();
   return html`
-    <main class="wrap app-main" id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
+    <main class=${split ? 'wrap app-main split' : 'wrap app-main'} id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
       <h1 class="sr-only">${t('Now')}</h1>
       <${InstallHint} />
       <${Banner} />
       <${Chips} />
       <${Where} />
-      <${CardArea} />
+      <${CardArea} foot=${!split} />
       <${GoLater} />
-      <${Today} />
+      ${split ? html`<${NowSide} />` : html`<${Today} />`}
     </main>
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Stops')}</h1><${BusesArea} /></main>
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
