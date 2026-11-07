@@ -39,6 +39,10 @@ is wide.
   (it's your day either way), whenever the client has a day to show.
   With no day, the card is alone, centred, at most 560 wide. The
   horizon's bus, stop sign and town stay drawn across the full width.
+  With no day, all of Now's words (wordmark, notices, chips, head) move
+  into that 560 column too, so they line up with the card. The search
+  ("Elsewhere") sits at the trailing end of the chips' row at every
+  width.
 - **Stops.** List and detail. The home (search, pinned stops,
   services) in a pane 360 wide on the leading side; the page opened
   from it (a stop, a line, and the pages opened from those) fills the
@@ -48,23 +52,34 @@ is wide.
   window. Nothing open: the detail pane says "Choose a stop or a
   service." in the muted colour, centred. A stop or line opened from
   another tab (Now, Nearby, the map's list) opens in the detail pane.
-  The row for the open stop or line is marked as chosen in the list.
-  Search results replace the list in the home pane.
+  The row for the open stop or line, or the open pinned stop's card, is
+  marked as chosen in the list. Search results replace the list in the
+  home pane, as rows of the same kind the phone shows.
 - **Map.** The map fills the window. From 700 wide (medium too) a stop's
   or bus's sheet floats in the bottom-left corner, 360 wide, all
   corners rounded, no taller than the room under the pills; the camera,
   the map's buttons and its credit allow for it. Narrower, the sheet
   lies across the bottom.
 - **Settings.** List and detail, as Stops: the list of pages in a
-  pane 360 wide, the open page beside it in the 560 column. The first
-  page in the list is open until another is picked, so the detail pane
-  is never empty; the open page's row is marked as chosen. A page
-  opened from a page pushes inside the detail pane.
+  pane 360 wide, the open page beside it in the 560 column. "Your
+  trips" is open until another is picked, so the detail pane is never
+  empty (not the account: a first look shouldn't land on Sign out); the
+  open page's row is marked as chosen. In the list pane a row's value
+  sits on a line under its name, so nothing is cut off. A page opened
+  from a page pushes inside the detail pane.
 - **Sheets and dialogs** (report a problem, sign in, go later, the
   pickers): the platform's centred sheet or dialog, at most 560 wide,
   from 600.
 - **Welcome, setup, pairing and sign-in:** the 560 column at every
   width.
+
+- **Chosen.** A chosen row or card in a list pane has a fill of the
+  accent at low opacity (the brand colour, about 12%), with rounded
+  corners, and nothing else (no bar or outline), and says it's selected
+  to a screen reader.
+- **The sky across panes.** Side by side, the panes' sky bands end at
+  the same height, so their horizons meet, and only the trailing pane
+  draws the moon and stars.
 
 Text, controls, cards and touch targets keep their phone sizes at
 every width. The extra room is for showing more beside, never for
