@@ -72,8 +72,10 @@ final class BusesModel {
     private(set) var note: String?
     private var noteTask: Task<Void, Never>?
 
-    /// When the timed refresh next runs, for a pull that asked nothing.
+    /// When the timed refresh next runs, for a pull that asked nothing: the
+    /// open page's, and the home's pinned stops' (wide, both run side by side).
     var nextTimedAt: Date?
+    var nextPinsAt: Date?
 
     /// When each board or line was last asked for, so going back and forth doesn't ask again at once.
     private var asked: [String: Date] = [:]
@@ -405,7 +407,7 @@ final class BusesModel {
     /// When the timed refresh brings new times for `key`: at its next run, or
     /// the one after when that's too soon after `key` was last asked.
     private func nextUpdate(_ key: String) -> Date? {
-        guard let at = nextTimedAt, at > Date() else { return nil }
+        guard let at = key.hasPrefix("pin:") ? nextPinsAt : nextTimedAt, at > Date() else { return nil }
         let last = asked[key] ?? .distantPast
         return at.timeIntervalSince(last) < Self.minGapS ? at.addingTimeInterval(BusTimes.refreshS) : at
     }

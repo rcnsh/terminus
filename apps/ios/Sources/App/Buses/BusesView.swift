@@ -126,7 +126,8 @@ struct BusRefreshing: ViewModifier {
             while !Task.isCancelled {
                 await action()
                 let wait = max(BusTimes.refreshS, Quiet.wait())
-                model.nextTimedAt = Date().addingTimeInterval(wait)
+                let next = Date().addingTimeInterval(wait)
+                if id.hasPrefix("pins:") { model.nextPinsAt = next } else { model.nextTimedAt = next }
                 try? await Task.sleep(for: .seconds(wait))
             }
         }
@@ -203,12 +204,14 @@ struct BusesHome: View {
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
         // The pinned stop showing and its neighbours, at most every 15 s (the
-        // API's own cache); none while searching or with a page over the home.
+        // API's own cache), while the home is on screen: none while searching or
+        // with a page over it (a phone); wide, beside the open page, it's still in view.
         .busRefreshing(searching ? "searching" : "pins:\(model.shownPins):\(model.pinFocus ?? "")") {
             if !searching { await model.refreshPinned() }
         }
         // The lines' buses out, from when the list is first on screen, at most once a minute
-        // while the home is (it reads every service from NUS); none with a page over it.
+        // while the home is on screen (it reads every service from NUS): none with a page
+        // over it on a phone; wide, the list stays in view beside the page, so it goes on.
         .task(id: "\(phase == .active)|\(searching)|\(linesSeen)") {
             guard phase == .active, !searching, linesSeen else { return }
             while !Task.isCancelled {
