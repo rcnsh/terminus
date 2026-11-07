@@ -472,3 +472,81 @@ test('a chosen bus that has left lines up nothing: the steps are as if none was 
   const steps = (target) => withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target }, false, now).steps;
   assert.deepEqual(steps(gone), steps(null));
 });
+
+/** A class at `classAt` by `svc` from `code`, with the feed answering nothing: its leave-by and the steps either side of it. */
+function classSteps(svc, code, now, classAt, rideS = 600) {
+  const option = {
+    svc,
+    stop: GRAPH.stops.find((s) => s.code === code),
+    walkS: 60,
+    rideS,
+    boardS: 0,
+    totalS: 0,
+    fromMs: now,
+    quality: 'scheduled',
+    hops: 5,
+  };
+  const f = {
+    options: [option],
+    candidates: [],
+    byStop: new Map([[code, board(code, now, svc, [])]]),
+    graph: GRAPH,
+    arriveBy: { atMs: classAt, venueWalkS: 0 },
+    walkAllS: null,
+    nowMs: now,
+  };
+  const leave = leaveBy(f);
+  return { leave, steps: withSteps({ departsAt: null, leave }, f, { trip: 'class', target: null }, false, now).steps };
+}
+
+test('a class days ahead steps among the buses on its day, either side of its leave-by', () => {
+  const { leave, steps } = classSteps('D2', 'PGP', at('2026-08-27T10:00'), at('2026-09-01T10:00'));
+  assert.equal(hhmmss(Date.parse(leave.board)), '09:41:19');
+  const day = (iso) => new Date(Date.parse(iso) + 8 * 3600_000).toISOString().slice(0, 10);
+  assert.equal(day(steps.earlier.board), '2026-09-01', 'Earlier: the bus before, not one the day after asking');
+  assert.ok(Date.parse(steps.earlier.board) < Date.parse(leave.board));
+  assert.ok(steps.later, 'Later: a bus after it, though five days off');
+  assert.equal(day(steps.later.board), '2026-09-01');
+  assert.ok(Date.parse(steps.later.board) > Date.parse(leave.board));
+});
+
+test("on K, a class's Earlier and Later are the windows either side of its leave-by's, not overlapping it", () => {
+  // K every 2346 s: the leave-by's window is 10:17:54 to 10:57:00.
+  const rideS = 600;
+  for (const cls of ['2026-08-27T11:10', '2026-08-27T11:25', '2026-08-27T12:30']) {
+    const { leave, steps } = classSteps('K', 'PGP', at('2026-08-27T10:00'), at(cls), rideS);
+    const end = Date.parse(leave.arrive) - rideS * 1000;
+    if (steps.earlier) assert.ok(Date.parse(steps.earlier.board) < Date.parse(leave.board), `${cls}: Earlier before the leave-by`);
+    if (steps.later)
+      assert.ok(Date.parse(steps.later.board) >= end, `${cls}: Later from ${hhmmss(Date.parse(steps.later.board))}, after ${hhmmss(end)}`);
+    // Earlier's window ends where the leave-by's starts: a bus a whole headway before its end.
+    if (steps.earlier) assert.ok(end - Date.parse(steps.earlier.board) >= 2346_000, `${cls}: Earlier a window before`);
+  }
+});
+
+test("a class whose latest bus is under a headway off: the steps are the windows after the leave-by's late one", () => {
+  // D2 from PGP, a 60 s walk and the minute to get ready: at the stop by 10:01:20.
+  const now = at('2026-08-27T10:00');
+  const ready = now + readyS({ walkS: 60 }) * 1000;
+  const rideS = 600;
+  for (const afterS of [30, 120, 300]) {
+    const classAt = ready + afterS * 1000 + (ON_TIME_SLACK_S + rideS) * 1000;
+    const { leave, steps } = classSteps('D2', 'PGP', now, classAt, rideS);
+    const end = Date.parse(leave.arrive) - rideS * 1000;
+    assert.ok(steps.later, `${afterS} s: a later bus`);
+    assert.ok(
+      Date.parse(steps.later.board) >= end,
+      `${afterS} s: Later from ${hhmmss(Date.parse(steps.later.board))}, after ${hhmmss(end)}`,
+    );
+  }
+});
+
+test("a class's Earlier is never a window cut short at when you reach the stop: its bus may have gone", () => {
+  const now = at('2026-08-27T10:00');
+  const ready = now + readyS({ walkS: 60 }) * 1000;
+  const rideS = 600;
+  const { leave, steps } = classSteps('D2', 'PGP', now, ready + 600_000 + (ON_TIME_SLACK_S + rideS) * 1000, rideS);
+  const h = headwayFor(GRAPH, 'D2', now) * 1000;
+  if (steps.earlier)
+    assert.ok(Date.parse(leave.board) - Date.parse(steps.earlier.board) >= h, `Earlier from ${hhmmss(Date.parse(steps.earlier.board))}`);
+});

@@ -15,7 +15,7 @@
 import type { ArriveBy, BusChange, Candidate, Graph, Leave, ScoredOption, StopArrivals } from '../types.ts';
 import { PUBLIC, TRANSFER, WALK } from '../config.ts';
 import { legRideS, readyS } from './resolve.ts';
-import { type Departure, type ServiceBoard, departuresFrom, nextDeparture, serviceBoard } from './departures.ts';
+import { type Departure, type ServiceBoard, departuresFrom, headwayMs, nextDeparture, serviceBoard } from './departures.ts';
 import { serviceResumesAt } from './hours.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
@@ -423,6 +423,12 @@ export function departureOf(all: Departing[], o: ScoredOption): Departing | null
 
 /** Past this many buses of one service from one stop, `departures` stops counting: a day's worth. */
 const MAX_DEPARTURES = 150;
+/**
+ * How far before a class's latest bus `departures` starts counting: a few
+ * buses before it on the longest headway, for Earlier, and short of the
+ * night between one day's service and the next.
+ */
+const CLASS_LOOKBACK_MS = 3 * 3_600_000;
 
 /**
  * Every bus that gets you there, leaving from now until `untilMs`: each
@@ -452,24 +458,37 @@ export function departures(f: LeaveInput, untilMs: number, anchor?: { svc: strin
     const walk = walkMs(leg);
     // A class's arrival is at the room; any other trip's at the stop, with the walk on beside it.
     const onS = f.arriveBy ? venueWalkOf(f.arriveBy, leg) : 0;
-    const from = f.nowMs + readyS(leg) * 1000;
+    const ready = f.nowMs + readyS(leg) * 1000;
+    // A class's latest bus, as its leave-by has it (forLeg).
+    const latestBoard = f.arriveBy ? f.arriveBy.atMs - (ON_TIME_SLACK_S + onS + leg.rideS) * 1000 : null;
+    // A class days ahead: its buses are on its day, not the next 150 from now.
+    const from = latestBoard === null ? ready : Math.max(ready, latestBoard - CLASS_LOOKBACK_MS);
     // With no live times, the estimates fall either side of the chosen bus,
     // so it stays among them. One that has left is no longer a choice
-    // (stepFrom), and lines up nothing.
+    // (stepFrom), and lines up nothing. With none chosen, a class's windows
+    // end at its latest bus, as the leave-by's do (leavingBy), so the steps
+    // either side of it are the windows before and after its own.
     const chosenMs = anchor && anchor.svc === leg.svc && anchor.stop === leg.stop.code ? Date.parse(anchor.board) : undefined;
     const chosen = chosenMs !== undefined && chosenMs > f.nowMs ? chosenMs : undefined;
+    // Only when the leave-by has a whole window by then: else it's late, the first bus from `ready`.
+    const onTime =
+      latestBoard !== null && latestBoard - headwayMs(f.graph, leg.svc, latestBoard - headwayMs(f.graph, leg.svc, latestBoard)) >= ready;
+    const lined = chosen === undefined && onTime && !t;
+    const around = chosen ?? (lined ? latestBoard! : undefined);
     const buses = departuresFrom(f.graph, sb, leg.svc, {
       now: f.nowMs,
       from,
       until: untilMs,
       max: MAX_DEPARTURES,
-      ...(chosen !== undefined ? { around: chosen } : {}),
+      ...(around !== undefined ? { around } : {}),
     });
     let prev: number | null = null;
     for (const d of buses) {
       // Two live times at the same instant are one bus.
       if (d.earliest === prev) continue;
       prev = d.earliest;
+      // Cut at `from`, its bus may have gone: the leave-by takes none such (leavingBy).
+      if (lined && d.partial) continue;
       const b = busOf(d);
       const b2 =
         t && sb2 ? firstBus(f.graph, t.svc, sb2, b.latest + leg.rideS * 1000 + (t.crossS + TRANSFER.changeBufferS) * 1000, f.nowMs) : null;

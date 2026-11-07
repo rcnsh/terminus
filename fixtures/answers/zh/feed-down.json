@@ -53,12 +53,12 @@
     "earlier": {
       "svc": "D2",
       "stop": "PGP",
-      "board": "2026-08-27T01:29:20Z"
+      "board": "2026-08-27T01:23:30Z"
     },
     "later": {
       "svc": "D2",
       "stop": "PGP",
-      "board": "2026-08-27T01:41:20Z"
+      "board": "2026-08-27T01:47:30Z"
     },
     "moved": false
   },
@@ -163,12 +163,12 @@
       "earlier": {
         "svc": "D2",
         "stop": "PGP",
-        "board": "2026-08-27T01:29:20Z"
+        "board": "2026-08-27T01:23:30Z"
       },
       "later": {
         "svc": "D2",
         "stop": "PGP",
-        "board": "2026-08-27T01:41:20Z"
+        "board": "2026-08-27T01:47:30Z"
       },
       "moved": false,
       "earlierLabel": "早一班",
