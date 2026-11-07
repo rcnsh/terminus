@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -153,12 +154,46 @@ internal fun BusesScreen(
     LaunchedEffect(Unit) { vm.loadCampus() }
     // The sky runs up under the status bar; each page keeps the room for it inside its band.
     val bar = insets.calculateTopPadding()
-    // Each stop or line opened slides over the last, and a back gesture can seek between them.
-    PageStack(state.stack, onBack = vm::back, Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())) { top ->
-        when (top) {
-            null -> Home(state, vm, pins, pinsKnown, onPin, bar)
-            is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
-            is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
+    val pane = Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())
+    if (windowWidth() != Width.Wide) {
+        // Each stop or line opened slides over the last, and a back gesture can seek between them.
+        PageStack(state.stack, onBack = vm::back, pane) { top ->
+            when (top) {
+                null -> Home(state, vm, pins, pinsKnown, onPin, bar)
+                is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
+                is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
+            }
+        }
+        return
+    }
+    // Wide: the home in a pane on the leading side, and what's opened from it beside it, where the pages opened from that one stack, with
+    // Back. Each pane has its own band of the sky, so the sky reads across the window.
+    Row(pane) {
+        Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) {
+            Home(state, vm, pins, pinsKnown, onPin, bar, chosen = state.stack.firstOrNull())
+        }
+        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        PageStack(state.stack, onBack = vm::back, Modifier.weight(1f).fillMaxHeight()) { top ->
+            when (top) {
+                null -> NothingOpen(bar)
+                is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
+                is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
+            }
+        }
+    }
+}
+
+/** The page pane when wide, with nothing open in it yet: its band of the sky, and what to do. */
+@Composable
+private fun NothingOpen(top: Dp) {
+    Column(Modifier.fillMaxSize()) {
+        SkyBand(skyPhase(), top) { TabHeader {} }
+        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Text(
+                stringResource(R.string.buses_choose),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -198,7 +233,15 @@ private fun ticking(): Long {
 }
 
 @Composable
-private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKnown: Boolean, onPin: (String) -> Unit, top: Dp) {
+private fun Home(
+    state: BusesUi,
+    vm: BusesViewModel,
+    pins: List<String>,
+    pinsKnown: Boolean,
+    onPin: (String) -> Unit,
+    top: Dp,
+    chosen: BusRoute? = null,
+) {
     var query by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = query.isNotEmpty()) { query = "" }
     val pinned = Pins.shown(pins, vm.pinLimit)
@@ -245,7 +288,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
                 if (query.isNotBlank()) {
                     SearchResults(state, query) { hit ->
                         query = ""
-                        vm.open(
+                        vm.show(
                             when (hit) {
                                 is BusHit.Service -> BusRoute.Line(hit.svc, null)
                                 is BusHit.Stop -> BusRoute.Stop(hit.code)
@@ -257,7 +300,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
                 // The stop showing and its neighbours, so a swipe has the next one ready.
                 Refreshing(pinned, pager.settledPage, next = { vm.nextTimedAt = it }) { vm.refreshPinned(around) }
                 LinesPolling(vm)
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     Label(stringResource(R.string.buses_pinned), Modifier.padding(top = 16.dp, bottom = 4.dp))
                     // Before the profile has come, "nothing pinned" may not be true.
                     when {
@@ -275,7 +318,7 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, pinsKno
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    Services(state) { vm.open(BusRoute.Line(it, null)) }
+                    Services(state, (chosen as? BusRoute.Line)?.svc) { vm.show(BusRoute.Line(it, null)) }
                 }
             }
             StatusStrip(phase, top, scroll)
@@ -342,8 +385,8 @@ private fun PinnedCard(
             pinsKnown = true,
             pinLimit = vm.pinLimit,
             onPin = onPin,
-            openStop = { vm.open(BusRoute.Stop(it)) },
-            openLine = { svc, stop -> vm.open(BusRoute.Line(svc, stop)) },
+            openStop = { vm.show(BusRoute.Stop(it)) },
+            openLine = { svc, stop -> vm.show(BusRoute.Line(svc, stop)) },
         )
     PinTabs(
         pinned.map { pinName(state, it) },
@@ -510,7 +553,7 @@ private fun NoPins() {
  * and how many of its buses are out. A row opens its line.
  */
 @Composable
-private fun Services(state: BusesUi, onOpen: (String) -> Unit) {
+private fun Services(state: BusesUi, chosen: String?, onOpen: (String) -> Unit) {
     val c = MaterialTheme.colorScheme
     val campus = state.campus
     val shape = RoundedCornerShape(18.dp)
@@ -525,10 +568,16 @@ private fun Services(state: BusesUi, onOpen: (String) -> Unit) {
         val badge = badgeWidth(rows.map { it.svc })
         for ((i, row) in rows.withIndex()) {
             if (i > 0) HorizontalDivider(color = c.outlineVariant)
+            // Wide, the line open beside the list is marked as chosen.
+            val on = row.svc == chosen
             Row(
                 Modifier.fillMaxWidth()
+                    .then(if (on) Modifier.background(c.secondaryContainer) else Modifier)
                     .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc)) { onOpen(row.svc) }
-                    .clearAndSetSemantics { contentDescription = row.said() }
+                    .clearAndSetSemantics {
+                        contentDescription = row.said()
+                        selected = on
+                    }
                     .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -663,7 +712,7 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
     val hits = remember(index, query) { SearchRank.grouped(searchBuses(query, index)) { it is BusHit.Service } }
     val colors = campus?.routes?.mapValues { it.value.color }.orEmpty()
     // In the tab's own scroll, under the field.
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+    Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
         if (hits.isEmpty() && campus != null) {
             Text(
                 stringResource(R.string.buses_search_none),
@@ -715,6 +764,9 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
     }
 }
 
+/** Whether the top page has one under it to go back to: always on a phone; wide, the first page is the pane's own, opened from the list. */
+@Composable private fun canGoBack(state: BusesUi): Boolean = windowWidth() != Width.Wide || state.stack.size > 1
+
 /** A stop opened from the search or a line: its page, with Back. */
 @Composable
 private fun StopRoute(
@@ -735,13 +787,14 @@ private fun StopRoute(
                 // Back, and the stop, in the sky, as on the tab's own pages; it scrolls away with the board.
                 SkyBand(phase, top, moonLow = true) {
                     Column {
-                        BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
+                        // Wide, a page opened from the list is the first in its pane: nothing to go back to there.
+                        if (canGoBack(state)) BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
                         PullRoom(below = 8.dp)
                         val label = if (code in pins) stringResource(R.string.buses_pinned) else null
                         StopHeader(state, vm, code, label, pins = pins, pinsKnown = pinsKnown, onPin = onPin)
                     }
                 }
-                Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     StopBody(state, vm, code)
                 }
             }
@@ -751,34 +804,41 @@ private fun StopRoute(
 }
 
 @Composable
-private fun BackRow(text: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}, onBack: () -> Unit) {
+private fun BackRow(
+    text: String,
+    modifier: Modifier = Modifier,
+    back: Boolean = true,
+    trailing: @Composable () -> Unit = {},
+    onBack: () -> Unit,
+) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = if (back) Arrangement.SpaceBetween else Arrangement.End,
     ) {
-        Row(
-            Modifier.weight(1f, fill = false)
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(role = Role.Button, onClick = onBack)
-                .padding(vertical = 8.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_back),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(
-                text,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        if (back)
+            Row(
+                Modifier.weight(1f, fill = false)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(role = Role.Button, onClick = onBack)
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_back),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         trailing()
     }
 }
@@ -1472,12 +1532,14 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                         Column {
                             // Back says where it goes: the page under this one, else the tab's home.
                             BackRow(
-                                when (val under = state.stack.getOrNull(state.stack.size - 2)) {
-                                    is BusRoute.Stop -> stopName(state, under.code)
-                                    is BusRoute.Line -> under.svc
-                                    null -> stringResource(R.string.tab_buses)
-                                },
-                                Modifier.pullLead(pull),
+                                back = canGoBack(state),
+                                text =
+                                    when (val under = state.stack.getOrNull(state.stack.size - 2)) {
+                                        is BusRoute.Stop -> stopName(state, under.code)
+                                        is BusRoute.Line -> under.svc
+                                        null -> stringResource(R.string.tab_buses)
+                                    },
+                                modifier = Modifier.pullLead(pull),
                                 trailing = {
                                     TextButton(onClick = { onShowOnMap(route.svc) }) {
                                         Icon(
@@ -1528,7 +1590,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                         }
                     }
                 }
-                Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     // Not running: why and when it's back, over the stops (it has no buses to show).
                     line
                         ?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }
