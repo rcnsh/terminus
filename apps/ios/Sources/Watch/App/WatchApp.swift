@@ -102,7 +102,10 @@ struct WatchRoot: View {
             let env = ProcessInfo.processInfo.environment
             if env["TERMINUS_RESET"] == "1" {
                 TokenStore.clear()
-                for k in Shared.defaults.dictionaryRepresentation().keys { Shared.defaults.removeObject(forKey: k) }
+                // Not the code last tried: the phone's context still holds it, spent, and it would be tried again.
+                for k in Shared.defaults.dictionaryRepresentation().keys where k != "watch.triedCode" {
+                    Shared.defaults.removeObject(forKey: k)
+                }
                 Shared.lastAnswer = nil
                 Shared.lastNearby = nil
             }

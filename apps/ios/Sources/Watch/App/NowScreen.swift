@@ -27,7 +27,7 @@ struct NowScreen: View {
                             if let e = model.error, model.answer != nil {
                                 Text(e).font(.footnote).foregroundStyle(Color.warn).padding(.top, 6)
                             }
-                            CardGround(shows: shows, now: now).padding(.top, 4)
+                            CardGround(shows: shows, now: now).padding(.top, 4).id("ground")
                         }
                         LocationNotice().padding(.top, 14)
                         Color.clear.frame(height: 1).id("foot")
@@ -92,7 +92,7 @@ struct CardHead: View {
                 if let sub = a.doneSub { Text(sub).font(.footnote).foregroundStyle(inks.muted) }
             case .journey(let a, let j):
                 Lead(answer: a, now: now)
-                Text(JourneyText.to(a, j)).font(.footnote).foregroundStyle(inks.muted).lineLimit(2)
+                Text(JourneyText.to(a, j)).font(.footnote).foregroundStyle(inks.muted)
                 LeaveHead(answer: a, journey: j, now: now)
                 let under = [JourneyText.by(a, j, now: now), j.slack].compactMap { $0 }.joined(separator: " · ")
                 if !under.isEmpty { Text(under).font(.footnote).foregroundStyle(a.leaveLate ? inks.late : inks.muted) }
@@ -106,7 +106,7 @@ struct CardHead: View {
             case .classPlan(let a):
                 Lead(answer: a, now: now)
                 Text([a.dest?.label, a.classAt.map(a.startsAt)].compactMap { $0 }.joined(separator: " · "))
-                    .font(.footnote).foregroundStyle(inks.muted).lineLimit(2)
+                    .font(.footnote).foregroundStyle(inks.muted)
                 Text(a.leaveHeadline(now: now) ?? "").font(.title3.weight(.bold)).foregroundStyle(a.leaveLate ? inks.late : inks.ink)
                     .accessibilityIdentifier("now.leave")
                 if let at = a.leaveAt, a.phase != "waiting", at > now {
@@ -115,7 +115,7 @@ struct CardHead: View {
                 }
             case .plain(let a, let old):
                 Lead(answer: a, now: now)
-                if let head = a.plainHeading { Text(head).font(.footnote).foregroundStyle(inks.muted).lineLimit(2) }
+                if let head = a.plainHeading { Text(head).font(.footnote).foregroundStyle(inks.muted) }
                 Text(a.title).font(.title3.weight(.bold)).foregroundStyle(old ? inks.muted : inks.ink)
                 if old {
                     Text(L("Updating times…")).font(.footnote).foregroundStyle(inks.muted)
@@ -325,7 +325,7 @@ private struct Steps: View {
                     below: j.change?.firstRideText ?? JourneyText.ride(j)
                 ) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(bus.stop).font(.headline).lineLimit(2)
+                        Text(bus.stop).font(.headline)
                         HStack(spacing: 4) {
                             BusBadge(svc: bus.svc, color: bus.color, size: 12, paid: bus.paid)
                             if let busIn = JourneyText.busIn(j, now: now) {
@@ -341,7 +341,7 @@ private struct Steps: View {
                     below: [c.changeText, c.rideText].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                 ) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(c.stop).font(.headline).lineLimit(2)
+                        Text(c.stop).font(.headline)
                         BusBadge(svc: c.bus.svc, color: c.bus.color, size: 12, paid: c.bus.paid)
                     }
                 }
@@ -484,7 +484,7 @@ private struct Directions: View {
                 item.name = w.name
                 item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
             } label: {
-                Text(L("Directions to %@", w.name)).lineLimit(2).multilineTextAlignment(.center)
+                Text(L("Directions to %@", w.name)).multilineTextAlignment(.center)
             }
             .tint(.brand)
             .padding(.top, 4)
