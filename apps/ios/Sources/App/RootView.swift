@@ -41,6 +41,11 @@ struct MainTabs: View {
 
     enum Tab: Hashable { case now, buses, map, settings }
 
+    /// A keyboard is up. Rotated after a search, iPadOS can hand the pages
+    /// the keyboard's room again once it has gone, and keep it: the map then
+    /// drew in the top of the window. With none up, that room is ignored.
+    @State private var keyboard = false
+
     var body: some View {
         // The Map tab tapped while on it goes back to how it opened, as on Android.
         let selection = Binding(
@@ -49,21 +54,28 @@ struct MainTabs: View {
                 if t == app.tab, t == .map { MapModel.shared.home() }
                 app.tab = t
             })
+        let room: SafeAreaRegions = keyboard ? [] : .keyboard
         TabView(selection: selection) {
             NowView()
+                .ignoresSafeArea(room)
                 .tabItem { Label(L("Now"), systemImage: "clock") }
                 .tag(Tab.now)
             // Stops: a stop sign on its pole, drawn (Support/Assets.xcassets), as SF Symbols has none.
             BusesView()
+                .ignoresSafeArea(room)
                 .tabItem { Label(L("Stops"), image: "StopSign") }
                 .tag(Tab.buses)
             MapTab()
+                .ignoresSafeArea(room)
                 .tabItem { Label(L("Map"), systemImage: "map") }
                 .tag(Tab.map)
             SettingsView()
+                .ignoresSafeArea(room)
                 .tabItem { Label(L("Settings"), systemImage: "gearshape") }
                 .tag(Tab.settings)
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
         .onGeometryChange(for: Bool.self) {
             // One side only: a landscape iPhone's notch and corners inset both.
             $0.safeAreaInsets.top == 0 && ($0.safeAreaInsets.leading == 0) != ($0.safeAreaInsets.trailing == 0)
