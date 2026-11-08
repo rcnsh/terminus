@@ -42,8 +42,22 @@ top of the page compact, so the answer is on screen without scrolling:
   pages) shows no moon; one with the moon beside its words keeps it.
 
 Content scrolls as it does upright, and text and controls keep their
-sizes. Every phone turns on its side in every client, the iPhone app
-included (portrait and both landscapes; not upside down on an iPhone).
+sizes.
+
+## Which way it turns
+
+Phones stay upright in the apps; tablets and open foldables turn freely.
+A phone on its side is too short to be worth laying out for: the answer
+is a glance, and an upright phone shows more of it. On Android a screen
+under 600 across its narrow side keeps to portrait (`Widths.upright`; from
+Android 16 the system ignores the lock on larger screens anyway). On
+iPhone, Info.plist lists the landscapes and the app delegate keeps a
+screen under 460 across upright (`WindowWidth.phoneTurns`), which lets
+both panels of an iPhone Duo turn, as it stands on its side in the tent
+position. The web can't hold a browser upright, so short windows still
+come from a phone's browser on its side, a short laptop window, Android
+split-screen on an upright phone and the Duo's tent position; the rule
+above is for those.
 
 ## Wide, tab by tab
 
@@ -120,9 +134,9 @@ it's done, in light and dark, with the dev stub
 | Android | Pixel phone | Pixel Fold or a foldable AVD open, or a tablet in split screen | Pixel Tablet landscape (1280) and portrait (800) |
 | Web | `shot.mjs --width 390` | `--width 700` | `--width 1280` |
 
-Short: an iPhone 17 Pro Max (956x440) and an iPhone 17 (874x402) on their
-side (Simlock's `rotate`), an Android phone on its side or sized with
-`wm size` to 915x412 dp, and the web at `--width 844 --height 390`.
+Short: an Android phone sized with `wm size` to 915x412 dp (or in
+split-screen), the web at `--width 844 --height 390`, and the iPhone Duo
+in the tent position.
 
 iPads run on the iOS 27.0 simulator runtime; the iPhone Duo needs
 27.1. The Duo's simulator folds with T3's `agent-device fold`.

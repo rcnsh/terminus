@@ -2,6 +2,7 @@ package sh.rcn.terminus.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
@@ -105,6 +106,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        keepUpright(resources.configuration)
         enableEdgeToEdge()
         shown = Configuration(resources.configuration)
         // A recreation (rotation) must not re-apply the link
@@ -114,12 +116,22 @@ class MainActivity : ComponentActivity() {
         setContent { TerminusTheme { ProvideWindowWidth { App(vm, account, map, buses) } } }
     }
 
+    /** A phone stays upright ([Widths.upright]); a tablet or an open foldable turns freely. */
+    private fun keepUpright(c: Configuration) {
+        val want =
+            if (Widths.upright(c.smallestScreenWidthDp)) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        if (requestedOrientation != want) requestedOrientation = want
+    }
+
     /**
      * Light or dark, or the language, changed (in Settings or the phone's): the activity stays and Compose redraws in it, with no blank
      * screen between. What recreating it did besides is done here.
      */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        // A fold or unfold changes the screen, and with it whether it may turn.
+        keepUpright(newConfig)
         val before = shown
         shown = Configuration(newConfig)
         if (before == null) return

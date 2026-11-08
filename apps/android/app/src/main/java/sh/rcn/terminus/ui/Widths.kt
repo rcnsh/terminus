@@ -57,6 +57,12 @@ internal object Widths {
      */
     fun notices(heightDp: Float): Notices = if (short(heightDp)) Notices.UnderCard else Notices.AboveChips
 
+    /**
+     * Whether a screen [smallestWidthDp] across its narrow side stays upright: a phone, folded or not. A tablet or an open foldable turns
+     * (from Android 16 the system ignores a lock there anyway). 0, nothing to go by, turns.
+     */
+    fun upright(smallestWidthDp: Int): Boolean = smallestWidthDp > 0 && smallestWidthDp < MEDIUM_FROM
+
     fun floatingSheet(dp: Float): Boolean = dp >= FLOATING_SHEET_FROM
 
     /** How wide Now's words go in a window [dp] wide: beside Today when wide and there's a [day], else lined up with the card alone. */

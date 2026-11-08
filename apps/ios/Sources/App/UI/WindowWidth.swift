@@ -25,6 +25,12 @@ enum WindowWidth: Comparable {
     static let shortBelow: CGFloat = 500
 
     static func short(_ height: CGFloat) -> Bool { height < shortBelow }
+
+    /// Whether an iPhone may turn on its side: an iPhone stays upright, as on
+    /// Android, except where the screen's shorter side is 460 or more, as on
+    /// either panel of an iPhone Duo (466 and 669), which stands on its side in
+    /// the tent position. An ordinary iPhone is 440 across at most. iPads turn.
+    static func phoneTurns(shortSide: CGFloat) -> Bool { shortSide >= 460 }
 }
 
 /// The leading pane of Stops and Settings when wide: the list a page opens from.
@@ -145,6 +151,15 @@ private struct ReadsWindowWidth: ViewModifier {
                 WindowWidth.short($0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom)
             } action: {
                 short = $0
+            }
+            // A fold moves the window to the other panel, and iOS asks which
+            // way it may turn only when told to (AppDelegate's orientations).
+            .onGeometryChange(for: CGSize.self) {
+                $0.size
+            } action: { _ in
+                for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                    scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
             }
             .environment(\.windowWidth, width)
             .environment(\.windowShort, short)

@@ -82,4 +82,12 @@ class WidthsTest {
         assertEquals(Notices.AboveChips, Widths.notices(915f))
         assertEquals(Notices.AboveChips, Widths.notices(0f))
     }
+
+    @Test
+    fun aPhoneStaysUprightAndATabletTurns() {
+        // Pixel 9, a small phone, a foldable folded: upright.
+        for (dp in listOf(412, 360, 599)) assertTrue(Widths.upright(dp))
+        // A foldable open, Pixel Tablet, and nothing to go by: free to turn.
+        for (dp in listOf(600, 701, 800, 0)) assertFalse(Widths.upright(dp))
+    }
 }
