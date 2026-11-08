@@ -208,7 +208,7 @@ private struct SettingsList: View {
                 switch prefs.lang {
                 case "en": "English"
                 case "zh": "中文"
-                default: L("Follow this phone")
+                default: settingsFollowDevice
                 }
             let clock: String? =
                 switch prefs.clock {
@@ -249,11 +249,14 @@ func settingsPaceName(_ pace: String) -> String {
     }
 }
 
+/// Following the device's own setting, named as the device it's on.
+var settingsFollowDevice: String { UIDevice.current.userInterfaceIdiom == .pad ? L("Follow this iPad") : L("Follow this phone") }
+
 func settingsThemeName(_ theme: String) -> String {
     switch theme {
     case "light": L("Light")
     case "dark": L("Dark")
-    default: L("Follow this phone")
+    default: settingsFollowDevice
     }
 }
 
