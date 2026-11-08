@@ -28,6 +28,7 @@
 "then" = "之后";
 "then %@" = "之后 %@";
 "Times may be old · %@" = "时间可能已过时 · %@";
+"Times may have changed." = "时间可能已有变化。";
 "Times may have changed. Open terminus to check." = "时间可能已有变化。打开 terminus 查看。";
 "to leave" = "距出发";
 "to the bus" = "距巴士开出";

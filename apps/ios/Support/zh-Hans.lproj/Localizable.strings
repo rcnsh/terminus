@@ -22,6 +22,7 @@
 "Back tomorrow at %@" = "明天 %@ 恢复";
 "Bus %@" = "%@ 巴士";
 "Bus %@ from %@" = "在 %2$@ 搭 %1$@ 巴士";
+"Bus in %@" = "巴士 %@后开出";
 "by %@" = "%@ 前出发";
 "Couldn't add it. Try again." = "无法添加，请再试一次。";
 "Couldn't put it back. Try again." = "无法放回，请再试一次。";
@@ -63,6 +64,7 @@
 "off at %@" = "在 %@ 下车";
 "Off at %@ %@" = "%2$@ 在 %1$@ 下车";
 "Off at %@ at %@" = "%2$@ 在 %1$@ 下车";
+"Off in %@" = "%@后下车";
 "Offline" = "离线";
 "On the %@" = "在 %@ 上";
 "On the %@, to %@" = "在 %@ 上，去 %@";
