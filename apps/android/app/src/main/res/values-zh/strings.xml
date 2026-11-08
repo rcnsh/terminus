@@ -176,6 +176,7 @@
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>
+    <string name="follow_tablet">跟随平板设置</string>
     <string name="free_hint_none">点按“附近”查看你周围的巴士。</string>
     <string name="friday">星期五</string>
     <string name="friday_short">周五</string>
