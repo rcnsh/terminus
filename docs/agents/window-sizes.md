@@ -32,11 +32,14 @@ top of the page compact, so the answer is on screen without scrolling:
   line says what the road's bus shows. The moon and stars stay.
 - **Now's wordmark** sits at the leading end of the chips' row instead
   of on a row of its own; the search stays at the trailing end.
-- **Notices on Now** (the location prompt and the like) move from above
-  the chips to under the card's buttons. In two panes, that's the foot
-  of the card's column.
+- **Notices on Now** (the location prompt, the web's install hint and
+  the like) move from above the chips to straight under the card, after
+  "Go later" when it shows. In two panes, that's the foot of the card's
+  column.
 - **The bands** on Stops, Settings and their pages end just under their
-  words, without the hills. Side by side, they still end level.
+  words, without the hills. Side by side, they still end level. A band
+  that keeps its moon on a line of its own over the hills (Stops and its
+  pages) shows no moon; one with the moon beside its words keeps it.
 
 Content scrolls as it does upright, and text and controls keep their
 sizes. Every phone turns on its side in every client, the iPhone app
