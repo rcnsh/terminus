@@ -491,7 +491,14 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .report-sheet[open] { animation: report-up 0.22s ease-out; }
 @keyframes report-up { from { transform: translateY(24px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .report-sheet[open] { animation: none; } }
-@media (min-width: 600px) { .report-sheet { inset: 0; margin: auto; height: fit-content; border-radius: 24px; } .report-grab { display: none; } }
+/* Cancel where the iPhone's sheet has it, from 600 wide: a dialog in the middle has no handle to drag down. */
+.report-cancel { display: none; }
+@media (min-width: 600px) {
+  .report-sheet { inset: 0; margin: auto; height: fit-content; border-radius: 24px; }
+  .report-grab { display: none; }
+  .report-cancel { display: inline-flex; align-items: center; margin: 8px 0 12px; padding: 7px 16px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); font: 600 0.9rem var(--font); cursor: pointer; }
+  .report-cancel:hover { background: var(--surface-2); }
+}
 .report-inner { padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); }
 .report-inner form, .report-sent { display: grid; gap: 0; }
 .report-grab { width: 32px; height: 4px; border-radius: 2px; background: var(--line-strong); margin: 4px auto 16px; opacity: 0.7; }

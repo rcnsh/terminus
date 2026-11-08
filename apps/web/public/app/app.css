@@ -195,10 +195,10 @@ body.on-buses > .nav { display: none; }
    two meet without a seam. The home's title, a stop's name, a line's
    title and Back sit in it, in the sky's ink (.sky-head). */
 /* Above the page under it, so its search's list comes down over it. */
-.bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 -16px; padding: max(12px, env(safe-area-inset-top)) 16px 0; background: var(--s0); }
+.bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 calc(50% - var(--half)); padding: max(12px, env(safe-area-inset-top)) calc(var(--half) - 50%) 0; background: var(--s0); }
 /* Overscrolled at the top: still the sky up there. */
 .bt-sky-top::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
-.bt-sky { margin: 0 -16px; padding: 0 16px; background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
+.bt-sky { margin: 0 calc(50% - var(--half)); padding: 0 calc(var(--half) - 50%); background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
 /* A page of its own starts the sky itself. */
 .bt-page.alone > .bt-sky, .buses-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
 .bt-sky .sky-head { --room: 0px; --moon: 22px; padding-bottom: 2px; }
@@ -207,8 +207,8 @@ body.on-buses > .nav { display: none; }
 body.sky .bt-sky .night-sky .moon { top: auto; bottom: 0; right: 30px; }
 /* A line's title has its words on the right: the moon up by Back instead. */
 body.sky .buses-tab > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
-/* Within the page, not across the window as on Now. */
-.bt-sky .horizon.low { width: auto; height: 52px; margin: 0 -16px; }
+/* As wide as its band. */
+.bt-sky .horizon.low { width: auto; height: 52px; margin: 0 calc(50% - var(--half)); }
 .bt-sky + .bt-sides { margin-top: 4px; }
 .bt-sky .bt-nav { height: 48px; }
 .bt-sky .bt-kicker-icon { fill: var(--k-accent-small); }
@@ -222,12 +222,6 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 /* The search's shape while the tab's code loads (app.js StopsSkeleton), in the sky's ink. */
 .bt-search .sk-field { display: block; height: 46px; border-radius: 14px; }
 body.sky .bt-sky-top { --sk: color-mix(in srgb, var(--k-ink) 13%, transparent); --sk-hi: color-mix(in srgb, var(--k-ink) 26%, transparent); }
-/* Wider than a phone, the column's sky has rounded top corners rather than
-   stopping short of the window's edges. */
-@media (min-width: 600px) {
-  .bt-sky-top, .buses-tab > .bt-sky, .bt-page.alone > .bt-sky { margin-top: 12px; border-radius: 18px 18px 0 0; }
-  .bt-sky-top::before { display: none; }
-}
 .bt-search { position: relative; }
 .bt-search input { height: 46px; padding-left: 42px; border-radius: 14px; border-color: var(--line-strong); background: var(--surface-2); }
 .bt-search input:focus-visible { outline-offset: 0; }
@@ -925,7 +919,8 @@ body.app > .nav { max-width: 560px; }
   .bt-detail { container-type: inline-size; min-width: 0; padding-bottom: 32px; }
   .bt-detail > :not(.bt-sky) { max-width: 528px; margin-inline: max(16px, calc(50% - 264px)); }
   .bt-detail .bt-page.alone { padding: 0; }
-  .bt-split .bt-sky-top, .bt-split .bt-page.alone > .bt-sky, .bt-detail > .bt-sky { margin-top: 0; border-radius: 0; }
+  .bt-list :is(.bt-sky-top, .bt-sky) { margin-inline: -16px; padding-inline: 16px; }
+  .bt-list .bt-sky .horizon.low { margin-inline: -16px; }
   .bt-detail .bt-page.alone > .bt-sky, .bt-detail > .bt-sky { margin-inline: calc(50% - 50cqw); padding: env(safe-area-inset-top) max(16px, calc(50cqw - 264px)) 0; }
   .bt-detail .bt-sky .sky-head { display: flex; flex-direction: column; justify-content: flex-end; min-height: 126px; }
   .bt-detail .bt-sky .horizon.low { margin-inline: calc(-1 * max(16px, calc(50cqw - 264px))); }
@@ -934,7 +929,8 @@ body.app > .nav { max-width: 560px; }
   .bt-choose { margin-top: 18vh; color: var(--muted); text-align: center; }
   /* Chosen (window-sizes.md): the open stop's card, the open line's row, a
      search result that's open: a fill of the accent, rounded, nothing else. */
-  .bt-split .bt-pager-page.open .stop-sign, .bt-split .bt-pager-page.open .stop-sign .plate { background: var(--chosen); }
+  .bt-split .bt-pager-page.open .stop-sign, .bt-split .bt-pager-page.open .stop-sign .plate { border-color: transparent; background: var(--chosen); }
+  .bt-split .bt-pager-page.open .plate-name { text-decoration: none; }
   .bt-split :is(.bt-service, .bt-result)[aria-current], .bt-split :is(.bt-service, .bt-result)[aria-current]:hover { border-radius: 12px; background: var(--chosen); }
   /* Only the trailing pane draws the moon and stars. */
   .bt-list .celestial, .settings-tab .settings-side .celestial { display: none; }
