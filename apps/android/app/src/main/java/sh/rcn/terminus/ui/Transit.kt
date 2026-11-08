@@ -222,18 +222,13 @@ internal fun ChoiceTile(
 
 /** A tile that opens something (Settings' pages), or just says something with no [onClick]. */
 @Composable
-internal fun LinkTile(
-    onClick: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-    chosen: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
+internal fun LinkTile(onClick: (() -> Unit)?, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(18.dp)
     Column(
         modifier
             .clip(shape)
-            .background(if (chosen) c.secondaryContainer else c.surface)
+            .background(c.surface)
             .border(1.dp, c.outlineVariant, shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(14.dp),

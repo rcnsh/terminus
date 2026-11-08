@@ -168,7 +168,9 @@ internal fun MainScreen(
     val shown = sky.end != null
     val light = sky.palette.lightInk
     val wide = windowWidth() == Width.Wide
-    NightStatusBar(shown && light)
+    // Whether there's a day to show beside the card when wide; without one, all of Now is in the card's column.
+    val hasDay = state.day?.items?.isNotEmpty() == true || state.removed != null
+    NightStatusBar(shown && light, sky.palette.sky[0])
     CompositionLocalProvider(LocalSky provides sky) {
         Box(Modifier.fillMaxSize()) {
             // Pulled down at the top, what's shown (the card or Nearby) is asked for
@@ -180,7 +182,7 @@ internal fun MainScreen(
                         .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
                         .skyBehind(sky, page, pull)
                         .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
-                        .column(Widths.nowColumn(LocalWindowDp.current).dp)
+                        .column(Widths.nowColumn(LocalWindowDp.current, hasDay).dp)
                         .padding(horizontal = 16.dp)
                 ) {
                     // The header and chips come down a little with a pull; the room opens under them.
@@ -415,7 +417,6 @@ internal fun MainScreen(
                             }
                         }
                     }
-                    val hasDay = state.day?.items?.isNotEmpty() == true || state.removed != null
                     val today: @Composable () -> Unit = {
                         state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }
                     }
@@ -428,12 +429,11 @@ internal fun MainScreen(
                         }
                         // Today shows whichever chip is chosen: it's your day either way.
                         hasDay -> BesideToday(sky, card, today, footerRow)
-                        // No day: the card alone, centred, as wide as a phone's.
-                        else ->
-                            Column(Modifier.column()) {
-                                card()
-                                footerRow()
-                            }
+                        // No day: the card alone, in the column the words above it are already in.
+                        else -> {
+                            card()
+                            footerRow()
+                        }
                     }
 
                     Spacer(Modifier.height(24.dp))

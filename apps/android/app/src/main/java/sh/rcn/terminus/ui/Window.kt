@@ -3,13 +3,22 @@ package sh.rcn.terminus.ui
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -33,3 +42,58 @@ internal fun ProvideWindowWidth(content: @Composable () -> Unit) {
  */
 internal fun Modifier.column(max: Dp = Widths.COLUMN.dp): Modifier =
     fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = max).fillMaxWidth()
+
+/**
+ * A row or card in a list pane marked as the one open beside it: a rounded fill of the accent at low opacity just inside it, nothing else,
+ * and said as selected. As the iPhone's and the web's.
+ */
+@Composable
+internal fun Modifier.chosen(on: Boolean): Modifier {
+    if (!on) return this
+    val fill = MaterialTheme.colorScheme.primary.copy(alpha = CHOSEN_ALPHA)
+    return drawBehind {
+        val inset = 4.dp.toPx()
+        drawRoundRect(fill, Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset), CornerRadius(12.dp.toPx()))
+    }
+        .semantics { selected = true }
+}
+
+/** A card in a list pane marked as the one open beside it: the same fill, over the card's own surface, to its [radius] corners. */
+@Composable
+internal fun Modifier.chosenCard(on: Boolean, radius: Dp): Modifier {
+    if (!on) return this
+    val fill = MaterialTheme.colorScheme.primary.copy(alpha = CHOSEN_ALPHA)
+    return drawWithContent {
+        drawContent()
+        drawRoundRect(fill, cornerRadius = CornerRadius(radius.toPx()))
+    }
+        .semantics { selected = true }
+}
+
+/** How strong the chosen fill is: the brand colour at about 12%. */
+private const val CHOSEN_ALPHA = 0.12f
+
+/**
+ * Two panes side by side, each with its band of the sky ([SkyBand]): every band's natural height, so each can grow to the tallest and their
+ * horizons meet.
+ */
+internal class PaneSkies {
+    private val heights = mutableStateMapOf<Any, Int>()
+
+    /** The tallest band's height, in px. */
+    val tallest: Int
+        get() = heights.values.maxOrNull() ?: 0
+
+    fun report(band: Any, px: Int) {
+        if (heights[band] != px) heights[band] = px
+    }
+
+    fun gone(band: Any) {
+        heights.remove(band)
+    }
+}
+
+/** The pane a [SkyBand] is in, when two are side by side: their heights, and whether it's the leading one, which draws no moon or stars. */
+internal class SkyPane(val skies: PaneSkies, val leading: Boolean)
+
+internal val LocalSkyPane = compositionLocalOf<SkyPane?> { null }

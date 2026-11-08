@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -65,8 +66,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -519,19 +523,28 @@ private fun Tabs(
     ) { inner ->
         Row(Modifier.fillMaxSize()) {
             if (rail)
-                NavigationRail(
-                    windowInsets =
-                        WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)
-                ) {
-                    for ((t, label, icon) in tabs) {
-                        NavigationRailItem(
-                            selected = tab == t,
-                            onClick = { choose(t) },
-                            icon = { Icon(painterResource(icon), contentDescription = null) },
-                            label = { Text(stringResource(label)) },
-                            modifier = Modifier.padding(vertical = 2.dp),
-                        )
+                Box {
+                    NavigationRail(
+                        windowInsets =
+                            WindowInsets.systemBars
+                                .union(WindowInsets.displayCutout)
+                                .only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)
+                    ) {
+                        for ((t, label, icon) in tabs) {
+                            NavigationRailItem(
+                                selected = tab == t,
+                                onClick = { choose(t) },
+                                icon = { Icon(painterResource(icon), contentDescription = null) },
+                                label = { Text(stringResource(label)) },
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
+                        }
                     }
+                    // The status bar runs over the rail too: while a dark sky has set its icons light, the rail's strip of it is
+                    // that sky's top colour, so the clock there reads as it does over the sky.
+                    val strip = StatusSky.color
+                    val statusTop = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
+                    if (strip != null) Box(Modifier.matchParentSize().drawBehind { drawRect(strip, size = Size(size.width, statusTop)) })
                 }
             // Beside the rail, clear of a camera cutout or the navigation buttons on the far side of a phone on its side.
             Box(

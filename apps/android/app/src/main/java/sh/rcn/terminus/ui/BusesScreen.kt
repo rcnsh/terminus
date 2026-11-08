@@ -45,7 +45,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -155,11 +157,17 @@ internal fun BusesScreen(
     // The sky runs up under the status bar; each page keeps the room for it inside its band.
     val bar = insets.calculateTopPadding()
     val pane = Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())
-    if (windowWidth() != Width.Wide) {
+    // The home's search, here so a back on a wide window clears it before it closes the page beside it.
+    var query by rememberSaveable { mutableStateOf("") }
+    val wide = windowWidth() == Width.Wide
+    // Wide, the stop open beside the home is asked for by its page: its pinned card takes the page's times rather than asking again.
+    val open = (state.stack.lastOrNull() as? BusRoute.Stop)?.code?.takeIf { wide }
+    SideEffect { vm.openStop = open }
+    if (!wide) {
         // Each stop or line opened slides over the last, and a back gesture can seek between them.
         PageStack(state.stack, onBack = vm::back, pane) { top ->
             when (top) {
-                null -> Home(state, vm, pins, pinsKnown, onPin, bar)
+                null -> Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar)
                 is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
                 is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
             }
@@ -168,19 +176,29 @@ internal fun BusesScreen(
     }
     // Wide: the home in a pane on the leading side, and what's opened from it beside it, where the pages opened from that one stack, with
     // Back. Each pane has its own band of the sky, so the sky reads across the window.
+    // The two bands of the sky end at the same height, and only the page's has the moon.
+    val skies = remember { PaneSkies() }
+    val list = remember(skies) { SkyPane(skies, leading = true) }
+    val page = remember(skies) { SkyPane(skies, leading = false) }
     Row(pane) {
         Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) {
-            Home(state, vm, pins, pinsKnown, onPin, bar, chosen = state.stack.firstOrNull())
+            CompositionLocalProvider(LocalSkyPane provides list) {
+                Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar, chosen = state.stack.lastOrNull())
+            }
         }
         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        PageStack(state.stack, onBack = vm::back, Modifier.weight(1f).fillMaxHeight()) { top ->
-            when (top) {
-                null -> NothingOpen(bar)
-                is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
-                is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
+        CompositionLocalProvider(LocalSkyPane provides page) {
+            PageStack(state.stack, onBack = vm::back, Modifier.weight(1f).fillMaxHeight()) { top ->
+                when (top) {
+                    null -> NothingOpen(bar)
+                    is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
+                    is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
+                }
             }
         }
     }
+    // After the page's own back, so it's asked first: a search open in the home is cleared before the page beside it closes.
+    BackHandler(enabled = query.isNotEmpty()) { query = "" }
 }
 
 /** The page pane when wide, with nothing open in it yet: its band of the sky, and what to do. */
@@ -236,14 +254,15 @@ private fun ticking(): Long {
 private fun Home(
     state: BusesUi,
     vm: BusesViewModel,
+    query: String,
+    onQuery: (String) -> Unit,
     pins: List<String>,
     pinsKnown: Boolean,
     onPin: (String) -> Unit,
     top: Dp,
     chosen: BusRoute? = null,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    BackHandler(enabled = query.isNotEmpty()) { query = "" }
+    BackHandler(enabled = query.isNotEmpty()) { onQuery("") }
     val pinned = Pins.shown(pins, vm.pinLimit)
     // A page per pinned stop, then "Pin another stop"; laid out again when the pins change, on the stop that was showing.
     val pager = remember(pinned) { PagerState(vm.pinPage(pinned)) { pinned.size + 1 } }
@@ -273,7 +292,7 @@ private fun Home(
                 // Searching, just the field over the hills, so the results start right under it.
                 SkyBand(phase, top, moonLow = true, moonLine = false, padded = false, moon = query.isBlank()) {
                     Column {
-                        SearchBox(query, { query = it }, Modifier.pullLead(pull).padding(horizontal = 16.dp, vertical = 8.dp))
+                        SearchBox(query, onQuery, Modifier.pullLead(pull).padding(horizontal = 16.dp, vertical = 8.dp))
                         if (query.isBlank()) {
                             PullRoom(above = 8.dp, below = 8.dp)
                             Text(
@@ -287,7 +306,7 @@ private fun Home(
                 }
                 if (query.isNotBlank()) {
                     SearchResults(state, query) { hit ->
-                        query = ""
+                        onQuery("")
                         vm.show(
                             when (hit) {
                                 is BusHit.Service -> BusRoute.Line(hit.svc, null)
@@ -298,7 +317,7 @@ private fun Home(
                     return@Column
                 }
                 // The stop showing and its neighbours, so a swipe has the next one ready.
-                Refreshing(pinned, pager.settledPage, next = { vm.nextTimedAt = it }) { vm.refreshPinned(around) }
+                Refreshing(pinned, pager.settledPage, next = { vm.pinsTimedAt = it }) { vm.refreshPinned(around) }
                 LinesPolling(vm)
                 Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     Label(stringResource(R.string.buses_pinned), Modifier.padding(top = 16.dp, bottom = 4.dp))
@@ -306,7 +325,7 @@ private fun Home(
                     when {
                         !pinsKnown -> PinnedSkeleton()
                         pinned.isEmpty() -> NoPins()
-                        else -> PinnedCard(state, vm, pinned, pager, pins, onPin)
+                        else -> PinnedCard(state, vm, pinned, pager, pins, onPin, (chosen as? BusRoute.Stop)?.code)
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Label(stringResource(R.string.buses_group_services), Modifier.padding(end = 12.dp))
@@ -376,6 +395,7 @@ private fun PinnedCard(
     pager: PagerState,
     pins: List<String>,
     onPin: (String) -> Unit,
+    chosen: String?,
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -423,7 +443,15 @@ private fun PinnedCard(
                     code == PinPages.ADD -> PinAnother(tallestDp)
                     i >= 0 ->
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            NearbySign(signs, i, act, saysNone = true, stopped = stopped[code].orEmpty())
+                            // Wide, the stop open beside the home is marked on its card.
+                            NearbySign(
+                                signs,
+                                i,
+                                act,
+                                saysNone = true,
+                                stopped = stopped[code].orEmpty(),
+                                modifier = Modifier.chosenCard(code == chosen, 14.dp),
+                            )
                             // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                             if (signs.cells[i].any { row -> row.any { it.mark.isNotEmpty() } }) {
                                 Text(
@@ -572,7 +600,7 @@ private fun Services(state: BusesUi, chosen: String?, onOpen: (String) -> Unit) 
             val on = row.svc == chosen
             Row(
                 Modifier.fillMaxWidth()
-                    .then(if (on) Modifier.background(c.secondaryContainer) else Modifier)
+                    .chosen(on)
                     .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc)) { onOpen(row.svc) }
                     .clearAndSetSemantics {
                         contentDescription = row.said()
@@ -778,7 +806,7 @@ private fun StopRoute(
     onPin: (String) -> Unit,
     top: Dp,
 ) {
-    Refreshing(code, state.across, next = { vm.nextTimedAt = it }) { vm.refreshPage(code) }
+    Refreshing(code, state.across, next = { vm.pageTimedAt = it }) { vm.refreshPage(code) }
     val phase = skyPhase()
     val scroll = rememberScrollState()
     BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }, nextUpdateAt = { vm.pageNextAt(code) }) { pull ->
@@ -1483,7 +1511,7 @@ private const val GREY = 0xFF8A939CL
 @Composable
 private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, onShowOnMap: (String) -> Unit, top: Dp) {
     val key = lineKey(route.svc, route.from)
-    Refreshing(key, next = { vm.nextTimedAt = it }) { vm.refreshLine(route.svc, route.from) }
+    Refreshing(key, next = { vm.pageTimedAt = it }) { vm.refreshLine(route.svc, route.from) }
     val now = ticking()
     // Refreshes failing: your stop's time counted down, not passed off as live.
     val line = state.lines[key]?.aged(now)
