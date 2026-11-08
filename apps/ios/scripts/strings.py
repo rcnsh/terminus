@@ -4,7 +4,8 @@
 Every phrase the app writes itself goes through L("English %@", ...), and
 its Chinese lives in Support/zh-Hans.lproj/<Table>.strings, keyed by the
 English: one table per part of the app (Sources/App/Buses -> Buses.strings,
-Sources/Widgets -> Widgets.strings, anything else -> Localizable.strings).
+Sources/Widgets -> Widgets.strings, Sources/Watch -> Watch.strings,
+anything else -> Localizable.strings).
 
     scripts/strings.py          fills in what's missing from the Android
                                 app's and the Mac app's translations (the same
@@ -41,6 +42,8 @@ def table_for(path):
         return 'Widgets'
     if parts[0] == 'NotificationService':
         return 'Notifications'
+    if parts[0] == 'Watch':
+        return 'Watch'
     return 'Localizable'
 
 

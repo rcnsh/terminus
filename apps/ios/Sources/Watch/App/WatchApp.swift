@@ -43,7 +43,7 @@ struct WatchRoot: View {
                                 } label: {
                                     Image(systemName: "list.bullet")
                                 }
-                                .accessibilityLabel(L("Show"))
+                                .accessibilityLabel(L("Choose what to show"))
                                 .accessibilityIdentifier("targets")
                             }
                         }

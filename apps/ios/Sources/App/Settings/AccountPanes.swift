@@ -17,6 +17,11 @@ struct SettingsDevicesPane: View {
     @State private var removing: Device?
 
     var body: some View {
+        devices
+        SettingsWatchGroup()
+    }
+
+    @ViewBuilder private var devices: some View {
         if app.email == nil {
             SettingsGroup(
                 title: L("Not signed in"),
@@ -133,6 +138,48 @@ struct SettingsDevicesPane: View {
         case "mac": "laptopcomputer"
         case "web": "globe"
         default: "iphone"
+        }
+    }
+}
+
+/// "Set up your watch", when a watch is paired with this phone: sends the
+/// watch a pairing code, so it signs in to this account by itself. Quiet,
+/// under the devices: most people set it up once.
+struct SettingsWatchGroup: View {
+    @Environment(AppModel.self) private var app
+    private var link: WatchLink { WatchLink.shared }
+
+    var body: some View {
+        if link.paired {
+            SettingsGroup(
+                title: L("Apple Watch"),
+                hint: !link.installed
+                    ? L("Install terminus on your watch first, from the Watch app on this phone.")
+                    : link.result ?? L("Signs in terminus on your Apple Watch to this account. It works without your phone after that.")
+            ) {
+                Button {
+                    if let t = app.token { link.setUp(token: t) }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "applewatch")
+                            .font(.title3)
+                            .foregroundStyle(Color.muted)
+                            .frame(width: 28)
+                            .accessibilityHidden(true)
+                        Text(L("Set up your watch")).fontWeight(.medium).foregroundStyle(link.installed ? Color.ink : Color.faint)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if link.sending { ProgressView() }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: 52)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SettingsRowPressStyle())
+                .disabled(link.sending || !link.installed || app.token == nil)
+                .accessibilityIdentifier("settings.setUpWatch")
+            }
+            .onDisappear { link.closed() }
         }
     }
 }

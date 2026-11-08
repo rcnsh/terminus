@@ -22,7 +22,6 @@ struct TargetsList: View {
                 Text(L("Signs out this watch only.")).font(.footnote)
             }
         }
-        .navigationTitle(L("Show"))
         .confirmationDialog(L("Sign out of this watch?"), isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button(L("Sign out"), role: .destructive) {
                 model.signOut()

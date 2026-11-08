@@ -85,9 +85,11 @@ struct Glance: Equatable {
         var out = WidgetTiming.redraws(a, now: now, until: until)
         if let j = a.card?.journey, a.phase != "waiting", j.leave != nil, let leave = a.leaveAt {
             // The figure is rounded (JourneyText.leaveIn): it drops a minute half a minute before each whole one.
-            for k in 2...60 { out.append(leave.addingTimeInterval(-(Double(k) * 60 + 29.5))) }
-            out.append(leave.addingTimeInterval(-119.5))
-            out.append(leave)
+            // Only while the card holds: past its staleAt the time to leave is shown, not counted.
+            let holds = a.staleAt ?? until
+            var count = (2...60).map { leave.addingTimeInterval(-(Double($0) * 60 + 29.5)) }
+            count += [leave.addingTimeInterval(-119.5), leave]
+            out += count.filter { $0 < holds }
         }
         return Array(Set(out.filter { $0 > now && $0 < until })).sorted()
     }
