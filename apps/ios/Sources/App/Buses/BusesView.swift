@@ -717,10 +717,12 @@ private struct BusSearchResults: View {
         VStack(alignment: .leading, spacing: 0) {
             if hits.isEmpty && campus != nil {
                 Text(L("No stop or service by that name")).foregroundStyle(Color.muted).padding(.vertical, 12)
+                    .padding(.horizontal, listPane ? 12 : 0)
             }
             ForEach(Array(hits.enumerated()), id: \.element.id) { i, hit in
                 if i == 0 || hits[i - 1].isService != hit.isService {
                     SectionLabel(hit.isService ? L("Services") : L("Stops")).padding(.top, 16).padding(.bottom, 4)
+                        .padding(.horizontal, listPane ? 12 : 0)
                 }
                 Button {
                     onPick(hit)
