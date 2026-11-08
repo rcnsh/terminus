@@ -150,6 +150,14 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(s.map { "\($0.towards[0]) \($0.etaS ?? -1) \($0.quality)" }, ["A 40 stale", "B 130 live"])
     }
 
+    func testARowMatchedByServiceAloneKeepsItsOwnWay() throws {
+        let card = [try row(#"{"svc":"D1","towards":["A"],"toText":"to A","dest":"to A","etaS":100,"quality":"live","later":[]}"#)]
+        let board = [try row(#"{"svc":"D1","towards":["B"],"toText":"to B","etaS":40,"quality":"live","later":[]}"#)]
+        let s = BusPinned.filled(card, from: board, since: 60)
+        // The board's time, the card's way and words, as Android and the web show it.
+        XCTAssertEqual(s.map { "\($0.towards[0]) \($0.toText ?? "-") \($0.etaS ?? -1) \($0.quality)" }, ["A to A 40 live"])
+    }
+
     func testPublicBusesStayOffThePinnedCard() throws {
         let card = [try row(#"{"svc":"D1","etaS":100,"quality":"live","later":[]}"#)]
         let s = BusPinned.filled(

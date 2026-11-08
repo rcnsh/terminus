@@ -45,15 +45,15 @@ struct BoardRow: Decodable, Hashable, Sendable {
     /// The well-known places it passes from here ("UTown", "Kent Ridge MRT"),
     /// for someone new to NUS; empty from an older server.
     let via: [String]
-    let crowd: String?
+    var crowd: String?
     let endsAt: String?
     /// The route ends at this stop.
     let endsHere: Bool
     /// False: calls here but isn't running now (asked for with `stopped=1`).
-    let running: Bool
+    var running: Bool
     /// ended, notYet or noService.
-    let stopped: String?
-    let resumesAt: String?
+    var stopped: String?
+    var resumesAt: String?
     /// "4 min", "now", "~6 min", worded on the server.
     var eta: String?
     /// "then 12, ~20, 25 min".

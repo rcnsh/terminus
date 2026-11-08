@@ -86,7 +86,7 @@ enum BusPinned {
     /// would come round again) and `since` the seconds since it came. Each of
     /// its rows, in its order, takes the board's row for the same service and
     /// way (`towards`), or the service's first left: the board's times, how
-    /// full, running or not, still worded as /me/stops worded it ("via
+    /// full, running or not, still the card's own row and words ("via
     /// UTown"; the board has no such words), then the card's buses the board
     /// doesn't cover (`guessesAfter`). A row the board doesn't have counts down
     /// on its own, a live time turning stale. Public buses aren't the card's.
@@ -113,9 +113,16 @@ enum BusPinned {
                 r.laterText = nil
                 return r
             }
-            var r = b
-            r.dest = row.dest
-            r.destPlace = row.destPlace
+            // The card's row with the board's times and state, as Android and
+            // the web make it: matched by service alone, it keeps its own way.
+            var r = row
+            r.etaS = b.etaS
+            r.quality = b.quality
+            r.eta = b.eta
+            r.crowd = b.crowd
+            r.running = b.running
+            r.stopped = b.stopped
+            r.resumesAt = b.resumesAt
             let mine = (row.etaS.map { [BoardRow.Later(etaS: $0, quality: row.quality, eta: nil)] } ?? []) + row.later
             r.later = b.later + guessesAfter(mine, since: since, shown: (b.etaS == nil ? 0 : 1) + b.later.count)
             r.laterText = nil
