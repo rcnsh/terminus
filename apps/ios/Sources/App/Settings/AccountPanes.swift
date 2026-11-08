@@ -19,6 +19,8 @@ struct SettingsDevicesPane: View {
     var body: some View {
         devices
         SettingsWatchGroup()
+            // The watch signed in or out: the list shows it.
+            .onChange(of: WatchLink.shared.watch) { _, _ in Task { await model.loadDevices() } }
     }
 
     @ViewBuilder private var devices: some View {
