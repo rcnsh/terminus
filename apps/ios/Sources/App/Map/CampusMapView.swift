@@ -527,7 +527,7 @@ struct CampusMapView: UIViewRepresentable {
         static let buttonsHeight: CGFloat = 44 * 2 + 10 + 16
 
         private func camera() {
-            guard let view, framed else { return }
+            guard view != nil, framed else { return }
             // Back to campus, from the button or the tab tapped again.
             if map.recentre != recentred {
                 recentred = map.recentre

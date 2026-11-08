@@ -356,7 +356,6 @@ final class BusesModel {
         pinnedMissing.formUnion(result.missing)
     }
 
-    /// A pinned stop as it stands at `now`, its times counted down since it came.
     /// A pinned stop's card, its own answer with its page's board (BusPinned.filled).
     private func fillPinned(_ code: String, from board: Board) {
         guard let own = pinnedOwn[code] else { return }
@@ -370,6 +369,7 @@ final class BusesModel {
         answeredAt["pin:" + code] = answeredAt[code]
     }
 
+    /// A pinned stop as it stands at `now`, its times counted down since it came.
     func pinnedStop(_ code: String, now: Date) -> NearbyStop? {
         pinned[code]?.aged(got: pinnedGot[code], now: now)
     }
