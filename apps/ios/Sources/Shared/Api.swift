@@ -239,14 +239,17 @@ struct Api: Sendable {
 
     // MARK: answers
 
-    func next(_ target: Target, lat: Double?, lon: Double?, acc: Double? = nil) async throws -> NextAnswer {
+    /// `seen` gets the response's headers: the watch keeps the language it's written in (WatchPlan).
+    func next(
+        _ target: Target, lat: Double?, lon: Double?, acc: Double? = nil, seen: ((HTTPURLResponse) -> Void)? = nil
+    ) async throws -> NextAnswer {
         var q = Self.coords(lat, lon, acc)
         switch target {
         case .plan: break
         case .place(let key): q.append(URLQueryItem(name: "place", value: key))
         case .code(let code, _): q.append(URLQueryItem(name: "to", value: code))
         }
-        return try NextAnswer.decode(try await send("GET", "/api/me/next", query: q + Self.h12))
+        return try NextAnswer.decode(try await send("GET", "/api/me/next", query: q + Self.h12, seen: seen))
     }
 
     /// Something that happened on the trip; answers with the new planned answer.

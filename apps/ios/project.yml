@@ -213,8 +213,10 @@ targets:
       - path: Sources/Watch/App
       - path: Sources/Watch/Common
       - path: Sources/Shared
-      # A Nearby row's words, as Now's Nearby on the phone has them.
+      # A Nearby row's words, as Now's Nearby on the phone has them, and
+      # where you are, asked as the phone asks.
       - path: Sources/App/Now/NearbyCells.swift
+      - path: Sources/App/Model/Locator.swift
       - path: Support/Watch/Assets.xcassets
       - path: Support/PrivacyInfo.xcprivacy
         buildPhase: resources
