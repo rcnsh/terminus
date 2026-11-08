@@ -47,6 +47,7 @@ final class WatchModel {
     private(set) var signalling = false
     /// A pairing code from the phone being redeemed, and why the last one failed.
     private(set) var pairing = false
+    private var waitingCode: WatchHandoff.Code?
     private(set) var pairError: String?
     /// Changes with every sign-in and out: a reply from before one is dropped.
     private var session = 0
@@ -196,29 +197,39 @@ final class WatchModel {
 
     /// A pairing code from the phone: redeemed for this watch's own token.
     func redeem(_ c: WatchHandoff.Code) async {
-        guard !pairing else { return }
+        // A code that comes while one is redeeming waits its turn rather than
+        // being dropped: the server has already replaced the one in flight with it.
+        guard !pairing else {
+            waitingCode = c
+            return
+        }
         pairing = true
-        pairError = nil
         defer { pairing = false }
-        let old = TokenStore.read()
-        do {
-            let token = try await Api(token: nil).pair(code: c.code, name: watchName)
-            WatchSession.signedIn(token: token, lang: c.lang, clock: c.clock)
-            // A code sent to a watch that was signed in replaces its session: the old one goes.
-            if let old, old != token { Task.detached { try? await Api(token: old).logout() } }
-            session += 1
-            paired = true
-            signedOutReason = nil
-            lang = Lang.pref
-            view = .plan
-            plan = nil
-            placeAnswers = [:]
-            nearby = nil
-            error = nil
-            PhoneLink.shared.report()
-            await load()
-        } catch {
-            pairError = failureMessage(error)
+        var next: WatchHandoff.Code? = c
+        while let c = next {
+            pairError = nil
+            let old = TokenStore.read()
+            do {
+                let token = try await Api(token: nil).pair(code: c.code, name: watchName)
+                WatchSession.signedIn(token: token, lang: c.lang, clock: c.clock)
+                // A code sent to a watch that was signed in replaces its session: the old one goes.
+                if let old, old != token { Task.detached { try? await Api(token: old).logout() } }
+                session += 1
+                paired = true
+                signedOutReason = nil
+                lang = Lang.pref
+                view = .plan
+                plan = nil
+                placeAnswers = [:]
+                nearby = nil
+                error = nil
+                PhoneLink.shared.report()
+                await load()
+            } catch {
+                pairError = failureMessage(error)
+            }
+            next = waitingCode
+            waitingCode = nil
         }
     }
 
