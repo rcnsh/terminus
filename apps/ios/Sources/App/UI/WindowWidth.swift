@@ -17,6 +17,12 @@ enum WindowWidth: Comparable {
 
     /// Two panes on Now, Stops and Settings.
     var panes: Bool { self == .wide }
+
+    /// Whether an iPhone may turn on its side: only where the screen's shorter
+    /// side is 600 or more, as on an open iPhone Duo. On an ordinary iPhone the
+    /// window on its side is about 400 tall, and the card's sky leaves no room
+    /// for its steps or for Today beside them.
+    static func phoneTurns(shortSide: CGFloat) -> Bool { shortSide >= mediumFrom }
 }
 
 /// The leading pane of Stops and Settings when wide: the list a page opens from.

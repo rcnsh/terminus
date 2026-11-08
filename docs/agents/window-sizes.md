@@ -13,6 +13,12 @@ a fold, a rotation, a resized window or Split View changes it mid-session.
 The device, its idiom (`userInterfaceIdiom`, `isTablet`), the screen's
 size and the orientation never decide a layout.
 
+Which way the window may turn is a separate question. An iPhone turns on
+its side only where the screen's shorter side is 600 or more, as on an open
+iPhone Duo (`WindowWidth.phoneTurns`): an ordinary iPhone on its side is
+about 400 tall, and the card's sky leaves no room for its steps or for
+Today. iPads, Android and the web turn freely.
+
 | Width | Name | Layout |
 | --- | --- | --- |
 | under 600 | narrow | The phone layout. |
