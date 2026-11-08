@@ -241,17 +241,25 @@ final class BusesModel {
         guard let token else { return }
         asked[code] = Date()
         let s = AppModel.shared.session
+        let publicBuses = publicBuses
         await fetching(code) {
-            do {
-                let b = try await Api(token: token).board(stop: code, publicBuses: publicBuses)
-                // Asked for by the account before a sign-in or sign-out, with its public buses setting.
-                guard current(s) else { return }
+            // Not cancelled with the page that asked: a page replaced beside the
+            // list goes as its request is under way, and the one that takes its
+            // place skips the stop as just asked, so this answer is the one it shows.
+            let answer = await Task { () -> Result<Board, Error> in
+                do { return .success(try await Api(token: token).board(stop: code, publicBuses: publicBuses)) } catch {
+                    return .failure(error)
+                }
+            }.value
+            // Asked for by the account before a sign-in or sign-out, with its public buses setting.
+            guard current(s) else { return }
+            switch answer {
+            case .success(let b):
                 answeredAt[code] = Date()
                 boards[code] = b
                 failed.remove(code)
                 if code == stopBeside { fillPinned(code, from: b) }
-            } catch {
-                guard current(s) else { return }
+            case .failure(let error):
                 if refused(error, token) { return }
                 failed.insert(code)
             }
