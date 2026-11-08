@@ -44,8 +44,8 @@ internal object Widths {
 
     fun floatingSheet(dp: Float): Boolean = dp >= FLOATING_SHEET_FROM
 
-    /** How wide Now's words go in a window [dp] wide. */
-    fun nowColumn(dp: Float): Float = if (of(dp) == Width.Wide) WIDE_COLUMN else COLUMN
+    /** How wide Now's words go in a window [dp] wide: beside Today when wide and there's a [day], else lined up with the card alone. */
+    fun nowColumn(dp: Float, day: Boolean): Float = if (of(dp) == Width.Wide && day) WIDE_COLUMN else COLUMN
 
     /** The widest a sheet or dialog goes in a window [dp] wide: the column from medium, else the window's own. */
     fun sheetMax(dp: Float): Float = if (of(dp) == Width.Narrow) dp else COLUMN

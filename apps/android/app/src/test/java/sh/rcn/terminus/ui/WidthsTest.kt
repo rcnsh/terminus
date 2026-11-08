@@ -40,10 +40,12 @@ class WidthsTest {
     }
 
     @Test
-    fun nowWidensItsColumnOnlyWhenWide() {
-        assertEquals(560f, Widths.nowColumn(412f))
-        assertEquals(560f, Widths.nowColumn(700f))
-        assertEquals(1040f, Widths.nowColumn(800f))
+    fun nowWidensItsColumnOnlyWhenWideWithADay() {
+        assertEquals(560f, Widths.nowColumn(412f, day = true))
+        assertEquals(560f, Widths.nowColumn(700f, day = true))
+        assertEquals(1040f, Widths.nowColumn(800f, day = true))
+        // No day: the card is alone, and all of Now's words line up with it.
+        assertEquals(560f, Widths.nowColumn(1280f, day = false))
     }
 
     @Test
