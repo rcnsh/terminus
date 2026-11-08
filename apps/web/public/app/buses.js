@@ -594,20 +594,20 @@ const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got
  * open page's `board` (/api/arrivals), for the stop whose page asks for it
  * in place of its card (signsToAsk), as the Android app does. Each row keeps
  * the card's own words (where it's going), so only the times change. The
- * board has at most one later bus, so the card's timetable guesses fill in
- * after it, counted on to the board's `got`; a live time of the card's is
- * as old as the card and never fills in. A service the board doesn't have
+ * board has at most one later bus, so the card's buses after as many as the
+ * board shows fill in, counted on to the board's `got`, if they're timetable
+ * guesses; a live time of the card's is as old as the card and never fills in. A service the board doesn't have
  * keeps its row, counted on and its live times "~". Public buses aren't on
  * the card.
  */
 export function withBoard(s, got, board) {
   const gone = (board.got - got) / 1000;
   const on = (x) => ({ ...x, etaS: x.etaS == null ? null : x.etaS - gone, eta: null });
-  const guesses = (row, after) =>
+  const guesses = (row) =>
     (row.later ?? [])
       .filter((x) => x.quality === 'scheduled' && x.etaS != null)
       .map(on)
-      .filter((x) => x.etaS > 0 && x.etaS > after);
+      .filter((x) => x.etaS > 0);
   const left = board.board.filter((b) => !b.paid);
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const rows = s.board.map((row) => {
@@ -620,13 +620,21 @@ export function withBoard(s, got, board) {
         ...at,
         etaS: at.etaS > -60 ? Math.max(0, at.etaS) : null,
         quality: row.quality === 'live' ? 'stale' : row.quality,
-        later: guesses(row, 0),
+        later: guesses(row),
         laterText: null,
       };
     }
     const [b] = left.splice(i, 1);
     const later = b.later ?? [];
-    const last = [b, ...later].reduce((m, x) => Math.max(m, x.etaS ?? 0), 0);
+    // Counted, not compared: the card's buses still to come, less as many as
+    // the board shows, are the ones after them. A time would keep a guess
+    // whose bus runs a little ahead of it, and show that bus twice.
+    const after = [row, ...(row.later ?? [])]
+      .filter((x) => x.etaS != null)
+      .map(on)
+      .filter((x) => x.etaS > 0)
+      .slice(1 + later.length)
+      .filter((x) => x.quality === 'scheduled');
     return {
       ...row,
       etaS: b.etaS,
@@ -636,7 +644,7 @@ export function withBoard(s, got, board) {
       running: b.running,
       stopped: b.stopped,
       resumesAt: b.resumesAt,
-      later: [...later, ...guesses(row, last)].slice(0, Math.max(later.length, row.later?.length ?? 0)),
+      later: [...later, ...after].slice(0, Math.max(later.length, row.later?.length ?? 0)),
       laterText: null,
     };
   });

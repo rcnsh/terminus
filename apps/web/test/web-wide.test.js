@@ -238,8 +238,8 @@ test('the open pinned card shows the times its page has', async () => {
   await settle();
   const row = root.querySelector('.bt-list .bt-pager-page.open .nearby-row');
   const times = [...row.querySelectorAll('.nb-time')].map((x) => x.textContent.replace(/\s+/g, ''));
-  // The page's two live buses, then the card's first guess after them (counted on a second); its own words for where it goes.
-  assert.deepEqual(times, ['2min', '12', '~25']);
+  // The page's two live buses stand for the card's first two; then its own guess for the third. Its own words for where it goes.
+  assert.deepEqual(times, ['2min', '12', '~35']);
   assert.match(row.textContent, /LT13/);
   render(null, root);
   await settle();
@@ -319,6 +319,35 @@ test('the open card counts its own guesses on to the board, and never fills in w
   assert.deepEqual(
     soon.board[0].later.map((x) => x.etaS),
     [2600, 3120],
+  );
+});
+
+test("the open card counts the board's buses off its own, so a bus running ahead of its guess isn't shown twice", () => {
+  const card = {
+    stop: { code: 'KTR' },
+    board: [
+      {
+        svc: 'D1',
+        etaS: 100,
+        quality: 'live',
+        later: [
+          { etaS: 700, quality: 'live' },
+          { etaS: 1300, quality: 'scheduled' },
+        ],
+      },
+    ],
+  };
+  // 100 s on: the first bus has gone; the board's two are the card's 700 and its guess at 1300, a little early.
+  const board = {
+    board: [{ svc: 'D1', etaS: 600, quality: 'live', later: [{ etaS: 1150, quality: 'live' }] }],
+    available: true,
+    got: 100_000,
+  };
+  const [d1] = B.withBoard(card, 0, board).board;
+  assert.equal(d1.etaS, 600);
+  assert.deepEqual(
+    d1.later.map((x) => [x.etaS, x.quality]),
+    [[1150, 'live']],
   );
 });
 
