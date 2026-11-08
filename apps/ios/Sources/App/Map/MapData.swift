@@ -391,9 +391,12 @@ struct BusStrip: Equatable {
 
 /// GeoJSON for the map's sources.
 enum MapGeoJson {
+    /// In /api/campus's order (A1 first, R2 last, on top where lines share a
+    /// road), as the web and Android draw them; a dictionary's order changes
+    /// from launch to launch.
     static func routes(_ campus: CampusMap) -> Data {
         collection(
-            campus.routes.values.map { r in
+            campus.routes.values.sorted { $0.svc < $1.svc }.map { r in
                 feature(["type": "LineString", "coordinates": r.line], ["svc": r.svc, "color": r.color])
             })
     }

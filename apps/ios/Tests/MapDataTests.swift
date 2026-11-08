@@ -102,7 +102,9 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let stops = try features(MapGeoJson.stops(campus))
     let com3 = try #require(stops.first { ($0["properties"] as? [String: Any])?["code"] as? String == "COM3" })
     #expect((com3["properties"] as? [String: Any])?["services"] as? String == " D1 D2 ")
-    #expect(try features(MapGeoJson.routes(campus)).count == 2)
+    // In the API's order, the last on top: the same every launch, as on the web and Android.
+    let lines = try features(MapGeoJson.routes(campus)).map { ($0["properties"] as? [String: Any])?["svc"] as? String }
+    #expect(lines == ["A1", "D2"])
     let placed = LiveBus(id: "b1", lat: 1, lon: 103, heading: nil, moving: true, at: "COM 3", slot: 1).placed()
     let props = try #require(try features(MapGeoJson.buses(svc: "D2", color: "#8e44c9", [placed]))[0]["properties"] as? [String: Any])
     #expect(props["color"] as? String == "#8e44c9")
