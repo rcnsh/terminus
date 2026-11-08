@@ -169,8 +169,9 @@ internal fun BusesScreen(
     // The home and each page keep where they were scrolled to under their own key, as the window goes from one pane to two (a fold, a
     // resize) and back, rather than by where they sit in either layout.
     val scrolls = rememberPaneScrolls()
+    scrolls.keep(state.stack.mapIndexed { i, r -> pageKey(i + 1, r) }.toSet() + HOME)
     val route: @Composable (BusRoute) -> Unit = { top ->
-        Keeps(scrolls, "$top@${state.stack.indexOf(top)}") {
+        Keeps(scrolls, pageKey(LocalPageDepth.current, top)) {
             when (top) {
                 is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
                 is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
@@ -214,6 +215,9 @@ internal fun BusesScreen(
 
 /** The home's key in BusesScreen's [PaneScrolls]. */
 private const val HOME = "home"
+
+/** A page's key in BusesScreen's [PaneScrolls]: its place in the stack ([LocalPageDepth]) and what it is. */
+private fun pageKey(depth: Int, route: BusRoute) = "$depth:$route"
 
 /** The page pane when wide, with nothing open in it yet: its band of the sky, and what to do. */
 @Composable

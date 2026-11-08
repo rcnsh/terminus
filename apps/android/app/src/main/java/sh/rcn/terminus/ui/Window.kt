@@ -110,14 +110,34 @@ internal val LocalSkyPane = compositionLocalOf<SkyPane?> { null }
 internal class PaneScrolls {
     private val states = mutableMapOf<String, ScrollState>()
 
-    fun of(key: String): ScrollState = states.getOrPut(key) { ScrollState(0) }
+    /** The pages that last left ([keep]): drawn on while one peels away under a back swipe, then let go. */
+    private val leaving = mutableMapOf<String, ScrollState>()
+    private var open = emptySet<String>()
+
+    /**
+     * The pages open now, by key (a page's place in the stack with what it is): only these keep a scroll. A page that leaves is let go, so
+     * opening it again starts at the top, as a page always opens.
+     */
+    fun keep(keys: Set<String>) {
+        if (keys == open) return
+        leaving.clear()
+        states.filterKeys { it !in keys }.let(leaving::putAll)
+        states.keys.retainAll(keys)
+        open = keys
+    }
+
+    fun of(key: String): ScrollState =
+        if (key in open) states.getOrPut(key) { ScrollState(0) } else leaving.getOrPut(key) { ScrollState(0) }
 
     companion object {
         val Saver: Saver<PaneScrolls, Any> =
             Saver(
                 save = { p -> p.states.flatMap { (k, v) -> listOf(k, v.value) } },
                 restore = { saved ->
-                    PaneScrolls().apply { (saved as List<*>).chunked(2).forEach { (k, v) -> states[k as String] = ScrollState(v as Int) } }
+                    PaneScrolls().apply {
+                        (saved as List<*>).chunked(2).forEach { (k, v) -> states[k as String] = ScrollState(v as Int) }
+                        open = states.keys.toSet()
+                    }
                 },
             )
     }
