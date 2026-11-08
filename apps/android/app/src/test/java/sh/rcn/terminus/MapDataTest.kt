@@ -375,6 +375,20 @@ class MapDataTest {
     }
 
     @Test
+    fun panLimitReachesPastTheMapUnderAnOpenSheet() {
+        // A tablet held upright, 720 by 1280 dp, at zoom 15, with a stop's sheet floating in the corner: 376 dp wide, 560 dp tall.
+        val world = 512 * Math.pow(2.0, 15.0)
+        val plain = PanLimit.centre(720.0, 1280.0, 15.0)
+        val under = PanLimit.centre(720.0, 1280.0, 15.0, west = 376.0, south = 560.0)
+        // The centre may go as far past the map's south and west edges as the sheet covers: what shows there is under the sheet.
+        assertEquals(560.0 / world, merc(under[1]) - merc(plain[1]), 1e-12)
+        assertEquals(376.0 / world * 360, plain[0] - under[0], 1e-9)
+        assertEquals("north and east stay as they were", listOf(plain[2], plain[3]), listOf(under[2], under[3]))
+        // And zooms out as far as the part of the screen the sheet leaves would let it.
+        assertEquals(PanLimit.minZoom(720.0 - 376, 1280.0 - 560), PanLimit.minZoom(720.0, 1280.0, 376.0, 560.0), 1e-12)
+    }
+
+    @Test
     fun panLimitKeepsTheScreenOnTheMap() {
         val e = PanLimit.EXTENT
         // A phone, 400 by 800 dp: tall, so its height fills the map first.

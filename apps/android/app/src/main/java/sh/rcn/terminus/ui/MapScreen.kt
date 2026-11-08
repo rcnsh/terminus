@@ -780,12 +780,15 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                         maxZoom = 19.0
                         boundingBox = box(PanLimit.EXTENT)
                     }
-                val min = max(13.0, PanLimit.minZoom(w, h))
+                // What an open sheet covers, which may show past the street map ([PanLimit.centre]).
+                val (west, south) =
+                    with(density) { cover.left.toDp().value.toDouble() to (cover.floatTop + cover.sheet).toDp().value.toDouble() }
+                val min = max(13.0, PanLimit.minZoom(w, h, west, south))
                 val zoom = floor(max(min, view.cameraPosition.zoom) * 16) / 16
                 CameraConstraints {
                     minZoom = min
                     maxZoom = 19.0
-                    boundingBox = box(PanLimit.centre(w, h, zoom))
+                    boundingBox = box(PanLimit.centre(w, h, zoom, west, south))
                 }
             }
         }

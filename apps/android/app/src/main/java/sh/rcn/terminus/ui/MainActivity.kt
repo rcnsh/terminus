@@ -81,6 +81,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.BuildConfig
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.R
@@ -442,8 +443,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
     state.pendingPair?.let { p ->
         AlertDialog(
             onDismissRequest = vm::dismissPairLink,
-            title = { Text(stringResource(R.string.pair_phone_title)) },
-            text = { Text(stringResource(R.string.pair_phone_text, p.account)) },
+            title = { Text(stringResource(DeviceKind.word(R.string.pair_phone_title))) },
+            text = { Text(stringResource(DeviceKind.word(R.string.pair_phone_text), p.account)) },
             confirmButton = { TextButton(onClick = { vm.pair(p.code) }) { Text(stringResource(R.string.pair)) } },
             dismissButton = { TextButton(onClick = vm::dismissPairLink) { Text(stringResource(R.string.cancel)) } },
         )

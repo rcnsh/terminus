@@ -689,4 +689,30 @@
     <string name="pull_up_to_date">已是最新</string>
     <string name="pull_up_to_date_next_s">已是最新，%1$d 秒后更新</string>
     <string name="pull_failed">无法更新</string>
+    <!-- The same, on a tablet (DeviceKind.word). -->
+    <string name="a11y_not_paired_tablet">terminus。这台平板还没配对。</string>
+    <string name="add_email_why_tablet">即使平板遗失也能保留你的设置，并可在 Mac 或网页上使用 terminus。</string>
+    <string name="signs_in_itself_tablet">选好后，这台平板会自动登录。</string>
+    <string name="follow_device_tablet">跟随平板设置</string>
+    <string name="not_signed_in_hint_tablet">你的设置只保存在这台平板上。添加邮箱后，即使平板遗失也能保留设置，并可在 Mac 或网页上使用 terminus。</string>
+    <string name="pair_phone_text_tablet">此链接会将这台平板与 %1$s 配对。仅当这个代码是你在自己的账户页面上创建的才继续。他人的代码会把你的行程和位置发送到他们的账户。</string>
+    <string name="pair_phone_title_tablet">配对这台平板？</string>
+    <string name="remove_this_phone_tablet">这台平板会退出登录。</string>
+    <string name="replace_with_phone_tablet">用这台平板的设置替换</string>
+    <string name="sign_out_title_tablet">在这台平板上退出登录？</string>
+    <string name="signed_out_key_lost_tablet">这台平板无法再读取登录信息，已退出登录。请重新登录，或重新开始。</string>
+    <string name="signed_out_removed_tablet">这台平板已从你的账户退出登录。请用你的邮箱重新登录。</string>
+    <string name="signed_out_unused_tablet">这台平板的设置因长时间未使用已被删除。请重新开始或登录。</string>
+    <string name="tap_to_pair_tablet">点按以配对这台平板</string>
+    <string name="theme_hint_tablet">仅限这台平板。</string>
+    <string name="which_setup_text_tablet">%1$s 已经有课表和设置，这台平板也有。保留其中一个：</string>
+    <string name="diagnostics_hint_tablet">应用正在做什么，用于报告问题。除非你复制，否则这些信息只留在这台平板上，也不包括你的账户和你所在的位置。</string>
+    <string name="diag_push_unavailable_tablet">这台平板不支持</string>
+    <string name="no_browser_tablet">这台平板上没有能打开网页链接的应用。</string>
+    <string name="card_style_hint_tablet">卡片和小组件如何显示搭巴士的行程。仅限这台平板。</string>
+    <string name="new_to_nus_hint_tablet">仅在这台平板上。关闭“刚来 NUS”时，小组件能显示更多巴士。</string>
+    <string name="pair_title_tablet">配对这台平板</string>
+    <string name="pair_scan_tablet">也可以用平板相机扫描二维码。</string>
+    <string name="this_phone_tag_tablet">这台平板</string>
+    <string name="time_format_hint_auto_tablet">terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。“自动”跟随这台平板。</string>
 </resources>
