@@ -112,18 +112,8 @@ private struct TripBadge: View {
 private struct TripBanner: View {
     let state: TripAttributes.ContentState
     let stale: Bool
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        banner
-            // Fixed colours for the appearance it's drawn in: iOS resolves a
-            // light-or-dark tint as light even on a dark Lock Screen, where
-            // the text is dark mode's, light on light.
-            .activityBackgroundTint(Color(rgb: scheme == .dark ? 0x1A1816 : 0xFFFFFF))
-            .activitySystemActionForegroundColor(Color(rgb: scheme == .dark ? 0xF2EFEB : 0x1C1917))
-    }
-
-    @ViewBuilder private var banner: some View {
         if #available(iOS 18.0, *) {
             FamilyTrip(state: state, stale: stale)
         } else {
@@ -153,8 +143,16 @@ private struct FamilyTrip: View {
 struct WatchTrip: View {
     let state: TripAttributes.ContentState
     let stale: Bool
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        content
+            // As the Lock Screen's: fixed colours for the appearance it's drawn in.
+            .activityBackgroundTint(Color(rgb: scheme == .dark ? 0x1A1816 : 0xFFFFFF))
+            .activitySystemActionForegroundColor(Color(rgb: scheme == .dark ? 0xF2EFEB : 0x1C1917))
+    }
+
+    @ViewBuilder private var content: some View {
         let s = state
         let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
         HStack(alignment: .center, spacing: 8) {
@@ -198,8 +196,18 @@ struct WatchTrip: View {
 private struct LockScreenTrip: View {
     let state: TripAttributes.ContentState
     let stale: Bool
+    @Environment(\.colorScheme) private var scheme
 
-    @ViewBuilder var body: some View {
+    var body: some View {
+        banner
+            // Fixed colours for the appearance it's drawn in: iOS resolves a
+            // light-or-dark tint as light even on a dark Lock Screen, where
+            // the text is dark mode's, light on light.
+            .activityBackgroundTint(Color(rgb: scheme == .dark ? 0x1A1816 : 0xFFFFFF))
+            .activitySystemActionForegroundColor(Color(rgb: scheme == .dark ? 0xF2EFEB : 0x1C1917))
+    }
+
+    @ViewBuilder private var banner: some View {
         let s = state
         let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
         let turnOff = s.phase != "arrived"
