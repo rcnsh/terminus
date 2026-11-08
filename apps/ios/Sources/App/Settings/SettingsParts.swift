@@ -17,6 +17,8 @@ struct SettingsScaffold<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    /// The first page in a wide detail pane: nothing to go back to.
+    @Environment(\.paneRoot) private var paneRoot
     /// The band has scrolled up under the status bar: a strip of the page
     /// goes behind the status bar, so the time never sits on the words.
     @State private var scrolled = false
@@ -29,11 +31,15 @@ struct SettingsScaffold<Content: View>: View {
         self.content = content()
     }
 
+    /// Pushed over another page, with Back. The first page in a wide detail pane
+    /// has the list's header instead, so the horizons beside each other line up.
+    private var pushed: Bool { back && !paneRoot }
+
     var body: some View {
         let skyLight = SkyPalette.of(clock.phase, dark: scheme == .dark).lightInk
         ScrollView {
             VStack(spacing: 0) {
-                SkyBand(moonLow: back) { header }
+                SkyBand(moonLow: pushed) { header }
                     .background {
                         GeometryReader { g in
                             let under = g.frame(in: .global).maxY < safeTop + 12
@@ -70,7 +76,7 @@ struct SettingsScaffold<Content: View>: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            if back {
+            if pushed {
                 Button {
                     dismiss()
                 } label: {
@@ -84,11 +90,11 @@ struct SettingsScaffold<Content: View>: View {
                 .padding(.leading, -10)
             }
             Text(title)
-                .font(back ? .title2.weight(.bold) : .largeTitle.weight(.bold))
+                .font(pushed ? .title2.weight(.bold) : .largeTitle.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
         }
         .column()
-        .padding(.top, back ? 4 : 10)
+        .padding(.top, pushed ? 4 : 10)
     }
 }
 

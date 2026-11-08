@@ -13,6 +13,8 @@
   --accent: #c2410c;
   --accent-bright: #fb923c;
   --accent-soft: #fff1e6;
+  /* A chosen row or card in a list pane: the accent at about 12%, in either theme (it follows --accent). */
+  --chosen: color-mix(in srgb, var(--accent) 12%, transparent);
   --good: #15803d;
   --warn: #b45309;
   --bad: #b91c1c;

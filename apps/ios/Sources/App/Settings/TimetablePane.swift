@@ -30,7 +30,7 @@ struct SettingsTimetablePane: View {
                     model.place(pick.u, to: d.goesTo)
                 }
             }
-            .sheet(isPresented: $adding) { AddClassSheet(model: model) }
+            .sheet(isPresented: $adding) { AddClassSheet(model: model).centredSheet() }
         } else {
             SettingsProfileLoading()
         }

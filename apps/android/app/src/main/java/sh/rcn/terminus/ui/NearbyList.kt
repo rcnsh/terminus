@@ -109,12 +109,20 @@ internal class NearbySigns(val stops: List<NearbyStop>, val cells: List<List<Lis
  * ([stopped]), greyed with when each starts again, as on the stop's board; Nearby's own signs leave it bare.
  */
 @Composable
-internal fun NearbySign(signs: NearbySigns, i: Int, act: NearbyActions, saysNone: Boolean = false, stopped: List<BoardRow> = emptyList()) {
+internal fun NearbySign(
+    signs: NearbySigns,
+    i: Int,
+    act: NearbyActions,
+    saysNone: Boolean = false,
+    stopped: List<BoardRow> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
     val s = signs.stops[i]
     val grid = signs.grid
     // The plate opens the stop's whole board, as the Stops tab has it; each row its service's line from here.
     StopSign(
         s.name,
+        modifier,
         plate = Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { act.openStop(s.code) },
         opens = true,
         trailing = {

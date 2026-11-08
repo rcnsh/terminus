@@ -51,6 +51,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.L
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.NearbyStop
@@ -147,7 +148,7 @@ internal fun NearbyLayout(look: WidgetLook, w: Float, h: Float, v: NearbyView, c
 private fun problem(v: NearbyView, buses: List<StopBus>): String? {
     val first = v.first
     return when {
-        !v.paired -> L.s(R.string.tap_to_pair)
+        !v.paired -> L.s(DeviceKind.word(R.string.tap_to_pair))
         checking(v) -> L.s(R.string.checking)
         v.stops == null -> v.error ?: L.s(R.string.nearby_tap_refresh)
         first == null -> v.error ?: L.s(R.string.no_stops_near)

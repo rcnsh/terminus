@@ -1,6 +1,7 @@
 package sh.rcn.terminus.ui
 
 import android.animation.ValueAnimator
+import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -24,9 +25,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,8 +62,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LongState
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -108,6 +115,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -122,16 +130,21 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlin.math.tan
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -172,6 +185,7 @@ import org.maplibre.compose.map.MapState
 import org.maplibre.compose.map.MapUiOptions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.overlay.LocalViewportInsets
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
 import org.maplibre.compose.sources.GeoJsonData
@@ -198,8 +212,28 @@ import sh.rcn.terminus.runningFirst
 /** Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you. */
 private const val NEAR_CAMPUS_DEG = 0.027
 
-/** Room round the campus's core when the map frames it: the pills are along the top. */
-private val CORE_PADDING = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp)
+/**
+ * Room round the campus's core when the map frames it: [top] is what the pills and any status line under them cover ([MapCover.top], 72 dp
+ * before they're measured); [left] is a floating sheet's ([MapCover.left]) and [bottom] the system's gesture bar under a map that runs to
+ * the window's foot ([MapCover.inset]).
+ */
+private fun corePadding(top: Dp = 0.dp, left: Dp = 0.dp, bottom: Dp = 0.dp) =
+    DpPadding(left = MARGIN + left, top = MARGIN + topCover(top), right = MARGIN, bottom = MARGIN + bottom)
+
+/** What the pills and any status line under them cover ([MapCover.top]), 72 dp before they're measured. */
+private fun topCover(top: Dp) = if (top > 0.dp) top else 72.dp
+
+/** The gap between the campus and whatever's at the map's edge. */
+private val MARGIN = 24.dp
+
+/** The gap round a chosen service's line, wider than the campus's so a bus at its end isn't cut off. */
+private val LINE_MARGIN = 40.dp
+
+/** The corner the "back to campus" button takes over the map's foot: its 40 dp, the 40 dp under it and a gap. */
+private val CORNER = 88.dp
+
+/** [MapCover.framing] for the whole campus (a service's code for its line). */
+private const val CAMPUS = "*"
 
 private fun Long.color() = Color(this.toInt())
 
@@ -207,13 +241,96 @@ private fun Long.color() = Color(this.toInt())
 private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = b[2], north = b[3])
 
 /**
- * How much of the map is covered, in px from its top and bottom edges: by the pills (and the status lines under them) and by the open
- * sheet. Plain state read only when the map moves, so a sheet growing redraws nothing.
+ * How much of the map is covered, in px from its top and bottom edges: by the pills (and the status lines under them) and by the open sheet
+ * across the bottom; or from its left edge, by a sheet floating in the corner ([Widths.floatingSheet]). Plain state read only when the map
+ * moves, so a sheet growing redraws nothing.
  */
-private class MapCover {
+private class MapCover(framing: MutableState<String?>) {
     var top by mutableIntStateOf(0)
     var sheet by mutableIntStateOf(0)
+    var left by mutableIntStateOf(0)
+
+    /** How far up a sheet floating in the corner reaches, in px from the map's foot (0 without one). */
+    var floatTop by mutableIntStateOf(0)
+
+    /** The system's bar at the foot, under the map beside a rail (none over the bottom bar, which the map stops at). */
+    var inset by mutableIntStateOf(0)
+
+    /**
+     * What's framed, with nothing else having moved the map since: the whole campus ([CAMPUS]) or a chosen service's line (its code),
+     * framed again when the map's size or what covers it changes ([refitFrame]); null once a finger or a stop has moved it. Saved with the
+     * tab, so a map moved before leaving it stays moved.
+     */
+    var framing by framing
+
+    /** The whole campus is framed ([framing]). */
+    var campusOnly: Boolean
+        get() = framing == CAMPUS
+        set(v) {
+            framing = if (v) CAMPUS else null
+        }
+
+    /** The first view has been set ([CampusMapView]); till then the pan limits are loose, as the camera starts far out. */
+    var started by mutableStateOf(false)
+
+    /** Moves the code is making ([loosened]), during which the pan limits are loose. */
+    var moving by mutableIntStateOf(0)
+
+    /**
+     * The pan limits are worked out for the zoom the map is at ([PanLimit.centre]), and the map holds every move's centre to them: from
+     * further out than where a move ends (the campus from the first view, a stop at 17), on a window wider than a phone, they'd hold it to
+     * the middle of the street map, away from campus. So they're loose for [move], from the frame after they're loosened, and worked out
+     * again where it ends.
+     */
+    suspend fun loosened(move: suspend () -> Unit) {
+        moving++
+        try {
+            withFrameNanos {}
+            withFrameNanos {}
+            move()
+            withFrameNanos {}
+        } finally {
+            moving--
+        }
+    }
+
+    val loose: Boolean
+        get() = !started || moving > 0
+
+    /** [corePadding], clear of the pills and status lines, a floating sheet and the bar at the foot. */
+    fun padding(density: Density) = with(density) { corePadding(top.toDp(), left.toDp(), inset.toDp()) }
+
+    /**
+     * Room round a chosen service's line, whose [bounds] it is, on a map [size] big: clear of the pills and status lines, an open sheet and
+     * the corner button. A sheet floating in the corner leaves two places, beside it and above it; the line goes in whichever shows it
+     * bigger, as beside it on a tall window it would have to be smaller than the street map lets the map zoom out.
+     */
+    fun linePadding(density: Density, size: DpSize?, bounds: DoubleArray): DpPadding =
+        with(density) {
+            val top = LINE_MARGIN + topCover(top.toDp())
+            val foot = LINE_MARGIN + inset.toDp()
+            if (left == 0) {
+                // A sheet across the foot that leaves under a third of the map (a stop's, on a phone) leaves too little to fit a line
+                // in at any zoom the street map allows: the line takes the whole map, all of it in view once the sheet is closed.
+                val clear = foot + sheet.toDp()
+                val roomy = size == null || size.height - top - clear >= size.height / 3
+                return DpPadding(LINE_MARGIN, top, LINE_MARGIN, if (sheet > 0 && roomy) clear else foot + CORNER)
+            }
+            val beside = DpPadding(LINE_MARGIN + left.toDp(), top, LINE_MARGIN, foot + CORNER)
+            val above = DpPadding(LINE_MARGIN, top, LINE_MARGIN, foot + floatTop.toDp())
+            if (size == null) return beside
+            val wide = bounds[2] - bounds[0]
+            val tall = mercator(bounds[3]) - mercator(bounds[1])
+            fun scale(p: DpPadding) = minOf((size.width - p.left - p.right).value / wide, (size.height - p.top - p.bottom).value / tall)
+            if (scale(above) > scale(beside)) above else beside
+        }
 }
+
+/** The bar at the foot under a sheet across the bottom, which the sheet's rows keep clear of. */
+private val LocalSheetInset = compositionLocalOf { 0.dp }
+
+/** How tall a floating sheet may be: the room under the pills. Null for a sheet across the bottom. */
+private val LocalSheetRoom = compositionLocalOf<Dp?> { null }
 
 /**
  * The Map tab: the campus's streets, every service's line in its colour, the stops, a pill per service along the top (one at a time: its
@@ -225,6 +342,7 @@ internal fun MapScreen(
     onGoThere: (code: String, name: String) -> Unit,
     places: PlacesForMap,
     onShowList: (svc: String?, stop: String?) -> Unit = { _, _ -> },
+    bottomInset: Dp = 0.dp,
 ) {
     val ui by map.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
@@ -254,6 +372,7 @@ internal fun MapScreen(
         dark,
         MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList, map::showStop),
         home = map.homeTaps,
+        bottomInset = bottomInset,
     )
 }
 
@@ -269,25 +388,34 @@ private suspend fun MapState.centreOn(lat: Double, lon: Double, cover: MapCover,
     withFrameNanos {}
     var moved = false
     withTimeoutOrNull(CENTRE_FOLLOW_MS) {
-        snapshotFlow { cover.top to cover.sheet }
+        snapshotFlow { Triple(cover.top, cover.sheet, cover.left) }
             .debounce { if (moved) 200L else 0L }
             .takeWhile { !moved || cameraMoveReason != CameraMoveReason.Gesture }
-            .collectLatest { (top, sheet) ->
+            .collectLatest { (top, sheet, left) ->
                 moved = true
                 val view = viewport ?: awaitViewport()
                 val h = view.size.height.value.toDouble()
-                val (topDp, sheetDp) = with(density) { top.toDp().value.toDouble() to sheet.toDp().value.toDouble() }
+                val (topDp, sheetDp) = with(density) { top.toDp().value.toDouble() to (sheet + cover.inset).toDp().value.toDouble() }
                 val zoom = max(view.cameraPosition.zoom, 17.0)
                 // How far above the map's middle the uncovered part's middle is,
                 // in dp, then in degrees of latitude at that zoom (the world is
                 // 512 dp round at zoom 0, its north-south scale cos(lat) of that).
                 val up = h / 2 - (topDp + h - sheetDp) / 2
-                val target = Position(longitude = lon, latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)))
+                // And how far right of it, beside a floating sheet, in degrees of longitude.
+                val right = with(density) { left.toDp().value.toDouble() } / 2
+                val target =
+                    Position(
+                        longitude = lon - right * 360 / (512 * 2.0.pow(zoom)),
+                        latitude = lat - up * 360 / (512 * 2.0.pow(zoom)) * cos(Math.toRadians(lat)),
+                    )
                 // With animations off in the phone's settings, it jumps there (the library reads the setting).
                 animateCamera(CameraUpdate(center = target, zoom = zoom), CameraAnimation.Ease.Standard)
             }
     }
 }
+
+/** A floating sheet's margin from the map's edges, and from the pills above it. */
+private val FLOAT_GAP = 16.dp
 
 /** How long after moving to a stop the map keeps it clear of its sheet as that grows. */
 private const val CENTRE_FOLLOW_MS = 2_500L
@@ -317,15 +445,28 @@ internal class MapActions(
 
 /** The map and everything over it, from [ui] alone. */
 @Composable
-internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow<Unit> = emptyFlow()) {
+internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow<Unit> = emptyFlow(), bottomInset: Dp = 0.dp) {
     val campus = ui.campus
     val style = ui.style
     // "Back to campus": bumped by the button and by the Map tab tapped again
     // ([home]), watched by the map.
     var recentre by remember { mutableIntStateOf(0) }
     LaunchedEffect(home) { home.collect { recentre++ } }
-    val cover = remember { MapCover() }
-    Box(Modifier.fillMaxSize()) {
+    val framing = rememberSaveable { mutableStateOf<String?>(CAMPUS) }
+    val cover = remember { MapCover(framing) }
+    // From 700 wide the sheet floats in the bottom-left corner, beside the map rather than over its foot.
+    val floats = Widths.floatingSheet(LocalWindowDp.current)
+    val density = LocalDensity.current
+    var height by remember { mutableIntStateOf(0) }
+    cover.inset = with(density) { bottomInset.roundToPx() }
+    LaunchedEffect(ui.sheet == null, floats) {
+        if (ui.sheet == null || floats) cover.sheet = 0
+        if (ui.sheet == null || !floats) {
+            cover.left = 0
+            cover.floatTop = 0
+        }
+    }
+    Box(Modifier.fillMaxSize().onSizeChanged { height = it.height }) {
         when {
             campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre, cover)
             ui.failed ->
@@ -347,11 +488,12 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
                     ui.downloadFailed -> StatusChip(stringResource(R.string.map_download_failed))
                 }
             }
-            if (ui.sheet == null) {
+            // Under a sheet across the bottom it would be covered; beside a floating one it stays.
+            if (ui.sheet == null || floats) {
                 // Lost after a pinch or a fling: one tap back to the whole campus.
                 SmallFloatingActionButton(
                     onClick = { recentre++ },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 40.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 40.dp + bottomInset),
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
@@ -359,16 +501,33 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
                 }
             }
             ui.sheet?.let { sheet ->
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { cover.sheet = it.height }) {
-                    when (sheet) {
-                        is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
-                        is MapSheet.Bus ->
-                            ui.buses
-                                .firstOrNull { it.id == sheet.id }
-                                ?.let { bus ->
-                                    val svc = ui.selected.orEmpty()
-                                    BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, campus, actions, sheet)
-                                }
+                val gap = with(density) { FLOAT_GAP.roundToPx() }
+                Box(
+                    if (floats)
+                        Modifier.align(Alignment.BottomStart)
+                            .padding(start = FLOAT_GAP, top = FLOAT_GAP, end = FLOAT_GAP, bottom = FLOAT_GAP + bottomInset)
+                            .width(Widths.PANE.dp)
+                            .onSizeChanged {
+                                cover.left = it.width + gap
+                                cover.floatTop = it.height + gap * 2
+                            }
+                    else Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { cover.sheet = it.height }
+                ) {
+                    val room = with(density) { (height - cover.top).toDp() } - FLOAT_GAP * 2 - bottomInset
+                    CompositionLocalProvider(
+                        LocalSheetRoom provides if (floats) room.coerceAtLeast(120.dp) else null,
+                        LocalSheetInset provides if (floats) 0.dp else bottomInset,
+                    ) {
+                        when (sheet) {
+                            is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
+                            is MapSheet.Bus ->
+                                ui.buses
+                                    .firstOrNull { it.id == sheet.id }
+                                    ?.let { bus ->
+                                        val svc = ui.selected.orEmpty()
+                                        BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, campus, actions, sheet)
+                                    }
+                        }
                     }
                 }
             }
@@ -379,6 +538,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
 @Composable
 private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, actions: MapActions, recentre: Int, cover: MapCover) {
     val ctx = LocalContext.current
+    val density = LocalDensity.current
     val ink = if (dark) Color(0xFFF2EFEB) else Color(0xFF1C1917)
     val paper = if (dark) Color(0xFF1A1816) else Color.White
     // What edges the lines and buses. On the light street map a service's own
@@ -536,54 +696,67 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             )
         }
 
-    // First view: your nearest stop when you're on campus, otherwise the whole
-    // campus. Once only: back on the tab, the map is where you left it (the
-    // camera is saved state, kept by the tabs).
     var framed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state) {
-        if (framed) return@LaunchedEffect
-        framed = true
-        // Opened on a stop from Nearby: that's the first view (below).
-        if (ui.focus != null) return@LaunchedEffect
-        state.fitCameraToBounds(box(campus.coreBounds(ui.core)), CameraFit(fitPadding = CORE_PADDING))
-        val at = Locator.lastKnown(ctx) ?: return@LaunchedEffect
-        val near =
-            campus.stops.minByOrNull { (it.lat - at.latitude) * (it.lat - at.latitude) + (it.lon - at.longitude) * (it.lon - at.longitude) }
-                ?: return@LaunchedEffect
-        if (abs(near.lat - at.latitude) < NEAR_CAMPUS_DEG && abs(near.lon - at.longitude) < NEAR_CAMPUS_DEG) {
-            state.setCameraPosition(CameraPosition(center = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
+        try {
+            if (!framed) {
+                framed = true
+                firstView(state, ui, campus, ctx, cover)
+            }
+        } finally {
+            if (!cover.campusOnly) cover.started = true
         }
+        // A finger moving the map, caught as it does: from then the map stays where it's put, through a fold or a resize too.
+        launch { snapshotFlow { state.cameraMoveReason }.collect { if (it == CameraMoveReason.Gesture) cover.campusOnly = false } }
+        refitFrame(state, ui, campus, cover, density)
     }
     // A stop opened from Nearby or a bus's sheet: the map glides to it.
-    val density = LocalDensity.current
     LaunchedEffect(ui.focus) {
         val stop = ui.focus?.let { campus.stop(it) } ?: return@LaunchedEffect
-        state.centreOn(stop.lat, stop.lon, cover, density)
+        cover.campusOnly = false
+        cover.loosened { state.centreOn(stop.lat, stop.lon, cover, density) }
     }
     // Back from a stop to the bus it was opened from: the map follows, as
     // it went to the stop, so the bus isn't left off screen.
     LaunchedEffect(ui.focusBus) {
         val bus = ui.focusBus?.let { id -> ui.buses.firstOrNull { it.id == id } } ?: return@LaunchedEffect
-        state.centreOn(bus.lat, bus.lon, cover, density)
+        cover.campusOnly = false
+        cover.loosened { state.centreOn(bus.lat, bus.lon, cover, density) }
     }
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
         if (recentre == 0) return@LaunchedEffect
-        // With animations off in the phone's settings, it jumps there (the library reads the setting).
-        state.animateCameraToBounds(
-            box(campus.coreBounds(ui.core)),
-            CameraFit(fitPadding = CORE_PADDING),
-            animation = CameraAnimation.Ease.Standard,
-        )
+        cover.campusOnly = false
+        // With animations off in the phone's settings, it jumps there (the library reads the setting). Beside a floating sheet, in the
+        // part of the map it leaves.
+        cover.loosened {
+            state.animateCameraToBounds(
+                box(campus.coreExtent(ui.core)),
+                CameraFit(fitPadding = cover.padding(density)),
+                animation = CameraAnimation.Ease.Standard,
+            )
+        }
+        // The whole campus again: fitted again as the window changes, till something moves it.
+        cover.campusOnly = true
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(selected) {
         if (selected == framedLine) return@LaunchedEffect
         framedLine = selected
+        // A service let go of: its line isn't fitted again; the map stays where it is.
+        if (cover.framing != CAMPUS) cover.framing = null
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
-        val padding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp)
-        state.animateCameraToBounds(box(r.bounds()), CameraFit(fitPadding = padding), animation = CameraAnimation.Ease.Standard)
+        cover.framing = null
+        cover.loosened {
+            state.animateCameraToBounds(
+                box(r.bounds()),
+                CameraFit(fitPadding = cover.linePadding(density, state.viewport?.size, r.bounds())),
+                animation = CameraAnimation.Ease.Standard,
+            )
+        }
+        // Fitted again as the window or the sheet changes, till a finger moves it.
+        cover.framing = selected
     }
 
     // The map is drawn, and its stops and buses are only reached by a finger
@@ -601,18 +774,21 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 val view = state.viewport
                 val w = view?.size?.width?.value?.toDouble() ?: 0.0
                 val h = view?.size?.height?.value?.toDouble() ?: 0.0
-                if (view == null || w <= 0 || h <= 0)
+                if (view == null || w <= 0 || h <= 0 || cover.loose)
                     return@derivedStateOf CameraConstraints {
                         minZoom = 13.0
                         maxZoom = 19.0
                         boundingBox = box(PanLimit.EXTENT)
                     }
-                val min = max(13.0, PanLimit.minZoom(w, h))
+                // What an open sheet covers, which may show past the street map ([PanLimit.centre]).
+                val (west, south) =
+                    with(density) { cover.left.toDp().value.toDouble() to (cover.floatTop + cover.sheet).toDp().value.toDouble() }
+                val min = max(13.0, PanLimit.minZoom(w, h, west, south))
                 val zoom = floor(max(min, view.cameraPosition.zoom) * 16) / 16
                 CameraConstraints {
                     minZoom = min
                     maxZoom = 19.0
-                    boundingBox = box(PanLimit.centre(w, h, zoom))
+                    boundingBox = box(PanLimit.centre(w, h, zoom, west, south))
                 }
             }
         }
@@ -648,9 +824,75 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                     }
                 }
             },
-        overlay = { include(MapOverlay.AttributionOnly) },
+        // The credit, in the bottom-left corner, moves along to clear a floating sheet there.
+        overlay = {
+            val insets = LocalViewportInsets.current
+            val dir = LocalLayoutDirection.current
+            val left = with(LocalDensity.current) { cover.left.toDp() }
+            CompositionLocalProvider(
+                LocalViewportInsets provides
+                    PaddingValues(
+                        start = insets.calculateStartPadding(dir) + left,
+                        top = insets.calculateTopPadding(),
+                        end = insets.calculateEndPadding(dir),
+                        bottom = insets.calculateBottomPadding() + with(LocalDensity.current) { cover.inset.toDp() },
+                    )
+            ) {
+                include(MapOverlay.AttributionOnly)
+            }
+        },
     )
 }
+
+/**
+ * The map's first view, once ([CampusMapView]'s `framed`): your nearest stop when you're on campus, otherwise the whole campus (fitted by
+ * [refitCampus]). Opened on a stop from Nearby, that's the first view. Back on the tab, the map is where you left it (the camera is saved
+ * state, kept by the tabs).
+ */
+private suspend fun firstView(state: MapState, ui: MapUi, campus: CampusMap, ctx: Context, cover: MapCover) {
+    if (ui.focus != null) {
+        cover.campusOnly = false
+        return
+    }
+    val at = Locator.lastKnown(ctx) ?: return
+    val near =
+        campus.stops
+            .minByOrNull { (it.lat - at.latitude) * (it.lat - at.latitude) + (it.lon - at.longitude) * (it.lon - at.longitude) }
+            ?.takeIf { abs(it.lat - at.latitude) < NEAR_CAMPUS_DEG && abs(it.lon - at.longitude) < NEAR_CAMPUS_DEG } ?: return
+    cover.campusOnly = false
+    cover.loosened { state.setCameraPosition(CameraPosition(center = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0)) }
+}
+
+/**
+ * What the map frames ([MapCover.framing]: the whole campus, or a chosen service's line) fitted to each size the map takes and each change
+ * in what covers it: the map is first measured before the window settles (the rail, the system bars), a fold or a resized window changes it
+ * again, a status line under the pills comes and goes, and a stop's sheet opens and grows.
+ */
+private suspend fun refitFrame(state: MapState, ui: MapUi, campus: CampusMap, cover: MapCover, density: Density) {
+    snapshotFlow {
+        state.viewport?.size?.let { size ->
+            val line = cover.framing?.takeIf { it != CAMPUS }?.let { campus.routes[it]?.bounds() }
+            Frame(size, cover.framing, cover.padding(density), line?.let { cover.linePadding(density, size, it) })
+        }
+    }
+        .filterNotNull()
+        .filter { it.size.width.value > 0 && it.size.height.value > 0 }
+        .distinctUntilChanged()
+        .collectLatest { f ->
+            val framing = f.framing ?: return@collectLatest
+            val (bounds, padding) =
+                if (framing == CAMPUS) campus.coreExtent(ui.core) to f.campus
+                else (campus.routes[framing]?.bounds() ?: return@collectLatest) to (f.line ?: return@collectLatest)
+            cover.loosened { state.fitCameraToBounds(box(bounds), CameraFit(fitPadding = padding)) }
+            cover.started = true
+        }
+}
+
+/** What [refitFrame] fits to: the map's size, what it's framing, and the room round the campus and round a line. */
+private data class Frame(val size: DpSize, val framing: String?, val campus: DpPadding, val line: DpPadding?)
+
+/** Web Mercator's northing for [lat], in degrees: how tall a box looks on the map. */
+private fun mercator(lat: Double) = Math.toDegrees(ln(tan(Math.PI / 4 + Math.toRadians(lat) / 2)))
 
 /** How the buses are drawn, apart from where: the same from frame to frame. */
 private class BusLook(
@@ -847,7 +1089,9 @@ private fun MapSheetFrame(
     val scope = rememberCoroutineScope()
     // Another stop or bus opened while this one slides off stays open.
     val showing by rememberUpdatedState(focusKey)
-    val y = { if (dragging) Fling.rubber(dragged, lift) else settle.value }
+    // Floating, the sheet has no room above it to lift into.
+    val room = LocalSheetRoom.current
+    val y = { (if (dragging) Fling.rubber(dragged, lift) else settle.value).let { if (room != null) it.coerceAtLeast(0f) else it } }
     LaunchedEffect(focusKey) {
         settle.snapTo(0f)
         runCatching { focus.requestFocus() }
@@ -858,7 +1102,7 @@ private fun MapSheetFrame(
     Surface(
         modifier =
             Modifier.fillMaxWidth()
-                .heightIn(max = 480.dp)
+                .heightIn(max = room ?: 480.dp)
                 .onSizeChanged { height = it.height }
                 .offset { IntOffset(0, y().roundToInt()) }
                 // Lifted, the sheet's colour carries on under it, so the map doesn't show through below; over the
@@ -868,12 +1112,12 @@ private fun MapSheetFrame(
                     if (y() < 0f) drawRect(surface, Offset(0f, size.height - 1f), Size(size.width, -y() + 1f))
                 }
                 .semantics { paneTitle = paneName },
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        shape = if (room != null) RoundedCornerShape(20.dp) else RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         color = c.surface,
         shadowElevation = 8.dp,
     ) {
         // The rows scroll; the footer's buttons stay in view under them.
-        Column(Modifier.animateContentSize()) {
+        Column(Modifier.animateContentSize().padding(bottom = LocalSheetInset.current)) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 Column(
                     Modifier.draggable(

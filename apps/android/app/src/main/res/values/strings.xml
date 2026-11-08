@@ -676,6 +676,7 @@
     <string name="buses_pin_another">Pin another stop</string>
     <string name="buses_pin_another_how">Tap the star on a stop in Nearby or on its page to keep it here.</string>
     <string name="buses_services_hint">Tap one to see its whole line.</string>
+    <string name="buses_choose">Choose a stop or a service.</string>
     <string name="buses_loop_from">Loop from %1$s</string>
     <string name="buses_from_to">%1$s to %2$s</string>
     <string name="buses_pin_stop">Pin %1$s</string>
@@ -693,4 +694,30 @@
     <string name="pull_up_to_date">Up to date</string>
     <string name="pull_up_to_date_next_s">Up to date, next update in %1$d s</string>
     <string name="pull_failed">Couldn\'t update</string>
+    <!-- The same, on a tablet (DeviceKind.word). -->
+    <string name="a11y_not_paired_tablet">terminus. This tablet isn\'t paired yet.</string>
+    <string name="add_email_why_tablet">Keeps your settings if you lose this tablet, and lets you use terminus on your Mac or the web.</string>
+    <string name="signs_in_itself_tablet">This tablet signs in by itself once you do.</string>
+    <string name="follow_device_tablet">Follow this tablet</string>
+    <string name="not_signed_in_hint_tablet">Your settings are stored only on this tablet. Add an email to keep them if you lose your tablet, and to use terminus on your Mac or the web.</string>
+    <string name="pair_phone_text_tablet">This link pairs this tablet with %1$s. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account.</string>
+    <string name="pair_phone_title_tablet">Pair this tablet?</string>
+    <string name="remove_this_phone_tablet">This tablet will be signed out.</string>
+    <string name="replace_with_phone_tablet">Replace it with this tablet\'s</string>
+    <string name="sign_out_title_tablet">Sign out of this tablet?</string>
+    <string name="signed_out_key_lost_tablet">This tablet could no longer read its sign-in, so it was signed out. Sign in again, or start again.</string>
+    <string name="signed_out_removed_tablet">This tablet was signed out of your account. Sign in again with your email.</string>
+    <string name="signed_out_unused_tablet">This tablet\'s setup was removed after a long time unused. Start again or sign in.</string>
+    <string name="tap_to_pair_tablet">Tap to pair this tablet</string>
+    <string name="theme_hint_tablet">Only on this tablet.</string>
+    <string name="which_setup_text_tablet">%1$s already has a timetable and settings, and so does this tablet. Keep one:</string>
+    <string name="diagnostics_hint_tablet">What the app is doing, for a bug report. It stays on this tablet unless you copy it, and leaves out your account and where you are.</string>
+    <string name="diag_push_unavailable_tablet">Not on this tablet</string>
+    <string name="no_browser_tablet">No app on this tablet opens web links.</string>
+    <string name="card_style_hint_tablet">How the card and widgets show a trip by bus. Only on this tablet.</string>
+    <string name="new_to_nus_hint_tablet">Only on this tablet. With New to NUS off, the widget fits in more buses.</string>
+    <string name="pair_title_tablet">Pair this tablet</string>
+    <string name="pair_scan_tablet">Or scan the QR code with your tablet\'s camera.</string>
+    <string name="this_phone_tag_tablet">This tablet</string>
+    <string name="time_format_hint_auto_tablet">For every time terminus shows, here, on your Mac and on the web. Auto follows this tablet.</string>
 </resources>

@@ -147,16 +147,20 @@ private struct DiagnosticsGroup: View {
     var body: some View {
         SettingsGroup(
             title: L("Diagnostics"),
-            hint: L(
-                "What the app is doing, for a bug report. It stays on this phone unless you copy it, and leaves out your account and where you are."
-            )
+            hint: (onIPad
+                ? L(
+                    "What the app is doing, for a bug report. It stays on this iPad unless you copy it, and leaves out your account and where you are."
+                )
+                : L(
+                    "What the app is doing, for a bug report. It stays on this phone unless you copy it, and leaves out your account and where you are."
+                ))
         ) {
             if let f = facts {
                 TimelineView(.periodic(from: .now, by: 1)) { tick in
                     VStack(alignment: .leading, spacing: 0) {
                         DiagnosticRow(label: L("Server"), value: URL(string: f.server)?.host ?? f.server)
                         GroupDivider()
-                        DiagnosticRow(label: L("Phone's clock"), value: clock(f.skewS))
+                        DiagnosticRow(label: (onIPad ? L("iPad's clock") : L("Phone's clock")), value: clock(f.skewS))
                         GroupDivider()
                         DiagnosticRow(
                             label: L("Notifications"),

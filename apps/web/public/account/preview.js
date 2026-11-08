@@ -541,6 +541,7 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
     >
       <div class="report-inner">
         <div class="report-grab" aria-hidden="true"></div>
+        ${open && !sent && html`<button type="button" class="report-cancel" onClick=${close}>${t('Cancel')}</button>`}
         ${open && body}
       </div>
     </dialog>

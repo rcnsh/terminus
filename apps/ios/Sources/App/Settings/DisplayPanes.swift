@@ -84,7 +84,10 @@ struct SettingsLanguagePane: View {
                 selection: Binding(get: { prefs.lang }, set: { model.setLang($0) }), id: "settings.lang")
         }
         SettingsGroup(
-            title: L("Time format"), hint: L("For every time terminus shows, here, on your Mac and on the web. Auto follows this phone.")
+            title: L("Time format"),
+            hint: (onIPad
+                ? L("For every time terminus shows, here, on your Mac and on the web. Auto follows this iPad.")
+                : L("For every time terminus shows, here, on your Mac and on the web. Auto follows this phone."))
         ) {
             SettingSegments(
                 label: L("Time format"), options: [("auto", L("Auto")), ("12", L("12-hour")), ("24", L("24-hour"))],
@@ -99,14 +102,18 @@ struct SettingsAppearancePane: View {
     @Environment(Prefs.self) private var prefs
 
     var body: some View {
-        SettingsGroup(title: L("Theme"), hint: L("Only on this phone.")) {
+        SettingsGroup(title: L("Theme"), hint: (onIPad ? L("Only on this iPad.") : L("Only on this phone."))) {
             SettingSegments(
                 label: L("Theme"), options: [("auto", L("Auto")), ("light", L("Light")), ("dark", L("Dark"))],
                 selection: Binding(get: { prefs.theme }, set: { prefs.theme = $0 }), id: "settings.theme")
         }
         SettingsCardStyles()
-        SettingsGroup(title: L("Buses near you widget"), hint: L("Only on this phone. With New to NUS off, the widget fits in more buses."))
-        {
+        SettingsGroup(
+            title: L("Buses near you widget"),
+            hint: (onIPad
+                ? L("Only on this iPad. With New to NUS off, the widget fits in more buses.")
+                : L("Only on this phone. With New to NUS off, the widget fits in more buses."))
+        ) {
             SettingSwitch(
                 label: L("New to NUS"), sub: L("Says where each bus goes, by places you'll know: the MRT, UTown, PGP."),
                 isOn: Binding(get: { prefs.newToNus }, set: { prefs.newToNus = $0 }), id: "settings.newToNus")

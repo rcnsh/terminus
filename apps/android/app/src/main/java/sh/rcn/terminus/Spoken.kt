@@ -22,7 +22,7 @@ object Spoken {
         withHead: Boolean = true,
         clock: (Long) -> String,
     ): String {
-        if (!paired) return L.s(R.string.a11y_not_paired)
+        if (!paired) return L.s(DeviceKind.word(R.string.a11y_not_paired))
         // The sentence's own stop ends it: an error that has one ("Can't reach terminus.") loses it, not read twice.
         if (answer == null) return L.s(R.string.a11y_loading, (error ?: L.s(R.string.a11y_loading_word)).trimEnd('.', '。'))
         val old = isOld(answer, now)

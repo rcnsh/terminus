@@ -15,6 +15,16 @@ struct ReportSheet: View {
     @State private var raw: Data?
     @State private var line = ""
     @FocusState private var noteFocused: Bool
+    @Environment(\.windowWidth) private var width
+    @ScaledMetric(relativeTo: .body) private var threeLines: CGFloat = 66
+
+    /// What the report is about, from the start: a centred sheet is sized to what's in it as it opens.
+    init(addEmail: Binding<Bool>) {
+        _addEmail = addEmail
+        let a = AppModel.shared.answer
+        _raw = State(initialValue: a?.raw)
+        _line = State(initialValue: a?.card?.line ?? a?.label ?? "")
+    }
 
     /// The reasons, as /me/feedback takes them (REASONS in the API's feedback.ts).
     private var reasons: [(String, String)] {
@@ -25,33 +35,51 @@ struct ReportSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        Group {
+            if width == .narrow {
+                NavigationStack {
+                    ScrollView { page }
+                        .scrollDismissesKeyboard(.interactively)
+                        .background(Color.page)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                if !app.reportSent { Button(L("Cancel")) { dismiss() } }
+                            }
+                        }
+                }
+            } else {
+                // From 600 wide its bar is in the page, so the centred sheet is as tall as what's in it.
                 VStack(alignment: .leading, spacing: 0) {
-                    if app.reportSent {
-                        sent
-                    } else if let email = app.email {
-                        form(email)
-                    } else {
-                        needsEmail
+                    if !app.reportSent {
+                        Button(L("Cancel")) { dismiss() }
+                            .buttonStyle(ChipButtonStyle())
+                            .padding([.horizontal, .top], 16)
                     }
+                    SheetScroll { page }.scrollDismissesKeyboard(.interactively)
                 }
-                .padding(20)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Color.page)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    if !app.reportSent { Button(L("Cancel")) { dismiss() } }
-                }
+                .background(Color.page)
             }
         }
         .presentationDetents([.large])
+        .centredSheet(fits: true)
         .onAppear {
             let a = app.answer
             raw = a?.raw
             line = a?.card?.line ?? a?.label ?? ""
         }
+    }
+
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if app.reportSent {
+                sent
+            } else if let email = app.email {
+                form(email)
+            } else {
+                needsEmail
+            }
+        }
+        .padding(20)
     }
 
     private var sent: some View {
@@ -130,6 +158,8 @@ struct ReportSheet: View {
             }
             TextField(text: $note, prompt: Text(L("What happened? A time or a stop helps.")), axis: .vertical) { Text(L("Your note")) }
                 .lineLimit(3...6)
+                // Asked for its height (a centred sheet sizing itself) it says one line; it draws three.
+                .frame(minHeight: width == .narrow ? nil : threeLines, alignment: .topLeading)
                 .focused($noteFocused)
                 .padding(12)
                 .background(Color.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -176,43 +206,72 @@ struct GoLaterSheet: View {
     @State private var failure: String?
     @State private var saving = false
 
+    @Environment(\.windowWidth) private var width
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                DatePicker(L("Time"), selection: $time, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .environment(\.timeZone, .campus)
-                    .environment(
-                        \.locale,
-                        Clock.hour12
-                            ? Locale(identifier: Lang.zh ? "zh_Hans_SG" : "en_SG") : Locale(identifier: Lang.zh ? "zh_Hans_CN" : "en_GB"))
-                if let failure { Text(failure).font(.footnote).foregroundStyle(Color.bad).padding(.top, 8) }
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .navigationTitle(L("Go later today at…"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L("Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L("OK")) {
-                        var cal = Calendar(identifier: .gregorian)
-                        cal.timeZone = .campus
-                        let c = cal.dateComponents([.hour, .minute], from: time)
-                        saving = true
-                        Task {
-                            failure = await app.goLater(atMin: (c.hour ?? 0) * 60 + (c.minute ?? 0))
-                            saving = false
-                            if failure == nil { dismiss() }
-                        }
+        Group {
+            if width == .narrow {
+                NavigationStack {
+                    VStack(spacing: 0) {
+                        picker
+                        Spacer()
                     }
-                    .disabled(saving)
-                    .accessibilityIdentifier("goLater.ok")
+                    .padding(.horizontal, 20)
+                    .navigationTitle(L("Go later today at…"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button(L("Cancel")) { dismiss() } }
+                        ToolbarItem(placement: .confirmationAction) { ok }
+                    }
                 }
+            } else {
+                // From 600 wide its bar is in the page, so the centred sheet is as tall as what's in it.
+                VStack(spacing: 12) {
+                    HStack {
+                        Button(L("Cancel")) { dismiss() }.buttonStyle(ChipButtonStyle())
+                        Spacer()
+                        ok.buttonStyle(ChipButtonStyle(filled: true))
+                    }
+                    .overlay { Text(L("Go later today at…")).font(.headline).accessibilityAddTraits(.isHeader) }
+                    picker
+                }
+                .padding(16)
+                .background(Color.page)
             }
         }
-        .presentationDetents([.medium])
+        // A medium detent would clip the centred sheet to half its height.
+        .presentationDetents(width == .narrow ? [.medium] : [.large])
+        .centredSheet(fits: true)
+    }
+
+    @ViewBuilder private var picker: some View {
+        DatePicker(L("Time"), selection: $time, displayedComponents: .hourAndMinute)
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            // Asked for its height (a centred sheet sizing itself) the wheel says less than it draws.
+            .frame(height: width == .narrow ? nil : 216)
+            .environment(\.timeZone, .campus)
+            .environment(
+                \.locale,
+                Clock.hour12
+                    ? Locale(identifier: Lang.zh ? "zh_Hans_SG" : "en_SG") : Locale(identifier: Lang.zh ? "zh_Hans_CN" : "en_GB"))
+        if let failure { Text(failure).font(.footnote).foregroundStyle(Color.bad).padding(.top, 8) }
+    }
+
+    private var ok: some View {
+        Button(L("OK")) {
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = .campus
+            let c = cal.dateComponents([.hour, .minute], from: time)
+            saving = true
+            Task {
+                failure = await app.goLater(atMin: (c.hour ?? 0) * 60 + (c.minute ?? 0))
+                saving = false
+                if failure == nil { dismiss() }
+            }
+        }
+        .disabled(saving)
+        .accessibilityIdentifier("goLater.ok")
     }
 }
 

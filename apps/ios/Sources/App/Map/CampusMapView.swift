@@ -37,6 +37,8 @@ struct CampusMapView: UIViewRepresentable {
     /// How much of the map the pills (top) and the sheet (bottom, or left
     /// where it floats beside the map) cover, in points.
     let cover: UIEdgeInsets
+    /// How far up from the map's foot a sheet floating in its corner reaches (0 with none): it hides only that corner.
+    let floating: CGFloat
     /// The tab is on screen and the app active: the buses' slides are drawn only then.
     let shown: Bool
     /// What it draws from the model, so SwiftUI updates it when any of it changes.
@@ -58,10 +60,7 @@ struct CampusMapView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MLNMapView {
         let view = SizedMapView(frame: .zero, styleURL: style)
-        view.sized = { [weak coordinator = context.coordinator] in
-            coordinator?.frameCampus()
-            coordinator?.keepOnMap()
-        }
+        view.sized = { [weak coordinator = context.coordinator] in coordinator?.resized() }
         view.delegate = context.coordinator
         view.compassView.isHidden = true
         // The map isn't MapLibre's: only the data's own credit (the ⓘ button) stays.
@@ -89,9 +88,11 @@ struct CampusMapView: UIViewRepresentable {
         c.campus = campus
         c.still = still
         c.shown = shown
-        if c.cover != cover {
+        if c.cover != cover || c.floating != floating {
+            let was = c.cover
             c.cover = cover
-            c.coverChanged()
+            c.floating = floating
+            c.coverChanged(from: was)
             // Beside a sheet floating on the left, so the sheet doesn't hide it.
             view.attributionButtonMargins = CGPoint(x: 8 + cover.left, y: 8)
         }
@@ -124,6 +125,7 @@ struct CampusMapView: UIViewRepresentable {
         var shown = true
         var loaded = false
         var cover = UIEdgeInsets.zero
+        var floating: CGFloat = 0
         var applied: (selected: String?, stretch: Bool, bus: String?, stale: Bool)?
 
         private var slides = Slides()
@@ -138,6 +140,19 @@ struct CampusMapView: UIViewRepresentable {
         private var located = 0
         private var framedLine: String?
         private var framed = false
+        /// The whole campus is in view (the first view, or Back to campus)
+        /// and nothing else has moved the map since: it's fitted again when
+        /// the map's size changes (a fold, a turn, a resized window), as on Android.
+        private var campusOnly = false
+        /// The same for the chosen service's whole line, since it was chosen.
+        private var lineOnly = false
+        /// That line was fitted beside an open sheet: fitted again as the sheet grows, shrinks or closes.
+        private var lineBesideSheet = false
+        /// The stop or bus of the sheet the line was fitted beside. A sheet
+        /// for another one, opened since, keeps that in view after a refit.
+        private var lineSheetSpot: MapModel.Spot?
+        /// The size the camera was last fitted to.
+        private var fittedSize = CGSize.zero
         private var keeping = false
         /// The place last moved onto, and when: kept clear of the sheet as it
         /// grows for a moment after, unless a finger has moved the map since.
@@ -190,12 +205,38 @@ struct CampusMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {
             // A finger on the map: it no longer follows the sheet.
+            // From then the map stays where it's put, through a fold or a turn too.
             if !reason.intersection([.gesturePan, .gesturePinch, .gestureZoomIn, .gestureZoomOut, .gestureOneFingerZoom]).isEmpty {
                 following = nil
+                campusOnly = false
+                lineOnly = false
             }
         }
 
         func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) { keepOnMap() }
+
+        /// The map has its size, or a new one: the first view once, then the
+        /// campus or the chosen line fitted again while nothing has moved it.
+        func resized() {
+            guard let view, view.bounds.width > 100, view.bounds.height > 100 else { return }
+            let size = view.bounds.size
+            defer { fittedSize = size }
+            // The furthest out it may zoom first, as that depends on the size.
+            keepOnMap()
+            if !framed {
+                frameCampus()
+            } else if size != fittedSize {
+                if lineOnly, let r = map.selected.flatMap({ campus.routes[$0] }) {
+                    let other = map.sheetSpot != nil && map.sheetSpot != lineSheetSpot
+                    fitLine(r, animated: false)
+                    if other { showSheetSpot() }
+                } else if campusOnly, map.sheetSpot == nil {
+                    // With a sheet open, MapLibre keeps the middle where it was, and its stop or bus with it.
+                    fitCampus(animated: false)
+                }
+            }
+            keepOnMap()
+        }
 
         /// Back onto the street map after a zoom out by its edge, and no
         /// further out than the screen full of map.
@@ -215,7 +256,10 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {
-            PanLimit.centre(width: view.bounds.width, height: view.bounds.height, zoom: zoom)
+            // What a sheet hides needn't be over the map (PanLimit.centre).
+            PanLimit.centre(
+                width: view.bounds.width, height: view.bounds.height, zoom: zoom, left: Double(cover.left),
+                bottom: Double(cover.bottom + floating))
         }
 
         /// How far (in degrees, the larger way) `c` is outside `box`; 0 inside it.
@@ -253,10 +297,14 @@ struct CampusMapView: UIViewRepresentable {
         private func build(_ style: MLNStyle) {
             let routes = source("routes", MapGeoJson.routes(campus))
             let stops = source("stops", MapGeoJson.stops(campus))
+            // The names from a source of their own: a tile waits for every
+            // layer drawn from its source, and the names wait for their font,
+            // which offline may never come. The dots don't wait with them.
+            let labels = source("stop-labels", MapGeoJson.stops(campus))
             let stretch = source("stretch", MapGeoJson.empty)
             let me = source("me", MapGeoJson.empty)
             let buses = source("buses", MapGeoJson.empty)
-            for s in [routes, stops, stretch, me, buses] { style.addSource(s) }
+            for s in [routes, stops, labels, stretch, me, buses] { style.addSource(s) }
             let byColor = E(["to-color", ["get", "color"]])
 
             style.addLayer(line("route-casing", routes, color: NSExpression(forConstantValue: edge), width: zoomed(13, 3, 16, 7, 18, 11)))
@@ -278,7 +326,7 @@ struct CampusMapView: UIViewRepresentable {
             dots.circleStrokeWidth = zoomed(13, 1, 16, 2)
             style.addLayer(dots)
 
-            let names = MLNSymbolStyleLayer(identifier: "stop-names", source: stops)
+            let names = MLNSymbolStyleLayer(identifier: "stop-names", source: labels)
             names.minimumZoomLevel = 15
             names.text = E(["get", "name"])
             names.textFontNames = NSExpression(forConstantValue: ["Noto Sans Medium"])
@@ -447,7 +495,7 @@ struct CampusMapView: UIViewRepresentable {
                 following = (f, Date().addingTimeInterval(followCoverS))
                 return centre(on: f, animated: false)
             }
-            view.setVisibleCoordinateBounds(bounds(campus.coreBounds), edgePadding: padding(24), animated: false, completionHandler: nil)
+            fitCampus(animated: false)
             if let at = Locator.shared.last?.coordinate,
                 let near = campus.stops.min(by: {
                     pow($0.lat - at.latitude, 2) + pow($0.lon - at.longitude, 2) < pow($1.lat - at.latitude, 2)
@@ -456,26 +504,63 @@ struct CampusMapView: UIViewRepresentable {
                 abs(near.lat - at.latitude) < nearCampusDeg, abs(near.lon - at.longitude) < nearCampusDeg
             {
                 view.setCenter(CLLocationCoordinate2D(latitude: near.lat, longitude: near.lon), zoomLevel: 17, animated: false)
+                campusOnly = false
             }
         }
 
+        /// The whole campus, clear of the pills and the sheet.
+        private func fitCampus(animated: Bool) {
+            view?.setVisibleCoordinateBounds(
+                bounds(campus.coreBounds), edgePadding: padding(24), animated: animated, completionHandler: nil)
+            campusOnly = true
+        }
+
+        /// A service's whole line in the part of the map nothing covers
+        /// (LineRoom): beside a sheet floating in the corner or above it, and
+        /// the corner buttons to its side or above it, whichever lets the line
+        /// be largest.
+        private func fitLine(_ r: MapRoute, animated: Bool, then done: (() -> Void)? = nil) {
+            guard let view else { return }
+            let box = bounds(r.bounds)
+            let size = view.bounds.size
+            // A sheet across the bottom hides the buttons (MapTab).
+            let shown = cover.bottom == 0
+            var covers = [cover]
+            if floating > 0 { covers.append(UIEdgeInsets(top: cover.top, left: 0, bottom: floating, right: 0)) }
+            let buttons = shown ? [CGSize(width: Self.buttonsWidth, height: 0), CGSize(width: 0, height: Self.buttonsHeight)] : [.zero]
+            let pads = covers.flatMap { c in buttons.map { LineRoom.padding(cover: c, buttons: $0, in: size) } }
+            // The fitting camera's zoom counts the padding, but its centre is the line's own: only the zoom is compared.
+            let pad = pads.min {
+                view.cameraThatFitsCoordinateBounds(box, edgePadding: $0).altitude
+                    < view.cameraThatFitsCoordinateBounds(box, edgePadding: $1).altitude
+            }!
+            view.setVisibleCoordinateBounds(box, edgePadding: pad, animated: animated, completionHandler: done)
+            campusOnly = false
+            lineOnly = true
+            lineBesideSheet = map.sheetSpot != nil
+            lineSheetSpot = map.sheetSpot
+        }
+
+        /// MapTab's buttons in the map's corner, with their margins: two of 44 points, 10 apart.
+        static let buttonsWidth: CGFloat = 44 + 12
+        static let buttonsHeight: CGFloat = 44 * 2 + 10 + 16
+
         private func camera() {
-            guard let view, framed else { return }
+            guard view != nil, framed else { return }
             // Back to campus, from the button or the tab tapped again.
             if map.recentre != recentred {
                 recentred = map.recentre
                 following = nil
-                view.setVisibleCoordinateBounds(
-                    bounds(campus.coreBounds), edgePadding: padding(24), animated: !still, completionHandler: nil)
+                lineOnly = false
+                fitCampus(animated: !still)
             }
             // A pill: its whole line in view, when it's chosen.
             if map.selected != framedLine {
                 framedLine = map.selected
+                lineOnly = false
                 if let r = map.selected.flatMap({ campus.routes[$0] }) {
                     following = nil
-                    // The whole line, under the pills: a sheet open over it closes or is dragged away.
-                    let pad = UIEdgeInsets(top: cover.top + 24, left: 40, bottom: 40, right: 40)
-                    view.setVisibleCoordinateBounds(bounds(r.bounds), edgePadding: pad, animated: !still, completionHandler: nil)
+                    fitLine(r, animated: !still)
                 }
             }
             // A stop opened from another tab or a bus's sheet, or the bus back
@@ -497,14 +582,36 @@ struct CampusMapView: UIViewRepresentable {
         /// moved onto stays in the middle of what they leave uncovered.
         /// Otherwise a sheet that opened or grew over its own stop or bus
         /// moves the map just enough to show it again.
-        func coverChanged() {
+        func coverChanged(from was: UIEdgeInsets) {
+            // A status line under the pills came or went ("3 buses on R2"):
+            // the campus or the line, untouched since, fitted again under them.
+            // The line too as the sheet it was fitted beside grows or goes,
+            // then its stop or bus kept in view; a sheet opened over the line
+            // instead keeps its own stop or bus in view, the line left be.
+            let sheet = map.sheetSpot != nil
+            if framed, lineOnly, sheet ? lineBesideSheet : was.top != cover.top || lineBesideSheet,
+                let r = map.selected.flatMap({ campus.routes[$0] })
+            {
+                let other = sheet && map.sheetSpot != lineSheetSpot
+                return fitLine(r, animated: !still) { [weak self] in if other { self?.showSheetSpot() } }
+            }
+            if framed, campusOnly, was.top != cover.top, !sheet { return fitCampus(animated: !still) }
             if let f = following, Date() < f.until { return centre(on: f.spot) }
             following = nil
-            guard let view, let spot = map.sheetSpot else { return }
+            showSheetSpot()
+        }
+
+        /// The open sheet's stop or bus moved onto when the sheet or the pills
+        /// hide it. With no sheet, the map back within what it may show: a
+        /// sheet that closed lets less of it past its edge.
+        private func showSheetSpot() {
+            guard let view, let spot = map.sheetSpot else { return keepOnMap() }
             let p = view.convert(CLLocationCoordinate2D(latitude: spot.lat, longitude: spot.lon), toPointTo: view)
             let top = cover.top + 24
             let bottom = view.bounds.height - cover.bottom - 24
-            guard bottom > top, p.y < top || p.y > bottom || p.x < cover.left || p.x > view.bounds.width else { return }
+            // A floating sheet hides only its corner.
+            let cornered = p.x < cover.left && p.y > view.bounds.height - floating - 24
+            guard bottom > top, p.y < top || p.y > bottom || cornered || p.x > view.bounds.width else { return keepOnMap() }
             centre(on: spot)
         }
 
@@ -512,6 +619,8 @@ struct CampusMapView: UIViewRepresentable {
         /// of what the pills and the sheet leave uncovered.
         private func centre(on spot: MapModel.Spot, animated: Bool = true) {
             guard let view else { return }
+            campusOnly = false
+            lineOnly = false
             let zoom = max(view.zoomLevel, 17)
             // How far above and right of the map's middle the uncovered part's
             // middle is, in points, then in degrees at that zoom (the world is
@@ -597,6 +706,37 @@ struct CampusMapView: UIViewRepresentable {
     @objc func tick(_ link: CADisplayLink) {
         guard let coordinator else { return link.invalidate() }
         coordinator.frame()
+    }
+}
+
+/// The room round a chosen line, as MapLibre padding: under the pills and
+/// their status lines (`cover.top`), beside a sheet floating on the left
+/// (`cover.left`) or above one across the bottom (`cover.bottom`), and clear
+/// of the corner `buttons` (their room to the right, or above the foot).
+/// However much is covered, a quarter of each way stays free, so the line is
+/// never fitted into a sliver: as the web's freePadding.
+enum LineRoom {
+    static func padding(cover: UIEdgeInsets, buttons: CGSize, in size: CGSize) -> UIEdgeInsets {
+        var p = UIEdgeInsets(
+            top: cover.top + 24,
+            left: cover.left > 0 ? cover.left + 24 : 40,
+            bottom: cover.bottom > 0 ? cover.bottom + 24 : 40,
+            right: 40)
+        if buttons.width > 0 { p.right = buttons.width + 24 }
+        if buttons.height > 0 { p.bottom = max(p.bottom, buttons.height + 24) }
+        let across = size.width * 0.75
+        if p.left + p.right > across {
+            let k = across / (p.left + p.right)
+            p.left *= k
+            p.right *= k
+        }
+        let down = size.height * 0.75
+        if p.top + p.bottom > down {
+            let k = down / (p.top + p.bottom)
+            p.top *= k
+            p.bottom *= k
+        }
+        return p
     }
 }
 

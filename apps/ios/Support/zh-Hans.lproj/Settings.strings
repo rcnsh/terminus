@@ -96,7 +96,9 @@
 "Fast" = "快";
 "Favourites" = "收藏";
 "Finding the nearest stop…" = "正在找最近的车站…";
+"Follow this iPad" = "跟随 iPad 设置";
 "Follow this phone" = "跟随手机设置";
+"For every time terminus shows, here, on your Mac and on the web. Auto follows this iPad." = "terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。“自动”跟随这台 iPad。";
 "For every time terminus shows, here, on your Mac and on the web. Auto follows this phone." = "terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。“自动”跟随这部手机。";
 "From" = "发件人";
 "from %@" = "在 %@ 上车";
@@ -105,6 +107,7 @@
 "Go home in gaps longer than" = "空档超过这个时长就回家";
 "Half an hour longer" = "延长半小时";
 "Half an hour shorter" = "缩短半小时";
+"How the card and widgets show a trip by bus. Only on this iPad." = "卡片和小组件如何显示搭巴士的行程。仅限这台 iPad。";
 "How the card and widgets show a trip by bus. Only on this phone." = "卡片和小组件如何显示搭巴士的行程。仅限这部手机。";
 "Ideas, problems, anything" = "想法、问题，什么都可以";
 "Ideas, problems, anything: a place you want to go, something that confused you…" = "想法、问题，什么都可以：想去的地方、让你困惑的地方……";
@@ -113,6 +116,7 @@
 "Importing…" = "正在导入…";
 "In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here. Re-import each semester." = "在 NUSMods 中：打开 Timetable，然后 Share/Sync。复制链接并粘贴到这里。每学期重新导入一次。";
 "In your timetable" = "在你的课表里";
+"iPad's clock" = "iPad 时钟";
 "It has to end after it starts." = "结束时间必须晚于开始时间。";
 "It will be signed out, and you'll receive an email confirming this." = "该设备将退出登录，你会收到一封确认邮件。";
 "just now" = "刚刚";
@@ -162,6 +166,8 @@
 "One bus earlier" = "提早一班";
 "One minute less" = "少一分钟";
 "One minute more" = "多一分钟";
+"Only on this iPad." = "仅限这台 iPad。";
+"Only on this iPad. With New to NUS off, the widget fits in more buses." = "仅在这台 iPad 上。关闭“刚来 NUS”时，小组件能显示更多巴士。";
 "Only on this phone." = "仅限这部手机。";
 "Only on this phone. With New to NUS off, the widget fits in more buses." = "仅在这部手机上。关闭“刚来 NUS”时，小组件能显示更多巴士。";
 "Only your stops are saved." = "只保存车站。";
@@ -203,6 +209,7 @@
 "Show buses from" = "从这个时间开始显示巴士";
 "Show buses until" = "显示巴士到这个时间";
 "Sign out" = "退出登录";
+"Sign out of this iPad?" = "在这台 iPad 上退出登录？";
 "Sign out of this phone?" = "在这部手机上退出登录？";
 "Signed in" = "已登录";
 "Skip" = "跳过";
@@ -228,6 +235,8 @@
 "Then updates on your ride or the next way there." = "之后更新你的乘车情况或下一种到达方式。";
 "This clears your trip history. Your class settings won't change." = "这会清除你的行程记录。你为各节课做的设置不会改变。";
 "this device" = "这台设备";
+"This iPad" = "这台 iPad";
+"This iPad will be signed out." = "这台 iPad 会退出登录。";
 "This link is for %@, which has ended. Copy this semester's link from NUSMods and import it below." = "此链接属于已结束的 %@。请从 NUSMods 复制本学期的链接并在下方导入。";
 "This phone" = "这部手机";
 "This phone will be signed out." = "这部手机会退出登录。";
@@ -247,6 +256,7 @@
 "Walking" = "步行";
 "Walking pace" = "步速";
 "Walks follow the paths on campus." = "步行时间按校园里的小路计算。";
+"What the app is doing, for a bug report. It stays on this iPad unless you copy it, and leaves out your account and where you are." = "应用正在做什么，用于报告问题。除非你复制，否则这些信息只留在这台 iPad 上，也不包括你的账户和你所在的位置。";
 "What the app is doing, for a bug report. It stays on this phone unless you copy it, and leaves out your account and where you are." = "应用正在做什么，用于报告问题。除非你复制，否则这些信息只留在这台手机上，也不包括你的账户和你所在的位置。";
 "When terminus crashes, send what broke and the app version. Never who you are or where." = "terminus 崩溃时，发送出错的内容和应用版本，不会包含你是谁或你在哪里。";
 "Where" = "地点";
@@ -264,6 +274,7 @@
 "Your devices" = "你的设备";
 "Your favourites" = "你的收藏";
 "Your Mac or another phone. You'll get an email whenever a device is added or removed." = "你的 Mac 或另一部手机。每当添加或移除设备时，你都会收到邮件。";
+"Your settings are stored only on this iPad. Add an email to keep them if you lose your iPad, and to use terminus on your Mac or the web." = "你的设置只保存在这台 iPad 上。添加邮箱后，即使 iPad 遗失也能保留设置，并可在 Mac 或网页上使用 terminus。";
 "Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web." = "你的设置只保存在这部手机上。添加邮箱后，即使手机遗失也能保留设置，并可在 Mac 或网页上使用 terminus。";
 "Your stop" = "你的车站";
 "Your stops: %@." = "你的车站：%@。";

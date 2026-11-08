@@ -181,7 +181,11 @@ final class AppModel {
         guard TokenStore.read() == token else { return }
         let wasAnonymous = anonymous
         clearLocal()
-        signedOutReason = wasAnonymous ? L("This phone's setup was removed after a long time unused. Start again or sign in.") : reason
+        signedOutReason =
+            wasAnonymous
+            ? (onIPad
+                ? L("This iPad's setup was removed after a long time unused. Start again or sign in.")
+                : L("This phone's setup was removed after a long time unused. Start again or sign in.")) : reason
     }
 
     /// Everything the account left on this phone.
@@ -227,7 +231,7 @@ final class AppModel {
             needsSetup = me.onboarding != nil
             setupUnknown = false
         } catch let e as ApiError where e.status == 401 {
-            rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+            rejected(token, reason: signedOutHere)
         } catch {}
     }
 
@@ -356,7 +360,7 @@ final class AppModel {
                 updateRequired = true
                 error = nil
             } else if e.status == 401 {
-                rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                rejected(token, reason: signedOutHere)
             } else {
                 error = e.message
             }
@@ -422,7 +426,7 @@ final class AppModel {
                 await loadDay()
             } catch let e as ApiError {
                 if e.status == 401 {
-                    rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                    rejected(token, reason: signedOutHere)
                 } else {
                     error = e.message
                 }
@@ -459,7 +463,7 @@ final class AppModel {
                 await loadDay()
             } catch let e as ApiError {
                 if e.status == 401 {
-                    rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                    rejected(token, reason: signedOutHere)
                 } else {
                     error = e.message
                 }

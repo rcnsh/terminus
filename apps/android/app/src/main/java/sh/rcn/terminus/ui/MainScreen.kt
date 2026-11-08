@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -166,7 +167,10 @@ internal fun MainScreen(
     val page = MaterialTheme.colorScheme.background
     val shown = sky.end != null
     val light = sky.palette.lightInk
-    NightStatusBar(shown && light)
+    val wide = windowWidth() == Width.Wide
+    // Without a day to show beside the card when wide, all of Now is in the card's column.
+    val hasDay = state.hasDay
+    NightStatusBar(shown && light, sky.palette.sky[0])
     CompositionLocalProvider(LocalSky provides sky) {
         Box(Modifier.fillMaxSize()) {
             // Pulled down at the top, what's shown (the card or Nearby) is asked for
@@ -178,6 +182,7 @@ internal fun MainScreen(
                         .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
                         .skyBehind(sky, page, pull)
                         .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
+                        .column(Widths.nowColumn(LocalWindowDp.current, hasDay).dp)
                         .padding(horizontal = 16.dp)
                 ) {
                     // The header and chips come down a little with a pull; the room opens under them.
@@ -303,110 +308,131 @@ internal fun MainScreen(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    // A minimum height keeps the chips and search from jumping as views
-                    // switch or data arrives.
-                    Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-                        if (state.showNearby)
-                            Column {
-                                SkyHead(26.dp) {}
-                                SkyGround()
-                                NearbyList(state.nearby, state.loading, nearby)
+                    // Under the chips: what's shown (the card or Nearby), "go later", Today, and the footer. Wide, the card is
+                    // in the left half and Today beside it, from the horizon down, with the footer under it.
+                    val card: @Composable () -> Unit = {
+                        // A minimum height keeps the chips and search from jumping as views
+                        // switch or data arrives.
+                        Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
+                            if (state.showNearby)
+                                Column {
+                                    SkyHead(26.dp) {}
+                                    SkyGround()
+                                    NearbyList(state.nearby, state.loading, nearby)
+                                }
+                            else {
+                                // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
+                                val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
+                                OfflinePlanOr(offline, state.answer, state.day) {
+                                    // Undo once: on Today's row while it's there for this trip, not on the card as well.
+                                    AnswerCard(
+                                        withoutLocalUndo(state.answer, state.removed?.takeIf { !it.failed }?.item?.key),
+                                        state.loading,
+                                        vm::signal,
+                                        state.signalling,
+                                        vm::choose,
+                                        onPlace = { vm.select(Target.SavedPlace(it)) },
+                                        onStep = vm::step,
+                                    )
+                                }
                             }
-                        else {
-                            // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
-                            val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
-                            OfflinePlanOr(offline, state.answer, state.day) {
-                                // Undo once: on Today's row while it's there for this trip, not on the card as well.
-                                AnswerCard(
-                                    withoutLocalUndo(state.answer, state.removed?.takeIf { !it.failed }?.item?.key),
-                                    state.loading,
-                                    vm::signal,
-                                    state.signalling,
-                                    vm::choose,
-                                    onPlace = { vm.select(Target.SavedPlace(it)) },
-                                    onStep = vm::step,
+                        }
+                        // Somewhere else: going there later today, planned like a class.
+                        if (!state.showNearby && state.target != Target.Plan && state.paired) {
+                            TimeButton(
+                                stringResource(R.string.go_later),
+                                null,
+                                vm::goLater,
+                                Modifier.padding(top = 8.dp),
+                                initial = ::soonOnCampus,
+                            )
+                        }
+                    }
+                    val footerRow: @Composable () -> Unit = {
+                        val footer =
+                            listOfNotNull(
+                                    state.error,
+                                    state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
                                 )
+                                .joinToString(" · ")
+                        val refreshing = stringResource(R.string.refreshing)
+                        // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?".
+                        val small = MaterialTheme.typography.bodySmall
+                        val muted = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 20.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (state.loading) {
+                                CircularProgressIndicator(
+                                    Modifier.size(12.dp).semantics { contentDescription = refreshing },
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(8.dp))
                             }
-                        }
-                    }
-                    // The rest of today under the planned answer.
-                    if (!state.showNearby && state.target == Target.Plan)
-                        state.day?.let {
-                            DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved)
-                        }
-                    // Somewhere else: going there later today, planned like a class.
-                    if (!state.showNearby && state.target != Target.Plan && state.paired) {
-                        TimeButton(
-                            stringResource(R.string.go_later),
-                            null,
-                            vm::goLater,
-                            Modifier.padding(top = 8.dp),
-                            initial = ::soonOnCampus,
-                        )
-                    }
-
-                    val footer =
-                        listOfNotNull(
-                                state.error,
-                                state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
-                            )
-                            .joinToString(" · ")
-                    val refreshing = stringResource(R.string.refreshing)
-                    // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?".
-                    val small = MaterialTheme.typography.bodySmall
-                    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (state.loading) {
-                            CircularProgressIndicator(
-                                Modifier.size(12.dp).semantics { contentDescription = refreshing },
-                                strokeWidth = 2.dp,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        // A failed refresh is said as it happens; "Updated 9:41" alone isn't.
-                        val failed = state.error != null
-                        Text(
-                            footer,
-                            style = small,
-                            color = muted,
-                            modifier = Modifier.weight(1f, fill = false).semantics { if (failed) liveRegion = LiveRegionMode.Polite },
-                        )
-                        if (!state.showNearby && state.answer != null) {
-                            if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
-                            var reporting by remember { mutableStateOf<String?>(null) }
-                            var reportingLine by remember { mutableStateOf("") }
-                            var opened by remember { mutableStateOf(false) }
+                            // A failed refresh is said as it happens; "Updated 9:41" alone isn't.
+                            val failed = state.error != null
                             Text(
-                                stringResource(R.string.is_this_wrong),
-                                style = small.copy(textDecoration = TextDecoration.Underline),
+                                footer,
+                                style = small,
                                 color = muted,
-                                modifier =
-                                    Modifier.clickable(role = Role.Button) {
-                                            reporting = state.rawAnswers[state.target]
-                                            reportingLine = state.answer?.card?.line ?: state.answer?.label ?: ""
-                                            opened = true
-                                            vm.reportOpened()
-                                        }
-                                        // A target 48 dp tall, though the words are small, for a thumb.
-                                        .heightIn(min = 48.dp)
-                                        .wrapContentHeight()
-                                        .padding(horizontal = 4.dp),
+                                modifier = Modifier.weight(1f, fill = false).semantics { if (failed) liveRegion = LiveRegionMode.Polite },
                             )
-                            if (opened) {
-                                ReportSheet(
-                                    line = reportingLine,
-                                    email = email,
-                                    sending = state.reportSending,
-                                    sent = state.reportSent,
-                                    failure = state.reportResult,
-                                    onSend = { reason, note -> vm.report(reason, note, reporting, BuildConfig.VERSION_NAME) },
-                                    onAddEmail = {
-                                        opened = false
-                                        onAddEmail()
-                                    },
-                                    onDismiss = { opened = false },
+                            if (!state.showNearby && state.answer != null) {
+                                if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
+                                var reporting by remember { mutableStateOf<String?>(null) }
+                                var reportingLine by remember { mutableStateOf("") }
+                                var opened by remember { mutableStateOf(false) }
+                                Text(
+                                    stringResource(R.string.is_this_wrong),
+                                    style = small.copy(textDecoration = TextDecoration.Underline),
+                                    color = muted,
+                                    modifier =
+                                        Modifier.clickable(role = Role.Button) {
+                                                reporting = state.rawAnswers[state.target]
+                                                reportingLine = state.answer?.card?.line ?: state.answer?.label ?: ""
+                                                opened = true
+                                                vm.reportOpened()
+                                            }
+                                            // A target 48 dp tall, though the words are small, for a thumb.
+                                            .heightIn(min = 48.dp)
+                                            .wrapContentHeight()
+                                            .padding(horizontal = 4.dp),
                                 )
+                                if (opened) {
+                                    ReportSheet(
+                                        line = reportingLine,
+                                        email = email,
+                                        sending = state.reportSending,
+                                        sent = state.reportSent,
+                                        failure = state.reportResult,
+                                        onSend = { reason, note -> vm.report(reason, note, reporting, BuildConfig.VERSION_NAME) },
+                                        onAddEmail = {
+                                            opened = false
+                                            onAddEmail()
+                                        },
+                                        onDismiss = { opened = false },
+                                    )
+                                }
                             }
+                        }
+                    }
+                    val today: @Composable () -> Unit = {
+                        state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }
+                    }
+                    when {
+                        !wide -> {
+                            card()
+                            // The rest of today under the planned answer.
+                            if (!state.showNearby && state.target == Target.Plan) today()
+                            footerRow()
+                        }
+                        // Today shows whichever chip is chosen: it's your day either way.
+                        hasDay -> BesideToday(sky, card, today, footerRow)
+                        // No day: the card alone, in the column the words above it are already in.
+                        else -> {
+                            card()
+                            footerRow()
                         }
                     }
 
@@ -414,6 +440,24 @@ internal fun MainScreen(
                 }
             }
             StatusStrip(sky, insets.calculateTopPadding(), scroll)
+        }
+    }
+}
+
+/**
+ * Now when wide: [card] in the left half of the column (its top up in the sky, which runs across the window all the same), and in the right
+ * half, from the horizon down, [today] with [footer] under it.
+ */
+@Composable
+private fun BesideToday(sky: SkyState, card: @Composable () -> Unit, today: @Composable () -> Unit, footer: @Composable () -> Unit) {
+    var top by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    Row(Modifier.fillMaxWidth().onGloballyPositioned { top = it.positionInRoot().y }, horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+        Column(Modifier.weight(1f)) { card() }
+        val below = with(density) { ((sky.groundBottom ?: top) - top).coerceAtLeast(0f).toDp() }
+        Column(Modifier.weight(1f).padding(top = below)) {
+            today()
+            footer()
         }
     }
 }
@@ -519,7 +563,12 @@ private fun ReportSheet(
     var note by rememberSaveable { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
     val wide = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        // From 600 wide, no wider than the page's column, centred.
+        sheetMaxWidth = Widths.sheetMax(LocalWindowDp.current).dp,
+    ) {
         Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 20.dp).verticalScroll(rememberScrollState())) {
             when {
                 sent -> {

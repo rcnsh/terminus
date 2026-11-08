@@ -9,18 +9,39 @@ import UIKit
 struct BusesView: View {
     @State private var model = BusesModel.shared
     @Environment(AppModel.self) private var app
+    @Environment(\.windowWidth) private var width
 
     var body: some View {
         @Bindable var model = model
-        NavigationStack(path: $model.path) {
-            BusesHome()
-                .navigationDestination(for: BusRoute.self) { route in
-                    switch route {
-                    case .stop(let code): BusStopPage(code: code)
-                    case .line(let svc, let from): BusLinePage(svc: svc, from: from)
+        Group {
+            if width.panes {
+                // The home beside the page open from it; the pages opened from that push in its pane.
+                ListDetail {
+                    // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
+                    NavigationStack { BusesHome().listPaneRoot().keyboardRoom() }
+                } detail: {
+                    NavigationStack(path: pagesOver) {
+                        Group {
+                            if let first = model.path.first {
+                                page(first).environment(\.paneRoot, true)
+                            } else {
+                                PaneEmpty(text: L("Choose a stop or a service."))
+                            }
+                        }
+                        .id(model.path.first)
+                        .keyboardRoom()
+                        .navigationDestination(for: BusRoute.self) { page($0).keyboardRoom() }
                     }
                 }
+            } else {
+                NavigationStack(path: $model.path) {
+                    BusesHome()
+                        .keyboardRoom()
+                        .navigationDestination(for: BusRoute.self) { page($0).keyboardRoom() }
+                }
+            }
         }
+        .onChange(of: width.panes, initial: true) { _, panes in model.split = panes }
         .environment(model)
         .overlay(alignment: .top) { NoteView(text: model.note) }
         .task(id: app.session) {
@@ -34,6 +55,18 @@ struct BusesView: View {
         }
         // A stop or line picked elsewhere (Now's Nearby, the map): its page, over the tab's home.
         .onChange(of: app.openBuses) { openPicked() }
+    }
+
+    /// The pages pushed over the first in the wide detail pane.
+    private var pagesOver: Binding<[BusRoute]> {
+        Binding(get: { Array(model.path.dropFirst()) }, set: { model.path = Array(model.path.prefix(1)) + $0 })
+    }
+
+    @ViewBuilder private func page(_ route: BusRoute) -> some View {
+        switch route {
+        case .stop(let code): BusStopPage(code: code)
+        case .line(let svc, let from): BusLinePage(svc: svc, from: from)
+        }
     }
 
     private func openPicked() {
@@ -84,18 +117,20 @@ struct NoteView: View {
 /// Runs `action` now and every 15 s (longer while the server asked for a
 /// wait), only while this is on screen and the app is in front.
 struct BusRefreshing: ViewModifier {
-    let id: String
+    /// Nil: no loop, as on the home while searching.
+    let id: String?
     let action: () async -> Void
     @Environment(\.scenePhase) private var phase
     @Environment(BusesModel.self) private var model
 
     func body(content: Content) -> some View {
-        content.task(id: "\(id)|\(phase == .active)") {
-            guard phase == .active else { return }
+        content.task(id: "\(id ?? "")|\(phase == .active)") {
+            guard phase == .active, let id else { return }
             while !Task.isCancelled {
                 await action()
                 let wait = max(BusTimes.refreshS, Quiet.wait())
-                model.nextTimedAt = Date().addingTimeInterval(wait)
+                let next = Date().addingTimeInterval(wait)
+                if id.hasPrefix("pins:") { model.nextPinsAt = next } else { model.nextTimedAt = next }
                 try? await Task.sleep(for: .seconds(wait))
             }
         }
@@ -103,7 +138,7 @@ struct BusRefreshing: ViewModifier {
 }
 
 extension View {
-    func busRefreshing(_ id: String, _ action: @escaping () async -> Void) -> some View {
+    func busRefreshing(_ id: String?, _ action: @escaping () async -> Void) -> some View {
         modifier(BusRefreshing(id: id, action: action))
     }
 }
@@ -142,8 +177,8 @@ struct BusesHome: View {
                         query = ""
                         focused = false
                         switch hit {
-                        case .service(let s): model.path.append(.line(svc: s, from: nil))
-                        case .stop(let code, _, _, _): model.path.append(.stop(code))
+                        case .service(let s): model.open(.line(svc: s, from: nil))
+                        case .stop(let code, _, _, _): model.open(.stop(code))
                         }
                     }
                 } else {
@@ -166,12 +201,14 @@ struct BusesHome: View {
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
         // The pinned stop showing and its neighbours, at most every 15 s (the
-        // API's own cache); none while searching or with a page over the home.
-        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins):\(model.pinFocus ?? "")") {
-            if !searching { await model.refreshPinned() }
+        // API's own cache), while the home is on screen: none while searching or
+        // with a page over it (a phone); wide, beside the open page, it's still in view.
+        .busRefreshing(searching ? nil : "pins:\(model.shownPins):\(model.pinFocus ?? ""):\(model.stopBeside ?? "")") {
+            await model.refreshPinned()
         }
         // The lines' buses out, from when the list is first on screen, at most once a minute
-        // while the home is (it reads every service from NUS); none with a page over it.
+        // while the home is on screen (it reads every service from NUS): none with a page
+        // over it on a phone; wide, the list stays in view beside the page, so it goes on.
         .task(id: "\(phase == .active)|\(searching)|\(linesSeen)") {
             guard phase == .active, !searching, linesSeen else { return }
             while !Task.isCancelled {
@@ -283,6 +320,14 @@ private struct PinnedPager: View {
             }
             .padding(.horizontal, -Self.gutter)
         }
+        // Wide, a pinned stop open beside the home (picked on Now, say, or
+        // pinned with its star while open): its card is the one showing.
+        .onChange(of: model.chosen, initial: true) { showOpenPin() }
+        .onChange(of: pins) { showOpenPin() }
+    }
+
+    private func showOpenPin() {
+        if case .stop(let code) = model.chosen, pins.contains(code), model.pinSelected != code { model.pinSelected = code }
     }
 
     /// A pinned stop's page: its sign as Nearby draws it, its times counted
@@ -304,11 +349,13 @@ private struct PinnedPager: View {
             VStack(alignment: .leading, spacing: 8) {
                 StopSign(
                     stop: stop, cells: cells, cols: cols, note: note, pending: pending, listsStopped: answered != nil,
-                    onStop: { model.path.append(.stop(code)) }
+                    onStop: { model.open(.stop(code)) }
                 ) {
                     svc in
-                    model.path.append(.line(svc: svc, from: code))
+                    model.open(.line(svc: svc, from: code))
                 }
+                // Wide, open beside the home.
+                .chosenCard(model.chosen == .stop(code), radius: 14)
                 // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                 if cells.joined().contains(where: { $0.mark == "~" }) {
                     Text(L("~ is a guess from the timetable, not a live time."))
@@ -443,6 +490,7 @@ private struct ServiceList: View {
     /// Set once the list is on screen.
     @Binding var seen: Bool
     @Environment(BusesModel.self) private var model
+    @Environment(\.listPane) private var listPane
     /// The widest badge, so every one is as wide.
     @State private var badge: CGFloat = 0
 
@@ -464,11 +512,12 @@ private struct ServiceList: View {
                     let name = route.flatMap { BusLines.name($0, stopName: { campus.stop($0)?.fullName ?? $0 }) }
                     let count = model.lineCounts[svc]
                     Button {
-                        model.path.append(.line(svc: svc, from: nil))
+                        model.open(.line(svc: svc, from: nil))
                     } label: {
                         row(svc, color: campus.color(svc), name: name, via: route?.via, count: count)
                     }
                     .buttonStyle(BusRowPress())
+                    .chosenRow(model.chosen.map { if case .line(svc, _) = $0 { true } else { false } } ?? false)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(BusLines.spoken(svc: svc, name: name, via: route?.via, count: count))
                     .accessibilityAddTraits(.isButton)
@@ -518,14 +567,40 @@ private struct ServiceList: View {
         .skeletonSpoken()
     }
 
-    private func row(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
+    @ViewBuilder private func row(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
+        if listPane {
+            paneRow(svc, color: color, name: name, via: via, count: count)
+        } else {
+            phoneRow(svc, color: color, name: name, via: via, count: count)
+        }
+    }
+
+    private func badge(_ svc: String, _ color: String?) -> some View {
+        BusChip(svc: svc, color: color, width: badge)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                badge = max(badge, $0)
+            }
+    }
+
+    @ViewBuilder private func out(_ count: LineCount?) -> some View {
+        if let count {
+            HStack(spacing: 6) {
+                if BusLines.showsDot(count) { BusLiveDot() }
+                Text(verbatim: count.outText).font(.subheadline).foregroundStyle(Color.muted)
+            }
+            .fixedSize()
+        }
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
+    }
+
+    private func phoneRow(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
         HStack(spacing: 12) {
-            BusChip(svc: svc, color: color, width: badge)
-                .onGeometryChange(for: CGFloat.self) {
-                    $0.size.width
-                } action: {
-                    badge = max(badge, $0)
-                }
+            badge(svc, color)
             VStack(alignment: .leading, spacing: 2) {
                 if let name { Text(verbatim: name).font(.body.weight(.semibold)).foregroundStyle(Color.ink) }
                 if let via { Text(verbatim: via).font(.subheadline).foregroundStyle(Color.muted) }
@@ -533,16 +608,34 @@ private struct ServiceList: View {
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            if let count {
-                HStack(spacing: 6) {
-                    if BusLines.showsDot(count) { BusLiveDot() }
-                    Text(verbatim: count.outText).font(.subheadline).foregroundStyle(Color.muted)
-                }
-                .fixedSize()
-            }
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
+            out(count)
+            chevron
         }
         .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 10)
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
+    }
+
+    /// In the 360 list pane: the name across the row on a line of its own,
+    /// the stops it passes under it beside the buses out, so neither wraps much.
+    private func paneRow(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
+        HStack(spacing: 10) {
+            badge(svc, color)
+            VStack(alignment: .leading, spacing: 2) {
+                if let name { Text(verbatim: name).font(.body.weight(.semibold)).foregroundStyle(Color.ink) }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let via { Text(verbatim: via).font(.subheadline).foregroundStyle(Color.muted) }
+                    Spacer(minLength: 0)
+                    out(count)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            chevron
+        }
+        .padding(.leading, 12)
         .padding(.trailing, 10)
         .padding(.vertical, 10)
         .frame(minHeight: 56)
@@ -617,6 +710,7 @@ private struct BusSearchResults: View {
     let query: String
     let onPick: (BusHit) -> Void
     @Environment(BusesModel.self) private var model
+    @Environment(\.listPane) private var listPane
 
     var body: some View {
         let campus = model.campus
@@ -625,10 +719,12 @@ private struct BusSearchResults: View {
         VStack(alignment: .leading, spacing: 0) {
             if hits.isEmpty && campus != nil {
                 Text(L("No stop or service by that name")).foregroundStyle(Color.muted).padding(.vertical, 12)
+                    .padding(.horizontal, listPane ? 12 : 0)
             }
             ForEach(Array(hits.enumerated()), id: \.element.id) { i, hit in
                 if i == 0 || hits[i - 1].isService != hit.isService {
                     SectionLabel(hit.isService ? L("Services") : L("Stops")).padding(.top, 16).padding(.bottom, 4)
+                        .padding(.horizontal, listPane ? 12 : 0)
                 }
                 Button {
                     onPick(hit)
@@ -636,12 +732,24 @@ private struct BusSearchResults: View {
                     row(hit, campus)
                 }
                 .buttonStyle(BusRowPress())
+                .chosenRow(chosen(hit))
                 .accessibilityIdentifier("hit-\(hit.id)")
                 Divider().overlay(Color.line)
             }
         }
-        .column()
+        // In the list pane the rows are inset, so the chosen one's tint has
+        // room around its words; they stay where a phone has them.
+        .column(gutter: listPane ? 4 : 16)
         .padding(.bottom, 24)
+    }
+
+    /// Whether `hit` is what's open beside the list.
+    private func chosen(_ hit: BusHit) -> Bool {
+        switch (hit, model.chosen) {
+        case (.service(let svc), .line(let open, _)?): svc == open
+        case (.stop(let code, _, _, _), .stop(let open)?): code == open
+        default: false
+        }
     }
 
     @ViewBuilder private func row(_ hit: BusHit, _ campus: BusCampus?) -> some View {
@@ -664,6 +772,7 @@ private struct BusSearchResults: View {
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint).accessibilityHidden(true)
         }
         .padding(.vertical, 10)
+        .padding(.horizontal, listPane ? 12 : 0)
         .contentShape(Rectangle())
     }
 }

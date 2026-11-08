@@ -87,9 +87,9 @@ object Session {
     /** What the welcome screen says about [reason] ([Store.takeSignedOut]); null for none. */
     fun message(reason: String?): String? =
         when (reason) {
-            Store.SIGNED_OUT_REMOVED -> L.s(R.string.signed_out_removed)
-            Store.SIGNED_OUT_UNUSED -> L.s(R.string.signed_out_unused)
-            Store.SIGNED_OUT_KEY_LOST -> L.s(R.string.signed_out_key_lost)
+            Store.SIGNED_OUT_REMOVED -> L.s(DeviceKind.word(R.string.signed_out_removed))
+            Store.SIGNED_OUT_UNUSED -> L.s(DeviceKind.word(R.string.signed_out_unused))
+            Store.SIGNED_OUT_KEY_LOST -> L.s(DeviceKind.word(R.string.signed_out_key_lost))
             else -> null
         }
 

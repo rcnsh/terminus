@@ -35,6 +35,11 @@ final class BusesModel {
     private(set) var pinnedMissing: Set<String> = []
     /// When each pinned stop came, on the server's clock, for counting its times down.
     private(set) var pinnedGot: [String: Date] = [:]
+    /// Each pinned stop's own answer (/me/stops) and when it came, on the
+    /// server's clock: what an open page's board is merged into each time.
+    @ObservationIgnored private var pinnedOwn: [String: (stop: NearbyStop, got: Date)] = [:]
+    /// When the stop open beside the home was last asked for here, for its card's guesses.
+    @ObservationIgnored private var guessesAsked: [String: Date] = [:]
     /// The page showing on the home: a pinned stop, or BusPinned.addPage; nil, the first.
     /// Kept while the app runs, so coming back to the tab finds the same stop.
     var pinSelected: String?
@@ -52,14 +57,35 @@ final class BusesModel {
     private(set) var pinLimit = BusPins.defaultMax
     private(set) var publicBuses = false
 
-    /// The pages opened over the home, the top one last.
+    /// The pages opened over the home, the top one last. When wide, the
+    /// first is the one open beside the home, the rest pushed over it.
     var path: [BusRoute] = []
+    /// Wide: the home and its page side by side, so the home opens a page in place of the one open.
+    var split = false
+
+    /// Wide, a stop whose page shows alone beside the home, its own side: its
+    /// page's refresh asks for it and fills its pinned card too, so the home's
+    /// pinned refresh leaves it out and each stop is asked for once per 15 s.
+    var stopBeside: String? {
+        guard split, path.count == 1, case .stop(let code) = path[0], pageBoard(code) == code else { return nil }
+        return code
+    }
+
+    /// The page open beside the home, its row marked as chosen; none when the home has the screen.
+    var chosen: BusRoute? { split ? path.first : nil }
+
+    /// A stop or line picked on the home: over it, or wide, beside it in place of the one open.
+    func open(_ route: BusRoute) {
+        if split { path = [route] } else { path.append(route) }
+    }
     /// A short note at the foot of the screen: how a pull went, the pins full.
     private(set) var note: String?
     private var noteTask: Task<Void, Never>?
 
-    /// When the timed refresh next runs, for a pull that asked nothing.
+    /// When the timed refresh next runs, for a pull that asked nothing: the
+    /// open page's, and the home's pinned stops' (wide, both run side by side).
     var nextTimedAt: Date?
+    var nextPinsAt: Date?
 
     /// When each board or line was last asked for, so going back and forth doesn't ask again at once.
     private var asked: [String: Date] = [:]
@@ -71,6 +97,9 @@ final class BusesModel {
 
     /// Shorter than the refresh, so the 15 s tick always asks; longer than a swipe back.
     static let minGapS: TimeInterval = 10
+    /// How often the stop open beside the home is asked for its card's
+    /// timetable guesses: well inside the 20 minutes or so they run ahead.
+    static let guessGapS: TimeInterval = 300
 
     static func lineKey(_ svc: String, _ from: String?) -> String { "\(svc)|\(from ?? "")" }
 
@@ -100,6 +129,8 @@ final class BusesModel {
         pinnedFailed = []
         pinnedMissing = []
         pinnedGot = [:]
+        pinnedOwn = [:]
+        guessesAsked = [:]
         pinSelected = nil
         outs = BusOuts()
         linesAskedAt = nil
@@ -114,7 +145,7 @@ final class BusesModel {
     /// A 401: this phone's token was refused, so it's signed out and the screen follows.
     private func refused(_ e: Error, _ token: String) -> Bool {
         guard let e = e as? ApiError, e.status == 401 else { return false }
-        AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+        AppModel.shared.rejected(token, reason: signedOutHere)
         return true
     }
 
@@ -220,16 +251,25 @@ final class BusesModel {
         guard let token else { return }
         asked[code] = Date()
         let s = AppModel.shared.session
+        let publicBuses = publicBuses
         await fetching(code) {
-            do {
-                let b = try await Api(token: token).board(stop: code, publicBuses: publicBuses)
-                // Asked for by the account before a sign-in or sign-out, with its public buses setting.
-                guard current(s) else { return }
+            // Not cancelled with the page that asked: a page replaced beside the
+            // list goes as its request is under way, and the one that takes its
+            // place skips the stop as just asked, so this answer is the one it shows.
+            let answer = await Task { () -> Result<Board, Error> in
+                do { return .success(try await Api(token: token).board(stop: code, publicBuses: publicBuses)) } catch {
+                    return .failure(error)
+                }
+            }.value
+            // Asked for by the account before a sign-in or sign-out, with its public buses setting.
+            guard current(s) else { return }
+            switch answer {
+            case .success(let b):
                 answeredAt[code] = Date()
                 boards[code] = b
                 failed.remove(code)
-            } catch {
-                guard current(s) else { return }
+                if code == stopBeside { fillPinned(code, from: b) }
+            case .failure(let error):
                 if refused(error, token) { return }
                 failed.insert(code)
             }
@@ -257,11 +297,18 @@ final class BusesModel {
     /// Walked from where you are only when the phone already may say.
     func refreshPinned(force: Bool = false) async {
         guard let token else { return }
-        let window = BusPinned.window(shownPins, selected: pinSelected)
-        let codes = BusPinned.toFetch(window, now: Date(), gap: Self.minGapS, force: force) { asked["pin:" + $0] }
-        guard !codes.isEmpty else { return }
         let now = Date()
+        // Open beside the home, the card is filled from its page's board, but
+        // the board has no timetable guesses: every guessGapS it's asked for
+        // here too, for them (its live times come from the edge cache the page filled).
+        let beside = stopBeside.flatMap { pinned[$0] == nil ? nil : $0 }
+        let guessesDue = beside.map { now.timeIntervalSince(guessesAsked[$0] ?? .distantPast) >= Self.guessGapS } ?? false
+        let window = BusPinned.window(shownPins, selected: pinSelected).filter { $0 != beside || guessesDue }
+        let codes = BusPinned.toFetch(window, now: now, gap: Self.minGapS, force: force) { $0 == beside ? nil : asked["pin:" + $0] }
+        guard !codes.isEmpty else { return }
         for c in codes {
+            // Each answer brings guesses, so the stop opened beside the home just after isn't asked again for them.
+            guessesAsked[c] = now
             asked["pin:" + c] = now
             asking.insert("pin:" + c)
         }
@@ -285,7 +332,7 @@ final class BusesModel {
         if case .failure(let e) = answer { failure = e }
         if let failure, refused(failure, token) { return }
         // Cancelled all the same (the session went): not failed, asked again.
-        let cancelled = failure is CancellationError || (failure as? URLError)?.code == .cancelled
+        let cancelled = failure.map(BusAsk.cancelled) ?? false
         let result = BusPinnedResult.of(asked: codes, returned: stops?.map(\.stop.code), cancelled: cancelled)
         let at = Date()
         let got = ServerClock.now
@@ -293,6 +340,7 @@ final class BusesModel {
             guard let code = codes.first(where: { $0.uppercased() == stop.stop.code.uppercased() }) else { continue }
             pinned[code] = stop
             pinnedGot[code] = got
+            pinnedOwn[code] = (stop, got)
             answeredAt["pin:" + code] = at
         }
         for code in result.askAgain { asked["pin:" + code] = nil }
@@ -300,11 +348,25 @@ final class BusesModel {
         for code in result.missing {
             pinned[code] = nil
             pinnedGot[code] = nil
+            pinnedOwn[code] = nil
         }
         pinnedFailed.subtract(result.answered + result.missing)
         pinnedFailed.formUnion(result.failed)
         pinnedMissing.subtract(result.answered)
         pinnedMissing.formUnion(result.missing)
+    }
+
+    /// A pinned stop's card, its own answer with its page's board (BusPinned.filled).
+    private func fillPinned(_ code: String, from board: Board) {
+        guard let own = pinnedOwn[code] else { return }
+        var stop = own.stop
+        let now = ServerClock.now
+        stop.board = BusPinned.filled(own.stop.board, from: board.rows, since: Int(now.timeIntervalSince(own.got)))
+        stop.available = board.available
+        pinned[code] = stop
+        pinnedGot[code] = now
+        asked["pin:" + code] = asked[code]
+        answeredAt["pin:" + code] = answeredAt[code]
     }
 
     /// A pinned stop as it stands at `now`, its times counted down since it came.
@@ -358,18 +420,28 @@ final class BusesModel {
         asked["line:" + key] = Date()
         let s = AppModel.shared.session
         await fetching("line:" + key) {
-            let api = Api(token: token)
-            do {
-                let l = try await api.line(svc: svc, stop: from)
-                guard current(s) else { return }
+            // Not cancelled with the page that asked, as a board isn't: a line
+            // opened from the list in place of the page beside it replaces the
+            // page as its request starts, and the new page skips it as just asked.
+            let answer = await Task { () -> Result<Line, Error> in
+                let api = Api(token: token)
+                do { return .success(try await api.line(svc: svc, stop: from)) } catch {
+                    // The stop isn't on this service: the line without it.
+                    if from != nil, let e = error as? ApiError, e.status == 400, let l = try? await api.line(svc: svc) {
+                        return .success(l)
+                    }
+                    return .failure(error)
+                }
+            }.value
+            guard current(s) else { return }
+            switch answer {
+            case .success(let l):
                 got(key, l)
-            } catch {
-                guard current(s) else { return }
+            case .failure(let error):
                 if refused(error, token) { return }
-                // The stop isn't on this service: the line without it.
-                if from != nil, let e = error as? ApiError, e.status == 400, let l = try? await api.line(svc: svc) {
-                    guard current(s) else { return }
-                    got(key, l)
+                // Cancelled all the same (the session went): not failed, and asked again at once.
+                if BusAsk.cancelled(error) {
+                    asked["line:" + key] = nil
                     return
                 }
                 lineFailed.insert(key)
@@ -391,7 +463,7 @@ final class BusesModel {
     /// When the timed refresh brings new times for `key`: at its next run, or
     /// the one after when that's too soon after `key` was last asked.
     private func nextUpdate(_ key: String) -> Date? {
-        guard let at = nextTimedAt, at > Date() else { return nil }
+        guard let at = key.hasPrefix("pin:") ? nextPinsAt : nextTimedAt, at > Date() else { return nil }
         let last = asked[key] ?? .distantPast
         return at.timeIntervalSince(last) < Self.minGapS ? at.addingTimeInterval(BusTimes.refreshS) : at
     }
@@ -433,6 +505,8 @@ final class BusesModel {
         await loadProfile()
         if pinsState == .failed { return .failed }
         guard let code = pinFocus else { return .upToDate(nextInS: nil) }
+        // Open beside the home, the card is filled from its page's board (refreshPinned leaves it).
+        if code == stopBeside, pinned[code] != nil { return await pulled(code) { await refreshPage(code, force: true) } }
         return await pulled("pin:" + code) { await refreshPinned(force: true) }
     }
 

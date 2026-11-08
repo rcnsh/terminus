@@ -349,16 +349,96 @@ object PinPages {
 
     /**
      * Of the stops [codes], the ones to ask for now, each once: those not asked within [gapMs] ([askedAt] says when each last was), so a
-     * swipe back and forth doesn't ask again at once.
+     * swipe back and forth doesn't ask again at once. Not [open], the stop whose page is open beside the home: its page asks for it.
      */
-    fun due(codes: List<String>, askedAt: (String) -> Long?, nowMs: Long, gapMs: Long): List<String> =
-        codes.distinct().filter { code -> askedAt(code)?.let { nowMs - it < gapMs } != true }
+    fun due(codes: List<String>, askedAt: (String) -> Long?, nowMs: Long, gapMs: Long, open: String? = null): List<String> =
+        codes.distinct().filter { code -> code != open && askedAt(code)?.let { nowMs - it < gapMs } != true }
 }
 
-/** A pinned stop as Nearby shows it (/api/me/stops), and when this phone got it, on the server's clock ([ServerClock]). */
-data class PinnedStop(val stop: NearbyStop, val gotMs: Long?) {
+/**
+ * A pinned stop as Nearby shows it (/api/me/stops), and when this phone got its times, on the server's clock ([ServerClock]): [gotMs] for
+ * the times as they stand (an open page's board's, [withBoard]), [answeredMs] for the card's own answer, [own], whose timetable guesses it
+ * carries.
+ */
+data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Long? = gotMs, val own: NearbyStop = stop) {
     /** The stop as it stands at [nowMs]: its rows [BusTimes.aged], so nothing old passes for live while refreshes fail. */
     fun aged(nowMs: Long): NearbyStop = if (gotMs == null) stop else stop.copy(board = stop.board.map { BusTimes.aged(it, gotMs, nowMs) })
+
+    /**
+     * The card's own answer is recent enough at [nowMs] that the stop's open page can keep its times ([withBoard]) without the card asking
+     * again: after [ANSWER_MS] it asks once more, so its timetable guesses for the buses after the board's never run out.
+     */
+    fun answerFresh(nowMs: Long): Boolean = answeredMs != null && nowMs - answeredMs < ANSWER_MS
+
+    /**
+     * The same stop with the times of its open page's [board] (its shuttles only, as /api/me/stops gives them), for one whose page asks for
+     * it in place of this card. The rows keep the card's own words, so opening the page changes only the times. The board gives at most one
+     * later bus; after it come the buses of the card's own answer ([own], never a page's, which would come round again) that the board
+     * doesn't cover ([guessesAfter]), and only its timetable guesses (a live time would be old). A service the board doesn't have keeps its
+     * own row, counted down the same way, a live time then stale.
+     */
+    fun withBoard(board: Board): PinnedStop {
+        val now = board.gotMs ?: gotMs
+        val since = if (now != null && answeredMs != null) ((now - answeredMs) / 1000).toInt() else 0
+        val left = board.rows.filterNot { it.paid }.toMutableList()
+        // Every row's own way first, then the service alone for the rows still without one: in one pass, a row for a way the board lacks
+        // would take the bus a later row's way has.
+        val exact = own.board.map { row -> left.firstOrNull { it.svc == row.svc && it.towards == row.towards }?.also { left.remove(it) } }
+        val taken = own.board.mapIndexed { i, row -> exact[i] ?: left.firstOrNull { it.svc == row.svc }?.also { left.remove(it) } }
+        val rows =
+            own.board.mapIndexed { i, row ->
+                val b = taken[i]
+                if (b == null) {
+                    if (row.etaS == null || since <= 0) row
+                    else
+                        (row.etaS - since).let { s ->
+                            row.copy(
+                                etaS = if (s > -60) maxOf(0, s) else null,
+                                eta = null,
+                                quality = if (row.quality == "live") "stale" else row.quality,
+                                later = guessesAfter(row.later, since, 0),
+                                laterText = null,
+                            )
+                        }
+                } else {
+                    row.copy(
+                        etaS = b.etaS,
+                        quality = b.quality,
+                        eta = b.eta,
+                        crowd = b.crowd,
+                        running = b.running,
+                        stopped = b.stopped,
+                        resumesAtMs = b.resumesAtMs,
+                        later =
+                            b.later +
+                                guessesAfter(
+                                    listOfNotNull(row.etaS?.let { LaterBus(it, row.quality) }) + row.later,
+                                    since,
+                                    (if (b.etaS != null) 1 else 0) + b.later.size,
+                                ),
+                        laterText = null,
+                    )
+                }
+            }
+        return PinnedStop(stop.copy(board = rows, available = board.available), now, answeredMs, own)
+    }
+
+    companion object {
+        /** How long the card's own answer serves an open page's merged times before it's asked again ([answerFresh]). */
+        const val ANSWER_MS = 120_000L
+
+        /**
+         * The card's [buses] (next first) that a board showing [shown] buses for the service doesn't cover, [since] seconds on: those now
+         * due are gone, the board's buses are the next [shown] of the rest, and of what's left only the timetable guesses stay. Counted,
+         * not matched by time, as the iPhone and the website do: a bus running a little ahead of its guess is still that bus.
+         */
+        internal fun guessesAfter(buses: List<LaterBus>, since: Int, shown: Int): List<LaterBus> =
+            buses
+                .map { it.copy(etaS = it.etaS - since, eta = null) }
+                .filter { it.etaS > 0 }
+                .drop(shown)
+                .filter { it.quality == "scheduled" }
+    }
 }
 
 /** One service's buses on the road (/api/lines), in the server's words ([outText]: "3 out", "None out"). */

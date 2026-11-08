@@ -45,10 +45,10 @@ let columnWidth: CGFloat = 560
 
 extension View {
     /// The page's column: `gutter` points in from each side, centred and no
-    /// wider than `columnWidth`, its content to the leading edge.
-    func column(gutter: CGFloat = 16) -> some View {
+    /// wider than `width` (`columnWidth` unless said), its content to the leading edge.
+    func column(gutter: CGFloat = 16, width: CGFloat = columnWidth) -> some View {
         padding(.horizontal, gutter)
-            .frame(maxWidth: columnWidth, alignment: .leading)
+            .frame(maxWidth: width, alignment: .leading)
             .frame(maxWidth: .infinity)
     }
 

@@ -147,26 +147,36 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         return Pull.outcome(fetched = true, ok = (answeredAt[key] ?: 0) >= start)
     }
 
-    /** When the screen's timed refresh next runs (BusesScreen's `Refreshing`), for a pull that asked nothing. */
-    var nextTimedAt: Long? = null
+    /**
+     * When each timed refresh next runs (BusesScreen's `Refreshing`), for a pull that asked nothing: the home's pinned stops, and the page
+     * on top. Each its own, as both run at once on a wide window.
+     */
+    var pinsTimedAt: Long? = null
+    var pageTimedAt: Long? = null
 
     /**
-     * When the timed refresh brings new times for [key]: at its next run, or the one after when that's too soon after [key] was last asked
-     * ([MIN_GAP_MS]) and it will skip it. Null with none due.
+     * The stop whose page is open beside the home on a wide window, which its page asks for: the home's pinned refresh leaves it out and
+     * its card takes the page's times ([PinnedStop.withBoard]). Null on a phone, where the home isn't on screen under a page.
      */
-    private fun nextUpdateAt(key: String): Long? {
-        val at = nextTimedAt?.takeIf { it > System.currentTimeMillis() } ?: return null
+    var openStop: String? = null
+
+    /**
+     * When the timed refresh at [timedAt] brings new times for [key]: at its next run, or the one after when that's too soon after [key]
+     * was last asked ([MIN_GAP_MS]) and it will skip it. Null with none due.
+     */
+    private fun nextUpdateAt(key: String, timedAt: Long?): Long? {
+        val at = timedAt?.takeIf { it > System.currentTimeMillis() } ?: return null
         return if (at - (asked[key] ?: 0) < MIN_GAP_MS) at + BusTimes.REFRESH_MS else at
     }
 
     /** When new times come for the page for [code], for its pull. */
-    fun pageNextAt(code: String): Long? = nextUpdateAt(pageBoard(code))
+    fun pageNextAt(code: String): Long? = nextUpdateAt(pageBoard(code), pageTimedAt)
 
-    /** When new times come for the pinned stop [code] on the home, for its pull. */
-    fun pinNextAt(code: String): Long? = nextUpdateAt(pinKey(code))
+    /** When new times come for the pinned stop [code] on the home, for its pull: from its page while that's open beside it. */
+    fun pinNextAt(code: String): Long? = if (code == openStop) pageNextAt(code) else nextUpdateAt(pinKey(code), pinsTimedAt)
 
     /** When new times come for a service's line, for its pull. */
-    fun lineNextAt(svc: String, from: String?): Long? = nextUpdateAt("line:${lineKey(svc, from)}")
+    fun lineNextAt(svc: String, from: String?): Long? = nextUpdateAt("line:${lineKey(svc, from)}", pageTimedAt)
 
     /** The page for [code] pulled down. */
     suspend fun pullPage(code: String): PullOutcome = pulled(pageBoard(code)) { refreshPage(code, force = true) }
@@ -222,7 +232,11 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
                 val board = api(token).board(code, publicBuses)
                 val got = board.copy(code = board.code.ifEmpty { code }, gotMs = ServerClock.now())
                 answered(code)
-                _state.update { it.copy(boards = it.boards + (code to got), failed = it.failed - code) }
+                _state.update { s ->
+                    // A pinned stop's card takes its page's times, rather than asking for the stop again ([openStop]).
+                    val pinned = s.pinned[code]?.let { s.pinned + (code to it.withBoard(got)) } ?: s.pinned
+                    s.copy(boards = s.boards + (code to got), failed = s.failed - code, pinned = pinned, pinFailed = s.pinFailed - code)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -255,7 +269,17 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
      * [force]d. With a location this phone already has, each says the walk there.
      */
     suspend fun refreshPinned(codes: List<String>, force: Boolean = false) {
-        val ask = if (force) codes.distinct() else PinPages.due(codes, { asked[pinKey(it)] }, System.currentTimeMillis(), MIN_GAP_MS)
+        val ask =
+            if (force) codes.distinct()
+            else
+                PinPages.due(
+                    codes,
+                    { asked[pinKey(it)] },
+                    System.currentTimeMillis(),
+                    MIN_GAP_MS,
+                    // Left to its page while the card's own answer is fresh; then asked once, for its guesses after the board's buses.
+                    openStop?.takeIf { _state.value.pinned[it]?.answerFresh(ServerClock.now()) == true },
+                )
         if (ask.isEmpty()) return
         val token = store.token ?: return
         val keys = ask.map(::pinKey)
@@ -395,6 +419,9 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun open(route: BusRoute) = _state.update { it.copy(stack = it.stack + route) }
+
+    /** [route] opened from the tab's home: the first page over it, in place of whatever was open (wide, the one beside the list). */
+    fun show(route: BusRoute) = _state.update { it.copy(stack = listOf(route)) }
 
     fun back() = _state.update { it.copy(stack = it.stack.dropLast(1)) }
 

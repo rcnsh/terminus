@@ -1,5 +1,11 @@
-/* The installed web app: one column, phone first. The card itself is the
-   account page's preview (.widget in account.css). */
+/* The installed web app: one column, phone first, then wider windows by
+   their width (docs/agents/window-sizes.md, at the end of this file). The
+   card itself is the account page's preview (.widget in account.css). */
+
+/* Half the page's width beside the rail (tabbar.css), which is the window's
+   under 800: how far Now's sky, the horizon and Settings' bands reach out
+   from the middle of the column to the page's edges. */
+:root { --half: calc((100vw - var(--rail-w, 0px)) / 2); }
 
 .app-main { max-width: 560px; display: grid; align-content: start; gap: 16px; padding-bottom: 32px; }
 
@@ -51,8 +57,8 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
   .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
   .map-pills .dot, .bt-bus { forced-color-adjust: none; }
 }
-/* Elsewhere at the end of the chips, worded so it reads as one more place to go, and the search it opens. */
-.app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px 7px 10px; }
+/* Elsewhere at the trailing end of the chips' row, worded so it reads as one more place to go, and the search it opens. */
+.app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 7px 14px 7px 10px; }
 .app-chips .chip-search[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
 .chip-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .where-box input { width: 100%; }
@@ -189,10 +195,10 @@ body.on-buses > .nav { display: none; }
    two meet without a seam. The home's title, a stop's name, a line's
    title and Back sit in it, in the sky's ink (.sky-head). */
 /* Above the page under it, so its search's list comes down over it. */
-.bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 -16px; padding: max(12px, env(safe-area-inset-top)) 16px 0; background: var(--s0); }
+.bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 calc(50% - var(--half)); padding: max(12px, env(safe-area-inset-top)) calc(var(--half) - 50%) 0; background: var(--s0); }
 /* Overscrolled at the top: still the sky up there. */
 .bt-sky-top::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
-.bt-sky { margin: 0 -16px; padding: 0 16px; background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
+.bt-sky { margin: 0 calc(50% - var(--half)); padding: 0 calc(var(--half) - 50%); background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
 /* A page of its own starts the sky itself. */
 .bt-page.alone > .bt-sky, .buses-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
 .bt-sky .sky-head { --room: 0px; --moon: 22px; padding-bottom: 2px; }
@@ -201,8 +207,8 @@ body.on-buses > .nav { display: none; }
 body.sky .bt-sky .night-sky .moon { top: auto; bottom: 0; right: 30px; }
 /* A line's title has its words on the right: the moon up by Back instead. */
 body.sky .buses-tab > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
-/* Within the page, not across the window as on Now. */
-.bt-sky .horizon.low { width: auto; height: 52px; margin: 0 -16px; }
+/* As wide as its band. */
+.bt-sky .horizon.low { width: auto; height: 52px; margin: 0 calc(50% - var(--half)); }
 .bt-sky + .bt-sides { margin-top: 4px; }
 .bt-sky .bt-nav { height: 48px; }
 .bt-sky .bt-kicker-icon { fill: var(--k-accent-small); }
@@ -216,12 +222,6 @@ body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; 
 /* The search's shape while the tab's code loads (app.js StopsSkeleton), in the sky's ink. */
 .bt-search .sk-field { display: block; height: 46px; border-radius: 14px; }
 body.sky .bt-sky-top { --sk: color-mix(in srgb, var(--k-ink) 13%, transparent); --sk-hi: color-mix(in srgb, var(--k-ink) 26%, transparent); }
-/* Wider than a phone, the column's sky has rounded top corners rather than
-   stopping short of the window's edges. */
-@media (min-width: 600px) {
-  .bt-sky-top, .buses-tab > .bt-sky, .bt-page.alone > .bt-sky { margin-top: 12px; border-radius: 18px 18px 0 0; }
-  .bt-sky-top::before { display: none; }
-}
 .bt-search { position: relative; }
 .bt-search input { height: 46px; padding-left: 42px; border-radius: 14px; border-color: var(--line-strong); background: var(--surface-2); }
 .bt-search input:focus-visible { outline-offset: 0; }
@@ -412,7 +412,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 /* Full screen above the tab bar; the header steps aside for it. */
 body.on-map { overflow: hidden; }
 body.on-map > .nav, body.on-map #tab-now { display: none; }
-.map-tab { position: fixed; inset: 0 0 calc(var(--tabbar-h) + env(safe-area-inset-bottom)) 0; background: var(--bg); }
+.map-tab { position: fixed; inset: 0 0 calc(var(--tabbar-h) + env(safe-area-inset-bottom)) var(--rail-w); background: var(--bg); }
 /* Sized, not positioned: MapLibre makes it position: relative. */
 .map { width: 100%; height: 100%; }
 .map-top {
@@ -622,7 +622,8 @@ button.svc-tag { cursor: pointer; }
 /* Settings (account/settings.js). Its title ("Settings", or a page's with a
    back arrow) takes the header's place, at the header's height, so the top
    of the screen stays put between tabs. */
-.settings-tab { padding-bottom: 32px; }
+/* In the 560 column under 800, as Now and Stops; its bands still run edge to edge. */
+.settings-tab { max-width: 560px; padding-bottom: 32px; }
 body.on-settings > .nav { display: none; }
 .settings-tab .settings { padding-top: 0; }
 /* The list starts at the very top here, so it sticks there: at 16px (as on the
@@ -704,7 +705,7 @@ body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-
 body.sky { --end: var(--sky-end, 22.5rem); }
 body.sky #tab-now { position: relative; }
 body.sky #tab-now::before {
-  content: ''; position: absolute; z-index: -1; top: calc(-1 * var(--sky-top, var(--header-h, 0px))); left: calc(50% - 50vw); width: 100vw;
+  content: ''; position: absolute; z-index: -1; top: calc(-1 * var(--sky-top, var(--header-h, 0px))); left: calc(50% - var(--half)); width: calc(2 * var(--half));
   height: calc(var(--end) - 24px); pointer-events: none;
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
@@ -732,7 +733,7 @@ body.sky .sky-head :is(.notice, .warning) { width: fit-content; padding: 4px 10p
    horizon (just the hills). The page's controls stay on the plain page under it. The page
    has a background of its own (it slides over the list), so the band draws
    its sky itself, across the window and up past the page's top. */
-.page-band { position: relative; isolation: isolate; margin: 0 calc(50% - 50vw); padding: 0 calc(50vw - 50%);
+.page-band { position: relative; isolation: isolate; margin: 0 calc(50% - var(--half)); padding: 0 calc(var(--half) - 50%);
   background: linear-gradient(var(--s0), var(--s1) 50%, var(--s2) 86%, var(--s3)); }
 .page-band::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
 .page-band .sky-head { --room: var(--header-h); --moon: 24px; padding-top: 0; }
@@ -753,7 +754,7 @@ body.sky-night .celestial .night-sky { display: block; }
 .day-done.open .done-label { font-size: 2.9rem; letter-spacing: -0.03em; }
 /* The horizon (sky.js Horizon): across the whole window, the near hill in the
    page's colour, the rest in the hour's. */
-.horizon { width: 100vw; height: 115px; margin: 10px calc(50% - 50vw) 0; }
+.horizon { width: calc(2 * var(--half)); height: 115px; margin: 10px calc(50% - var(--half)) 0; }
 .horizon svg { display: block; }
 .horizon .far { fill: var(--h-far); }
 .horizon .tree { fill: var(--h-tree); }
@@ -858,3 +859,109 @@ body.sky-dusk .pull .beam, body.sky-night .pull .beam { display: inline; }
 .pull-hint:is(.is-updated, .is-fresh)::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--k-good, var(--good)); }
 .pull-hint.is-failed::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--k-warn, var(--warn)); }
 @media (prefers-reduced-motion: reduce) { .pull-hint svg { transition: none; } }
+
+/* Wider windows (docs/agents/window-sizes.md, ADR 0015): by the window's
+   width alone. Under 600 the phone layout above; from 600 the same in a
+   centred column at most 560 wide (.app-main, .buses-tab); from 800 the
+   rail (tabbar.css) and two panes on Now, Stops and Settings. Text,
+   controls and cards keep their phone sizes: the room is for what sits
+   beside them. */
+
+/* The wordmark in Now's column, as wide as what's under it. */
+body.app > .nav { max-width: 560px; }
+
+@media (min-width: 800px) {
+  /* Now with a day (app.js useNowSplit): the chips and the card's top across
+     a column at most 1040 wide; under the horizon the card's steps and
+     buttons on the left, and Today on the right with the card's foot under
+     it. Today starts where the sky ends (sky.js keeps --sky-end and
+     --sky-top), out of the flow, so Now is kept at least as tall as it
+     and the foot (--side-h, --foot-h, app.js NowSide). The foot stays in
+     the card and is only placed there, so an open report keeps its draft
+     as Now goes between one column and two. */
+  body.app.now-split > .nav { max-width: 1072px; }
+  .app-main.split {
+    position: relative; max-width: 1072px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px;
+    min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px + var(--foot-h, 0px) + 32px);
+  }
+  .app-main.split > * { grid-column: 1 / -1; }
+  .app-main.split > :is(.go-later, .go-later-form) { grid-column: 1; }
+  /* Whatever comes after the horizon in the card, however deep the card puts it. */
+  .app-main.split .app-card :is(.horizon ~ *, :has(.horizon) ~ *) { max-width: calc(50% - 24px); }
+  /* Both lines named: an absolute item's auto end would be the padding edge, past the column. */
+  .app-main.split > .now-side { grid-column: 2 / 3; position: absolute; inset: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px) 0 auto; display: grid; gap: 12px; align-content: start; }
+  /* Two equal columns 48 apart: column 2 starts half the gap past the middle, and ends at the 16 px gutter. */
+  .app-main.split .app-card > .card-foot.card-foot {
+    position: absolute; top: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px); left: calc(50% + 24px); right: 16px;
+    max-width: none; margin: 0;
+  }
+}
+
+/* A narrow detail pane (800 wide leaves Settings' page about 350): a long
+   value (a residence's name) goes on a line under its name rather than
+   being cut off. Only a pane is a container, so a phone is as it was. */
+@container (max-width: 440px) {
+  .settings-tab .field:has(select.plain) { flex-wrap: wrap; }
+  .settings-tab .field:has(select.plain) > label { flex-basis: 100%; }
+  .settings-tab .field-control:has(> select.plain) { flex-basis: 100%; justify-content: flex-start; }
+  .settings-tab .field-control > select.plain { max-width: 100%; margin-left: -6px; text-align: left; text-align-last: left; }
+}
+
+@media (min-width: 800px) {
+  /* Stops (buses.js BusesTab): the home in a pane 360 wide on the left, and
+     the stop or line opened from it beside it, its words in the 560 column.
+     The home scrolls on its own. A hairline between them; each pane's sky
+     band runs from edge to edge of the pane (50cqw is half the pane), and
+     the page's is at least as tall as the home's, so their hills line up. */
+  .buses-tab:has(> .bt-split) { max-width: none; padding: 0; }
+  .bt-split { display: grid; grid-template-columns: 360px minmax(0, 1fr); min-height: 100dvh; }
+  .bt-list { position: sticky; top: 0; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 32px; border-right: 1px solid var(--line); }
+  .bt-detail { container-type: inline-size; min-width: 0; padding-bottom: 32px; }
+  .bt-detail > :not(.bt-sky) { max-width: 528px; margin-inline: max(16px, calc(50% - 264px)); }
+  .bt-detail .bt-page.alone { padding: 0; }
+  .bt-list :is(.bt-sky-top, .bt-sky) { margin-inline: -16px; padding-inline: 16px; }
+  .bt-list .bt-sky .horizon.low { margin-inline: -16px; }
+  .bt-detail .bt-page.alone > .bt-sky, .bt-detail > .bt-sky { margin-inline: calc(50% - 50cqw); padding: env(safe-area-inset-top) max(16px, calc(50cqw - 264px)) 0; }
+  .bt-detail .bt-sky .sky-head { display: flex; flex-direction: column; justify-content: flex-end; min-height: 126px; }
+  .bt-detail .bt-sky .horizon.low { margin-inline: calc(-1 * max(16px, calc(50cqw - 264px))); }
+  body.sky .bt-detail > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
+  /* Nothing open: the band, and what to do. */
+  .bt-choose { margin-top: 18vh; color: var(--muted); text-align: center; }
+  /* Chosen (window-sizes.md): the open stop's card, the open line's row, a
+     search result that's open: a fill of the accent, rounded, nothing else. */
+  .bt-split .bt-pager-page.open .stop-sign, .bt-split .bt-pager-page.open .stop-sign .plate { border-color: transparent; background: var(--chosen); }
+  .bt-split .bt-pager-page.open .plate-name { text-decoration: none; }
+  .bt-split :is(.bt-service, .bt-result)[aria-current], .bt-split :is(.bt-service, .bt-result)[aria-current]:hover { border-radius: 12px; background: var(--chosen); }
+  /* Only the trailing pane draws the moon and stars. */
+  .bt-list .celestial, .settings-tab .settings-side .celestial { display: none; }
+  /* The search's results in the home pane (buses.js Results): a stop by name, its code and the services there. */
+  .bt-results { padding: 0; overflow: hidden; }
+  .bt-result-stop { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 8px 11px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .bt-result-stop:first-child { border-top: 0; }
+  .bt-result-stop:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+  .bt-result-text { flex: 1; display: grid; gap: 4px; min-width: 0; }
+  .bt-result-name { font: 600 0.95rem/1.3 var(--font); overflow-wrap: anywhere; }
+  .bt-result-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .bt-result-code { margin-right: 4px; color: var(--muted); font: 600 0.7rem/1 var(--display); letter-spacing: 0.06em; }
+  /* Its own clear button in place of the browser's. */
+  .bt-list .bt-search input { padding-right: 44px; }
+  .bt-list .bt-search input::-webkit-search-cancel-button { display: none; }
+  .bt-search-clear { position: absolute; top: 7px; right: 7px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+  .bt-search-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  body.sky .bt-sky-top .bt-search-clear { color: var(--k-muted); }
+}
+
+@media (min-width: 800px) {
+  /* Settings (account/settings.js) as Stops: the list in a pane 360 wide,
+     the open page beside it in the 560 column, each under its own band. */
+  .settings-tab { max-width: none; padding: 0; }
+  .settings-tab .settings { grid-template-columns: 360px minmax(0, 1fr); gap: 0; min-height: 100dvh; }
+  .settings-tab .settings-side { height: 100dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 32px; border-right: 1px solid var(--line); }
+  .settings-tab .settings-side .page-band { margin-inline: -16px; padding-inline: 16px; }
+  .settings-tab .settings-pages { container-type: inline-size; min-width: 0; padding-bottom: 32px; }
+  .settings-tab .settings-page { max-width: 528px; margin-inline: max(16px, calc(50% - 264px)); }
+  .settings-tab .settings-page .page-band { margin-inline: calc(50% - 50cqw); padding-inline: calc(50cqw - 50%); }
+  /* The hills as wide as the band they end, not the page. */
+  .settings-tab .settings-side .page-band .horizon { width: auto; margin-inline: -16px; }
+  .settings-tab .settings-page .page-band .horizon { width: 100cqw; margin-inline: calc(50% - 50cqw); }
+}

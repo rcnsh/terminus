@@ -34,7 +34,7 @@ struct MapTab: View {
             if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: dark, still: reduceMotion,
-                    cover: cover, shown: active,
+                    cover: cover, floating: wide && sheetCover > 0 ? sheetCover + 16 : 0, shown: active,
                     drawn: .init(
                         selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet,
                         me: map.me,

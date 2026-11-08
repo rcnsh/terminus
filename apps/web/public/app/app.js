@@ -1111,8 +1111,6 @@ function CardSkeleton({ nearby }) {
 function CardArea() {
   const c = useStore(card);
   const to = useStore(target);
-  const when = useStore(updated);
-  const who = useStore(me);
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a =
@@ -1132,11 +1130,25 @@ function CardArea() {
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
-      <div class="card-foot">
-        <div class="updated hint">${when}</div>
-        ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />`}
-      </div>
+      <${CardFoot} />
     </section>
+  `;
+}
+
+/**
+ * Under the card ("Updated 9:41 · Is this wrong?"); placed under Today when
+ * they're side by side (app.css), never moved, so an open report keeps its draft.
+ */
+function CardFoot() {
+  const c = useStore(card);
+  const to = useStore(target);
+  const when = useStore(updated);
+  const who = useStore(me);
+  return html`
+    <div class="card-foot">
+      <div class="updated hint">${when}</div>
+      ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />`}
+    </div>
   `;
 }
 
@@ -1290,11 +1302,11 @@ function GoLater() {
   `;
 }
 
-/** Today, from /api/me/day: each class with when to leave and how, and the trips home. */
-function Today() {
-  const plan = useStore(day);
-  const gone = useStore(removed);
-  const bar = useStore(undo);
+/**
+ * Today's rows: the day's entries not taken off here (`gone`), and the row
+ * left where one was (`bar`, the undo store), as Today draws them.
+ */
+function todayRows(plan, gone, bar) {
   const items = (plan?.items ?? []).filter((it) => !gone.has(it.key));
   // The entry just taken off keeps its place, as a row saying so with Undo.
   // A failed removal's row sits just above the entry it's about, which is back.
@@ -1304,6 +1316,15 @@ function Today() {
     const next = bar.before === null ? rows.length : rows.findIndex((r) => r.it.key === bar.before);
     rows.splice(next >= 0 ? next : Math.min(bar.at, rows.length), 0, { note: bar });
   }
+  return { items, rows };
+}
+
+/** Today, from /api/me/day: each class with when to leave and how, and the trips home. */
+function Today() {
+  const plan = useStore(day);
+  const gone = useStore(removed);
+  const bar = useStore(undo);
+  const { items, rows } = todayRows(plan, gone, bar);
   if (!rows.length) return null;
   return html`
     <section class="today" aria-labelledby="today-title">
@@ -1419,22 +1440,22 @@ const SkeletonRows = ({ n }) => html`
 `;
 
 /**
- * Settings before its code arrives: its title (in the sky's band on a phone,
- * as the list has), then the list's shapes, and beside them a page's when
- * side by side, so nothing moves when Settings takes its place.
+ * Settings before its code arrives: its title in the sky's band, as the list
+ * has, then the list's shapes, and beside them a page's, under a band of its
+ * own, when side by side, so nothing moves when Settings takes its place.
  */
 function SettingsSkeleton() {
-  const wide = useMedia('(min-width: 900px)');
+  const wide = useMedia('(min-width: 800px)');
   useEffect(() => {
-    if (wide) return;
     document.body.classList.add('set-sky');
     return () => document.body.classList.remove('set-sky');
-  }, [wide]);
-  const title = html`<h1 class="settings-title">${t('Settings')}</h1>`;
+  }, []);
+  const band = (head) =>
+    html`<div class="page-band"><div class="sky-head"><${Celestial} band />${head}</div><${Horizon} on=${null} low /></div>`;
   return html`
     <div class="settings skeleton" aria-busy="true">
       <div class="settings-side">
-        ${wide ? title : html`<div class="page-band"><div class="sky-head"><${Celestial} band />${title}</div><${Horizon} on=${null} low /></div>`}
+        ${band(html`<h1 class="settings-title">${t('Settings')}</h1>`)}
         <div class="settings-groups" aria-hidden="true">
           <div class="settings-row set-account"><span class="avatar skel"></span><span class="row-text"><span class="row-title skel-line"></span><span class="row-sum skel-line short"></span></span></div>
           <${SkeletonRows} n=${4} />
@@ -1446,7 +1467,7 @@ function SettingsSkeleton() {
         wide &&
         html`<div class="settings-pages" aria-hidden="true">
         <div class="settings-page">
-          <div class="page-head"><h2 class="skel-line title"></h2></div>
+          ${band(html`<div class="page-head"><h2 class="skel-line title"></h2></div>`)}
           <div class="skel-block" style="height: 132px"></div>
           <div class="skel-block" style="height: 180px"></div>
         </div>
@@ -1522,12 +1543,84 @@ function TabBar() {
   `;
 }
 
+/**
+ * Whether Now is two columns: a wide window (docs/agents/window-sizes.md)
+ * with a day to show, the card on the left and Today on the right with the
+ * card's foot under it. Without a day the card stays in the 560 column. The
+ * body's now-split class widens the header with it (app.css).
+ */
+function useNowSplit() {
+  const wide = useMedia('(min-width: 800px)');
+  const plan = useStore(day);
+  const gone = useStore(removed);
+  const bar = useStore(undo);
+  const split = wide && todayRows(plan, gone, bar).rows.length > 0;
+  useEffect(() => {
+    document.body.classList.toggle('now-split', split);
+  }, [split]);
+  return split;
+}
+
+/**
+ * Today beside the card, under the horizon (app.css, .now-side): out of the
+ * page's flow so it starts where the sky ends, so its height and the card's
+ * foot's under it are kept on Now (--side-h, --foot-h) for Now to be at
+ * least as tall.
+ */
+function NowSide() {
+  const box = useRef(null);
+  useEffect(() => {
+    const el = box.current;
+    const tab = el?.closest('main');
+    const foot = tab?.querySelector('.app-card > .card-foot');
+    if (!el || !tab) return;
+    const seen = new ResizeObserver(() => {
+      tab.style.setProperty('--side-h', `${el.offsetHeight}px`);
+      tab.style.setProperty('--foot-h', `${foot?.offsetHeight ?? 0}px`);
+    });
+    seen.observe(el);
+    if (foot) seen.observe(foot);
+    return () => {
+      seen.disconnect();
+      tab.style.removeProperty('--side-h');
+      tab.style.removeProperty('--foot-h');
+    };
+  }, []);
+  return html`<div class="now-side" ref=${box}><${Today} /></div>`;
+}
+
+/**
+ * The tabs as the rail on the left, from 800 wide, in #rail ahead of the
+ * wordmark (app/index.html), so the keyboard meets them first, as the eye does.
+ */
+function Rail() {
+  return useMedia('(min-width: 800px)') ? html`<${TabBar} />` : null;
+}
+
+/**
+ * The rail's place, made ahead of the header when the page has none: the
+ * service worker can pair a kept older /app/ with this script (sw.js
+ * decides file by file), and drawing into nothing would stop the app.
+ */
+function railRoot() {
+  const found = document.getElementById('rail');
+  if (found) return found;
+  const made = document.createElement('div');
+  made.id = 'rail';
+  document.body.insertBefore(made, document.body.querySelector(':scope > header') ?? document.body.firstChild);
+  return made;
+}
+
 /** The four tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
+  const split = useNowSplit();
+  // From 800 the tabs are a rail drawn ahead of the page (Rail); the bar
+  // along the bottom stays last, under the page.
+  const rail = useMedia('(min-width: 800px)');
   return html`
-    <main class="wrap app-main" id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
+    <main class=${split ? 'wrap app-main split' : 'wrap app-main'} id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
       <h1 class="sr-only">${t('Now')}</h1>
       <${InstallHint} />
       <${Banner} />
@@ -1535,13 +1628,13 @@ function App() {
       <${Where} />
       <${CardArea} />
       <${GoLater} />
-      <${Today} />
+      ${split ? html`<${NowSide} />` : html`<${Today} />`}
     </main>
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Stops')}</h1><${BusesArea} /></main>
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
     <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
     <${PullToRefresh} enabled=${pullable} refresh=${pullTab} />
-    <${TabBar} />
+    ${!rail && html`<${TabBar} />`}
     <${Toast} />
   `;
 }
@@ -1560,6 +1653,7 @@ async function start() {
   const opening = tabInAddress();
   markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));
+  render(html`<${Rail} />`, railRoot());
   // Settings' code and the account alongside the card, not after /api/me.
   if (opening === 'settings') openSettings();
   // The plan from last time at once, if it still holds (a look in the cache),

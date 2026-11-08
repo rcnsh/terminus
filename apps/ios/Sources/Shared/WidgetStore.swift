@@ -64,7 +64,7 @@ enum WidgetStore {
             keep(a)
             return a
         } catch let e as ApiError {
-            error = e.status == 401 ? L("This phone was signed out of your account. Sign in again with your email.") : e.message
+            error = e.status == 401 ? signedOutHere : e.message
         } catch is DecodingError {
             error = L("Unexpected response from terminus")
         } catch {

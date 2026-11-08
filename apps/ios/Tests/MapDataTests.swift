@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import Terminus
 
@@ -50,6 +51,19 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(near(b[3], 1.2955))
 }
 
+@Test func campusIsFramedWithItsLinesNotJustItsStops() throws {
+    // D2 and A1 stay on campus: their lines bend out past COM3, the one stop, and count.
+    // P goes out to Botanic Gardens: its line would frame half the island, so it doesn't.
+    var o = try json(campusJson)
+    var routes = try #require(o["routes"] as? [String: Any])
+    routes["P"] = ["seq": ["COM3", "BG-MRT"], "loop": false, "color": "#888888", "line": [[103.7745, 1.2948], [103.8153, 1.3224]]]
+    o["routes"] = routes
+    let campus = try #require(CampusMap.parse(JSONSerialization.data(withJSONObject: o)))
+    let b = campus.coreBounds
+    #expect(near(b[0], 103.77) && near(b[1], 1.29), "A1's line, south-west of COM3")
+    #expect(near(b[2], 103.78) && near(b[3], 1.30), "A1's line, north-east; nothing of P's")
+}
+
 @Test func aTapTakingInTwoStopsOpensTheNearer() throws {
     let campus = try #require(CampusMap.parse(campusJson))
     #expect(campus.nearest(["COM3", "BG-MRT"], lat: 1.3220, lon: 103.8150) == "BG-MRT")
@@ -89,7 +103,9 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let stops = try features(MapGeoJson.stops(campus))
     let com3 = try #require(stops.first { ($0["properties"] as? [String: Any])?["code"] as? String == "COM3" })
     #expect((com3["properties"] as? [String: Any])?["services"] as? String == " D1 D2 ")
-    #expect(try features(MapGeoJson.routes(campus)).count == 2)
+    // In the API's order, the last on top: the same every launch, as on the web and Android.
+    let lines = try features(MapGeoJson.routes(campus)).map { ($0["properties"] as? [String: Any])?["svc"] as? String }
+    #expect(lines == ["A1", "D2"])
     let placed = LiveBus(id: "b1", lat: 1, lon: 103, heading: nil, moving: true, at: "COM 3", slot: 1).placed()
     let props = try #require(try features(MapGeoJson.buses(svc: "D2", color: "#8e44c9", [placed]))[0]["properties"] as? [String: Any])
     #expect(props["color"] as? String == "#8e44c9")
@@ -359,6 +375,28 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(abs(tiny[0] - (e[0] + e[2]) / 2) < 1e-9 && tiny[0] == tiny[2])
 }
 
+@Test func aSheetLetsTheCentreGoAsFarPastTheEdgeAsItHides() {
+    // A phone's sheet across the bottom, 500 points tall: the centre may go
+    // 500 points further south, and no further any other way.
+    let open = PanLimit.centre(width: 400, height: 800, zoom: 17)
+    let sheet = PanLimit.centre(width: 400, height: 800, zoom: 17, bottom: 500)
+    let world = 512 * pow(2.0, 17.0)
+    #expect(abs(merc(sheet[1]) - merc(open[1]) - 500 / world) < 1e-12)
+    #expect(sheet[0] == open[0] && sheet[2] == open[2] && sheet[3] == open[3])
+}
+
+@Test func aFloatingSheetLetsTheCentreGoWestAndSouthAsFarAsItReaches() {
+    // An iPad mini in portrait, a sheet 376 wide and 517 up in its corner: a
+    // line fitted above it (D2 from UHall, its centre at 1.29735 at zoom
+    // 14.13) stays where it was fitted instead of being pushed under it.
+    let floating = PanLimit.centre(width: 744, height: 1113, zoom: 14.13, left: 376, bottom: 517)
+    #expect(floating[1] < 1.29735)
+    #expect(PanLimit.centre(width: 744, height: 1113, zoom: 14.13)[1] > 1.29735, "without the sheet, it was")
+    let open = PanLimit.centre(width: 744, height: 1113, zoom: 17)
+    let world = 512 * pow(2.0, 17.0)
+    #expect(abs((open[0] - PanLimit.centre(width: 744, height: 1113, zoom: 17, left: 376)[0]) / 360 - 376 / world) < 1e-12)
+}
+
 @Test func aBusesSheetListsTheStopsAheadOfIt() throws {
     let list = try #require(
         BusList.parse(
@@ -432,4 +470,36 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(MapModel.pollDelay(base: 5, failures: 10, quiet: 0) == 60, "a minute at most")
     #expect(MapModel.pollDelay(base: 5, failures: 0, quiet: 90) == 90, "a Retry-After is waited out")
     #expect(MapModel.pollDelay(base: 15, failures: 0, quiet: 0) == 15)
+}
+
+// MARK: the room round a chosen line
+
+@Test func aLineIsFittedAboveASheetAcrossTheBottom() {
+    // A phone with a stop's sheet open: the line above it, under the pills.
+    let p = LineRoom.padding(
+        cover: UIEdgeInsets(top: 120, left: 0, bottom: 300, right: 0), buttons: .zero, in: CGSize(width: 402, height: 874))
+    #expect(p == UIEdgeInsets(top: 144, left: 40, bottom: 324, right: 40))
+}
+
+@Test func aLineIsFittedBesideAFloatingSheetAndTheButtons() {
+    let p = LineRoom.padding(
+        cover: UIEdgeInsets(top: 186, left: 376, bottom: 0, right: 0), buttons: CGSize(width: 56, height: 0),
+        in: CGSize(width: 1210, height: 834))
+    #expect(p == UIEdgeInsets(top: 210, left: 400, bottom: 40, right: 80))
+}
+
+@Test func aQuarterOfEachWayStaysFreeHoweverMuchIsCovered() {
+    // The sheet up to the pills (UHall's, on a phone): never a sliver of map.
+    let size = CGSize(width: 402, height: 874)
+    let p = LineRoom.padding(cover: UIEdgeInsets(top: 210, left: 0, bottom: 580, right: 0), buttons: .zero, in: size)
+    #expect(abs(p.top + p.bottom - size.height * 0.75) < 0.001)
+    #expect(p.top < p.bottom, "each side keeps its share")
+}
+
+// MARK: the device named
+
+@Test func theDeviceIsNamedAsItIs() async {
+    let pad = await MainActor.run { UIDevice.current.userInterfaceIdiom == .pad }
+    #expect(onIPad == pad)
+    #expect(signedOutHere.contains(pad ? "iPad" : "phone"))
 }
