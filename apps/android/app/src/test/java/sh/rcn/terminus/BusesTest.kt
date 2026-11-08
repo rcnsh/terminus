@@ -374,9 +374,20 @@ class BusesTest {
         // Merged again 15 s later: counted down from the last merge, not frozen at the first.
         val two = one.withBoard(board(75_000L, 225, 825))
         assertEquals(listOf(LaterBus(825, "live"), LaterBus(1_425, "scheduled")), two.stop.board[0].later)
-        // Once the board's last bus is as late as the guess, the guess goes.
-        val three = two.withBoard(board(90_000L, 210, 1_500))
-        assertEquals(listOf(LaterBus(1_500, "live")), three.stop.board[0].later)
+        // Once the board shows as many buses as the card had, the guess goes: counted, whatever the times.
+        val three =
+            two.withBoard(
+                Board(
+                    "COM3",
+                    "Computing 3",
+                    null,
+                    true,
+                    listOf(BoardRow("D1", 210, "live", later = listOf(LaterBus(810, "live"), LaterBus(1_380, "live")))),
+                    null,
+                    gotMs = 90_000L,
+                )
+            )
+        assertEquals(listOf(LaterBus(810, "live"), LaterBus(1_380, "live")), three.stop.board[0].later)
         // And a guess already due is dropped.
         assertEquals(emptyList<LaterBus>(), PinnedStop.guessesAfter(listOf(LaterBus(30, "scheduled")), 60, 0))
         // The merged times are what the card keeps: live, from the board, when its page closes.
@@ -401,6 +412,38 @@ class BusesTest {
         val one = card.withBoard(board(60_000L, 900))
         val two = one.withBoard(board(75_000L, 880))
         assertEquals(listOf(LaterBus(880, "scheduled")), two.stop.board[0].later)
+    }
+
+    @Test
+    fun anOpenPinnedCardDoesNotKeepItsGuessForABusTheBoardShowsAhead() {
+        // The card's answer: D1 in 100 s and 700 s (the feed's two), then its guess for the third, 1300 s.
+        val card =
+            PinnedStop(
+                NearbyStop(
+                    "COM3",
+                    "COM 3",
+                    null,
+                    true,
+                    listOf(BoardRow("D1", 100, "live", later = listOf(LaterBus(700, "live"), LaterBus(1_300, "scheduled")))),
+                ),
+                gotMs = 0L,
+            )
+        // 100 s on the first has gone; the board gives the second and the third, which runs 50 s ahead of the card's guess for it.
+        val board =
+            Board(
+                "COM3",
+                "Computing 3",
+                null,
+                true,
+                listOf(BoardRow("D1", 600, "live", later = listOf(LaterBus(1_150, "live")))),
+                null,
+                gotMs = 100_000L,
+            )
+        assertEquals(
+            "the third bus once, not also as the guess at 1200 s",
+            listOf(LaterBus(1_150, "live")),
+            card.withBoard(board).stop.board[0].later,
+        )
     }
 
     @Test
