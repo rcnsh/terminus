@@ -1597,6 +1597,20 @@ function Rail() {
   return useMedia('(min-width: 800px)') ? html`<${TabBar} />` : null;
 }
 
+/**
+ * The rail's place, made ahead of the header when the page has none: the
+ * service worker can pair a kept older /app/ with this script (sw.js
+ * decides file by file), and drawing into nothing would stop the app.
+ */
+function railRoot() {
+  const found = document.getElementById('rail');
+  if (found) return found;
+  const made = document.createElement('div');
+  made.id = 'rail';
+  document.body.insertBefore(made, document.body.querySelector(':scope > header') ?? document.body.firstChild);
+  return made;
+}
+
 /** The four tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
@@ -1639,7 +1653,7 @@ async function start() {
   const opening = tabInAddress();
   markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));
-  render(html`<${Rail} />`, document.getElementById('rail'));
+  render(html`<${Rail} />`, railRoot());
   // Settings' code and the account alongside the card, not after /api/me.
   if (opening === 'settings') openSettings();
   // The plan from last time at once, if it still holds (a look in the cache),

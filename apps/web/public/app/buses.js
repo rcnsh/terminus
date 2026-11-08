@@ -408,7 +408,11 @@ function onHash() {
   // The browser's own Back, to where the tab came from.
   if (trail.at(-1) === location.hash) trail.pop();
   const next = parse(location.hash);
-  if (JSON.stringify(next) === JSON.stringify(route.get())) return;
+  const was = route.get();
+  if (JSON.stringify(next) === JSON.stringify(was)) return;
+  // A pinned stop closing beside the home: its card keeps the live times its page had, with nothing fetched.
+  const kept = split && was.kind === 'stop' && pins().includes(was.code) ? signWithBoard(was.code) : null;
+  if (kept) signs.set((m) => new Map(m).set(was.code, kept));
   route.set(next);
   window.scrollTo(0, 0);
   // What was focused (a row, Back) has gone with the page: its heading takes it.
@@ -586,22 +590,43 @@ const plateName = (code) => signs.get().get(code)?.s?.stop.name ?? stopOf(code)?
 const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got, now)) });
 
 /**
- * Pinned stop `s` (/api/me/stops) with the times of its open page's `board`
- * (/api/arrivals), for the stop whose page asks for it in place of its card
- * (signsToAsk), as the Android app does. Each row keeps the card's own
- * words (where it's going) and its timetable guesses after the board's
- * last bus, so only the times change; a service the board doesn't have
- * keeps its row. Public buses aren't on the card.
+ * Pinned stop `s` (/api/me/stops, answered at `got`) with the times of its
+ * open page's `board` (/api/arrivals), for the stop whose page asks for it
+ * in place of its card (signsToAsk), as the Android app does. Each row keeps
+ * the card's own words (where it's going), so only the times change. The
+ * board has at most one later bus, so the card's timetable guesses fill in
+ * after it, counted on to the board's `got`; a live time of the card's is
+ * as old as the card and never fills in. A service the board doesn't have
+ * keeps its row, counted on and its live times "~". Public buses aren't on
+ * the card.
  */
-export function withBoard(s, board) {
+export function withBoard(s, got, board) {
+  const gone = (board.got - got) / 1000;
+  const on = (x) => ({ ...x, etaS: x.etaS == null ? null : x.etaS - gone, eta: null });
+  const guesses = (row, after) =>
+    (row.later ?? [])
+      .filter((x) => x.quality === 'scheduled' && x.etaS != null)
+      .map(on)
+      .filter((x) => x.etaS > 0 && x.etaS > after);
   const left = board.board.filter((b) => !b.paid);
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const rows = s.board.map((row) => {
     let i = left.findIndex((b) => b.svc === row.svc && same(b.towards, row.towards));
     if (i < 0) i = left.findIndex((b) => b.svc === row.svc);
-    if (i < 0) return row;
+    if (i < 0) {
+      if (row.etaS == null || !gone) return row;
+      const at = on(row);
+      return {
+        ...at,
+        etaS: at.etaS > -60 ? Math.max(0, at.etaS) : null,
+        quality: row.quality === 'live' ? 'stale' : row.quality,
+        later: guesses(row, 0),
+        laterText: null,
+      };
+    }
     const [b] = left.splice(i, 1);
     const later = b.later ?? [];
+    const last = [b, ...later].reduce((m, x) => Math.max(m, x.etaS ?? 0), 0);
     return {
       ...row,
       etaS: b.etaS,
@@ -611,11 +636,23 @@ export function withBoard(s, board) {
       running: b.running,
       stopped: b.stopped,
       resumesAt: b.resumesAt,
-      later: [...later, ...(row.later ?? []).slice(later.length)],
+      later: [...later, ...guesses(row, last)].slice(0, Math.max(later.length, row.later?.length ?? 0)),
       laterText: null,
     };
   });
   return { ...s, board: rows, available: board.available };
+}
+
+/**
+ * Pinned stop `code`'s card as its open page has it: its sign with the
+ * board's times (withBoard), on the board's clock. Null when there's no
+ * newer board, or the page shows the other side of the road.
+ */
+function signWithBoard(code) {
+  const own = signs.get().get(code);
+  const board = boards.get().get(code);
+  if (!own?.s || !board?.board || !(board.at > own.at) || shownCode(code) !== code) return null;
+  return { s: withBoard(own.s, own.got, board), at: board.at, got: board.got, error: board.error };
 }
 
 /**
@@ -624,10 +661,9 @@ export function withBoard(s, board) {
  * times come, its plate with its rows as shapes.
  */
 function PinPage({ code, entry: own, pinned, now, open }) {
-  // Open beside the home, its page's board is the live one: the card takes its times (withBoard).
-  const board = useStore(boards).get(code);
-  const entry =
-    open && own?.s && board?.board && shownCode(code) === code ? { s: withBoard(own.s, board), got: board.got, error: board.error } : own;
+  // Open beside the home, its page's board is the live one: the card takes its times.
+  useStore(boards);
+  const entry = (open && signWithBoard(code)) || own;
   const s = entry?.s
     ? agedSign(entry.s, entry.got, now)
     : { stop: { code, name: plateName(code) }, walkS: null, available: true, board: [] };

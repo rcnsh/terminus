@@ -890,9 +890,9 @@ body.app > .nav { max-width: 560px; }
   .app-main.split .app-card :is(.horizon ~ *, :has(.horizon) ~ *) { max-width: calc(50% - 24px); }
   /* Both lines named: an absolute item's auto end would be the padding edge, past the column. */
   .app-main.split > .now-side { grid-column: 2 / 3; position: absolute; inset: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px) 0 auto; display: grid; gap: 12px; align-content: start; }
-  /* Column 2 starts half the padding box plus 8 px in (16 px gutter, 48 px gap). */
+  /* Two equal columns 48 apart: column 2 starts half the gap past the middle, and ends at the 16 px gutter. */
   .app-main.split .app-card > .card-foot.card-foot {
-    position: absolute; top: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px); left: calc(50% + 8px); right: 16px;
+    position: absolute; top: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px); left: calc(50% + 24px); right: 16px;
     max-width: none; margin: 0;
   }
 }
