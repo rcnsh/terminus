@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -48,6 +47,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -69,7 +69,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -187,12 +186,22 @@ internal fun SettingsScreen(
         }
     }
     if (wide) {
-        // The account's tile heads the list.
-        val shown = open ?: SettingsPage.Account
+        // Your trips, not the account: a first look shouldn't land on Sign out.
+        val shown = open ?: SettingsPage.Trips
+        // The two bands of the sky end at the same height, and only the page's has the moon.
+        val skies = remember { PaneSkies() }
         Row(Modifier.fillMaxSize()) {
-            Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) { SettingsList(state, main, top, bottom, chosen = shown) { open = it } }
+            Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) {
+                CompositionLocalProvider(LocalSkyPane provides remember(skies) { SkyPane(skies, leading = true) }) {
+                    SettingsList(state, main, top, bottom, chosen = shown) { open = it }
+                }
+            }
             VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Box(Modifier.weight(1f).fillMaxHeight()) { key(shown) { page(shown, false) } }
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                CompositionLocalProvider(LocalSkyPane provides remember(skies) { SkyPane(skies, leading = false) }) {
+                    key(shown) { page(shown, false) }
+                }
+            }
         }
         return
     }
@@ -274,7 +283,7 @@ private fun SettingsList(
 private fun AccountTile(state: AccountState, ui: UiState, chosen: Boolean, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
-    LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth().semantics { selected = chosen }, chosen = chosen) {
+    LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth().chosenCard(chosen, 18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val email = state.email
             if (email != null) {
@@ -328,6 +337,8 @@ private val GROUPS =
 /** Under the horizon: the groups of pages, and About. */
 @Composable
 private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, chosen: SettingsPage?, onOpen: (SettingsPage) -> Unit) {
+    // Wide (a page chosen beside the list), the list is a narrow pane.
+    val stacked = chosen != null
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
     // What isn't set yet says what to do, in the accent: no home stop, no
@@ -349,8 +360,7 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                     val on = page == chosen
                     Row(
                         Modifier.fillMaxWidth()
-                            .then(if (on) Modifier.background(c.secondaryContainer) else Modifier)
-                            .semantics { selected = on }
+                            .chosen(on)
                             .clickable(role = Role.Button) { onOpen(page) }
                             .heightIn(min = 56.dp)
                             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -363,8 +373,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                             Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(14.dp))
-                        Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                        Spacer(Modifier.width(12.dp))
                         // Send feedback says what it's for on its page: beside it there's no room.
                         val said =
                             when (page) {
@@ -375,16 +383,29 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                             }
                         val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates
                         val ask = todo(page)
-                        Text(
-                            said.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (off) c.tertiary else if (ask) c.primary else muted,
-                            fontWeight = if (off || ask) FontWeight.SemiBold else null,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.weight(1f),
-                        )
+                        val value: @Composable (Modifier, TextAlign) -> Unit = { modifier, align ->
+                            Text(
+                                said.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (off) c.tertiary else if (ask) c.primary else muted,
+                                fontWeight = if (off || ask) FontWeight.SemiBold else null,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = align,
+                                modifier = modifier,
+                            )
+                        }
+                        if (stacked) {
+                            // In the narrow list pane, the value on a line under the name, so neither is cut off.
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                                if (!said.isNullOrEmpty()) value(Modifier, TextAlign.Start)
+                            }
+                        } else {
+                            Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                            Spacer(Modifier.width(12.dp))
+                            value(Modifier.weight(1f), TextAlign.End)
+                        }
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             painterResource(R.drawable.ic_chevron),
@@ -400,11 +421,7 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     // About, as a link under the groups.
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
         val on = chosen == SettingsPage.About
-        TextButton(
-            onClick = { onOpen(SettingsPage.About) },
-            colors = if (on) ButtonDefaults.textButtonColors(containerColor = c.secondaryContainer) else ButtonDefaults.textButtonColors(),
-            modifier = Modifier.semantics { selected = on },
-        ) {
+        TextButton(onClick = { onOpen(SettingsPage.About) }, modifier = Modifier.chosen(on)) {
             Text(stringResource(R.string.about))
         }
     }

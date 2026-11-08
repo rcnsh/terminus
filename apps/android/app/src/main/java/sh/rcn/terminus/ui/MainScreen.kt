@@ -170,7 +170,7 @@ internal fun MainScreen(
     val wide = windowWidth() == Width.Wide
     // Whether there's a day to show beside the card when wide; without one, all of Now is in the card's column.
     val hasDay = state.day?.items?.isNotEmpty() == true || state.removed != null
-    NightStatusBar(shown && light)
+    NightStatusBar(shown && light, sky.palette.sky[0])
     CompositionLocalProvider(LocalSky provides sky) {
         Box(Modifier.fillMaxSize()) {
             // Pulled down at the top, what's shown (the card or Nearby) is asked for
