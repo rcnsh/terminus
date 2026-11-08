@@ -104,9 +104,9 @@ extension TripAttributes.ContentState {
         return (before, after)
     }
 
-    /// Where the countdown is to: the stop you get off at on the bus, else
-    /// the one you board at, else where you're going.
-    var countdownPlace: String? { (phase == "riding" ? off : stop) ?? to }
+    /// Where the countdown is to: the stop you get off at once on the bus
+    /// (and still once off it), else the one you board at, else where you're going.
+    var countdownPlace: String? { (phase == "riding" || phase == "arrived" ? off : stop) ?? to }
 
     /// With no arrival time, how long after the bus (or the leave-by) a trip nothing has updated is taken as over.
     static let unheardS: TimeInterval = 3600

@@ -171,8 +171,9 @@ struct WatchTrip: View {
                 .foregroundStyle(count == nil ? Color.ink : Color.brand)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 if stale {
-                    Text(verbatim: L("Times may have changed. Open terminus to check.")).font(.system(size: 12)).foregroundStyle(Color.warn)
-                        .lineLimit(2)
+                    // The Lock Screen's sentence without "Open terminus", which
+                    // the wrist hasn't room for and can't do.
+                    Text(verbatim: L("Times may have changed.")).font(.system(size: 13)).foregroundStyle(Color.warn).lineLimit(2)
                 } else if let place = s.countdownPlace {
                     Text(verbatim: place).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.muted).lineLimit(1)
                 }

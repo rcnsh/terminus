@@ -73,6 +73,9 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     #expect(s.countdownPlace == "COM3")
     s.phase = "riding"
     #expect(s.countdownPlace == "UTown")
+    s.phase = "arrived"
+    #expect(s.countdownPlace == "UTown")
+    s.phase = "riding"
     s.off = nil
     #expect(s.countdownPlace == "GEA1000")
 }
