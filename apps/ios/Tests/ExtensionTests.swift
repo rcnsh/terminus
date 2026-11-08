@@ -49,6 +49,34 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     #expect(s.countdown(phoneNow: t0.addingTimeInterval(570), skew: 60) == nil)
 }
 
+// MARK: the Live Activity on the watch
+
+@Test func theWatchsCountdownSaysWhatItCountsTo() {
+    Lang.pref = "en"
+    #expect(TripAttributes.ContentState.countdownWords("leave") == ("Leave in ", ""))
+    #expect(TripAttributes.ContentState.countdownWords("bus") == ("Bus in ", ""))
+    #expect(TripAttributes.ContentState.countdownWords("off") == ("Off in ", ""))
+}
+
+@Test func theWatchsCountdownKeepsChineseOrderWithSpaces() {
+    // The tables' Chinese for "Leave in %@" and "Bus in %@": the time first, or in the middle.
+    #expect(TripAttributes.ContentState.around("%@后出发") == ("", " 后出发"))
+    #expect(TripAttributes.ContentState.around("巴士 %@后开出") == ("巴士 ", " 后开出"))
+    #expect(TripAttributes.ContentState.around("巴士%@") == ("巴士 ", ""))
+}
+
+@Test func theWatchNamesTheStopTheCountdownIsAbout() {
+    var s = state(phase: "idle")
+    s.stop = "COM3"
+    s.off = "UTown"
+    s.to = "GEA1000"
+    #expect(s.countdownPlace == "COM3")
+    s.phase = "riding"
+    #expect(s.countdownPlace == "UTown")
+    s.off = nil
+    #expect(s.countdownPlace == "GEA1000")
+}
+
 // MARK: activities no push can end
 
 /// The app ends an arrived trip for as long as the server's push does (LIVE_DISMISS_S in apns.ts).

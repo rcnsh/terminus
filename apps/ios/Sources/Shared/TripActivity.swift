@@ -82,6 +82,32 @@ extension TripAttributes.ContentState {
         return (now...max(now, c.to.addingTimeInterval(-skew)), c.kind)
     }
 
+    /// The countdown in words, either side of where its ticking time goes,
+    /// for `kind` (as `countdown` gives it): "Leave in " and "", or "" and
+    /// " 后出发". Each language keeps its own order.
+    static func countdownWords(_ kind: String) -> (before: String, after: String) {
+        switch kind {
+        case "leave": around(L("Leave in %@"))
+        case "off": around(L("Off in %@"))
+        default: around(L("Bus in %@"))
+        }
+    }
+
+    /// The words either side of a phrase's one `%@`, with a space between
+    /// the time and Chinese beside it, as everywhere else in the app.
+    static func around(_ phrase: String) -> (before: String, after: String) {
+        let parts = phrase.components(separatedBy: "%@")
+        var before = parts.first ?? ""
+        var after = parts.count > 1 ? parts[1] : ""
+        if let c = before.last, !c.isASCII, !c.isWhitespace { before += " " }
+        if let c = after.first, !c.isASCII, !c.isWhitespace { after = " " + after }
+        return (before, after)
+    }
+
+    /// Where the countdown is to: the stop you get off at on the bus, else
+    /// the one you board at, else where you're going.
+    var countdownPlace: String? { (phase == "riding" ? off : stop) ?? to }
+
     /// With no arrival time, how long after the bus (or the leave-by) a trip nothing has updated is taken as over.
     static let unheardS: TimeInterval = 3600
 

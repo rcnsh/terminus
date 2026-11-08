@@ -8,11 +8,20 @@ import WidgetKit
 /// Past the card's staleAt with nothing newer, it says the times may have
 /// changed rather than counting down to a bus that may be gone. Turn off, by
 /// where it says terminus, ends it and turns it off, as on Android's live
-/// notification.
+/// notification. On an Apple Watch's Smart Stack it has a layout of its own
+/// (WatchTrip), from iOS 18, where the watch can show one.
 struct TripLiveActivity: Widget {
     var body: some WidgetConfiguration {
+        if #available(iOS 18.0, *) {
+            return trip.supplementalActivityFamilies([.small])
+        } else {
+            return trip
+        }
+    }
+
+    private var trip: ActivityConfiguration<TripAttributes> {
         ActivityConfiguration(for: TripAttributes.self) { context in
-            LockScreenTrip(state: context.state, stale: context.isStale)
+            TripBanner(state: context.state, stale: context.isStale)
                 .widgetURL(URL(string: "terminus://plan"))
         } dynamicIsland: { context in
             let s = context.state
@@ -98,9 +107,9 @@ private struct TripBadge: View {
     }
 }
 
-/// The Lock Screen's banner: where to and the phase, the card's line with
-/// the bus, the countdown big on the right, then the ride's progress.
-private struct LockScreenTrip: View {
+/// The banner outside the Dynamic Island: the Lock Screen's, or on iOS 18
+/// and later, the watch's when the system asks for the small family.
+private struct TripBanner: View {
     let state: TripAttributes.ContentState
     let stale: Bool
     @Environment(\.colorScheme) private var scheme
@@ -115,6 +124,81 @@ private struct LockScreenTrip: View {
     }
 
     @ViewBuilder private var banner: some View {
+        if #available(iOS 18.0, *) {
+            FamilyTrip(state: state, stale: stale)
+        } else {
+            LockScreenTrip(state: state, stale: stale)
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct FamilyTrip: View {
+    let state: TripAttributes.ContentState
+    let stale: Bool
+    @Environment(\.activityFamily) private var family
+
+    var body: some View {
+        switch family {
+        case .small: WatchTrip(state: state, stale: stale)
+        default: LockScreenTrip(state: state, stale: stale)
+        }
+    }
+}
+
+/// On the wrist (the Smart Stack's small family): the bus, the countdown in
+/// words ("Leave in 4:12", "Bus in 1:58", "Off in 6:30") and the stop it's
+/// about under it. The same states as the Lock Screen's: no countdown when
+/// stale or with nothing ahead, the glance in its place, as the compact view.
+struct WatchTrip: View {
+    let state: TripAttributes.ContentState
+    let stale: Bool
+
+    var body: some View {
+        let s = state
+        let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
+        HStack(alignment: .center, spacing: 8) {
+            TripBadge(state: s, size: 15)
+            VStack(alignment: .leading, spacing: 1) {
+                Group {
+                    if let count {
+                        countdown(count)
+                    } else {
+                        Text(verbatim: s.glance.isEmpty ? s.headline : s.glance)
+                    }
+                }
+                .font(.system(size: 17, weight: .bold)).monospacedDigit()
+                .foregroundStyle(count == nil ? Color.ink : Color.brand)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                if stale {
+                    Text(verbatim: L("Times may have changed. Open terminus to check.")).font(.system(size: 12)).foregroundStyle(Color.warn)
+                        .lineLimit(2)
+                } else if let place = s.countdownPlace {
+                    Text(verbatim: place).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.muted).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The phrase with the ticking time in it, split round its blank so each
+    /// language keeps its own order ("Leave in 4:12", "4:12 后出发").
+    private func countdown(_ count: (range: ClosedRange<Date>, kind: String)) -> Text {
+        let (before, after) = TripAttributes.ContentState.countdownWords(count.kind)
+        return Text(verbatim: before) + Text(timerInterval: count.range, countsDown: true) + Text(verbatim: after)
+    }
+}
+
+/// The Lock Screen's banner: where to and the phase, the card's line with
+/// the bus, the countdown big on the right, then the ride's progress.
+private struct LockScreenTrip: View {
+    let state: TripAttributes.ContentState
+    let stale: Bool
+
+    @ViewBuilder var body: some View {
         let s = state
         let count = stale ? nil : s.countdown(phoneNow: Date(), skew: ServerClock.skew)
         let turnOff = s.phase != "arrived"
