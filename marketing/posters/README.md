@@ -9,6 +9,10 @@ A3 posters for noticeboards around campus. Each has a PDF to print, a PNG
 | `ticket` | Your ticket to being on time. |
 | `board` | Your own departure board. |
 
+The `bus-banner` is a long strip (1940 × 700, PNG at 3880 × 1400) for the
+ad panel above a shuttle's windows. `qr-github.svg` on it opens the GitHub
+repo.
+
 The HTML is drawn at 1190 × 1684 CSS pixels with the website's own fonts
 (from `apps/web/public/assets/fonts`) and the shuttles' livery colours.
 `qr.svg` (dark) and `qr-white.svg` (for the dark board poster) open
