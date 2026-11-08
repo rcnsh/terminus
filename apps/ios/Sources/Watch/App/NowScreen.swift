@@ -24,10 +24,11 @@ struct NowScreen: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .accessibilityIdentifier("now.head")
-                            if let e = model.error, model.answer != nil {
+                            if let e = model.error {
                                 Text(e).font(.footnote).foregroundStyle(Color.warn).padding(.top, 6)
                             }
-                            CardGround(shows: shows, now: now).padding(.top, 4).id("ground")
+                            Color.clear.frame(height: 1).id("ground")
+                            CardGround(shows: shows, now: now).padding(.top, 4)
                         }
                         LocationNotice().padding(.top, 14)
                         Color.clear.frame(height: 1).id("foot")
