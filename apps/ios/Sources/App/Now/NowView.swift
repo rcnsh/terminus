@@ -24,6 +24,10 @@ struct NowView: View {
     @State private var signingIn = false
     @State private var goingLater = false
     @State private var pull = SkyPull()
+    /// The chips' own width, and the row's room for them: from 600 wide, all
+    /// of them fitting, the row neither fades nor leaves room for the fade.
+    @State private var chipsWidth: CGFloat = 0
+    @State private var chipsRoom: CGFloat = 0
 
     /// Wide, with a day to show: the card's steps in the left half, Today in the right.
     private var beside: Bool { width.panes && hasDay }
@@ -233,6 +237,8 @@ struct NowView: View {
     /// wouldn't both fit, the row's last chip.
     private var chips: some View {
         let searchInRow = typeSize.isAccessibilitySize
+        // A phone keeps its fade and the room after the last chip whatever fits.
+        let allFit = width != .narrow && chipsWidth > 0 && chipsWidth <= chipsRoom
         return HStack(spacing: 8) {
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -252,11 +258,23 @@ struct NowView: View {
                         }
                         if searchInRow { elsewhere }
                     }
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.width
+                    } action: {
+                        chipsWidth = $0
+                    }
                     .padding(.vertical, 2)
                     // Scrolled to the end, the last chip clears the fade.
-                    .padding(.trailing, FadeEnd.width)
+                    .padding(.trailing, allFit ? 0 : FadeEnd.width)
                 }
-                .mask(FadeEnd())
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: {
+                    chipsRoom = $0
+                }
+                .mask {
+                    if allFit { Rectangle() } else { FadeEnd() }
+                }
                 // Chosen here, or on the map or Buses (Go there) while Now was away: in view either way.
                 .onChange(of: app.target) { _, t in
                     if case .code(let c, _) = t { withAnimation { reader.scrollTo(c, anchor: .trailing) } }
