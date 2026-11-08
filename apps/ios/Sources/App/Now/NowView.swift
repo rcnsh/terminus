@@ -82,11 +82,15 @@ struct NowView: View {
                                     NowHead(shows: shows, now: ServerClock.now)
                                         .column()
                                 }
-                                if short {
-                                    LowHorizon(palette: p, phase: phase)
-                                } else {
-                                    Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
+                                // Out to the screen's edges, past the notch and the home bar on a phone on its side.
+                                Group {
+                                    if short {
+                                        LowHorizon(palette: p, phase: phase)
+                                    } else {
+                                        Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
+                                    }
                                 }
+                                .ignoresSafeArea(edges: .horizontal)
                             }
                         }
                     }
@@ -98,6 +102,7 @@ struct NowView: View {
                             Rectangle().fill(p.gradient)
                         }
                         .padding(.top, -1000)
+                        .ignoresSafeArea(edges: .horizontal)
                         .accessibilityHidden(true)
                     }
 

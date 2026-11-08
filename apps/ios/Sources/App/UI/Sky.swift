@@ -163,8 +163,10 @@ struct SkyBand<Content: View>: View {
                     }
                 }
             }
-            // Up under the status bar, and on up past the top for a pull.
+            // Up under the status bar, and on up past the top for a pull; out to
+            // the screen's edges on a phone on its side.
             .padding(.top, -600)
+            .ignoresSafeArea(edges: .horizontal)
             .accessibilityHidden(true)
         }
     }
