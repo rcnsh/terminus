@@ -57,14 +57,17 @@ struct MapRoute {
     let color: String
     let line: [[Double]]
     let loop: Bool
+    /// Its stops' codes in order, as /campus lists them.
+    let seq: [String]
     /// The line measured for sliding buses along it.
     let path: RoutePath
 
-    init(svc: String, color: String, line: [[Double]], loop: Bool = false) {
+    init(svc: String, color: String, line: [[Double]], loop: Bool = false, seq: [String] = []) {
         self.svc = svc
         self.color = color
         self.line = line
         self.loop = loop
+        self.seq = seq
         path = RoutePath(line, loop: loop)
     }
 
@@ -180,11 +183,17 @@ struct CampusMap {
         }?.code ?? codes.first
     }
 
-    /// [west, south, east, north] of the main campus.
+    /// [west, south, east, north] of the main campus: its stops, and the
+    /// whole line of each service that stays on it (a line bends out past
+    /// the stops at its ends). A service out to stops off it (P to Botanic
+    /// Gardens) would frame half the island, so its line isn't counted.
     var coreBounds: [Double] {
         let inCore = stops.filter { core.contains($0.code) }
-        let pts = inCore.isEmpty ? stops : inCore
-        return [pts.map(\.lon).min()!, pts.map(\.lat).min()!, pts.map(\.lon).max()!, pts.map(\.lat).max()!]
+        var pts = (inCore.isEmpty ? stops : inCore).map { [$0.lon, $0.lat] }
+        if !inCore.isEmpty {
+            for r in routes.values where !r.seq.isEmpty && r.seq.allSatisfy(core.contains) { pts += r.line }
+        }
+        return [pts.map { $0[0] }.min()!, pts.map { $0[1] }.min()!, pts.map { $0[0] }.max()!, pts.map { $0[1] }.max()!]
     }
 
     /// The stops and routes from `/campus`; nil when it isn't that.
@@ -212,7 +221,9 @@ struct CampusMap {
                 return [lon, lat]
             }
             if line.count >= 2 {
-                routes[svc] = MapRoute(svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false)
+                routes[svc] = MapRoute(
+                    svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false,
+                    seq: x["seq"] as? [String] ?? [])
             }
         }
         guard !stops.isEmpty else { return nil }

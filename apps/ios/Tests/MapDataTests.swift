@@ -50,6 +50,19 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(near(b[3], 1.2955))
 }
 
+@Test func campusIsFramedWithItsLinesNotJustItsStops() throws {
+    // D2 and A1 stay on campus: their lines bend out past COM3, the one stop, and count.
+    // P goes out to Botanic Gardens: its line would frame half the island, so it doesn't.
+    var o = try json(campusJson)
+    var routes = try #require(o["routes"] as? [String: Any])
+    routes["P"] = ["seq": ["COM3", "BG-MRT"], "loop": false, "color": "#888888", "line": [[103.7745, 1.2948], [103.8153, 1.3224]]]
+    o["routes"] = routes
+    let campus = try #require(CampusMap.parse(JSONSerialization.data(withJSONObject: o)))
+    let b = campus.coreBounds
+    #expect(near(b[0], 103.77) && near(b[1], 1.29), "A1's line, south-west of COM3")
+    #expect(near(b[2], 103.78) && near(b[3], 1.30), "A1's line, north-east; nothing of P's")
+}
+
 @Test func aTapTakingInTwoStopsOpensTheNearer() throws {
     let campus = try #require(CampusMap.parse(campusJson))
     #expect(campus.nearest(["COM3", "BG-MRT"], lat: 1.3220, lon: 103.8150) == "BG-MRT")
