@@ -905,7 +905,8 @@ internal fun SkyBand(
     val hills = if (short) 0.dp else LOW
     val band = remember { Any() }
     if (pane != null) DisposableEffect(pane) { onDispose { pane.skies.gone(band) } }
-    val shown = moon && pane?.leading != true
+    // Short, a low moon has no line of its own to keep clear of a button on, so it shows only beside the words, as on the iPhone.
+    val shown = moon && pane?.leading != true && !(short && moonLow)
     var natural by remember { mutableIntStateOf(0) }
     val grow = with(LocalDensity.current) { ((pane?.skies?.tallest ?: 0) - natural).coerceAtLeast(0).toDp() }
     Column(
@@ -945,7 +946,7 @@ internal fun SkyBand(
             SkyInk(true, p.lightInk) { Box(if (padded) Modifier.column().padding(horizontal = 16.dp) else Modifier.column()) { content() } }
             // The moon's own line, under the content, so it never sits on a button;
             // without it ([moonLine] false), the content's last line leaves the right clear for it.
-            if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
+            if (moonLow && moonLine && !short) Spacer(Modifier.height(MOON_LINE))
         }
         Spacer(Modifier.height(grow + if (short) SHORT_FOOT else LOW))
     }

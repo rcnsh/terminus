@@ -1115,7 +1115,7 @@ function CardSkeleton({ nearby }) {
  * its top is up in the sky and it ends on the horizon, so the sky stays as
  * the chips switch. The sky is the hour's, whatever the card says.
  */
-function CardArea({ notices = null }) {
+function CardArea() {
   const c = useStore(card);
   const to = useStore(target);
   const bar = useStore(undo);
@@ -1137,7 +1137,6 @@ function CardArea({ notices = null }) {
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
-      ${notices}
       <${CardFoot} />
     </section>
   `;
@@ -1627,7 +1626,7 @@ function App() {
   // From 800 the tabs are a rail drawn ahead of the page (Rail); the bar
   // along the bottom stays last, under the page.
   const rail = useMedia('(min-width: 800px)');
-  // Notices above the chips; in a short window, under the card's buttons, so the answer comes first.
+  // Notices above the chips; in a short window, after the card and Go later, so the answer comes first.
   const short = useShort();
   const notices = html`<${InstallHint} /><${Banner} />`;
   return html`
@@ -1636,8 +1635,9 @@ function App() {
       ${!short && notices}
       <${Chips} />
       <${Where} />
-      <${CardArea} notices=${short ? notices : null} />
+      <${CardArea} />
       <${GoLater} />
+      ${short && html`<div class="short-notices">${notices}</div>`}
       ${split ? html`<${NowSide} />` : html`<${Today} />`}
     </main>
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Stops')}</h1><${BusesArea} /></main>

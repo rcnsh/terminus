@@ -128,11 +128,15 @@ struct NowView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             card
-                            if noticesAt == .underCard { notices(under: true) }
+                            // Short: Go later, then the notices, straight under the card, as in two panes and on Android.
+                            if noticesAt == .underCard {
+                                goLater
+                                notices(under: true)
+                            }
                             if !app.showNearby && app.target == .plan, let day = app.day {
                                 DayTimeline(day: day)
                             }
-                            goLater
+                            if noticesAt != .underCard { goLater }
                             footer
                         }
                         .column()

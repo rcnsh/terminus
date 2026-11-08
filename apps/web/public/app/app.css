@@ -885,7 +885,7 @@ body.app > .nav { max-width: 560px; }
     min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px + var(--foot-h, 0px) + 32px);
   }
   .app-main.split > * { grid-column: 1 / -1; }
-  .app-main.split > :is(.go-later, .go-later-form) { grid-column: 1; }
+  .app-main.split > :is(.go-later, .go-later-form, .short-notices) { grid-column: 1; }
   /* Whatever comes after the horizon in the card, however deep the card puts it. */
   .app-main.split .app-card :is(.horizon ~ *, :has(.horizon) ~ *) { max-width: calc(50% - 24px); }
   /* Both lines named: an absolute item's auto end would be the padding edge, past the column. */
@@ -980,8 +980,8 @@ body.app > .nav { max-width: 560px; }
   /* Down into the low near hill, which is only a few px deep. */
   body.sky #tab-now::before { height: calc(var(--end) - 2px); }
   .road-line { margin-top: 6px; }
-  .app-card > :is(.install, .banner-slot) { margin-top: 16px; }
+  .short-notices > :is(.install, .banner-slot) { margin-top: 16px; }
   .page-band .horizon.low, .bt-sky .horizon.low { display: none; }
-  /* Clear of the band's end, which the hills no longer push down. */
-  body.sky .bt-sky .night-sky .moon { bottom: 10px; }
+  /* With no line of its own over the hills, the low moon has no room clear of a button, as on the apps. */
+  body.sky-night .bt-sky .celestial .night-sky { display: none; }
 }

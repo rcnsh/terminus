@@ -73,23 +73,25 @@ test("in a short window the wordmark leads the chips' row, in place of the heade
   assert.match(css, /\n {2}body\.app > \.nav \{ display: none; \}/);
 });
 
-test("notices sit above the chips in a tall window, and under the card's buttons in a short one", () => {
+test('notices sit above the chips in a tall window, and after the card and Go later in a short one', () => {
   const app = read('app/app.js');
   const main = app.slice(app.indexOf('<main class=${split'), app.indexOf('</main>'));
-  // Above the chips only when not short; handed to the card when short, and nowhere else.
+  // Above the chips only when not short; after the card and Go later when short, as the apps put them.
   assert.match(main, /\$\{!short && notices\}\s*<\$\{Chips\} \/>/);
-  assert.match(main, /<\$\{CardArea\} notices=\$\{short \? notices : null\} \/>/);
+  assert.match(main, /<\$\{CardArea\} \/>\s*<\$\{GoLater\} \/>\s*\$\{short && html`<div class="short-notices">\$\{notices\}<\/div>`\}/);
   assert.match(app, /const notices = html`<\$\{InstallHint\} \/><\$\{Banner\} \/>`;/);
   assert.equal(app.match(/<\$\{InstallHint\} \/>/g).length, 1);
   assert.equal(app.match(/<\$\{Banner\} \/>/g).length, 1);
-  // In the card: after its body (the steps and buttons), before its foot.
-  assert.match(app, /\$\{body\}\s*\$\{notices\}\s*<\$\{CardFoot\} \/>/);
+  // In two panes, in the card's column.
+  assert.match(read('app/app.css'), /\.app-main\.split > :is\(\.go-later, \.go-later-form, \.short-notices\) \{ grid-column: 1; \}/);
 });
 
 test("in a short window the bands on Stops and Settings drop their hills, and Now's sky reaches the low one", () => {
   const css = shortBlock(read('app/app.css'));
   assert.match(css, /\n {2}\.page-band \.horizon\.low, \.bt-sky \.horizon\.low \{ display: none; \}/);
   assert.match(css, /\n {2}#tab-now \.horizon\.low \{ height: 52px; \}/);
+  // The Stops bands' low moon has no line of its own left, so it goes, as on the apps.
+  assert.match(css, /\n {2}body\.sky-night \.bt-sky \.celestial \.night-sky \{ display: none; \}/);
   assert.match(css, /\n {2}body\.sky #tab-now::before \{ height: calc\(var\(--end\) - 2px\); \}/);
   // Nothing gets a fixed height or a smaller font: content still scrolls, controls keep their sizes.
   assert.doesNotMatch(css, /font-size|max-height|overflow: hidden|100dvh|100vh/);
