@@ -457,11 +457,27 @@ class MapDataTest {
         }
         val median = dist.values.sorted()[dist.size / 2]
         val core = stops.filter { dist.getValue(it.code) <= 3 * median }.map { it.code }.toSet()
-        val campus = CampusMap(stops, routes)
-        val east = listOf("A1", "A2", "D2", "K").maxOf { svc -> routes.getValue(svc).line.maxOf { it[0] } }
+        val lines =
+            shapes.keys().asSequence().toList().map { svc ->
+                val seq = shapes.getJSONObject(svc).getJSONArray("stops")
+                ServiceRoute(svc, (0 until seq.length()).map { seq.getString(it) }, false)
+            }
+        val campus = CampusMap(stops, routes, lines = lines)
+        val onCampus = lines.filter { l -> l.seq.all { it in core } }.map { it.svc }
+        assertTrue("P leaves campus; the loops don't", "P" !in onCampus && onCampus.containsAll(listOf("A1", "A2", "D1", "D2", "K")))
+        val east = onCampus.maxOf { svc -> routes.getValue(svc).line.maxOf { it[0] } }
         assertTrue("the stops alone stop short of the east loops' turn", campus.coreBounds(core)[2] < east)
-        val extent = campus.coreExtent(core)
-        assertTrue("every campus loop is in", extent[2] >= east)
-        assertTrue("P's trip to the Botanic Gardens isn't", extent[2] < 103.79 && extent[3] < 1.31)
+        val (w, s, e, n) = campus.coreExtent(core).toList()
+        for (svc in onCampus) {
+            assertTrue("every point of $svc is in", routes.getValue(svc).line.all { (lon, lat) -> lon in w..e && lat in s..n })
+        }
+        // Nothing of P's widens it: the frame is exactly the core stops and the on-campus lines.
+        val pts = stops.filter { it.code in core }.map { doubleArrayOf(it.lon, it.lat) } + onCampus.flatMap { routes.getValue(it).line }
+        val want = listOf(pts.minOf { it[0] }, pts.minOf { it[1] }, pts.maxOf { it[0] }, pts.maxOf { it[1] })
+        assertEquals(want, listOf(w, s, e, n))
+        assertTrue(
+            "P's trip to the Botanic Gardens runs outside it",
+            routes.getValue("P").line.any { (lon, lat) -> lon !in w..e || lat !in s..n },
+        )
     }
 }

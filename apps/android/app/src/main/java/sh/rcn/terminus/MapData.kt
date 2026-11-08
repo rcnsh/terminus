@@ -199,28 +199,23 @@ data class CampusMap(
     }
 
     /**
-     * [west, south, east, north] of the main campus as the map draws it: its stops ([coreBounds]) and the lines round them, so a loop that
-     * turns past the last stop (K's and D2's in the east) isn't cut off at the window's edge. Only the lines within [NEAR_DEG] of the stops
-     * count, which leaves out P's trip to the Botanic Gardens.
+     * [west, south, east, north] of the main campus as the map draws it: its stops ([coreBounds]) and the whole line of every service whose
+     * stops are all on it, so a loop that turns past the last stop (K's and D2's in the east) isn't cut off at the window's edge, and P's
+     * trip to the Botanic Gardens stays out. The iPhone's `coreBounds` and the website's `campusBounds` frame the same.
      */
     fun coreExtent(core: Set<String>): DoubleArray {
         val b = coreBounds(core)
-        val near =
-            routes.values
-                .flatMap { it.line }
-                .filter { (lon, lat) -> lon in b[0] - NEAR_DEG..b[2] + NEAR_DEG && lat in b[1] - NEAR_DEG..b[3] + NEAR_DEG }
+        if (stops.none { it.code in core }) return b
+        val pts = lines.filter { l -> l.seq.isNotEmpty() && l.seq.all { it in core } }.flatMap { routes[it.svc]?.line.orEmpty() }
         return doubleArrayOf(
-            minOf(b[0], near.minOfOrNull { it[0] } ?: b[0]),
-            minOf(b[1], near.minOfOrNull { it[1] } ?: b[1]),
-            maxOf(b[2], near.maxOfOrNull { it[0] } ?: b[2]),
-            maxOf(b[3], near.maxOfOrNull { it[1] } ?: b[3]),
+            minOf(b[0], pts.minOfOrNull { it[0] } ?: b[0]),
+            minOf(b[1], pts.minOfOrNull { it[1] } ?: b[1]),
+            maxOf(b[2], pts.maxOfOrNull { it[0] } ?: b[2]),
+            maxOf(b[3], pts.maxOfOrNull { it[1] } ?: b[3]),
         )
     }
 
     companion object {
-        /** How far past the campus's stops a line still counts as the campus's ([coreExtent]): about 110 m, past every loop's turn. */
-        const val NEAR_DEG = 0.001
-
         /** The stops and routes from `/api/campus`; the core stops' codes come back alongside. */
         fun parse(o: JSONObject): Pair<CampusMap, Set<String>> {
             val s = o.getJSONArray("stops")
