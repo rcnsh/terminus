@@ -82,24 +82,30 @@ enum BusPinned {
 
     /// A pinned card's rows from its stop page's board: the board's rows, the
     /// same buses fresher (running or not, how full), each still worded as
-    /// /me/stops worded it ("via UTown"; the board has no such words). The board sends no timetable
-    /// guesses, so the card's own guesses after the board's last time stay,
-    /// counted down by `gone` seconds. An old live time stays only while the
-    /// board still sends it: one it has dropped (the night's last bus gone) goes.
+    /// /me/stops worded it ("via UTown"; the board has no such words). After
+    /// the board's buses come the card's own timetable guesses, found by
+    /// counting, not by comparing times, as Android and the web do: the
+    /// card's buses moved on by `gone` seconds, those now due dropped, then as
+    /// many skipped as the board shows for the service (a bus running ahead of
+    /// its guess is still the same bus). What's left stays only if it's a
+    /// guess: an old live time the board no longer sends (the night's last
+    /// bus gone) goes.
     static func filled(_ card: [BoardRow], from rows: [BoardRow], gone: Int) -> [BoardRow] {
         rows.map { row in
             guard let old = card.first(where: { $0.svc == row.svc }) else { return row }
             var r = row
             r.dest = old.dest
             r.destPlace = old.destPlace
-            let last = row.later.last?.etaS ?? row.etaS ?? 0
-            r.later += old.later.filter { $0.quality == "scheduled" }.map {
+            let next = old.etaS.map { [BoardRow.Later(etaS: $0, quality: old.quality, eta: nil)] } ?? []
+            let mine = (next + old.later).map {
                 var l = $0
                 l.etaS -= gone
                 // Worded again from the time left: the server's words ("~25 min") are as old as the guess.
                 l.eta = nil
                 return l
-            }.filter { $0.etaS > last }
+            }.filter { $0.etaS > 0 }
+            let shown = (row.etaS == nil ? 0 : 1) + row.later.count
+            r.later += mine.dropFirst(shown).filter { $0.quality == "scheduled" }
             return r
         }
     }
