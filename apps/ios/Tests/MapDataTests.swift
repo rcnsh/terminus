@@ -385,6 +385,18 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(sheet[0] == open[0] && sheet[2] == open[2] && sheet[3] == open[3])
 }
 
+@Test func aFloatingSheetLetsTheCentreGoWestAndSouthAsFarAsItReaches() {
+    // An iPad mini in portrait, a sheet 376 wide and 517 up in its corner: a
+    // line fitted above it (D2 from UHall, its centre at 1.29735 at zoom
+    // 14.13) stays where it was fitted instead of being pushed under it.
+    let floating = PanLimit.centre(width: 744, height: 1113, zoom: 14.13, left: 376, bottom: 517)
+    #expect(floating[1] < 1.29735)
+    #expect(PanLimit.centre(width: 744, height: 1113, zoom: 14.13)[1] > 1.29735, "without the sheet, it was")
+    let open = PanLimit.centre(width: 744, height: 1113, zoom: 17)
+    let world = 512 * pow(2.0, 17.0)
+    #expect(abs((open[0] - PanLimit.centre(width: 744, height: 1113, zoom: 17, left: 376)[0]) / 360 - 376 / world) < 1e-12)
+}
+
 @Test func aBusesSheetListsTheStopsAheadOfIt() throws {
     let list = try #require(
         BusList.parse(

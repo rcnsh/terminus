@@ -258,7 +258,8 @@ struct CampusMapView: UIViewRepresentable {
         private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {
             // What a sheet hides needn't be over the map (PanLimit.centre).
             PanLimit.centre(
-                width: view.bounds.width, height: view.bounds.height, zoom: zoom, bottom: Double(cover.bottom))
+                width: view.bounds.width, height: view.bounds.height, zoom: zoom, left: Double(cover.left),
+                bottom: Double(cover.bottom + floating))
         }
 
         /// How far (in degrees, the larger way) `c` is outside `box`; 0 inside it.
