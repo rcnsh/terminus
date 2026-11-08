@@ -64,9 +64,9 @@ struct BoardRow: Decodable, Hashable, Sendable {
     let at: String?
     /// Where it's going, worded and translated on the server ("to PGP Foyer",
     /// "via UTown", "Ends here"); nil from an older server.
-    let dest: String?
+    var dest: String?
     /// The place inside `dest`, set apart from the words around it; nil with none.
-    let destPlace: String?
+    var destPlace: String?
 
     enum CodingKeys: String, CodingKey {
         case svc, etaS, quality, color, paid, later, towards, via, crowd, endsAt, running, stopped, resumesAt, eta, laterText, toText, at,

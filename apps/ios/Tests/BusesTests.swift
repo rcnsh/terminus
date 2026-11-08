@@ -63,6 +63,13 @@ final class BusesTests: XCTestCase {
             ], gone: 60)
         XCTAssertEqual(passed[0].later.map(\.etaS), [1600])
         XCTAssertEqual(passed[1].later.map(\.etaS), [])
+        // The rest is the board's: a service that has stopped for the night, or how full it is, shows at once.
+        let ended = BusPinned.filled(
+            card, from: [try row(#"{"svc":"D2","quality":"ended","running":false,"stopped":"ended","crowd":"low","later":[]}"#)], gone: 60)
+        XCTAssertFalse(ended[0].running)
+        XCTAssertEqual(ended[0].stopped, "ended")
+        XCTAssertEqual(ended[0].crowd, "low")
+        XCTAssertEqual(ended[0].dest, "via UTown")
     }
 
     func testUnpinningTheStopShowingShowsTheOneThatTookItsPlace() {

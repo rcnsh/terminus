@@ -80,21 +80,18 @@ enum BusPinned {
         force ? window : window.filter { askedAt($0).map { now.timeIntervalSince($0) >= gap } ?? true }
     }
 
-    /// A pinned card's rows from its stop page's board: the board's buses, its
-    /// times fresher, each row still worded as /me/stops worded it ("via
-    /// UTown"; the board has no such words). The board sends no timetable
+    /// A pinned card's rows from its stop page's board: the board's rows, the
+    /// same buses fresher (running or not, how full), each still worded as
+    /// /me/stops worded it ("via UTown"; the board has no such words). The board sends no timetable
     /// guesses, so the card's own guesses after the board's last time stay,
     /// counted down by `gone` seconds. An old live time stays only while the
     /// board still sends it: one it has dropped (the night's last bus gone) goes.
     static func filled(_ card: [BoardRow], from rows: [BoardRow], gone: Int) -> [BoardRow] {
         rows.map { row in
             guard let old = card.first(where: { $0.svc == row.svc }) else { return row }
-            var r = old
-            r.etaS = row.etaS
-            r.quality = row.quality
-            r.eta = row.eta
-            r.laterText = row.laterText
-            r.later = row.later
+            var r = row
+            r.dest = old.dest
+            r.destPlace = old.destPlace
             let last = row.later.last?.etaS ?? row.etaS ?? 0
             r.later += old.later.filter { $0.quality == "scheduled" }.map {
                 var l = $0

@@ -302,8 +302,9 @@ final class BusesModel {
         let window = BusPinned.window(shownPins, selected: pinSelected).filter { $0 != beside || guessesDue }
         let codes = BusPinned.toFetch(window, now: now, gap: Self.minGapS, force: force) { $0 == beside ? nil : asked["pin:" + $0] }
         guard !codes.isEmpty else { return }
-        if let beside, codes.contains(beside) { guessesAsked[beside] = now }
         for c in codes {
+            // Each answer brings guesses, so the stop opened beside the home just after isn't asked again for them.
+            guessesAsked[c] = now
             asked["pin:" + c] = now
             asking.insert("pin:" + c)
         }
