@@ -295,8 +295,7 @@ async function build(container) {
   if (!protocolAdded) ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
   protocolAdded = true;
 
-  const core = data.stops.filter((s) => s.core);
-  fit = boundsOf(core.map((s) => [s.lon, s.lat]));
+  fit = campusBounds(data);
   map = new ml.Map({
     container,
     style: (styled = styleUrl()),
@@ -379,6 +378,20 @@ export function home() {
   openSheet(null);
   if (selected.get()) choose(null);
   toCampus();
+}
+
+/**
+ * The main campus as the first view frames it: its stops, and the whole line
+ * of each service that stays on it, since a line bends out past the stops at
+ * its ends (K's east loop). P, out to the Botanic Gardens, would frame half
+ * the island, so its line isn't counted. The same rule as the apps
+ * (MapData.swift coreBounds), so the three open on the same view.
+ */
+export function campusBounds(data) {
+  const core = new Set(data.stops.filter((s) => s.core).map((s) => s.code));
+  if (!core.size) return boundsOf(data.stops.map((s) => [s.lon, s.lat]));
+  const lines = Object.values(data.routes ?? {}).filter((r) => r.seq?.length && r.seq.every((code) => core.has(code)));
+  return boundsOf([...data.stops.filter((s) => core.has(s.code)).map((s) => [s.lon, s.lat]), ...lines.flatMap((r) => r.line)]);
 }
 
 function boundsOf(points) {

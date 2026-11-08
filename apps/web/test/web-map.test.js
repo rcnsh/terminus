@@ -21,7 +21,7 @@ registerHooks({
   resolve: (spec, ctx, next) => next(/^\/(assets|account|app|vendor)\//.test(spec) ? new URL(`.${spec}`, PUBLIC).href : spec, ctx),
 });
 globalThis.document ??= { addEventListener() {} };
-const { aheadBy, busesWaitMs, pathOf, pointAt, positionAt, slideMs } = await import('../public/app/map.js');
+const { aheadBy, busesWaitMs, campusBounds, pathOf, pointAt, positionAt, slideMs } = await import('../public/app/map.js');
 
 const CAMPUS = buildCampusMap(GRAPH);
 const SERVICES = Object.keys(GRAPH.routes).filter((svc) => shapeFor(svc, GRAPH.routes[svc]));
@@ -132,4 +132,21 @@ test('failed polls for the buses back off from 5 s to a minute, never before the
   // A Retry-After still running (dom.js quietMs) holds the next poll back.
   assert.equal(busesWaitMs(0, 30_000), 30_000);
   assert.equal(busesWaitMs(4, 90_000), 90_000);
+});
+
+test("the first view frames the campus's stops and the whole line of each service that stays on it, not P's trip out", () => {
+  const core = new Set(CAMPUS.stops.filter((s) => s.core).map((s) => s.code));
+  const [[west, south], [east, north]] = campusBounds(CAMPUS);
+  const stopsEast = Math.max(...CAMPUS.stops.filter((s) => core.has(s.code)).map((s) => s.lon));
+  // Every service but P stays on campus, and each of their lines is wholly in the frame.
+  const onCampus = Object.keys(CAMPUS.routes).filter((svc) => CAMPUS.routes[svc].seq.every((code) => core.has(code)));
+  assert.ok(!onCampus.includes('P') && onCampus.includes('K'), onCampus.join());
+  for (const svc of onCampus)
+    for (const [lon, lat] of CAMPUS.routes[svc].line)
+      assert.ok(lon >= west && lon <= east && lat >= south && lat <= north, `${svc} at ${lon},${lat}`);
+  // K's east loop turns past the last stop: the stops alone would cut it off.
+  const kEast = Math.max(...CAMPUS.routes.K.line.map((p) => p[0]));
+  assert.ok(kEast > stopsEast && east === Math.max(kEast, ...onCampus.map((svc) => Math.max(...CAMPUS.routes[svc].line.map((p) => p[0])))));
+  // Nothing of P's trip to the Botanic Gardens: the frame stays on campus.
+  assert.ok(east < 103.79 && north < 1.31, `${east},${north}`);
 });
