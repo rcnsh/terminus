@@ -383,6 +383,38 @@ test("a board row with no next bus (ended) takes none of the card's off, so all 
   );
 });
 
+test("the open card matches the board's buses by way first, so a way the board lacks doesn't take another's bus", () => {
+  const card = {
+    stop: { code: 'KTR' },
+    board: [
+      { svc: 'D1', towards: ['B'], etaS: 200, quality: 'live', later: [{ etaS: 1000, quality: 'scheduled' }] },
+      { svc: 'D1', towards: ['A'], etaS: 100, quality: 'live', later: [{ etaS: 700, quality: 'scheduled' }] },
+    ],
+  };
+  // A minute on, the board has only the bus towards A.
+  const board = { board: [{ svc: 'D1', towards: ['A'], etaS: 30, quality: 'live', later: [] }], available: true, got: 60_000 };
+  assert.deepEqual(
+    B.withBoard(card, 0, board).board.map((r) => [r.towards[0], r.etaS, r.quality, r.later.map((x) => x.etaS)]),
+    [
+      ['B', 140, 'stale', [940]],
+      ['A', 30, 'live', [640]],
+    ],
+  );
+});
+
+test('the open card counts whole seconds since its answer, as the apps do: a board under a second later leaves a missing service live', () => {
+  const card = {
+    stop: { code: 'KTR' },
+    board: [
+      { svc: 'D1', etaS: 100, quality: 'live', later: [] },
+      { svc: 'D2', etaS: 200, quality: 'live', later: [] },
+    ],
+  };
+  const board = { board: [{ svc: 'D1', etaS: 99, quality: 'live', later: [] }], available: true, got: 500 };
+  const d2 = B.withBoard(card, 0, board).board[1];
+  assert.deepEqual([d2.etaS, d2.quality], [200, 'live']);
+});
+
 test('a pinned stop closing beside the home keeps the live times its page had, with nothing fetched', async () => {
   const now = Date.now();
   const card = {
