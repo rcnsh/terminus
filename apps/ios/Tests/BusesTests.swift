@@ -38,7 +38,7 @@ final class BusesTests: XCTestCase {
         // The card from /me/stops: a live next and then, and a guess after.
         let card = [
             try row(
-                #"{"svc":"D2","etaS":120,"quality":"live","dest":"via UTown","later":[{"etaS":600,"quality":"live"},{"etaS":1500,"quality":"scheduled"}]}"#
+                #"{"svc":"D2","etaS":120,"quality":"live","dest":"via UTown","later":[{"etaS":600,"quality":"live","eta":"10 min"},{"etaS":1500,"quality":"scheduled","eta":"~25 min"}]}"#
             )
         ]
         // A minute later the board still sends both live times: the guess stays, a minute nearer.
@@ -54,6 +54,14 @@ final class BusesTests: XCTestCase {
         let last = BusPinned.filled(card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[]}"#)], gone: 60)
         XCTAssertEqual(last[0].later.map(\.etaS), [1440])
         XCTAssertEqual(last[0].later.map(\.quality), ["scheduled"])
+        // Four minutes on, the guess says so: worded from the time left, not the server's "~25 min".
+        let later = BusPinned.filled(
+            card,
+            from: [
+                try row(#"{"svc":"D2","etaS":60,"quality":"live","eta":"1 min","later":[{"etaS":360,"quality":"live","eta":"6 min"}]}"#)
+            ],
+            gone: 240)
+        XCTAssertEqual(NearbyCells.cells(later[0]).map(\.text), ["1 min", "6", "~21"])
         // A guess the board's times have passed goes, and a service only the board has is its own.
         let passed = BusPinned.filled(
             card,

@@ -96,6 +96,8 @@ enum BusPinned {
             r.later += old.later.filter { $0.quality == "scheduled" }.map {
                 var l = $0
                 l.etaS -= gone
+                // Worded again from the time left: the server's words ("~25 min") are as old as the guess.
+                l.eta = nil
                 return l
             }.filter { $0.etaS > last }
             return r
