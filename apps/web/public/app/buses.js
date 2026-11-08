@@ -601,7 +601,8 @@ const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got
  * the card.
  */
 export function withBoard(s, got, board) {
-  const gone = (board.got - got) / 1000;
+  // Whole seconds, as the apps count it: a board a moment after the card changes nothing.
+  const gone = Math.floor((board.got - got) / 1000);
   const on = (x) => ({ ...x, etaS: x.etaS == null ? null : x.etaS - gone, eta: null });
   const guesses = (row) =>
     (row.later ?? [])
@@ -610,10 +611,21 @@ export function withBoard(s, got, board) {
       .filter((x) => x.etaS > 0);
   const left = board.board.filter((b) => !b.paid);
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  const rows = s.board.map((row) => {
-    let i = left.findIndex((b) => b.svc === row.svc && same(b.towards, row.towards));
-    if (i < 0) i = left.findIndex((b) => b.svc === row.svc);
-    if (i < 0) {
+  // Each way of a service to its own first, then the service alone for the
+  // rows left: in one pass a way the board lacks, listed first, would take
+  // the bus of the way after it.
+  const matched = s.board.map(() => null);
+  const take = (test) =>
+    s.board.forEach((row, n) => {
+      if (matched[n]) return;
+      const i = left.findIndex((b) => test(row, b));
+      if (i >= 0) matched[n] = left.splice(i, 1)[0];
+    });
+  take((row, b) => b.svc === row.svc && same(b.towards, row.towards));
+  take((row, b) => b.svc === row.svc);
+  const rows = s.board.map((row, n) => {
+    const b = matched[n];
+    if (!b) {
       if (row.etaS == null || !gone) return row;
       const at = on(row);
       return {
@@ -624,7 +636,6 @@ export function withBoard(s, got, board) {
         laterText: null,
       };
     }
-    const [b] = left.splice(i, 1);
     const later = b.later ?? [];
     // Counted, not compared: the card's buses still to come, less as many as
     // the board shows, are the ones after them. A time would keep a guess
