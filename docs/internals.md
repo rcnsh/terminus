@@ -429,7 +429,10 @@ get one of three ways:
   for 10 minutes, and a new code replaces the account's last. `POST
   /api/pair/check` names the code's account by its masked address, or, for
   one without an email, says so (`anonymous: true`) in words the apps show
-  in its place. A guess is tried against every
+  in its place. Only the watch app (`ios-watch/<version>`) can check or
+  redeem an anonymous account's code; to anything else it's a wrong code.
+  With no address to show, nothing else would warn that a code sent as a
+  link pairs your phone to a stranger's account. A guess is tried against every
   live code at once, so besides the per-IP limit (`RL_AUTH`, shared by
   `/api/pair` and `/api/pair/check`) there's one ceiling for everyone (`RL_PAIR`,
   60 a minute): an attacker with an IPv6 range can't spread guesses over
@@ -439,9 +442,16 @@ A device added with a pairing code emails the account's owner: it's the one
 way in that doesn't go through the inbox, and it's what lets a signed-in app
 make codes (`/api/me/pair-code`). An anonymous account has no inbox, so
 nothing is sent; the new device shows in its devices list, which every
-device of the account can read, and any of them can remove it (`DELETE
-/api/me/devices/<id>`): without that, a lost watch could be cut off only
-by deleting the account. Adding an email to an anonymous account
+device of the account can read. With no email to prove who owns the
+account, the device that started it does: a device joined by code is
+marked (`sessions.paired`, migration 0018; `SessionInfo.paired`) and can't
+delete the account, give it an email, fold it into another
+(`/api/auth/app/merge`), make codes or remove devices. The starting device
+removes a paired one (`DELETE /api/me/devices/<id>`), so a lost watch is
+cut off without deleting the account, and a watch can't cut off the phone
+and keep it; a paired device signs only itself out. A paired device that
+signs in with an email gets that account on its own and leaves this one
+as it is. Adding an email to an anonymous account
 signs all its devices out but the one adding it (`addEmailTo`), and signing
 in to another account deletes it with them, so a paired watch is paired
 again afterwards. Signing in from the email sends nothing more

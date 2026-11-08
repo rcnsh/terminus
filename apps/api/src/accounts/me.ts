@@ -408,6 +408,7 @@ export const ME_ROUTES: MeRoute[] = [
     // From the account page; an anonymous account has no page, so its app can.
     run: async ({ env, db, session }) => {
       if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
+      if (session.paired) return json({ error: 'only the device that started this account can do that' }, 403);
       await deleteAccount(db, session.user);
       await clearTrip(env, session.user.id);
       if (session.user.email) await forgetSignInCode(env, session.user.email);
@@ -602,6 +603,7 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/pair-code',
     // An account without an email too: its phone pairs its watch this way.
     run: async ({ nowMs, db, session }) => {
+      if (session.paired) return json({ error: 'only the device that started this account can do that' }, 403);
       return json(await createPairCode(db, session.user.id, nowMs));
     },
   },
@@ -647,7 +649,9 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/devices/',
     // An account without an email too: once it has paired a watch, this is
     // how a lost one is cut off without deleting the account.
+    // Not from a paired one, which could otherwise cut off the phone and keep the account.
     run: async ({ db, session, rest }) => {
+      if (session.paired) return json({ error: 'only the device that started this account can do that' }, 403);
       const name = await revokeDevice(db, session.user.id, rest);
       if (name === null) return json({ error: 'no such device' }, 404);
       return json({ ok: true });
@@ -1119,12 +1123,14 @@ export async function handleMe(
     // (with the email added) or folded into the account the email has.
     const current = tokenFrom(req) ? await authenticate(db, req, nowMs) : null;
     if (current?.user.email) return json({ error: 'this device is already signed in' }, 409);
+    // A paired device signs in on its own: the account it shares isn't its to give an email.
+    const anonUserId = current && !current.paired ? current.user.id : null;
     let started;
     try {
       started = await startAppLogin(
         env,
         db,
-        { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null },
+        { email, name: deviceName(body), client: clientWith(req, body), anonUserId },
         emailOrigin(url, env),
         nowMs,
       );
@@ -1227,7 +1233,7 @@ export async function handleMe(
     if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
-    const owner = code ? await pairCodeOwner(db, code, nowMs) : null;
+    const owner = code ? await pairCodeOwner(db, code, nowMs, clientFrom(req)) : null;
     if (!owner) return json({ error: 'that code is wrong or has expired' }, 400);
     // An account without an email has nothing to recognise it by: the apps
     // show this in place of the address, so the warning still reads.

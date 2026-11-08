@@ -780,6 +780,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'id must be a report id': 'id 必须是一条反馈的 id',
   'something went wrong on our side': '我们这边出了问题',
   'delete the account from the account page': '请在账户页面删除账户',
+  'only the device that started this account can do that': '只有创建这个账户的设备才能这样做',
   'send the profile as JSON': '请以 JSON 发送资料',
   "send place (a favourite's key) or to (a stop, place or room code)": '请发送 place（收藏的键）或 to（车站、地点或教室代码）',
   'atMin must be minutes past midnight, Singapore time': 'atMin 必须是新加坡时间午夜后的分钟数',

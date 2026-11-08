@@ -209,12 +209,86 @@ test("pair/check names an anonymous account's code without an address, in the as
   const { env } = setup();
   const phone = await anon(env);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', token: phone })).json();
-  const en = await call(env, '/api/pair/check', { method: 'POST', body: { code } });
+  const en = await call(env, '/api/pair/check', { method: 'POST', body: { code }, headers: WATCH });
   assert.equal(en.status, 200);
   assert.deepEqual(await en.json(), { account: 'an account without an email', anonymous: true });
-  const zh = await call(env, '/api/pair/check', { method: 'POST', body: { code }, headers: { 'accept-language': 'zh-CN' } });
+  const zh = await call(env, '/api/pair/check', { method: 'POST', body: { code }, headers: { ...WATCH, 'accept-language': 'zh-CN' } });
   assert.deepEqual(await zh.json(), { account: '一个没有邮箱的账户', anonymous: true });
-  assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code, name: 'p' } })).status, 200, 'not spent by the check');
+  assert.equal(
+    (await call(env, '/api/pair', { method: 'POST', body: { code, name: 'p' }, headers: WATCH })).status,
+    200,
+    'not spent by the check',
+  );
+});
+
+test("only the watch app takes an anonymous account's code: a link someone sent can't pair your phone to their account", async () => {
+  const { env, db } = setup();
+  const theirs = await anon(env);
+  const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', token: theirs })).json();
+  const phone = { 'x-terminus-client': 'ios/3.11.0' };
+  const check = await call(env, '/api/pair/check', { method: 'POST', body: { code }, headers: phone });
+  assert.equal(check.status, 400);
+  assert.deepEqual(await check.json(), { error: 'that code is wrong or has expired' });
+  for (const headers of [phone, { 'x-terminus-client': 'android/3.11.0' }, {}]) {
+    const paired = await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone', platform: 'ios' }, headers });
+    assert.equal(paired.status, 400);
+  }
+  assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 1, 'no session made');
+  assert.equal(
+    (await call(env, '/api/pair', { method: 'POST', body: { code, name: 'Apple Watch' }, headers: WATCH })).status,
+    200,
+    'still unspent',
+  );
+});
+
+test("a watch paired to an anonymous account can't delete it, pair or remove devices; the phone can", async () => {
+  const { env, db } = setup();
+  const phone = await anon(env);
+  const watch = await pairWatch(env, phone);
+  const { devices } = await (await call(env, '/api/me/devices', { token: watch })).json();
+  const phoneId = devices.find((d) => d.name === 'Pixel 8').id;
+  const refused = [
+    ['DELETE', '/api/me'],
+    ['POST', '/api/me/pair-code'],
+    ['DELETE', `/api/me/devices/${phoneId}`],
+  ];
+  for (const [method, path] of refused) {
+    const res = await call(env, path, { method, token: watch, headers: WATCH });
+    assert.equal(res.status, 403, `${method} ${path}`);
+    assert.deepEqual(await res.json(), { error: 'only the device that started this account can do that' });
+  }
+  const zh = await call(env, '/api/me', { method: 'DELETE', token: watch, headers: { ...WATCH, 'accept-language': 'zh-CN' } });
+  assert.deepEqual(await zh.json(), { error: '只有创建这个账户的设备才能这样做' });
+  assert.equal((await call(env, '/api/me', { token: phone })).status, 200, 'the phone is still signed in');
+  assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
+  // The watch can still sign itself out.
+  assert.equal((await call(env, '/api/auth/logout', { method: 'POST', token: watch })).status, 200);
+  assert.equal((await call(env, '/api/me', { token: watch })).status, 401);
+  assert.equal((await call(env, '/api/me', { method: 'DELETE', token: phone })).status, 200, 'the phone deletes the account');
+});
+
+test('a watch paired to an anonymous account signs in with an email on its own, leaving the account to the phone', async () => {
+  const { env, email, db } = setup();
+  const phone = await anon(env);
+  await call(env, '/api/me/profile', { method: 'PUT', token: phone, body: HOME });
+  const watch = await pairWatch(env, phone);
+  const r = await signInApp(env, email, { token: watch, address: 'someone@example.test', name: 'Apple Watch' });
+  assert.equal(r.outcome, 'created');
+  const me = await (await call(env, '/api/me', { token: phone })).json();
+  assert.equal(me.email, null, 'the phone keeps its account, with no email added');
+  assert.deepEqual((await (await call(env, '/api/me/profile', { token: phone })).json()).home, HOME.home);
+  assert.equal((await (await call(env, '/api/me/profile', { token: r.token })).json()).home, null, 'nothing moved to the new account');
+  assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 2);
+});
+
+test("a watch's token can't fold its anonymous account into another account", async () => {
+  const { env, email } = setup();
+  const phone = await anon(env);
+  const watch = await pairWatch(env, phone);
+  const { token } = await signInApp(env, email, { address: 'someone@example.test' });
+  const res = await call(env, '/api/auth/app/merge', { method: 'POST', token, body: { anon: watch, keep: 'device' } });
+  assert.equal(res.status, 400);
+  assert.equal((await call(env, '/api/me', { token: phone })).status, 200);
 });
 
 test('adding an email from the phone signs its paired watch out too; the phone can pair it again', async () => {

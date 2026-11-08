@@ -411,7 +411,8 @@ export async function mergeAnonymous(
   nowMs: number,
 ): Promise<{ removed: string } | 'not-anonymous'> {
   const anon = await db
-    .prepare('SELECT u.id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.email IS NULL')
+    // The device that started the account, never one paired to it later (SessionInfo.paired).
+    .prepare('SELECT u.id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.email IS NULL AND s.paired = 0')
     .bind(await hashToken(anonToken))
     .first<{ id: string }>();
   if (!anon || anon.id === userId) return 'not-anonymous';
