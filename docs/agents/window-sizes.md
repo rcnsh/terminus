@@ -14,10 +14,11 @@ The device, its idiom (`userInterfaceIdiom`, `isTablet`), the screen's
 size and the orientation never decide a layout.
 
 Which way the window may turn is a separate question. An iPhone turns on
-its side only where the screen's shorter side is 600 or more, as on an open
-iPhone Duo (`WindowWidth.phoneTurns`): an ordinary iPhone on its side is
-about 400 tall, and the card's sky leaves no room for its steps or for
-Today. iPads, Android and the web turn freely.
+its side only where the screen's shorter side is 460 or more, as on both
+panels of an iPhone Duo, which stands on its side in the tent position
+(`WindowWidth.phoneTurns`): an ordinary iPhone on its side is 440 tall at
+most, and the card's sky leaves no room for its steps or for Today. iPads,
+Android and the web turn freely.
 
 | Width | Name | Layout |
 | --- | --- | --- |
