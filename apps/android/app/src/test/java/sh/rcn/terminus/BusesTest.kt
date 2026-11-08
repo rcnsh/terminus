@@ -333,11 +333,63 @@ class BusesTest {
         val now = old.withBoard(board)
         val d1 = now.stop.board[0]
         assertEquals("the page's time", 120, d1.etaS)
-        assertEquals("the page's next bus, then the card's own guess after it", listOf(LaterBus(800, "live"), guess), d1.later)
+        assertEquals(
+            "the page's next bus, then the card's own guess after it, counted down the 49 s since the card's times",
+            listOf(LaterBus(800, "live"), LaterBus(2_351, "scheduled")),
+            d1.later,
+        )
         assertEquals("the card's words", "via UTown", d1.dest)
         assertEquals("a service the page doesn't have keeps its row; no paid bus joins", listOf("D1", "D2"), now.stop.board.map { it.svc })
         assertEquals(50_000L, now.gotMs)
         assertEquals("the walk and name are the card's own", "COM 3", now.stop.name)
+    }
+
+    @Test
+    fun anOpenPinnedCardsGuessesCountDownAndNeverPassAnOldLiveTimeOff() {
+        val card =
+            PinnedStop(
+                NearbyStop(
+                    "COM3",
+                    "COM 3",
+                    null,
+                    true,
+                    listOf(BoardRow("D1", 300, "live", later = listOf(LaterBus(900, "live"), LaterBus(1_500, "scheduled")))),
+                ),
+                gotMs = 0L,
+            )
+        fun board(atMs: Long, etaS: Int, laterS: Int) =
+            Board(
+                "COM3",
+                "Computing 3",
+                null,
+                true,
+                listOf(BoardRow("D1", etaS, "live", later = listOf(LaterBus(laterS, "live")))),
+                null,
+                gotMs = atMs,
+            )
+        // A minute on: the card's own live "then" isn't carried (it's old); its guess is a minute nearer.
+        val one = card.withBoard(board(60_000L, 240, 840))
+        assertEquals(listOf(LaterBus(840, "live"), LaterBus(1_440, "scheduled")), one.stop.board[0].later)
+        assertEquals("its own answer is still when it was got", 0L, one.answeredMs)
+        // Merged again 15 s later: counted down from the last merge, not frozen at the first.
+        val two = one.withBoard(board(75_000L, 225, 825))
+        assertEquals(listOf(LaterBus(825, "live"), LaterBus(1_425, "scheduled")), two.stop.board[0].later)
+        // Once the board's last bus is as late as the guess, the guess goes.
+        val three = two.withBoard(board(90_000L, 210, 1_500))
+        assertEquals(listOf(LaterBus(1_500, "live")), three.stop.board[0].later)
+        // And a guess already due is dropped.
+        assertEquals(emptyList<LaterBus>(), PinnedStop.guessesAfter(listOf(LaterBus(30, "scheduled")), 60, 0))
+        // The merged times are what the card keeps: live, from the board, when its page closes.
+        assertEquals("live", three.stop.board[0].quality)
+        assertEquals(90_000L, three.gotMs)
+    }
+
+    @Test
+    fun anOpenPinnedCardAsksAgainWhenItsOwnAnswerIsOld() {
+        val card = PinnedStop(NearbyStop("COM3", "COM 3", null, true, emptyList()), gotMs = 0L)
+        assertTrue(card.answerFresh(PinnedStop.ANSWER_MS - 1))
+        assertFalse("then once more, for fresh guesses", card.answerFresh(PinnedStop.ANSWER_MS))
+        assertFalse(PinnedStop(card.stop, null).answerFresh(0L))
     }
 
     @Test

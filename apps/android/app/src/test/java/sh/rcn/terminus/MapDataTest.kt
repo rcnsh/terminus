@@ -1,5 +1,6 @@
 package sh.rcn.terminus
 
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -429,5 +430,38 @@ class MapDataTest {
         assertTrue(line.buses.isEmpty())
         assertNull(line.here?.row)
         assertNull(Line.fromCampus(campus, "Z", from = null))
+    }
+
+    @Test
+    fun theMapFitsTheCampussLinesNotJustItsStops() {
+        // The real stops and lines (apps/api/data), with the API's own core: within three times the median distance of the middle.
+        val data = listOf("../../../apps/api/data", "../../api/data").map(::File).first { it.isDirectory }
+        val js = JSONObject(File(data, "stops.json").readText()).getJSONArray("stops")
+        val stops =
+            (0 until js.length())
+                .map { js.getJSONObject(it) }
+                .map { MapStop(it.getString("code"), it.getString("name"), it.getDouble("lat"), it.getDouble("lon"), emptyList()) }
+        val shapes = JSONObject(File(data, "shapes.json").readText()).getJSONObject("routes")
+        val routes =
+            shapes.keys().asSequence().associateWith { svc ->
+                val l = shapes.getJSONObject(svc).getJSONArray("line")
+                MapRoute(
+                    svc,
+                    0,
+                    (0 until l.length()).map { doubleArrayOf(l.getJSONArray(it).getDouble(0), l.getJSONArray(it).getDouble(1)) },
+                )
+            }
+        val mid = stops.map { it.lat }.sorted()[stops.size / 2] to stops.map { it.lon }.sorted()[stops.size / 2]
+        val dist = stops.associate {
+            it.code to Math.hypot((it.lat - mid.first), (it.lon - mid.second) * Math.cos(Math.toRadians(mid.first)))
+        }
+        val median = dist.values.sorted()[dist.size / 2]
+        val core = stops.filter { dist.getValue(it.code) <= 3 * median }.map { it.code }.toSet()
+        val campus = CampusMap(stops, routes)
+        val east = listOf("A1", "A2", "D2", "K").maxOf { svc -> routes.getValue(svc).line.maxOf { it[0] } }
+        assertTrue("the stops alone stop short of the east loops' turn", campus.coreBounds(core)[2] < east)
+        val extent = campus.coreExtent(core)
+        assertTrue("every campus loop is in", extent[2] >= east)
+        assertTrue("P's trip to the Botanic Gardens isn't", extent[2] < 103.79 && extent[3] < 1.31)
     }
 }

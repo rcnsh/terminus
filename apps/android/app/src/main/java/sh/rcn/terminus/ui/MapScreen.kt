@@ -65,6 +65,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LongState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -226,7 +227,7 @@ private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = 
  * across the bottom; or from its left edge, by a sheet floating in the corner ([Widths.floatingSheet]). Plain state read only when the map
  * moves, so a sheet growing redraws nothing.
  */
-private class MapCover {
+private class MapCover(campusOnly: MutableState<Boolean>) {
     var top by mutableIntStateOf(0)
     var sheet by mutableIntStateOf(0)
     var left by mutableIntStateOf(0)
@@ -234,8 +235,11 @@ private class MapCover {
     /** The system's bar at the foot, under the map beside a rail (none over the bottom bar, which the map stops at). */
     var inset by mutableIntStateOf(0)
 
-    /** The whole campus has been framed and nothing else has moved the map since: it's framed again when the map's size changes. */
-    var campusOnly by mutableStateOf(true)
+    /**
+     * The whole campus is framed and nothing else has moved the map since: it's framed again when the map's size changes. Saved with the
+     * tab, so a map moved before leaving it stays moved.
+     */
+    var campusOnly by campusOnly
 
     /** The first view has been set ([CampusMapView]); till then the pan limits are loose, as the camera starts far out. */
     var started by mutableStateOf(false)
@@ -394,7 +398,8 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
     // ([home]), watched by the map.
     var recentre by remember { mutableIntStateOf(0) }
     LaunchedEffect(home) { home.collect { recentre++ } }
-    val cover = remember { MapCover() }
+    val campusOnly = rememberSaveable { mutableStateOf(true) }
+    val cover = remember { MapCover(campusOnly) }
     // From 700 wide the sheet floats in the bottom-left corner, beside the map rather than over its foot.
     val floats = Widths.floatingSheet(LocalWindowDp.current)
     val density = LocalDensity.current
@@ -636,10 +641,16 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     var framed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state) {
         try {
-            firstView(state, ui, campus, ctx, cover, density, framed) { framed = true }
+            if (!framed) {
+                framed = true
+                firstView(state, ui, campus, ctx, cover)
+            }
         } finally {
-            cover.started = true
+            if (!cover.campusOnly) cover.started = true
         }
+        // A finger moving the map, caught as it does: from then the map stays where it's put, through a fold or a resize too.
+        launch { snapshotFlow { state.cameraMoveReason }.collect { if (it == CameraMoveReason.Gesture) cover.campusOnly = false } }
+        refitCampus(state, ui, campus, cover, density)
     }
     // A stop opened from Nearby or a bus's sheet: the map glides to it.
     LaunchedEffect(ui.focus) {
@@ -662,11 +673,13 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         // part of the map it leaves.
         cover.loosened {
             state.animateCameraToBounds(
-                box(campus.coreBounds(ui.core)),
+                box(campus.coreExtent(ui.core)),
                 CameraFit(fitPadding = cover.padding(density)),
                 animation = CameraAnimation.Ease.Standard,
             )
         }
+        // The whole campus again: fitted again as the window changes, till something moves it.
+        cover.campusOnly = true
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
@@ -765,44 +778,36 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
 }
 
 /**
- * The map's first view: your nearest stop when you're on campus, otherwise the whole campus. Once only ([framed], then [onFramed]): back on
- * the tab, the map is where you left it (the camera is saved state, kept by the tabs). Opened on a stop from Nearby, that's the first view.
+ * The map's first view, once ([CampusMapView]'s `framed`): your nearest stop when you're on campus, otherwise the whole campus (fitted by
+ * [refitCampus]). Opened on a stop from Nearby, that's the first view. Back on the tab, the map is where you left it (the camera is saved
+ * state, kept by the tabs).
  */
-private suspend fun firstView(
-    state: MapState,
-    ui: MapUi,
-    campus: CampusMap,
-    ctx: Context,
-    cover: MapCover,
-    density: Density,
-    framed: Boolean,
-    onFramed: () -> Unit,
-) {
-    if (framed) return
-    onFramed()
-    if (ui.focus != null) return
-    val at = Locator.lastKnown(ctx)
-    val near = at?.let {
-        campus.stops
-            .minByOrNull { (it.lat - at.latitude) * (it.lat - at.latitude) + (it.lon - at.longitude) * (it.lon - at.longitude) }
-            ?.takeIf { abs(it.lat - at.latitude) < NEAR_CAMPUS_DEG && abs(it.lon - at.longitude) < NEAR_CAMPUS_DEG }
-    }
-    if (near != null) {
+private suspend fun firstView(state: MapState, ui: MapUi, campus: CampusMap, ctx: Context, cover: MapCover) {
+    if (ui.focus != null) {
         cover.campusOnly = false
-        cover.loosened {
-            state.setCameraPosition(CameraPosition(center = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
-        }
         return
     }
-    // The map is first measured before the window settles (the rail, the system bars), and a fold or a resized window changes it
-    // again: the campus is fitted to each size the map takes, until a finger, a stop, a pill or Back to campus moves it.
+    val at = Locator.lastKnown(ctx) ?: return
+    val near =
+        campus.stops
+            .minByOrNull { (it.lat - at.latitude) * (it.lat - at.latitude) + (it.lon - at.longitude) * (it.lon - at.longitude) }
+            ?.takeIf { abs(it.lat - at.latitude) < NEAR_CAMPUS_DEG && abs(it.lon - at.longitude) < NEAR_CAMPUS_DEG } ?: return
+    cover.campusOnly = false
+    cover.loosened { state.setCameraPosition(CameraPosition(center = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0)) }
+}
+
+/**
+ * The whole campus fitted to each size the map takes while it's showing just that ([MapCover.campusOnly]): the map is first measured before
+ * the window settles (the rail, the system bars), and a fold or a resized window changes it again.
+ */
+private suspend fun refitCampus(state: MapState, ui: MapUi, campus: CampusMap, cover: MapCover, density: Density) {
     snapshotFlow { state.viewport?.size }
         .filterNotNull()
         .filter { it.width.value > 0 && it.height.value > 0 }
         .distinctUntilChanged()
-        .takeWhile { cover.campusOnly && state.cameraMoveReason != CameraMoveReason.Gesture }
+        .filter { cover.campusOnly }
         .collectLatest {
-            cover.loosened { state.fitCameraToBounds(box(campus.coreBounds(ui.core)), CameraFit(fitPadding = cover.padding(density))) }
+            cover.loosened { state.fitCameraToBounds(box(campus.coreExtent(ui.core)), CameraFit(fitPadding = cover.padding(density))) }
             cover.started = true
         }
 }

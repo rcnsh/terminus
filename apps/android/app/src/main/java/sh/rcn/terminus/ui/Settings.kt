@@ -186,6 +186,8 @@ internal fun SettingsScreen(
     }
     // The list and each page keep where they were scrolled to under their own key, as the window goes from one pane to two and back.
     val scrolls = rememberPaneScrolls()
+    // The list, and the page open: one closed, or another opened in its place, starts at the top next time.
+    scrolls.keep(setOfNotNull(LIST, (if (wide) open ?: SettingsPage.Trips else open)?.name))
     if (wide) {
         // Your trips, not the account: a first look shouldn't land on Sign out.
         val shown = open ?: SettingsPage.Trips

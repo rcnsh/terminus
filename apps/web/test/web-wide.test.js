@@ -218,7 +218,7 @@ test('the open pinned card shows the times its page has', async () => {
   P.profile.set({ pinnedStops: ['KTR', 'LT13'] });
   B.chosen.set('KTR');
   B.route.set({ kind: 'stop', code: 'KTR' });
-  B.signs.set(new Map([['KTR', { s: card, at: now, got: now }]]));
+  B.signs.set(new Map([['KTR', { s: card, at: now - 1000, got: now - 1000 }]]));
   // The page's board: live, two buses.
   B.boards.set(
     new Map([
@@ -238,9 +238,118 @@ test('the open pinned card shows the times its page has', async () => {
   await settle();
   const row = root.querySelector('.bt-list .bt-pager-page.open .nearby-row');
   const times = [...row.querySelectorAll('.nb-time')].map((x) => x.textContent.replace(/\s+/g, ''));
-  // The page's two live buses, then the card's own guess for the third; its own words for where it goes.
-  assert.deepEqual(times, ['2min', '12', '~35']);
+  // The page's two live buses, then the card's first guess after them (counted on a second); its own words for where it goes.
+  assert.deepEqual(times, ['2min', '12', '~25']);
   assert.match(row.textContent, /LT13/);
+  render(null, root);
+  await settle();
+  B.boards.set(new Map());
+  B.signs.set(new Map());
+  P.profile.set({ pinnedStops: [] });
+});
+
+test("wide Settings keeps the phone's grouped cards and chevrons, and Now's foot lines up with Today", () => {
+  const account = read('account/account.css');
+  // From 800 the groups stay cards with chevrons; only what each has set moves under its name.
+  assert.equal(wideRule(account, '.set-group'), null);
+  assert.equal(wideRule(account, '.set-item .chev'), null);
+  assert.match(wideRule(account, '.set-item .row-text'), /display: grid;/);
+  // Send feedback is its name alone at every width.
+  assert.match(account, /\n\.set-item\[data-page="feedback"\] \.row-sum \{ display: none; \}/);
+  assert.match(wideRule(read('app/app.css'), '.app-main.split .app-card > .card-foot.card-foot'), /left: calc\(50% \+ 24px\);/);
+});
+
+test("a kept older /app/ without the rail's place still starts: the app makes it, ahead of the header", () => {
+  const src = read('app/app.js');
+  assert.doesNotMatch(src, /render\([^\n]*getElementById\('rail'\)\)/);
+  assert.match(src, /render\(html`<\$\{Rail\} \/>`, railRoot\(\)\);/);
+  const fn = src.slice(src.indexOf('function railRoot() {'), src.indexOf('\n}\n', src.indexOf('function railRoot() {')) + 2);
+  const railRoot = new Function(`${fn}; return railRoot;`)();
+  const kept = [...document.body.childNodes];
+  document.body.innerHTML = '<script></script><header class="wrap nav"></header><div id="app"></div>';
+  const made = railRoot();
+  assert.equal(made.id, 'rail');
+  assert.equal(made.nextElementSibling.tagName, 'HEADER');
+  // Found the second time, not made again.
+  assert.equal(railRoot(), made);
+  assert.equal(document.querySelectorAll('#rail').length, 1);
+  document.body.replaceChildren(...kept);
+});
+
+test('the open card counts its own guesses on to the board, and never fills in with an old live time', () => {
+  const card = {
+    stop: { code: 'KTR' },
+    board: [
+      {
+        svc: 'A1',
+        etaS: 180,
+        quality: 'live',
+        later: [
+          { etaS: 600, quality: 'live' },
+          { etaS: 2700, quality: 'scheduled' },
+          { etaS: 3300, quality: 'scheduled' },
+        ],
+      },
+      { svc: 'D2', etaS: 240, eta: '4 min', quality: 'live', later: [{ etaS: 1500, quality: 'scheduled' }] },
+    ],
+  };
+  // Three minutes on, the page's board has one A1 bus and no D2.
+  const board = { board: [{ svc: 'A1', etaS: 720, eta: '12 min', quality: 'live', later: [] }], available: true, got: 180_000 };
+  const [a1, d2] = B.withBoard(card, 0, board).board;
+  assert.equal(a1.etaS, 720);
+  // The card's live 600 is three minutes old: not filled in. Its guesses are counted on by 180 s, as estimates.
+  assert.deepEqual(
+    a1.later.map((x) => [x.etaS, x.quality, x.eta]),
+    [
+      [2520, 'scheduled', null],
+      [3120, 'scheduled', null],
+    ],
+  );
+  // A service the board doesn't have: counted on, and its live time a "~", not live.
+  assert.deepEqual([d2.etaS, d2.quality, d2.eta], [60, 'stale', null]);
+  assert.deepEqual(
+    d2.later.map((x) => x.etaS),
+    [1320],
+  );
+  // A guess due before the board's last bus is dropped.
+  const soon = B.withBoard(card, 0, {
+    ...board,
+    board: [{ svc: 'A1', etaS: 120, quality: 'live', later: [{ etaS: 2600, quality: 'live' }] }],
+  });
+  assert.deepEqual(
+    soon.board[0].later.map((x) => x.etaS),
+    [2600, 3120],
+  );
+});
+
+test('a pinned stop closing beside the home keeps the live times its page had, with nothing fetched', async () => {
+  const now = Date.now();
+  const card = {
+    stop: { code: 'KTR', name: 'KTR' },
+    walkS: null,
+    available: true,
+    board: [{ svc: 'A1', dest: 'to LT13', etaS: 900, quality: 'scheduled' }],
+  };
+  P.profile.set({ pinnedStops: ['KTR', 'LT13'] });
+  B.chosen.set('KTR');
+  B.route.set({ kind: 'stop', code: 'KTR' });
+  B.signs.set(new Map([['KTR', { s: card, at: now - 5000, got: now - 5000 }]]));
+  B.boards.set(
+    new Map([
+      [
+        'KTR',
+        { stop: { code: 'KTR', name: 'KTR' }, board: [{ svc: 'A1', etaS: 120, quality: 'live' }], available: true, at: now, got: now },
+      ],
+    ]),
+  );
+  render(html`<${B.BusesTab} visible=${false} />`, root);
+  await settle();
+  await go('#buses');
+  const kept = B.signs.get().get('KTR');
+  assert.equal(kept.at, now, 'as fresh as the page, so not asked for again yet');
+  assert.deepEqual([kept.s.board[0].etaS, kept.s.board[0].quality, kept.s.board[0].dest], [120, 'live', 'to LT13']);
+  const first = root.querySelector('.bt-pager-page[aria-label="KTR"] .nearby-row .nb-time');
+  assert.equal(first.textContent.replace(/\s+/g, ''), '2min');
   render(null, root);
   await settle();
   B.boards.set(new Map());
