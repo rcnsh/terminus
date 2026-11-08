@@ -18,7 +18,7 @@ struct BusesView: View {
                 // The home beside the page open from it; the pages opened from that push in its pane.
                 ListDetail {
                     // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
-                    NavigationStack { BusesHome().listPaneRoot() }
+                    NavigationStack { BusesHome().listPaneRoot().keyboardRoom() }
                 } detail: {
                     NavigationStack(path: pagesOver) {
                         Group {
@@ -29,13 +29,15 @@ struct BusesView: View {
                             }
                         }
                         .id(model.path.first)
-                        .navigationDestination(for: BusRoute.self) { page($0) }
+                        .keyboardRoom()
+                        .navigationDestination(for: BusRoute.self) { page($0).keyboardRoom() }
                     }
                 }
             } else {
                 NavigationStack(path: $model.path) {
                     BusesHome()
-                        .navigationDestination(for: BusRoute.self) { page($0) }
+                        .keyboardRoom()
+                        .navigationDestination(for: BusRoute.self) { page($0).keyboardRoom() }
                 }
             }
         }

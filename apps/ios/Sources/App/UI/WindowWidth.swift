@@ -34,6 +34,23 @@ extension EnvironmentValues {
     @Entry var listPane = false
     /// Side by side, the panes' bands of sky, so their horizons meet.
     @Entry var paneBands: PaneBands?
+    /// A keyboard is up, set at the tabs from its notifications (keyboardRoom()).
+    @Entry var keyboardUp = false
+}
+
+/// Rotated after a search, iPadOS can hand a page the keyboard's room again
+/// once the keyboard has gone, and keep it: the map drew in the top of the
+/// window, and Settings' background stopped there. With no keyboard up, that
+/// room is ignored. Each page in a navigation stack is hosted on its own and
+/// is handed the room itself, so it goes on each stack's pages too.
+private struct KeyboardRoom: ViewModifier {
+    @Environment(\.keyboardUp) private var up
+
+    func body(content: Content) -> some View { content.ignoresSafeArea(up ? [] : .keyboard) }
+}
+
+extension View {
+    func keyboardRoom() -> some View { modifier(KeyboardRoom()) }
 }
 
 /// Where each band of sky in a pair of panes would end on its own (its top

@@ -17,22 +17,24 @@ struct SettingsView: View {
                 // The list beside the page open from it; a page opened from that pushes in its pane.
                 ListDetail {
                     // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
-                    NavigationStack { SettingsList(model: model).listPaneRoot() }
+                    NavigationStack { SettingsList(model: model).listPaneRoot().keyboardRoom() }
                 } detail: {
                     NavigationStack(path: model.pagesOver) {
                         SettingsPageView(page: model.shown, model: model)
                             .environment(\.paneRoot, true)
                             .id(model.shown)
+                            .keyboardRoom()
                             .navigationDestination(for: SettingsPage.self) { page in
-                                SettingsPageView(page: page, model: model)
+                                SettingsPageView(page: page, model: model).keyboardRoom()
                             }
                     }
                 }
             } else {
                 NavigationStack(path: $model.path) {
                     SettingsList(model: model)
+                        .keyboardRoom()
                         .navigationDestination(for: SettingsPage.self) { page in
-                            SettingsPageView(page: page, model: model)
+                            SettingsPageView(page: page, model: model).keyboardRoom()
                         }
                 }
             }
