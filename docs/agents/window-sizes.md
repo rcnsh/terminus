@@ -1,17 +1,17 @@
 # Window sizes
 
-How the iPhone, Android and web clients lay out at each window width:
-phones, iPads, Android tablets and foldables, an unfolded iPhone Duo,
+How the iPhone, Android and web clients lay out at each window size:
+phones upright and on their side, iPads, Android tablets and foldables, an unfolded iPhone Duo,
 Split View and Stage Manager windows, and a browser on a laptop. The
 Mac's menu bar popover is phone-sized and stays as it is. Why it's done
 this way: [ADR 0015](../adr/0015-window-sizes.md).
 
 ## The three widths
 
-The window's width decides, in points, dp or CSS pixels, read live:
-a fold, a rotation, a resized window or Split View changes it mid-session.
-The device, its idiom (`userInterfaceIdiom`, `isTablet`), the screen's
-size and the orientation never decide a layout.
+The window's width decides the layout, in points, dp or CSS pixels, read
+live: a fold, a rotation, a resized window or Split View changes it
+mid-session. The device, its idiom (`userInterfaceIdiom`, `isTablet`),
+the screen's size and the orientation never decide a layout.
 
 | Width | Name | Layout |
 | --- | --- | --- |
@@ -19,8 +19,45 @@ size and the orientation never decide a layout.
 | 600 to 799 | medium | The phone layout in a centred column at most 560 wide (gutters included), the sky still edge to edge. |
 | 800 and over | wide | Two panes on Now, Stops and Settings, as below. |
 
-Height never changes the layout. A phone on its side that's 800 wide
-is wide.
+## Short windows
+
+Separately, a window under 500 tall (read live, like the width) is
+**short**: a phone on its side, the Duo's outer panel in the tent
+position, a short browser window. A short window keeps its width's
+layout (a phone on its side 900 wide still has two panes) and makes the
+top of the page compact, so the answer is on screen without scrolling:
+
+- **Now's horizon** is the bands' low horizon: the hills only, 52 tall,
+  with no road, bus, stop sign or town. The card's "… reaches … in …"
+  line says what the road's bus shows. The moon and stars stay.
+- **Now's wordmark** sits at the leading end of the chips' row instead
+  of on a row of its own; the search stays at the trailing end.
+- **Notices on Now** (the location prompt, the web's install hint and
+  the like) move from above the chips to straight under the card, after
+  "Go later" when it shows. In two panes, that's the foot of the card's
+  column.
+- **The bands** on Stops, Settings and their pages end just under their
+  words, without the hills. Side by side, they still end level. A band
+  that keeps its moon on a line of its own over the hills (Stops and its
+  pages) shows no moon; one with the moon beside its words keeps it.
+
+Content scrolls as it does upright, and text and controls keep their
+sizes.
+
+## Which way it turns
+
+Phones stay upright in the apps; tablets and open foldables turn freely.
+A phone on its side is too short to be worth laying out for: the answer
+is a glance, and an upright phone shows more of it. On Android a screen
+under 600 across its narrow side keeps to portrait (`Widths.upright`; from
+Android 16 the system ignores the lock on larger screens anyway). On
+iPhone, Info.plist lists the landscapes and the app delegate keeps a
+screen under 460 across upright (`WindowWidth.phoneTurns`), which lets
+both panels of an iPhone Duo turn, as it stands on its side in the tent
+position. The web can't hold a browser upright, so short windows still
+come from a phone's browser on its side, a short laptop window, Android
+split-screen on an upright phone and the Duo's tent position; the rule
+above is for those.
 
 ## Wide, tab by tab
 
@@ -96,6 +133,10 @@ it's done, in light and dark, with the dev stub
 | iPhone | iPhone 17 or 18 Pro | iPad in a Split View half, or iPad mini portrait (744) | iPad Pro 11-inch landscape (1210); iPhone Duo open (867) |
 | Android | Pixel phone | Pixel Fold or a foldable AVD open, or a tablet in split screen | Pixel Tablet landscape (1280) and portrait (800) |
 | Web | `shot.mjs --width 390` | `--width 700` | `--width 1280` |
+
+Short: an Android phone sized with `wm size` to 915x412 dp (or in
+split-screen), the web at `--width 844 --height 390`, and the iPhone Duo
+in the tent position.
 
 iPads run on the iOS 27.0 simulator runtime; the iPhone Duo needs
 27.1. The Duo's simulator folds with T3's `agent-device fold`.

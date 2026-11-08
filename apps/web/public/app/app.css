@@ -885,7 +885,7 @@ body.app > .nav { max-width: 560px; }
     min-height: calc(var(--sky-end, 0px) - var(--sky-top, 0px) + 8px + var(--side-h, 0px) + 12px + var(--foot-h, 0px) + 32px);
   }
   .app-main.split > * { grid-column: 1 / -1; }
-  .app-main.split > :is(.go-later, .go-later-form) { grid-column: 1; }
+  .app-main.split > :is(.go-later, .go-later-form, .short-notices) { grid-column: 1; }
   /* Whatever comes after the horizon in the card, however deep the card puts it. */
   .app-main.split .app-card :is(.horizon ~ *, :has(.horizon) ~ *) { max-width: calc(50% - 24px); }
   /* Both lines named: an absolute item's auto end would be the padding edge, past the column. */
@@ -964,4 +964,24 @@ body.app > .nav { max-width: 560px; }
   /* The hills as wide as the band they end, not the page. */
   .settings-tab .settings-side .page-band .horizon { width: auto; margin-inline: -16px; }
   .settings-tab .settings-page .page-band .horizon { width: 100cqw; margin-inline: calc(50% - 50cqw); }
+}
+
+/* A short window, under 500 tall (ui.js shortBelow): a phone on its side.
+   The width still picks the layout above; only the top goes compact, so the
+   answer fits on the screen. Now's horizon is the low one (sky.js Horizon),
+   the wordmark leads the chips' row in place of the header (app.js Chips),
+   notices sit under the card's buttons (app.js App), and the bands on Stops
+   and Settings end under their words, without their hills. */
+@media (max-height: 499.98px) {
+  body.app > .nav { display: none; }
+  #tab-now { padding-top: 12px; }
+  .app-chips .brand { flex: none; margin-right: 6px; }
+  #tab-now .horizon.low { height: 52px; }
+  /* Down into the low near hill, which is only a few px deep. */
+  body.sky #tab-now::before { height: calc(var(--end) - 2px); }
+  .road-line { margin-top: 6px; }
+  .short-notices > :is(.install, .banner-slot) { margin-top: 16px; }
+  .page-band .horizon.low, .bt-sky .horizon.low { display: none; }
+  /* With no line of its own over the hills, the low moon has no room clear of a button, as on the apps. */
+  body.sky-night .bt-sky .celestial .night-sky { display: none; }
 }

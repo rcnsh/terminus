@@ -55,6 +55,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +101,8 @@ import kotlinx.coroutines.delay
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
+import sh.rcn.terminus.Pull
+import sh.rcn.terminus.PullScene
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
@@ -168,14 +171,74 @@ internal fun MainScreen(
     val shown = sky.end != null
     val light = sky.palette.lightInk
     val wide = windowWidth() == Width.Wide
+    // A short window (a phone on its side): the low horizon, the wordmark on the chips' row, the notices under the card.
+    val short = windowShort()
+    val notices = Widths.notices(LocalWindowHeightDp.current)
+    SideEffect { sky.short = short }
     // Without a day to show beside the card when wide, all of Now is in the card's column.
     val hasDay = state.hasDay
     NightStatusBar(shown && light, sky.palette.sky[0])
+    // What needs doing before the answer can be right: an update, and location. Above the chips, or in a short window under the card's
+    // buttons, so the answer comes first ([Widths.notices]); [place] spaces each from what's beside it.
+    val noticeCards: @Composable (Modifier) -> Unit = { place ->
+        // Refused as too old (426): the way to update, from where it was installed.
+        if (state.updateRequired) {
+            Card(Modifier.fillMaxWidth().then(place)) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.update_required), modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
+                }
+            }
+        } else
+            state.update?.let { v ->
+                Card(Modifier.fillMaxWidth().then(place)) {
+                    Row(
+                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
+                        // The APK built for this phone's CPU (the site falls back to arm64).
+                        TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
+                    }
+                }
+            }
+
+        if (!hasLocation) {
+            Card(Modifier.fillMaxWidth().then(place)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(stringResource(R.string.location_ask))
+                    if (blocked) {
+                        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings_location)) }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                askLocation.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                                    )
+                                )
+                            }
+                        ) {
+                            Text(stringResource(R.string.allow_location))
+                        }
+                    }
+                }
+            }
+        }
+    }
     CompositionLocalProvider(LocalSky provides sky) {
         Box(Modifier.fillMaxSize()) {
             // Pulled down at the top, what's shown (the card or Nearby) is asked for
             // again: the sky stretches, and your bus drives to your stop on its horizon.
-            BusPull(sky.road.bus?.takeIf { sky.road.stop }?.color, scene = { roadScene(it, sky.road) }, onRefresh = vm::pull) { pull ->
+            BusPull(
+                sky.road.bus?.takeIf { sky.road.stop }?.color,
+                scene = { if (sky.short) PullScene(it, Pull.hillSign(it)) else roadScene(it, sky.road) },
+                onRefresh = vm::pull,
+            ) { pull ->
                 Column(
                     Modifier.fillMaxSize()
                         .verticalScroll(scroll)
@@ -188,56 +251,9 @@ internal fun MainScreen(
                     // The header and chips come down a little with a pull; the room opens under them.
                     SkyInk(shown, light) {
                         Column(Modifier.pullLead(pull)) {
-                            TabHeader { HeaderWordmark() }
+                            if (!short) TabHeader { HeaderWordmark() }
 
-                            // Refused as too old (426): the way to update, from where it was installed.
-                            if (state.updateRequired) {
-                                Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                                    Row(
-                                        Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(stringResource(R.string.update_required), modifier = Modifier.weight(1f))
-                                        TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
-                                    }
-                                }
-                            } else
-                                state.update?.let { v ->
-                                    Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                                        Row(
-                                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
-                                            // The APK built for this phone's CPU (the site falls back to arm64).
-                                            TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
-                                        }
-                                    }
-                                }
-
-                            if (!hasLocation) {
-                                Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                                    Column(Modifier.padding(12.dp)) {
-                                        Text(stringResource(R.string.location_ask))
-                                        if (blocked) {
-                                            TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings_location)) }
-                                        } else {
-                                            TextButton(
-                                                onClick = {
-                                                    askLocation.launch(
-                                                        arrayOf(
-                                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                                                        )
-                                                    )
-                                                }
-                                            ) {
-                                                Text(stringResource(R.string.allow_location))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            if (notices == Notices.AboveChips) noticeCards(Modifier.padding(bottom = 12.dp))
 
                             // Next and Nearby first, as on the widget, then favourites and the
                             // places added from "Go somewhere else" (each with an X); the row
@@ -262,11 +278,17 @@ internal fun MainScreen(
                             // At the largest text sizes, Elsewhere beside the row would leave it room
                             // for barely one chip: it's the row's last chip instead, as on the iPhone.
                             val searchInRow = LocalDensity.current.fontScale >= SEARCH_IN_ROW_SCALE
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Short, the wordmark leads the row and scrolls with the chips, in place of a header row; the row keeps
+                            // that header's height.
+                            Row(if (short) Modifier.heightIn(min = 56.dp) else Modifier, verticalAlignment = Alignment.CenterVertically) {
                                 Row(
                                     Modifier.weight(1f).fadeEnd(chips).horizontalScroll(chips),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
+                                    if (short)
+                                        Box(Modifier.align(Alignment.CenterVertically).padding(end = 8.dp)) {
+                                            Wordmark(MaterialTheme.typography.titleLarge)
+                                        }
                                     FilterChip(
                                         selected = !state.showNearby && state.target == Target.Plan,
                                         onClick = { vm.select(Target.Plan) },
@@ -347,6 +369,7 @@ internal fun MainScreen(
                                 initial = ::soonOnCampus,
                             )
                         }
+                        if (notices == Notices.UnderCard) noticeCards(Modifier.padding(top = 12.dp))
                     }
                     val footerRow: @Composable () -> Unit = {
                         val footer =

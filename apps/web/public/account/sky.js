@@ -7,7 +7,19 @@
 // ends on a <Horizon>, and the sky reaches down to it. The hour only picks
 // classes (app.css draws the colours). Android draws the same scene from the
 // same numbers (NightSky.kt).
-import { Icon, html, reducedMotion, store, useEffect, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
+import {
+  Icon,
+  html,
+  reducedMotion,
+  store,
+  useEffect,
+  useLayoutEffect,
+  useMedia,
+  useRef,
+  useShort,
+  useState,
+  useStore,
+} from '../assets/ui.js';
 import { t } from './dom.js';
 import { PHASES, parallax, phaseAt } from './daylight.js';
 import { STARS, starTop } from '../assets/stars.js';
@@ -204,8 +216,11 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
  * drawn ROAD_SCALE times bigger. `drive`: the services' colours, for
  * shuttles that drive along the road instead of one standing (the website's
  * landing page, Lane); for anyone who asks for less motion one stands.
+ * Now's is the low one in a short window, so the card's steps fit under it.
  */
-export function Horizon({ stop = false, bus = null, shuttle = true, drive = null, on = 'now', low = false }) {
+export function Horizon({ stop = false, bus = null, shuttle = true, drive = null, on = 'now', low: lowAsked = false }) {
+  const short = useShort();
+  const low = lowAsked || (on === 'now' && short);
   const box = useRef(null);
   const [w, setW] = useState(0);
   // Shuttles only pull out while the road is on screen.

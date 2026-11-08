@@ -29,16 +29,22 @@ import androidx.compose.ui.unit.dp
 /** The window's width in dp, as it is now ([Widths]); 0, the phone layout, where nothing provides it (a widget, a preview). */
 internal val LocalWindowDp = compositionLocalOf { 0f }
 
-/** The window's width under [content], from the window itself, so a fold, a rotation or a resize lays it out again. */
+/** The window's height in dp, as it is now ([Widths.short]); 0, not short, where nothing provides it. */
+internal val LocalWindowHeightDp = compositionLocalOf { 0f }
+
+/** The window's width and height under [content], from the window itself, so a fold, a rotation or a resize lays it out again. */
 @Composable
 internal fun ProvideWindowWidth(content: @Composable () -> Unit) {
-    val px = LocalWindowInfo.current.containerSize.width
-    val dp = with(LocalDensity.current) { px.toDp().value }
-    CompositionLocalProvider(LocalWindowDp provides dp, content = content)
+    val size = LocalWindowInfo.current.containerSize
+    val (w, h) = with(LocalDensity.current) { size.width.toDp().value to size.height.toDp().value }
+    CompositionLocalProvider(LocalWindowDp provides w, LocalWindowHeightDp provides h, content = content)
 }
 
 /** Which layout the window's width calls for. */
 @Composable internal fun windowWidth(): Width = Widths.of(LocalWindowDp.current)
+
+/** Whether the window is short ([Widths.SHORT_BELOW]): the top of the page goes compact. */
+@Composable internal fun windowShort(): Boolean = Widths.short(LocalWindowHeightDp.current)
 
 /**
  * The page's column: as wide as there's room for up to [max], centred, its content still filling it. On a phone, where there's never more

@@ -17,6 +17,20 @@ enum WindowWidth: Comparable {
 
     /// Two panes on Now, Stops and Settings.
     var panes: Bool { self == .wide }
+
+    /// Under 500 tall the window is short, whatever its width: a phone on its
+    /// side. Short, the top of each page is compact (Now's horizon low, its
+    /// wordmark on the chips' row, its notices under the card; the bands
+    /// without their hills); the width still picks the layout.
+    static let shortBelow: CGFloat = 500
+
+    static func short(_ height: CGFloat) -> Bool { height < shortBelow }
+
+    /// Whether an iPhone may turn on its side: an iPhone stays upright, as on
+    /// Android, except where the screen's shorter side is 460 or more, as on
+    /// either panel of an iPhone Duo (466 and 669), which stands on its side in
+    /// the tent position. An ordinary iPhone is 440 across at most. iPads turn.
+    static func phoneTurns(shortSide: CGFloat) -> Bool { shortSide >= 460 }
 }
 
 /// The leading pane of Stops and Settings when wide: the list a page opens from.
@@ -28,6 +42,8 @@ let wideColumnWidth: CGFloat = 1040
 extension EnvironmentValues {
     /// The window's width class, set once at the root from its geometry.
     @Entry var windowWidth = WindowWidth.narrow
+    /// The window is under 500 tall (`WindowWidth.short`), set beside `windowWidth`.
+    @Entry var windowShort = false
     /// The first page in a wide detail pane: nothing under it to go back to.
     @Entry var paneRoot = false
     /// In a wide list pane, 360 wide: rows put their values under their names.
@@ -90,8 +106,9 @@ final class PaneBands {
 }
 
 extension View {
-    /// Reads the window's width from this view's geometry (safe areas
-    /// included, so the Duo's side status bar counts) into `windowWidth`.
+    /// Reads the window's width and height from this view's geometry (safe
+    /// areas included, so the Duo's side status bar and a keyboard count)
+    /// into `windowWidth` and `windowShort`.
     func readsWindowWidth() -> some View { modifier(ReadsWindowWidth()) }
 
     /// A list row marked as the one open beside it: the accent at 12% inside
@@ -121,6 +138,7 @@ extension Color {
 
 private struct ReadsWindowWidth: ViewModifier {
     @State private var width = WindowWidth.narrow
+    @State private var short = false
 
     func body(content: Content) -> some View {
         content
@@ -129,7 +147,22 @@ private struct ReadsWindowWidth: ViewModifier {
             } action: {
                 width = $0
             }
+            .onGeometryChange(for: Bool.self) {
+                WindowWidth.short($0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom)
+            } action: {
+                short = $0
+            }
+            // A fold moves the window to the other panel, and iOS asks which
+            // way it may turn only when told to (AppDelegate's orientations).
+            .onGeometryChange(for: CGSize.self) {
+                $0.size
+            } action: { _ in
+                for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                    scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            }
             .environment(\.windowWidth, width)
+            .environment(\.windowShort, short)
     }
 }
 

@@ -86,6 +86,18 @@ export function useMedia(query) {
   return on;
 }
 
+/**
+ * A window under this many CSS px tall is short (docs/agents/window-sizes.md):
+ * the top of Now, Stops and Settings goes compact, so the answer fits on a
+ * phone on its side. The width still picks the layout, at 600 and 800
+ * (`min-width: 800px` where it's read); the height only changes the top.
+ */
+export const shortBelow = 500;
+/** A short window, as app.css asks for it. */
+export const SHORT = `(max-height: ${shortBelow - 0.02}px)`;
+/** Whether the window is short, following it as it's resized or turned. */
+export const useShort = () => useMedia(SHORT);
+
 /** location.hash, following it as it changes. */
 export function useHash() {
   const [hash, set] = useState(location.hash);

@@ -74,7 +74,10 @@ final class SkyClock {
 /// and scrolls away with it; give the scroll view `.skyStatusBar()` so the
 /// status bar's icons read over it. `moonLow` puts the moon on a line of its
 /// own just over the hills, clear of a button at the top right; without
-/// `moon`, none.
+/// `moon`, none. In a short window (a phone on its side) the band ends 12
+/// under its words, with no hills and no line for the moon: the moon shows
+/// only where it has room beside the words (not `moonLow`), and a pull
+/// stretches the sky without drawing its sign and bus.
 struct SkyBand<Content: View>: View {
     var moonLow = false
     var moon = true
@@ -83,6 +86,7 @@ struct SkyBand<Content: View>: View {
     @Environment(\.skyPull) private var pull
     @Environment(\.listPane) private var listPane
     @Environment(\.paneBands) private var bands
+    @Environment(\.windowShort) private var short
     @State private var bandID = UUID()
     private let clock = SkyClock.shared
 
@@ -95,6 +99,8 @@ struct SkyBand<Content: View>: View {
     /// How much of the horizon shows: the city's top to the near hill.
     private static var low: CGFloat { 52 }
     private static var moonLine: CGFloat { 24 }
+    /// Short, under the words in place of the hills.
+    private static var shortEnd: CGFloat { 12 }
 
     var body: some View {
         let phase = clock.phase
@@ -103,11 +109,16 @@ struct SkyBand<Content: View>: View {
         let pulling = m?.open ?? false
         let paint = pull?.paint
         // Side by side, only the trailing pane draws the moon and stars.
-        let moon = self.moon && !listPane
+        let short = self.short
+        let moon = self.moon && !listPane && !(short && moonLow)
         VStack(alignment: .leading, spacing: 0) {
             content.skyInk(light: p.lightInk)
-            if moonLow { Spacer().frame(height: Self.moonLine) }
-            Spacer().frame(height: Self.low)
+            if short {
+                Spacer().frame(height: Self.shortEnd)
+            } else {
+                if moonLow { Spacer().frame(height: Self.moonLine) }
+                Spacer().frame(height: Self.low)
+            }
         }
         .modifier(MatchedBand(bands: bands, id: bandID, pulling: pulling))
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,8 +135,8 @@ struct SkyBand<Content: View>: View {
                             ]), startPoint: .zero, endPoint: CGPoint(x: 0, y: end)))
                     let top = geo.safeAreaInsets.top
                     if phase == .night && moon {
-                        let row: ClosedRange<CGFloat> =
-                            moonLow ? (end - Self.low - Self.moonLine)...(end - Self.low) : top...(end - Self.low)
+                        let ground = short ? end - Self.shortEnd : end - Self.low
+                        let row: ClosedRange<CGFloat> = moonLow ? (end - Self.low - Self.moonLine)...(end - Self.low) : top...ground
                         let pts: [(CGFloat, CGFloat, Double)] =
                             moonLow
                             ? [(0.69, 0.3, 0.6), (0.74, 0.75, 0.45), (0.79, 0.2, 0.7), (0.83, 0.65, 0.4), (0.98, 0.55, 0.45)]
@@ -141,6 +152,7 @@ struct SkyBand<Content: View>: View {
                         }
                         SkyDraw.crescent(&g, centre: CGPoint(x: size.width - 22 - 11, y: (row.lowerBound + row.upperBound) / 2), r: 12)
                     }
+                    if short { return }
                     var hills = g
                     hills.clip(to: Path(CGRect(x: 0, y: end - Self.low, width: size.width, height: Self.low)))
                     SkyDraw.horizon(
@@ -151,8 +163,10 @@ struct SkyBand<Content: View>: View {
                     }
                 }
             }
-            // Up under the status bar, and on up past the top for a pull.
+            // Up under the status bar, and on up past the top for a pull; out to
+            // the screen's edges on a phone on its side.
             .padding(.top, -600)
+            .ignoresSafeArea(edges: .horizontal)
             .accessibilityHidden(true)
         }
     }

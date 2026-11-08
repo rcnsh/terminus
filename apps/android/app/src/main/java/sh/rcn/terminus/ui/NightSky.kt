@@ -142,6 +142,9 @@ internal class SkyState {
     var dark by mutableStateOf(false)
     var road by mutableStateOf(Road())
 
+    /** The window is short ([Widths.short]): the horizon is the bands' low one, just the hills, with nothing on a road. */
+    var short by mutableStateOf(false)
+
     /** How far Now has scrolled, in pixels: read while drawing, so scrolling only redraws. */
     var scroll: () -> Int = { 0 }
 
@@ -318,6 +321,10 @@ internal fun Modifier.skyBehind(sky: SkyState, page: Color, pull: PullView? = nu
     val end = sky.end ?: return@drawBehind
     val p = sky.palette
     drawRect(skyBrush(p, end), size = Size(size.width, end))
+    if (sky.short) {
+        lowHorizon(end, page, p, sky.phase, pull)
+        return@drawBehind
+    }
     horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE, pull = pull)
 }
 
@@ -360,13 +367,18 @@ internal fun SkyHead(room: Dp = 34.dp, content: @Composable ColumnScope.() -> Un
     }
 }
 
-/** Where the sky ends on Now: room for the horizon (drawn by [skyBehind]), with [road]'s sign and bus on it. Off Now, nothing. */
+/**
+ * Where the sky ends on Now: room for the horizon (drawn by [skyBehind]), with [road]'s sign and bus on it; in a short window, room for the
+ * low horizon alone. Off Now, nothing.
+ */
 @Composable
 internal fun SkyGround(road: Road = Road()) {
     val sky = LocalSky.current ?: return
     SideEffect { sky.road = road }
     Spacer(
-        Modifier.fillMaxWidth().height(10.dp + HORIZON).onGloballyPositioned { sky.groundBottom = it.positionInRoot().y + it.size.height }
+        Modifier.fillMaxWidth().height(10.dp + if (sky.short) LOW else HORIZON).onGloballyPositioned {
+            sky.groundBottom = it.positionInRoot().y + it.size.height
+        }
     )
 }
 
@@ -820,8 +832,25 @@ private fun StatusStrip(color: Color, top: Dp, scroll: ScrollState) {
 /** The line a low moon ([SkyBand]) has to itself, just over the hills. */
 private val MOON_LINE = 24.dp
 
-/** How much of the horizon Settings' band shows: the city's top to the near hill. */
+/** How much of the horizon Settings' band shows: the city's top to the near hill. Now's whole horizon in a short window. */
 private val LOW = 52.dp
+
+/** Under a band's words in a short window, where the hills would be: the sky ends this far below them. */
+private val SHORT_FOOT = 12.dp
+
+/**
+ * The low horizon ending at [end] px: just the hills, no road, sun or town, as the bands draw it. A [pull] that's open grows a sign out of
+ * the near hill and drives its bus along the hilltop to it ([pullHill]).
+ */
+private fun DrawScope.lowHorizon(end: Float, page: Color, p: Palette, phase: Phase, pull: PullView?) {
+    val d = 1.dp.toPx()
+    // The strip's y 6 to 58 dp, at the foot.
+    val strip = end - 58 * d
+    clipRect(top = end - LOW.toPx(), bottom = end) {
+        horizon(strip, page, p, phase, Road(shuttle = false), 0f, withSun = false)
+        if (pull?.read()?.open == true) pullHill(pull, p, strip, d, size.width / d, lights = phase == Phase.DUSK || phase == Phase.NIGHT)
+    }
+}
 
 /** A few stars beside a page's title in the band, clear of the title: across (0–1), down (0–1 of the title's row). */
 private val BAND_STARS =
@@ -871,9 +900,13 @@ internal fun SkyBand(
     NightStatusBar(p.lightInk, p.sky[0])
     // Beside another pane's band: grown to the taller of the two, so the horizons meet, and the moon only in the trailing one.
     val pane = LocalSkyPane.current
+    // Short, no hills: the band ends just under its words, and a pull plays out in the room it opens, with no hill to drive along.
+    val short = windowShort()
+    val hills = if (short) 0.dp else LOW
     val band = remember { Any() }
     if (pane != null) DisposableEffect(pane) { onDispose { pane.skies.gone(band) } }
-    val shown = moon && pane?.leading != true
+    // Short, a low moon has no line of its own to keep clear of a button on, so it shows only beside the words, as on the iPhone.
+    val shown = moon && pane?.leading != true && !(short && moonLow)
     var natural by remember { mutableIntStateOf(0) }
     val grow = with(LocalDensity.current) { ((pane?.skies?.tallest ?: 0) - natural).coerceAtLeast(0).toDp() }
     Column(
@@ -884,7 +917,8 @@ internal fun SkyBand(
             // Beside the title, on the right: its row is between the status bar and the hills.
             // Low, the moon and stars keep to the last line over the hills, which
             // has nothing in it on the right, so none lands on a word however long.
-            val row = if (moonLow) (end - LOW.toPx() - MOON_LINE.toPx())..(end - LOW.toPx()) else top.toPx()..(end - LOW.toPx())
+            val floor = end - hills.toPx() - if (short) SHORT_FOOT.toPx() else 0f
+            val row = if (moonLow) (floor - MOON_LINE.toPx())..floor else top.toPx()..floor
             val mid = (row.start + row.endInclusive) / 2
             val r = 11 * d
             val centre = Offset(size.width - 22 * d - r, mid)
@@ -896,15 +930,9 @@ internal fun SkyBand(
                 )
                 crescent(centre, r + d)
             }
-            // The low horizon: the strip's y 6 to 58 dp, at the band's foot.
-            val strip = end - 58 * d
-            clipRect(top = end - LOW.toPx(), bottom = end) {
-                // Just the hills: the sun stays for Now's horizon.
-                horizon(strip, page, p, phase, Road(shuttle = false), 0f, withSun = false)
-                // Pulled down (the Stops tab): a sign grows out of the near hill and a bus drives to it.
-                if (pull?.read()?.open == true)
-                    pullHill(pull, p, strip, d, size.width / d, lights = phase == Phase.DUSK || phase == Phase.NIGHT)
-            }
+            // Just the hills, the sun staying for Now's horizon. Pulled down (the Stops tab): a sign grows out of the near hill and a bus
+            // drives to it.
+            if (!short) lowHorizon(end, page, p, phase, pull)
         }
     ) {
         Column(
@@ -918,9 +946,9 @@ internal fun SkyBand(
             SkyInk(true, p.lightInk) { Box(if (padded) Modifier.column().padding(horizontal = 16.dp) else Modifier.column()) { content() } }
             // The moon's own line, under the content, so it never sits on a button;
             // without it ([moonLine] false), the content's last line leaves the right clear for it.
-            if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
+            if (moonLow && moonLine && !short) Spacer(Modifier.height(MOON_LINE))
         }
-        Spacer(Modifier.height(grow + LOW))
+        Spacer(Modifier.height(grow + if (short) SHORT_FOOT else LOW))
     }
 }
 
