@@ -168,7 +168,7 @@ function fitted(points, box, pad, maxZoom) {
   return m.map(([x, y]) => [cx + (x - (x0 + x1) / 2) * scale, cy + (y - (y0 + y1) / 2) * scale]);
 }
 
-test("a chosen service's whole line fits the map's free area: clear of the pills, the status line, the buttons and a sheet, at every width", () => {
+test("a chosen service's whole line fits the map's free area: clear of the pills, the status line, the buttons and an open sheet, at every width", () => {
   const rect = (left, top, right, bottom) => ({ left, top, right, bottom });
   // The boxes as the browser lays them out (the stub, R2 chosen): the pills' row, "3 buses on R2", Back to campus and the zoom buttons.
   const layout = (w, h, rail = 0) => ({
@@ -188,12 +188,21 @@ test("a chosen service's whole line fits the map's free area: clear of the pills
     layout(1210, 834, 88),
     layout(1280, 860, 88),
   ];
-  // A stop's sheet open too: across the bottom of a phone, floating in the corner from 700.
-  const phone = layout(390, 784);
-  phone.covers.push({ rect: rect(0, 420, 390, 784), side: 'bottom' });
-  const wide = layout(1024, 768, 88);
-  wide.covers.push({ rect: rect(104, 300, 464, 752), side: 'left' });
-  for (const { box, covers } of [...widths, phone, wide]) {
+  // A stop's sheet open too (UHall's, as the browser lays it out): across the bottom of a phone, floating in the corner from 700.
+  const sheet = (w, h, rail, r, side) => {
+    const l = layout(w, h, rail);
+    l.covers.push({ rect: r, side, sheet: true });
+    return l;
+  };
+  const sheets = [
+    sheet(390, 784, 0, rect(0, 298, 390, 784), 'bottom'),
+    sheet(390, 784, 0, rect(0, 420, 390, 784), 'bottom'),
+    sheet(700, 940, 0, rect(16, 402, 376, 924), 'left'),
+    sheet(834, 1112, 88, rect(104, 574, 464, 1096), 'left'),
+    sheet(1024, 768, 88, rect(104, 300, 464, 752), 'left'),
+    sheet(1280, 860, 88, rect(104, 340, 464, 844), 'left'),
+  ];
+  for (const { box, covers } of [...widths, ...sheets]) {
     const pad = freePadding(box, covers);
     for (const svc of Object.keys(CAMPUS.routes)) {
       if (svc === 'P') continue;
@@ -208,7 +217,13 @@ test("a chosen service's whole line fits the map's free area: clear of the pills
       }
     }
   }
-  // However much is covered, a quarter of each way stays free for the line.
+  // However much is covered, 15% of each way stays free for the line, the margins given up first.
   const crowded = freePadding(rect(0, 0, 390, 400), [{ rect: rect(0, 0, 390, 380), side: 'top' }]);
-  assert.ok(crowded.top + crowded.bottom <= 300);
+  assert.ok(crowded.top + crowded.bottom <= 340);
+  const tight = freePadding(rect(0, 0, 390, 784), [
+    { rect: rect(0, 10, 390, 54), side: 'top' },
+    { rect: rect(0, 200, 390, 784), side: 'bottom' },
+  ]);
+  // 54 + 584 clear and two 24 px margins is 686, past 85% of 784 (666.4): each margin gives up 10.
+  assert.deepEqual([tight.top, tight.bottom], [54 + 14, 584 + 14], 'clear of both, the margins smaller');
 });
