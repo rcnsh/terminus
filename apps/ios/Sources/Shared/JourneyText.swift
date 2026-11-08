@@ -101,6 +101,21 @@ enum JourneyText {
         guard let at = j.boardDate else { return nil }
         let left = Int(at.timeIntervalSince(now))
         guard left > 0 else { return nil }
-        return left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)")
+        return inTime(left)
+    }
+
+    /// "in 4 min", then "in 1 min 5 s" for the last two: `left` seconds away.
+    static func inTime(_ left: Int) -> String {
+        left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)")
+    }
+
+    /// `left` seconds to a departure, in words. Gone: a minute ago from the
+    /// moment it leaves, never "0 min ago", as the web, Android and the Mac say it.
+    static func leaves(left: Int) -> String {
+        left > 60
+            ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)")
+            : left > 0
+                ? L("Leaves in %@ s", "\(left)")
+                : L("Left %@ min ago", "\(max(1, (-left + 59) / 60))")
     }
 }
