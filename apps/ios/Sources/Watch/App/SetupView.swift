@@ -30,6 +30,7 @@ struct SetupView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
         }
     }
 }

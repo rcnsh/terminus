@@ -24,10 +24,22 @@ final class PhoneLink: NSObject, WCSessionDelegate, @unchecked Sendable {
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
         guard state == .activated else { return }
         report()
+        // A code sent while the app wasn't running.
+        received(session.receivedApplicationContext)
     }
 
-    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        guard let code = WatchHandoff.code(in: userInfo) else { return }
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        received(applicationContext)
+    }
+
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        received(message)
+    }
+
+    /// A code not tried yet, redeemed once: the same one comes as a message and in the context.
+    private func received(_ m: [String: Any]) {
+        guard let code = WatchHandoff.code(in: m, tried: Shared.defaults.string(forKey: "watch.triedCode")) else { return }
+        Shared.defaults.set(code.code, forKey: "watch.triedCode")
         Task { @MainActor in await WatchModel.shared.redeem(code) }
     }
 }

@@ -2,11 +2,13 @@ import Foundation
 
 /// What the iPhone and its watch say to each other over WatchConnectivity,
 /// both ways, as plain dictionaries. The phone sends a pairing code (with
-/// its language and 12- or 24-hour choice, so the watch starts in them)
-/// by `transferUserInfo`, which waits for the watch if it's away; the watch
-/// says whether it's signed in by its application context, the latest of
-/// which the phone can read at any time. The token itself never crosses:
-/// the watch redeems the code for a session of its own (ADR 0016).
+/// its language and 12- or 24-hour choice, so the watch starts in them) as
+/// its application context, which waits for the watch app to run and keeps
+/// only the latest (a new code replaces the old, as on the server), and as
+/// a message too when the watch app is open, so it signs in at once. The
+/// watch says whether it's signed in by its own application context, which
+/// the phone can read at any time. The token itself never crosses: the
+/// watch redeems the code for a session of its own (ADR 0016).
 enum WatchHandoff {
     /// A code is good for 10 minutes on the server; one older than that
     /// (a transfer that waited for a watch left off) isn't tried.
@@ -23,9 +25,11 @@ enum WatchHandoff {
         ["pairCode": c.code, "lang": c.lang, "clock": c.clock, "sentAt": c.sentAt.timeIntervalSince1970]
     }
 
-    /// The code in a message from the phone, unless it has run out or isn't one.
-    static func code(in m: [String: Any], now: Date = Date()) -> Code? {
-        guard let code = m["pairCode"] as? String, !code.isEmpty, let at = m["sentAt"] as? Double else { return nil }
+    /// The code in a message from the phone, unless it has run out, isn't
+    /// one, or is `tried` already (the context stays until replaced, and is
+    /// read again each time the watch app starts).
+    static func code(in m: [String: Any], tried: String? = nil, now: Date = Date()) -> Code? {
+        guard let code = m["pairCode"] as? String, !code.isEmpty, code != tried, let at = m["sentAt"] as? Double else { return nil }
         let sentAt = Date(timeIntervalSince1970: at)
         guard now.timeIntervalSince(sentAt) < codeLife else { return nil }
         return Code(code: code, lang: m["lang"] as? String ?? "auto", clock: m["clock"] as? String ?? "auto", sentAt: sentAt)

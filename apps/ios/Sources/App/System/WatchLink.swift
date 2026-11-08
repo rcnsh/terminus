@@ -41,8 +41,9 @@ final class WatchLink: NSObject, WCSessionDelegate {
                     result = L("Couldn't reach your watch. Try again in a moment.")
                     return
                 }
-                WCSession.default.transferUserInfo(
-                    WatchHandoff.message(WatchHandoff.Code(code: code, lang: Lang.pref, clock: Clock.pref, sentAt: Date())))
+                let m = WatchHandoff.message(WatchHandoff.Code(code: code, lang: Lang.pref, clock: Clock.pref, sentAt: Date()))
+                try WCSession.default.updateApplicationContext(m)
+                if WCSession.default.isReachable { WCSession.default.sendMessage(m, replyHandler: nil) }
                 result = L("Sent. Open terminus on your watch.")
             } catch {
                 result = failureMessage(error)

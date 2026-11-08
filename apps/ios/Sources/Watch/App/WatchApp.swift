@@ -29,6 +29,7 @@ struct WatchRoot: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.scenePhase) private var phase
     @State private var choosing = false
+    @State private var started = false
 
     var body: some View {
         NavigationStack {
@@ -61,6 +62,15 @@ struct WatchRoot: View {
         // Every word drawn again in the account's language once it's known.
         .id(model.lang)
         .onChange(of: phase) { _, p in if p == .active { model.reopened() } }
+        #if DEBUG
+            .onAppear {
+                guard !started else { return }
+                started = true
+                if let v = WatchDevLaunch.view() { model.choose(v) }
+                if WatchDevLaunch.show == "targets" { choosing = true }
+            }
+            .sheet(isPresented: .constant(WatchDevLaunch.show == "complications")) { ComplicationGallery() }
+        #endif
         .onOpenURL { _ in model.choose(.plan) }
     }
 
@@ -74,8 +84,20 @@ struct WatchRoot: View {
     /// For screenshots and the UI test, in debug builds only, as the phone's
     /// DevLaunch: TERMINUS_RESET=1 starts signed out with nothing kept,
     /// TERMINUS_TOKEN signs in with that token, TERMINUS_LANG=en|zh sets
-    /// the language and TERMINUS_API_BASE the server.
+    /// the language and TERMINUS_API_BASE the server. TERMINUS_VIEW=nearby
+    /// or place:<key>:<label> opens on that view, and TERMINUS_SHOW=targets
+    /// on the list, or complications on each complication drawn in the app.
     enum WatchDevLaunch {
+        static var show: String? { ProcessInfo.processInfo.environment["TERMINUS_SHOW"] }
+
+        @MainActor static func view() -> WatchModel.View? {
+            guard let v = ProcessInfo.processInfo.environment["TERMINUS_VIEW"] else { return nil }
+            if v == "nearby" { return .nearby }
+            let parts = v.split(separator: ":", maxSplits: 2).map(String.init)
+            if parts.count == 3, parts[0] == "place" { return .place(key: parts[1], label: parts[2]) }
+            return nil
+        }
+
         static func apply() {
             let env = ProcessInfo.processInfo.environment
             if env["TERMINUS_RESET"] == "1" {

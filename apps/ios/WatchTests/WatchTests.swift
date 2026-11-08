@@ -212,6 +212,9 @@ func nextGoldens() -> [String] {
     #expect(WatchHandoff.code(in: m, now: at.addingTimeInterval(WatchHandoff.codeLife)) == nil)
     #expect(WatchHandoff.code(in: ["pairCode": "", "sentAt": at.timeIntervalSince1970], now: at) == nil)
     #expect(WatchHandoff.code(in: [:], now: at) == nil)
+    // Read again when the app starts: a code tried already isn't tried twice.
+    #expect(WatchHandoff.code(in: m, tried: "ABC234", now: at) == nil)
+    #expect(WatchHandoff.code(in: m, tried: "XYZ789", now: at) != nil)
 }
 
 @Test func theWatchTellsThePhoneHowItWasSignedOut() {

@@ -28,11 +28,13 @@ struct SkyBand<Content: View>: View {
                             Path(CGRect(origin: .zero, size: size)),
                             with: .linearGradient(
                                 Gradient(colors: p.sky), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
-                        if phase.lights { SkyDraw.starsAndMoon(&g, width: size.width, room: max(30, top), alpha: 0.8) }
+                        // The stars without the moon (no room for it: a moon of size 0),
+                        // as a phone's short band with its words across the whole width.
+                        if phase.lights { SkyDraw.starsAndMoon(&g, width: size.width, room: max(30, top), alpha: 0.8, moonRoom: 0) }
                         SkyDraw.horizon(&g, size: size, top: top, page: .black, p: p, phase: phase, road: road, scale: scale)
                     }
                     // Edge to edge, and up behind the clock.
-                    .padding(.horizontal, -24)
+                    .padding(.horizontal, -30)
                     .ignoresSafeArea(edges: .top)
                     .accessibilityHidden(true)
                 }

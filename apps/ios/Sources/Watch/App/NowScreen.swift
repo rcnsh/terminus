@@ -13,23 +13,35 @@ struct NowScreen: View {
         TimelineView(.periodic(from: .now, by: dimmed ? 60 : 1)) { _ in
             let now = ServerClock.now
             let shows = model.shows
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if case .nearby = shows {
-                        NearbyList(now: now)
-                    } else {
-                        SkyBand(road: road(shows, now)) { inks in
-                            CardHead(shows: shows, now: now).environment(\.inks, inks)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollViewReader { scroller in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if case .nearby = shows {
+                            NearbyList(now: now)
+                        } else {
+                            SkyBand(road: road(shows, now)) { inks in
+                                CardHead(shows: shows, now: now).environment(\.inks, inks)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .accessibilityIdentifier("now.head")
+                            if let e = model.error, model.answer != nil {
+                                Text(e).font(.footnote).foregroundStyle(Color.warn).padding(.top, 6)
+                            }
+                            CardGround(shows: shows, now: now).padding(.top, 4)
                         }
-                        .accessibilityIdentifier("now.head")
-                        if let e = model.error, model.answer != nil {
-                            Text(e).font(.footnote).foregroundStyle(Color.warn).padding(.top, 6)
-                        }
-                        CardGround(shows: shows, now: now).padding(.top, 4)
+                        LocationNotice().padding(.top, 14)
+                        Color.clear.frame(height: 1).id("foot")
                     }
-                    LocationNotice().padding(.top, 14)
+                    .padding(.horizontal, 6)
                 }
+                #if DEBUG
+                    .task {
+                        // For screenshots of the card's foot (TERMINUS_SCROLL=foot).
+                        guard ProcessInfo.processInfo.environment["TERMINUS_SCROLL"] == "foot" else { return }
+                        try? await Task.sleep(for: .seconds(3))
+                        scroller.scrollTo("foot", anchor: .bottom)
+                    }
+                #endif
             }
         }
     }
