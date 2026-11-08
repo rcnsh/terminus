@@ -163,14 +163,24 @@ internal fun BusesScreen(
     // Wide, the stop open beside the home is asked for by its page: its pinned card takes the page's times rather than asking again.
     val open = (state.stack.lastOrNull() as? BusRoute.Stop)?.code?.takeIf { wide }
     SideEffect { vm.openStop = open }
-    if (!wide) {
-        // Each stop or line opened slides over the last, and a back gesture can seek between them.
-        PageStack(state.stack, onBack = vm::back, pane) { top ->
+    // A page opened or closed beside the home leaves the search field as it was: unfocused, with no cursor or raised label in it.
+    val focus = LocalFocusManager.current
+    LaunchedEffect(state.stack.lastOrNull()) { if (wide) focus.clearFocus() }
+    // The home and each page keep where they were scrolled to under their own key, as the window goes from one pane to two (a fold, a
+    // resize) and back, rather than by where they sit in either layout.
+    val scrolls = rememberPaneScrolls()
+    val route: @Composable (BusRoute) -> Unit = { top ->
+        Keeps(scrolls, "$top@${state.stack.indexOf(top)}") {
             when (top) {
-                null -> Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar)
                 is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
                 is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
             }
+        }
+    }
+    if (!wide) {
+        // Each stop or line opened slides over the last, and a back gesture can seek between them.
+        PageStack(state.stack, onBack = vm::back, pane) { top ->
+            if (top == null) Keeps(scrolls, HOME) { Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar) } else route(top)
         }
         return
     }
@@ -183,23 +193,27 @@ internal fun BusesScreen(
     Row(pane) {
         Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) {
             CompositionLocalProvider(LocalSkyPane provides list) {
-                Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar, chosen = state.stack.lastOrNull())
+                Keeps(scrolls, HOME) {
+                    Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar, chosen = state.stack.lastOrNull())
+                }
             }
         }
         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         CompositionLocalProvider(LocalSkyPane provides page) {
             PageStack(state.stack, onBack = vm::back, Modifier.weight(1f).fillMaxHeight()) { top ->
-                when (top) {
-                    null -> NothingOpen(bar)
-                    is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, pinsKnown, onPin, bar)
-                    is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
-                }
+                if (top == null) NothingOpen(bar) else route(top)
             }
         }
     }
     // After the page's own back, so it's asked first: a search open in the home is cleared before the page beside it closes.
-    BackHandler(enabled = query.isNotEmpty()) { query = "" }
+    BackHandler(enabled = query.isNotEmpty()) {
+        query = ""
+        focus.clearFocus()
+    }
 }
+
+/** The home's key in BusesScreen's [PaneScrolls]. */
+private const val HOME = "home"
 
 /** The page pane when wide, with nothing open in it yet: its band of the sky, and what to do. */
 @Composable
@@ -262,7 +276,13 @@ private fun Home(
     top: Dp,
     chosen: BusRoute? = null,
 ) {
-    BackHandler(enabled = query.isNotEmpty()) { onQuery("") }
+    val focus = LocalFocusManager.current
+    // Back, or a result tapped, empties the search and leaves the field: no cursor left in it.
+    val clear = {
+        onQuery("")
+        focus.clearFocus()
+    }
+    BackHandler(enabled = query.isNotEmpty(), onBack = clear)
     val pinned = Pins.shown(pins, vm.pinLimit)
     // A page per pinned stop, then "Pin another stop"; laid out again when the pins change, on the stop that was showing.
     val pager = remember(pinned) { PagerState(vm.pinPage(pinned)) { pinned.size + 1 } }
@@ -278,7 +298,7 @@ private fun Home(
     // The sky stretches over the title, and the stop's first service drives to a sign on the hill.
     // The band, then the card or the search's results, scroll as one, so the
     // sky goes up with the page rather than staying over it.
-    val scroll = rememberScrollState()
+    val scroll = rememberPaneScroll()
     BusPull(
         showing?.let { pinLivery(state, it) },
         ::hillScene,
@@ -306,7 +326,7 @@ private fun Home(
                 }
                 if (query.isNotBlank()) {
                     SearchResults(state, query) { hit ->
-                        onQuery("")
+                        clear()
                         vm.show(
                             when (hit) {
                                 is BusHit.Service -> BusRoute.Line(hit.svc, null)
@@ -808,7 +828,7 @@ private fun StopRoute(
 ) {
     Refreshing(code, state.across, next = { vm.pageTimedAt = it }) { vm.refreshPage(code) }
     val phase = skyPhase()
-    val scroll = rememberScrollState()
+    val scroll = rememberPaneScroll()
     BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }, nextUpdateAt = { vm.pageNextAt(code) }) { pull ->
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
@@ -1519,7 +1539,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     val ctx = LocalContext.current
     val h12 = remember { hour12(ctx) }
     val color = line?.color ?: state.campus?.routes?.get(route.svc)?.color ?: GREY
-    val scroll = rememberScrollState()
+    val scroll = rememberPaneScroll()
     // Opened from a stop: scrolled to it once, so your stop is in view with the buses coming to it.
     // Its place is on the page under the band, which scrolls too: the band's height comes first.
     var hereY by remember { mutableStateOf<Int?>(null) }

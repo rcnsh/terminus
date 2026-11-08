@@ -572,7 +572,9 @@ private fun Tabs(
                     saved.SaveableStateProvider(t.name) {
                         when (t) {
                             Tab.Map ->
-                                Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
+                                // Over the bottom bar, the map stops at it; beside the rail it runs to the window's foot, and keeps
+                                // its credit, buttons and sheet clear of the system's bar there itself.
+                                Box(Modifier.fillMaxSize().padding(bottom = if (rail) 0.dp else inner.calculateBottomPadding())) {
                                     // The account's places, for "Save as place" on a stop.
                                     LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
                                     // Before the stop sheet asks, so its board has them too: after
@@ -612,6 +614,7 @@ private fun Tabs(
                                                     }
                                                 },
                                             ),
+                                        bottomInset = if (rail) inner.calculateBottomPadding() else 0.dp,
                                         onShowList = { svc, stop ->
                                             openStops(
                                                 when {

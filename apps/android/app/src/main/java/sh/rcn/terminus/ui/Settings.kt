@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -185,6 +184,8 @@ internal fun SettingsScreen(
             SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
         }
     }
+    // The list and each page keep where they were scrolled to under their own key, as the window goes from one pane to two and back.
+    val scrolls = rememberPaneScrolls()
     if (wide) {
         // Your trips, not the account: a first look shouldn't land on Sign out.
         val shown = open ?: SettingsPage.Trips
@@ -193,13 +194,13 @@ internal fun SettingsScreen(
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) {
                 CompositionLocalProvider(LocalSkyPane provides remember(skies) { SkyPane(skies, leading = true) }) {
-                    SettingsList(state, main, top, bottom, chosen = shown) { open = it }
+                    Keeps(scrolls, LIST) { SettingsList(state, main, top, bottom, chosen = shown) { open = it } }
                 }
             }
             VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 CompositionLocalProvider(LocalSkyPane provides remember(skies) { SkyPane(skies, leading = false) }) {
-                    key(shown) { page(shown, false) }
+                    key(shown) { Keeps(scrolls, shown.name) { page(shown, false) } }
                 }
             }
         }
@@ -207,10 +208,14 @@ internal fun SettingsScreen(
     }
     Column(Modifier.fillMaxSize()) {
         PageStack(listOfNotNull(open), onBack = { open = null }, Modifier.weight(1f)) { shown ->
-            if (shown == null) SettingsList(state, main, top, bottom) { open = it } else page(shown, true)
+            if (shown == null) Keeps(scrolls, LIST) { SettingsList(state, main, top, bottom) { open = it } }
+            else Keeps(scrolls, shown.name) { page(shown, true) }
         }
     }
 }
+
+/** The list's key in Settings' [PaneScrolls]. */
+private const val LIST = "list"
 
 /**
  * One page of Settings, [content] under its title in a slim band of the list's sky, scrolling away with the page; the page itself plain, in
@@ -220,7 +225,7 @@ internal fun SettingsScreen(
 private fun SettingsPagePane(page: SettingsPage, top: Dp, bottom: Dp, back: (() -> Unit)?, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().padding(bottom = bottom)) {
         val phase = skyPhase()
-        val scroll = rememberScrollState()
+        val scroll = rememberPaneScroll()
         Box(Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
                 SkyBand(phase, top) {
@@ -262,7 +267,7 @@ private fun SettingsList(
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
     val phase = skyPhase()
-    val scroll = rememberScrollState()
+    val scroll = rememberPaneScroll()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = bottom)) {
             SkyBand(phase, top) {
