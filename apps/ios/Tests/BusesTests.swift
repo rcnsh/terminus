@@ -140,6 +140,16 @@ final class BusesTests: XCTestCase {
             s.map { "\($0.towards[0]) \($0.etaS ?? -1) \($0.later.map(\.etaS)) \($0.dest ?? "")" }, ["A 50 [640] to A", "B 130 [940] to B"])
     }
 
+    func testAWayTheBoardLacksDoesNotTakeTheOtherWaysRow() throws {
+        let card = [
+            try row(#"{"svc":"D1","towards":["A"],"dest":"to A","etaS":100,"quality":"live","later":[]}"#),
+            try row(#"{"svc":"D1","towards":["B"],"dest":"to B","etaS":200,"quality":"live","later":[]}"#),
+        ]
+        let s = BusPinned.filled(card, from: [try row(#"{"svc":"D1","towards":["B"],"etaS":130,"quality":"live","later":[]}"#)], since: 60)
+        // A: its own time counted down, stale. B: the board's.
+        XCTAssertEqual(s.map { "\($0.towards[0]) \($0.etaS ?? -1) \($0.quality)" }, ["A 40 stale", "B 130 live"])
+    }
+
     func testPublicBusesStayOffThePinnedCard() throws {
         let card = [try row(#"{"svc":"D1","etaS":100,"quality":"live","later":[]}"#)]
         let s = BusPinned.filled(

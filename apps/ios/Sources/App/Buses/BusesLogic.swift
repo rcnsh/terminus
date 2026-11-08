@@ -92,9 +92,17 @@ enum BusPinned {
     /// on its own, a live time turning stale. Public buses aren't the card's.
     static func filled(_ card: [BoardRow], from rows: [BoardRow], since: Int) -> [BoardRow] {
         var left = rows.filter { !$0.paid }
-        return card.map { row in
-            let i = left.firstIndex { $0.svc == row.svc && $0.towards == row.towards } ?? left.firstIndex { $0.svc == row.svc }
-            guard let i else {
+        // Every row's own way first, then the service alone for those left
+        // without: one way the board lacks never takes the other way's row.
+        var match = [BoardRow?](repeating: nil, count: card.count)
+        for (k, row) in card.enumerated() {
+            if let i = left.firstIndex(where: { $0.svc == row.svc && $0.towards == row.towards }) { match[k] = left.remove(at: i) }
+        }
+        for (k, row) in card.enumerated() where match[k] == nil {
+            if let i = left.firstIndex(where: { $0.svc == row.svc }) { match[k] = left.remove(at: i) }
+        }
+        return zip(card, match).map { row, b in
+            guard let b else {
                 guard let eta = row.etaS, since > 0 else { return row }
                 var r = row
                 let s = eta - since
@@ -105,7 +113,6 @@ enum BusPinned {
                 r.laterText = nil
                 return r
             }
-            let b = left.remove(at: i)
             var r = b
             r.dest = row.dest
             r.destPlace = row.destPlace
