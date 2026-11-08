@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import Terminus
 
@@ -374,6 +375,16 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(abs(tiny[0] - (e[0] + e[2]) / 2) < 1e-9 && tiny[0] == tiny[2])
 }
 
+@Test func aSheetLetsTheCentreGoAsFarPastTheEdgeAsItHides() {
+    // A phone's sheet across the bottom, 500 points tall: the centre may go
+    // 500 points further south, and no further any other way.
+    let open = PanLimit.centre(width: 400, height: 800, zoom: 17)
+    let sheet = PanLimit.centre(width: 400, height: 800, zoom: 17, bottom: 500)
+    let world = 512 * pow(2.0, 17.0)
+    #expect(abs(merc(sheet[1]) - merc(open[1]) - 500 / world) < 1e-12)
+    #expect(sheet[0] == open[0] && sheet[2] == open[2] && sheet[3] == open[3])
+}
+
 @Test func aBusesSheetListsTheStopsAheadOfIt() throws {
     let list = try #require(
         BusList.parse(
@@ -447,4 +458,36 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(MapModel.pollDelay(base: 5, failures: 10, quiet: 0) == 60, "a minute at most")
     #expect(MapModel.pollDelay(base: 5, failures: 0, quiet: 90) == 90, "a Retry-After is waited out")
     #expect(MapModel.pollDelay(base: 15, failures: 0, quiet: 0) == 15)
+}
+
+// MARK: the room round a chosen line
+
+@Test func aLineIsFittedAboveASheetAcrossTheBottom() {
+    // A phone with a stop's sheet open: the line above it, under the pills.
+    let p = LineRoom.padding(
+        cover: UIEdgeInsets(top: 120, left: 0, bottom: 300, right: 0), buttons: .zero, in: CGSize(width: 402, height: 874))
+    #expect(p == UIEdgeInsets(top: 144, left: 40, bottom: 324, right: 40))
+}
+
+@Test func aLineIsFittedBesideAFloatingSheetAndTheButtons() {
+    let p = LineRoom.padding(
+        cover: UIEdgeInsets(top: 186, left: 376, bottom: 0, right: 0), buttons: CGSize(width: 56, height: 0),
+        in: CGSize(width: 1210, height: 834))
+    #expect(p == UIEdgeInsets(top: 210, left: 400, bottom: 40, right: 80))
+}
+
+@Test func aQuarterOfEachWayStaysFreeHoweverMuchIsCovered() {
+    // The sheet up to the pills (UHall's, on a phone): never a sliver of map.
+    let size = CGSize(width: 402, height: 874)
+    let p = LineRoom.padding(cover: UIEdgeInsets(top: 210, left: 0, bottom: 580, right: 0), buttons: .zero, in: size)
+    #expect(abs(p.top + p.bottom - size.height * 0.75) < 0.001)
+    #expect(p.top < p.bottom, "each side keeps its share")
+}
+
+// MARK: the device named
+
+@Test func theDeviceIsNamedAsItIs() async {
+    let pad = await MainActor.run { UIDevice.current.userInterfaceIdiom == .pad }
+    #expect(onIPad == pad)
+    #expect(signedOutHere.contains(pad ? "iPad" : "phone"))
 }

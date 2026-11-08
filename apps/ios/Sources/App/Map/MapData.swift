@@ -22,11 +22,15 @@ enum PanLimit {
     }
 
     /// [west, south, east, north] of where the centre may go at `zoom`; a point mid-map on a side the screen is wider than.
-    static func centre(width: Double, height: Double, zoom: Double) -> [Double] {
+    /// A sheet across the screen's `bottom` points lets the centre go that much
+    /// further south: past the map's edge there's only the sheet, so a line
+    /// can sit above it.
+    static func centre(width: Double, height: Double, zoom: Double, bottom: Double = 0) -> [Double] {
         let world = tile * pow(2, zoom)
         let (west, east) = inset(x(extent[0]), x(extent[2]), by: width / 2 / world)
-        let (top, bottom) = inset(y(extent[3]), y(extent[1]), by: height / 2 / world)
-        return [lon(west), lat(bottom), lon(east), lat(top)]
+        var (top, south) = inset(y(extent[3]), y(extent[1]), by: height / 2 / world)
+        south += bottom / world
+        return [lon(west), lat(south), lon(east), lat(top)]
     }
 
     private static func inset(_ a: Double, _ b: Double, by: Double) -> (Double, Double) {
