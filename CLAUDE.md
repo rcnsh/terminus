@@ -200,9 +200,10 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
     others already do it and match them, or improve all of them together.
   - The window's width picks the layout, never the device: under 600
     the phone layout, 600 to 799 that layout in a centred 560 column,
-    800 and over two panes (ADR 0015). The same widths and the same
-    panes in every client; only the navigation takes each platform's
-    own large-screen look.
+    800 and over two panes (ADR 0015). Under 500 tall the window is
+    short and the top of the page goes compact. The same sizes and the
+    same panes in every client; only the navigation takes each
+    platform's own large-screen look.
   - Judge it from a screenshot of every state (chosen and not, empty and
     full, light and dark) with fresh eyes, as a new user would, not from
     the code.
