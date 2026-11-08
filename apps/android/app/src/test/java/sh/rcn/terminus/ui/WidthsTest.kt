@@ -54,4 +54,32 @@ class WidthsTest {
         assertEquals(560f, Widths.sheetMax(600f))
         assertEquals(560f, Widths.sheetMax(1280f))
     }
+
+    @Test
+    fun underFiveHundredTallIsShort() {
+        // A phone on its side (412 tall, 360 on a small one), a short browser-like window.
+        for (dp in listOf(412f, 360f, 499.9f)) assertTrue(Widths.short(dp))
+        // A phone upright, a tablet on its side, a foldable open.
+        for (dp in listOf(500f, 915f, 800f, 1280f)) assertFalse(Widths.short(dp))
+    }
+
+    @Test
+    fun noHeightToGoByIsNotShort() {
+        // A widget or a preview, where nothing provides the window.
+        assertFalse(Widths.short(0f))
+    }
+
+    @Test
+    fun shortIsIndependentOfWidth() {
+        // A phone on its side 915 wide is still two panes; 412 tall makes it short too.
+        assertEquals(Width.Wide, Widths.of(915f))
+        assertTrue(Widths.short(412f))
+    }
+
+    @Test
+    fun noticesGoUnderTheCardWhenShort() {
+        assertEquals(Notices.UnderCard, Widths.notices(412f))
+        assertEquals(Notices.AboveChips, Widths.notices(915f))
+        assertEquals(Notices.AboveChips, Widths.notices(0f))
+    }
 }
