@@ -37,10 +37,12 @@ struct NowScreen: View {
                 }
                 #if DEBUG
                     .task {
-                        // For screenshots of the card's foot (TERMINUS_SCROLL=foot).
-                        guard ProcessInfo.processInfo.environment["TERMINUS_SCROLL"] == "foot" else { return }
+                        // For screenshots of the card's steps (TERMINUS_SCROLL=ground) or its foot (foot).
+                        guard let to = ProcessInfo.processInfo.environment["TERMINUS_SCROLL"], ["ground", "foot"].contains(to) else {
+                            return
+                        }
                         try? await Task.sleep(for: .seconds(3))
-                        scroller.scrollTo("foot", anchor: .bottom)
+                        scroller.scrollTo(to, anchor: to == "foot" ? .bottom : .top)
                     }
                 #endif
             }

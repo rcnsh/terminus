@@ -48,7 +48,7 @@ iPhone changes reach users only through a release
     opens on that view, `TERMINUS_SHOW=targets` on the list,
     `TERMINUS_SHOW=complications` on each complication family drawn in
     the app (a face can't be edited from a script), and
-    `TERMINUS_SCROLL=foot` scrolls Now to its foot.
+    `TERMINUS_SCROLL=ground` scrolls Now to its steps, `foot` to its foot.
   - The UI test runs against a stub you start:
     `TEST_RUNNER_TERMINUS_STUB=http://127.0.0.1:$PORT xcodebuild test
     -scheme "Terminus Watch" -destination "id=<watch>"
