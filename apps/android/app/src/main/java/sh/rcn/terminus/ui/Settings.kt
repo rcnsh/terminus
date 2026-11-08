@@ -96,6 +96,7 @@ import sh.rcn.terminus.Clock
 import sh.rcn.terminus.CrashReports
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.Device
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LeaveAlerts
@@ -495,7 +496,7 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
                 when (Lang.pref(ctx)) {
                     Lang.EN -> "English"
                     Lang.ZH -> "中文"
-                    else -> stringResource(R.string.follow_device)
+                    else -> stringResource(DeviceKind.word(R.string.follow_device))
                 },
                 when (state.profile?.clock) {
                     Clock.H12 -> stringResource(R.string.clock_12)
@@ -514,12 +515,12 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
     }
 }
 
-/** "Follow this phone", or "Follow this tablet" on a tablet (values-sw600dp, as every string that names the device). */
+/** "Follow this phone", or "Follow this tablet" on a tablet ([DeviceKind.word], as every string that names the device). */
 private fun themeName(theme: String) =
     when (theme) {
         Theme.LIGHT -> R.string.theme_light
         Theme.DARK -> R.string.theme_dark
-        else -> R.string.follow_device
+        else -> DeviceKind.word(R.string.follow_device)
     }
 
 private fun paceName(pace: String) =
@@ -596,7 +597,7 @@ private fun SettingsPageContent(
         SettingsPage.Devices ->
             Groups {
                 if (state.email == null) {
-                    Hint(stringResource(R.string.not_signed_in_hint))
+                    Hint(stringResource(DeviceKind.word(R.string.not_signed_in_hint)))
                     InkButton(stringResource(R.string.add_email), onAddEmail)
                 } else {
                     Devices(state, account, main, onSignedOut)
@@ -605,7 +606,7 @@ private fun SettingsPageContent(
         SettingsPage.Language ->
             Groups {
                 LanguagePicker(account)
-                Group(stringResource(R.string.time_format), stringResource(R.string.time_format_hint_auto)) {
+                Group(stringResource(R.string.time_format), stringResource(DeviceKind.word(R.string.time_format_hint_auto))) {
                     ClockPills(state.profile, account)
                 }
             }
@@ -905,7 +906,7 @@ private fun AccountSection(
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(account::exportTo) }
     val email = state.email
     if (email == null) {
-        Group(stringResource(R.string.not_signed_in), stringResource(R.string.not_signed_in_hint)) {
+        Group(stringResource(R.string.not_signed_in), stringResource(DeviceKind.word(R.string.not_signed_in_hint))) {
             InkButton(stringResource(R.string.add_email), onAddEmail, Modifier.fillMaxWidth().padding(16.dp))
         }
     } else {
@@ -988,7 +989,7 @@ private fun AccountSection(
         "signout" ->
             AlertDialog(
                 onDismissRequest = { confirm = null },
-                title = { Text(stringResource(R.string.sign_out_title)) },
+                title = { Text(stringResource(DeviceKind.word(R.string.sign_out_title))) },
                 text = { Text(stringResource(R.string.sign_out_text, email.orEmpty())) },
                 confirmButton = {
                     TextButton(
@@ -1032,7 +1033,7 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false),
                             )
-                            if (d.current) Tag(stringResource(R.string.this_phone_tag))
+                            if (d.current) Tag(stringResource(DeviceKind.word(R.string.this_phone_tag)))
                         }
                         val now = System.currentTimeMillis()
                         val used =
@@ -1059,7 +1060,9 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
         AlertDialog(
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.remove_device_title, d.name)) },
-            text = { Text(if (d.current) stringResource(R.string.remove_this_phone) else stringResource(R.string.remove_other)) },
+            text = {
+                Text(if (d.current) stringResource(DeviceKind.word(R.string.remove_this_phone)) else stringResource(R.string.remove_other))
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1419,7 +1422,7 @@ private fun NearbyWidgetSettings() {
         exact = LeaveAlerts.canBeExact(ctx)
         onPauseOrDispose {}
     }
-    Group(stringResource(R.string.nearby_widget), stringResource(R.string.new_to_nus_hint)) {
+    Group(stringResource(R.string.nearby_widget), stringResource(DeviceKind.word(R.string.new_to_nus_hint))) {
         FieldRow(
             stringResource(R.string.widget_minutes),
             Modifier.clickable { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } },
@@ -1451,7 +1454,7 @@ private fun ThemePicker() {
     val ctx = LocalContext.current
     // Read again when it changes, so the pill moves before the theme does.
     var pref by remember { mutableStateOf(Theme.pref(ctx)) }
-    Group(stringResource(R.string.theme), stringResource(R.string.theme_hint)) {
+    Group(stringResource(R.string.theme), stringResource(DeviceKind.word(R.string.theme_hint))) {
         Pills(
             listOf(
                 Theme.AUTO to stringResource(R.string.auto),

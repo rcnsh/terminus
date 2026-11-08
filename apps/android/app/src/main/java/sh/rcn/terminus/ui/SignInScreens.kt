@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.CODE_LENGTH
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.R
 import sh.rcn.terminus.codeEdit
@@ -300,7 +301,10 @@ private fun EmailStep(adding: Boolean, busy: Boolean, message: String?, onSend: 
     val ok = looksLikeEmail(email)
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    Group(stringResource(R.string.your_email), stringResource(if (adding) R.string.add_email_why else R.string.sign_in_why)) {
+    Group(
+        stringResource(R.string.your_email),
+        stringResource(if (adding) DeviceKind.word(R.string.add_email_why) else R.string.sign_in_why),
+    ) {
         OutlinedTextField(
             value = email,
             onValueChange = {
@@ -349,7 +353,7 @@ private fun ColumnScope.Waiting(
     Action(stringResource(if (busy) R.string.checking else R.string.sign_in), code.length == CODE_LENGTH && !busy, message) { onCode(code) }
     // Or approve it from the email on another device, by the number shown here.
     Group(stringResource(R.string.other_device_title)) {
-        FieldRow(stringResource(R.string.other_device_row), sub = stringResource(R.string.signs_in_itself)) {
+        FieldRow(stringResource(R.string.other_device_row), sub = stringResource(DeviceKind.word(R.string.signs_in_itself))) {
             val numberLabel = stringResource(R.string.number_to_choose, s.match.toString())
             Box(
                 Modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(14.dp))
@@ -446,11 +450,11 @@ private fun CodeBoxes(field: TextFieldValue, onChange: (TextFieldValue) -> Unit,
 
 @Composable
 private fun Choose(s: SignIn.Choose, busy: Boolean, message: String?, onChoose: (Boolean) -> Unit) {
-    Text(stringResource(R.string.which_setup_text, s.email), modifier = Modifier.padding(horizontal = 4.dp))
+    Text(stringResource(DeviceKind.word(R.string.which_setup_text), s.email), modifier = Modifier.padding(horizontal = 4.dp))
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Action(stringResource(R.string.keep_account), !busy, message) { onChoose(false) }
         OutlinedButton(onClick = { onChoose(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.replace_with_phone))
+            Text(stringResource(DeviceKind.word(R.string.replace_with_phone)))
         }
         Hint(stringResource(R.string.replace_hint, s.email), Modifier.padding(horizontal = 4.dp))
     }

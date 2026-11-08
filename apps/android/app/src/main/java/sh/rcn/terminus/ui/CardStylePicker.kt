@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Card
 import sh.rcn.terminus.CardStyle
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.NextAnswer
@@ -41,7 +42,7 @@ internal fun CardStylePicker() {
     // Read again when it changes, so the pill and the sample move at once.
     var chosen by remember { mutableStateOf(CardStyle.pref(ctx)) }
     val sample = sampleAnswer()
-    Group(stringResource(R.string.card_style), stringResource(R.string.card_style_hint)) {
+    Group(stringResource(R.string.card_style), stringResource(DeviceKind.word(R.string.card_style_hint))) {
         Pills(
             CardStyle.ALL.map { it to stringResource(CardStyle.name(it)) },
             chosen,
