@@ -447,6 +447,30 @@ class BusesTest {
     }
 
     @Test
+    fun aWayTheBoardLacksDoesNotTakeTheOtherWaysBus() {
+        // The card lists D1 towards B, then towards A; the board has only the bus towards A, due in 30 s.
+        val card =
+            PinnedStop(
+                NearbyStop(
+                    "COM3",
+                    "COM 3",
+                    null,
+                    true,
+                    listOf(
+                        BoardRow("D1", 200, "live", later = listOf(LaterBus(1_000, "scheduled")), towards = listOf("B")),
+                        BoardRow("D1", 100, "live", later = listOf(LaterBus(700, "scheduled")), towards = listOf("A")),
+                    ),
+                ),
+                gotMs = 0L,
+            )
+        val board =
+            Board("COM3", "Computing 3", null, true, listOf(BoardRow("D1", 30, "live", towards = listOf("A"))), null, gotMs = 60_000L)
+        val (b, a) = card.withBoard(board).stop.board
+        assertEquals("towards B: its own countdown, a minute on, stale", listOf(140, "stale"), listOf(b.etaS, b.quality))
+        assertEquals("towards A: the board's bus", listOf(30, "live"), listOf(a.etaS, a.quality))
+    }
+
+    @Test
     fun anOpenPinnedCardsMissingServiceCountsDownFromItsOwnAnswer() {
         val card = PinnedStop(NearbyStop("COM3", "COM 3", null, true, listOf(BoardRow("D2", 300, "live"))), gotMs = 0L)
         val empty = { atMs: Long -> Board("COM3", "Computing 3", null, true, emptyList(), null, gotMs = atMs) }

@@ -381,9 +381,13 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
         val now = board.gotMs ?: gotMs
         val since = if (now != null && answeredMs != null) ((now - answeredMs) / 1000).toInt() else 0
         val left = board.rows.filterNot { it.paid }.toMutableList()
+        // Every row's own way first, then the service alone for the rows still without one: in one pass, a row for a way the board lacks
+        // would take the bus a later row's way has.
+        val exact = own.board.map { row -> left.firstOrNull { it.svc == row.svc && it.towards == row.towards }?.also { left.remove(it) } }
+        val taken = own.board.mapIndexed { i, row -> exact[i] ?: left.firstOrNull { it.svc == row.svc }?.also { left.remove(it) } }
         val rows =
-            own.board.map { row ->
-                val b = left.firstOrNull { it.svc == row.svc && it.towards == row.towards } ?: left.firstOrNull { it.svc == row.svc }
+            own.board.mapIndexed { i, row ->
+                val b = taken[i]
                 if (b == null) {
                     if (row.etaS == null || since <= 0) row
                     else
@@ -397,7 +401,6 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
                             )
                         }
                 } else {
-                    left.remove(b)
                     row.copy(
                         etaS = b.etaS,
                         quality = b.quality,
