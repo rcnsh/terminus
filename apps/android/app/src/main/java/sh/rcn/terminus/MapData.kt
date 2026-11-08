@@ -192,13 +192,35 @@ data class CampusMap(
         return known.minByOrNull { (it.lat - lat).pow(2) + ((it.lon - lon) * k).pow(2) }?.code ?: codes.firstOrNull()
     }
 
-    /** [west, south, east, north] of the main campus (not P's trip to the Botanic Gardens). */
+    /** [west, south, east, north] of the main campus's stops (not P's trip to the Botanic Gardens). */
     fun coreBounds(core: Set<String>): DoubleArray {
         val pts = stops.filter { it.code in core }.ifEmpty { stops }
         return doubleArrayOf(pts.minOf { it.lon }, pts.minOf { it.lat }, pts.maxOf { it.lon }, pts.maxOf { it.lat })
     }
 
+    /**
+     * [west, south, east, north] of the main campus as the map draws it: its stops ([coreBounds]) and the lines round them, so a loop that
+     * turns past the last stop (K's and D2's in the east) isn't cut off at the window's edge. Only the lines within [NEAR_DEG] of the stops
+     * count, which leaves out P's trip to the Botanic Gardens.
+     */
+    fun coreExtent(core: Set<String>): DoubleArray {
+        val b = coreBounds(core)
+        val near =
+            routes.values
+                .flatMap { it.line }
+                .filter { (lon, lat) -> lon in b[0] - NEAR_DEG..b[2] + NEAR_DEG && lat in b[1] - NEAR_DEG..b[3] + NEAR_DEG }
+        return doubleArrayOf(
+            minOf(b[0], near.minOfOrNull { it[0] } ?: b[0]),
+            minOf(b[1], near.minOfOrNull { it[1] } ?: b[1]),
+            maxOf(b[2], near.maxOfOrNull { it[0] } ?: b[2]),
+            maxOf(b[3], near.maxOfOrNull { it[1] } ?: b[3]),
+        )
+    }
+
     companion object {
+        /** How far past the campus's stops a line still counts as the campus's ([coreExtent]): about 110 m, past every loop's turn. */
+        const val NEAR_DEG = 0.001
+
         /** The stops and routes from `/api/campus`; the core stops' codes come back alongside. */
         fun parse(o: JSONObject): Pair<CampusMap, Set<String>> {
             val s = o.getJSONArray("stops")
