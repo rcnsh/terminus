@@ -23,6 +23,12 @@ internal object Widths {
     const val MEDIUM_FROM = 600f
     const val WIDE_FROM = 800f
 
+    /**
+     * A window shorter than this is short, whatever its width (a phone on its side): the top of the page goes compact, the low horizon on
+     * Now, the wordmark on the chips' row, notices under the card, the bands without their hills. Nothing else about the layout changes.
+     */
+    const val SHORT_BELOW = 500f
+
     /** From here a stop's or bus's sheet on the map floats in the bottom-left corner rather than lying across the bottom. */
     const val FLOATING_SHEET_FROM = 700f
 
@@ -42,6 +48,21 @@ internal object Widths {
             else -> Width.Narrow
         }
 
+    /** Whether a window [heightDp] tall is short ([SHORT_BELOW]); 0, nothing to go by (a widget, a preview), is not. */
+    fun short(heightDp: Float): Boolean = heightDp > 0f && heightDp < SHORT_BELOW
+
+    /**
+     * Where Now's notices (the location prompt, an update) go in a window [heightDp] tall: under the card when short, so the answer comes
+     * first.
+     */
+    fun notices(heightDp: Float): Notices = if (short(heightDp)) Notices.UnderCard else Notices.AboveChips
+
+    /**
+     * Whether a screen [smallestWidthDp] across its narrow side stays upright: a phone, folded or not. A tablet or an open foldable turns
+     * (from Android 16 the system ignores a lock there anyway). 0, nothing to go by, turns.
+     */
+    fun upright(smallestWidthDp: Int): Boolean = smallestWidthDp > 0 && smallestWidthDp < MEDIUM_FROM
+
     fun floatingSheet(dp: Float): Boolean = dp >= FLOATING_SHEET_FROM
 
     /** How wide Now's words go in a window [dp] wide: beside Today when wide and there's a [day], else lined up with the card alone. */
@@ -49,4 +70,13 @@ internal object Widths {
 
     /** The widest a sheet or dialog goes in a window [dp] wide: the column from medium, else the window's own. */
     fun sheetMax(dp: Float): Float = if (of(dp) == Width.Narrow) dp else COLUMN
+}
+
+/** Where Now's notices sit ([Widths.notices]). */
+internal enum class Notices {
+    /** Between the wordmark and the chips, as in a tall window. */
+    AboveChips,
+
+    /** Just under the card's buttons: in two panes, the foot of the card's column. */
+    UnderCard,
 }

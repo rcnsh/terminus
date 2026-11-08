@@ -27,6 +27,7 @@ import {
   useEffect,
   useMedia,
   useRef,
+  useShort,
   useState,
   useStore,
 } from '/assets/ui.js';
@@ -915,8 +916,13 @@ function InstallHint() {
 }
 const installDismissed = store(false);
 
-/** Next, Nearby, each favourite, then places added from the search: the phone app's chips, then Elsewhere, which opens the search. */
+/**
+ * Next, Nearby, each favourite, then places added from the search: the phone
+ * app's chips, then Elsewhere, which opens the search. In a short window the
+ * wordmark leads the row, in place of the header (app.css).
+ */
 function Chips() {
+  const short = useShort();
   const to = useStore(target);
   const list = useStore(places);
   const extra = useStore(added);
@@ -927,6 +933,7 @@ function Chips() {
   `;
   return html`
     <div class="app-chips" role="group" aria-label=${t('Where to')}>
+      ${short && html`<a class="brand" href="/app/"><img src="/assets/mark.svg" alt="" /><span class="wordmark">termi<b>nus</b></span></a>`}
       ${chip(t('Next'), { kind: 'plan' })}
       ${chip(t('Nearby'), { kind: 'nearby' })}
       ${list.map((p) => chip(p.label, { kind: 'place', key: p.key }))}
@@ -1619,15 +1626,18 @@ function App() {
   // From 800 the tabs are a rail drawn ahead of the page (Rail); the bar
   // along the bottom stays last, under the page.
   const rail = useMedia('(min-width: 800px)');
+  // Notices above the chips; in a short window, after the card and Go later, so the answer comes first.
+  const short = useShort();
+  const notices = html`<${InstallHint} /><${Banner} />`;
   return html`
     <main class=${split ? 'wrap app-main split' : 'wrap app-main'} id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
       <h1 class="sr-only">${t('Now')}</h1>
-      <${InstallHint} />
-      <${Banner} />
+      ${!short && notices}
       <${Chips} />
       <${Where} />
       <${CardArea} />
       <${GoLater} />
+      ${short && html`<div class="short-notices">${notices}</div>`}
       ${split ? html`<${NowSide} />` : html`<${Today} />`}
     </main>
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Stops')}</h1><${BusesArea} /></main>
