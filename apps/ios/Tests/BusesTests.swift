@@ -43,7 +43,7 @@ final class BusesTests: XCTestCase {
         ]
         // A minute later the board still sends both live times: the guess stays, a minute nearer.
         let both = BusPinned.filled(
-            card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[{"etaS":540,"quality":"live"}]}"#)], gone: 60)
+            card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[{"etaS":540,"quality":"live"}]}"#)], since: 60)
         XCTAssertEqual(both[0].later.map(\.etaS), [540, 1440])
         XCTAssertEqual(both[0].later.map(\.quality), ["live", "scheduled"])
         // Its times from the board, its words still the card's: the board has no "via UTown".
@@ -51,22 +51,18 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(both[0].dest, "via UTown")
         // The night's last bus: the board drops the "then". The card's old live
         // then isn't carried on counting down; only the guess is.
-        let last = BusPinned.filled(card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[]}"#)], gone: 60)
+        let last = BusPinned.filled(card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[]}"#)], since: 60)
         XCTAssertEqual(last[0].later.map(\.etaS), [1440])
         XCTAssertEqual(last[0].later.map(\.quality), ["scheduled"])
         // Four minutes on the first has gone and the board shows one bus (the
         // card's second, a little early): the guess after it says ~21, worded
         // from the time left, not the server's "~25 min".
         let later = BusPinned.filled(
-            card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","eta":"1 min","later":[]}"#)], gone: 240)
+            card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","eta":"1 min","later":[]}"#)], since: 240)
         XCTAssertEqual(NearbyCells.cells(later[0]).map(\.text), ["1 min", "~21", "–"])
-        // The board's services are the card's: one only the board has is its own.
-        let other = BusPinned.filled(card, from: [try row(#"{"svc":"K","etaS":300,"quality":"live","later":[]}"#)], gone: 60)
-        XCTAssertEqual(other.map(\.svc), ["K"])
-        XCTAssertEqual(other[0].later.map(\.etaS), [])
         // The rest is the board's: a service that has stopped for the night, or how full it is, shows at once.
         let ended = BusPinned.filled(
-            card, from: [try row(#"{"svc":"D2","quality":"ended","running":false,"stopped":"ended","crowd":"low","later":[]}"#)], gone: 60)
+            card, from: [try row(#"{"svc":"D2","quality":"ended","running":false,"stopped":"ended","crowd":"low","later":[]}"#)], since: 60)
         XCTAssertFalse(ended[0].running)
         XCTAssertEqual(ended[0].stopped, "ended")
         XCTAssertEqual(ended[0].crowd, "low")
@@ -81,9 +77,88 @@ final class BusesTests: XCTestCase {
         ]
         // 100 s on, the first has come; the board has the other two, the guessed one running ahead (1150, not 1200).
         let filled = BusPinned.filled(
-            card, from: [try row(#"{"svc":"D1","etaS":600,"quality":"live","later":[{"etaS":1150,"quality":"live"}]}"#)], gone: 100)
+            card, from: [try row(#"{"svc":"D1","etaS":600,"quality":"live","later":[{"etaS":1150,"quality":"live"}]}"#)], since: 100)
         XCTAssertEqual(filled[0].later.map(\.etaS), [1150])
         XCTAssertEqual(filled[0].later.map(\.quality), ["live"])
+    }
+
+    func testEachBoardIsMergedFromTheCardsOwnAnswer() throws {
+        // The card's answer at 0 s: D2 in 50 s, then 600 live, and two guesses.
+        let card = [
+            try row(
+                #"{"svc":"D2","etaS":50,"quality":"live","later":[{"etaS":600,"quality":"live"},{"etaS":1200,"quality":"scheduled"},{"etaS":1800,"quality":"scheduled"}]}"#
+            )
+        ]
+        // At 10 s the board shows only the next; at 20 s it shows the 600 bus again.
+        let first = BusPinned.filled(card, from: [try row(#"{"svc":"D2","etaS":40,"quality":"live","later":[]}"#)], since: 10)
+        XCTAssertEqual(first[0].later.map(\.etaS), [1190, 1790])
+        let second = BusPinned.filled(
+            card, from: [try row(#"{"svc":"D2","etaS":30,"quality":"live","later":[{"etaS":580,"quality":"live"}]}"#)], since: 20)
+        // Both guesses still after it: neither went missing with the first board.
+        XCTAssertEqual(second[0].later.map(\.etaS), [580, 1180, 1780])
+    }
+
+    func testAGuessOnlyTheBoardHadDoesNotComeBack() throws {
+        // The card has D1 and nothing after; the board had its own guess, then didn't.
+        let card = [try row(#"{"svc":"D1","etaS":300,"quality":"live","later":[]}"#)]
+        let withGuess = BusPinned.filled(
+            card, from: [try row(#"{"svc":"D1","etaS":225,"quality":"live","later":[{"etaS":880,"quality":"scheduled"}]}"#)], since: 75)
+        XCTAssertEqual(withGuess[0].later.map(\.etaS), [880])
+        let without = BusPinned.filled(card, from: [try row(#"{"svc":"D1","etaS":210,"quality":"live","later":[]}"#)], since: 90)
+        XCTAssertEqual(without[0].later.map(\.etaS), [])
+    }
+
+    func testAServiceTheBoardDoesNotHaveStaysCountedDown() throws {
+        let card = [
+            try row(#"{"svc":"D1","etaS":100,"quality":"live","later":[{"etaS":700,"quality":"scheduled"}]}"#),
+            try row(#"{"svc":"D2","etaS":200,"quality":"live","later":[{"etaS":900,"quality":"scheduled"}]}"#),
+        ]
+        let s = BusPinned.filled(
+            card, from: [try row(#"{"svc":"D1","etaS":40,"quality":"live","later":[{"etaS":640,"quality":"live"}]}"#)], since: 60)
+        XCTAssertEqual(s.map(\.svc), ["D1", "D2"])
+        XCTAssertEqual(s[0].later.map(\.etaS), [640])
+        // D2 a minute on, no longer live, its guess after it.
+        XCTAssertEqual(s[1].etaS, 140)
+        XCTAssertEqual(s[1].quality, "stale")
+        XCTAssertEqual(s[1].later.map(\.etaS), [840])
+    }
+
+    func testOneServiceBothWaysKeepsEachWaysOwnRowInTheCardsOrder() throws {
+        let card = [
+            try row(
+                #"{"svc":"D1","towards":["A"],"dest":"to A","etaS":100,"quality":"live","later":[{"etaS":700,"quality":"scheduled"}]}"#),
+            try row(
+                #"{"svc":"D1","towards":["B"],"dest":"to B","etaS":200,"quality":"live","later":[{"etaS":1000,"quality":"scheduled"}]}"#),
+        ]
+        let s = BusPinned.filled(
+            card,
+            from: [
+                try row(#"{"svc":"D1","towards":["B"],"etaS":130,"quality":"live","later":[]}"#),
+                try row(#"{"svc":"D1","towards":["A"],"etaS":50,"quality":"live","later":[]}"#),
+            ], since: 60)
+        XCTAssertEqual(
+            s.map { "\($0.towards[0]) \($0.etaS ?? -1) \($0.later.map(\.etaS)) \($0.dest ?? "")" }, ["A 50 [640] to A", "B 130 [940] to B"])
+    }
+
+    func testPublicBusesStayOffThePinnedCard() throws {
+        let card = [try row(#"{"svc":"D1","etaS":100,"quality":"live","later":[]}"#)]
+        let s = BusPinned.filled(
+            card,
+            from: [
+                try row(#"{"svc":"95","paid":true,"etaS":30,"quality":"live","later":[]}"#),
+                try row(#"{"svc":"D1","etaS":40,"quality":"live","later":[]}"#),
+            ], since: 60)
+        XCTAssertEqual(s.map(\.svc), ["D1"])
+    }
+
+    func testACancelledAskIsNotAFailure() {
+        // The page that asked went (replaced beside the list), or the session did: asked again, not shown as failed.
+        XCTAssertTrue(BusAsk.cancelled(CancellationError()))
+        XCTAssertTrue(BusAsk.cancelled(URLError(.cancelled)))
+        // Not reached, or refused: a failure to show.
+        XCTAssertFalse(BusAsk.cancelled(URLError(.timedOut)))
+        XCTAssertFalse(BusAsk.cancelled(URLError(.notConnectedToInternet)))
+        XCTAssertFalse(BusAsk.cancelled(ApiError(status: 503, message: "down")))
     }
 
     func testUnpinningTheStopShowingShowsTheOneThatTookItsPlace() {

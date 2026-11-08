@@ -80,34 +80,65 @@ enum BusPinned {
         force ? window : window.filter { askedAt($0).map { now.timeIntervalSince($0) >= gap } ?? true }
     }
 
-    /// A pinned card's rows from its stop page's board: the board's rows, the
-    /// same buses fresher (running or not, how full), each still worded as
-    /// /me/stops worded it ("via UTown"; the board has no such words). After
-    /// the board's buses come the card's own timetable guesses, found by
-    /// counting, not by comparing times, as Android and the web do: the
-    /// card's buses moved on by `gone` seconds, those now due dropped, then as
-    /// many skipped as the board shows for the service (a bus running ahead of
-    /// its guess is still the same bus). What's left stays only if it's a
-    /// guess: an old live time the board no longer sends (the night's last
-    /// bus gone) goes.
-    static func filled(_ card: [BoardRow], from rows: [BoardRow], gone: Int) -> [BoardRow] {
-        rows.map { row in
-            guard let old = card.first(where: { $0.svc == row.svc }) else { return row }
-            var r = row
-            r.dest = old.dest
-            r.destPlace = old.destPlace
-            let next = old.etaS.map { [BoardRow.Later(etaS: $0, quality: old.quality, eta: nil)] } ?? []
-            let mine = (next + old.later).map {
-                var l = $0
-                l.etaS -= gone
-                // Worded again from the time left: the server's words ("~25 min") are as old as the guess.
-                l.eta = nil
-                return l
-            }.filter { $0.etaS > 0 }
-            let shown = (row.etaS == nil ? 0 : 1) + row.later.count
-            r.later += mine.dropFirst(shown).filter { $0.quality == "scheduled" }
+    /// A pinned card's rows with its stop page's board, as Android's
+    /// `PinnedStop.withBoard` and the web's `withBoard` make them. `card` is
+    /// the card's own answer (/me/stops, never an earlier merge, whose guesses
+    /// would come round again) and `since` the seconds since it came. Each of
+    /// its rows, in its order, takes the board's row for the same service and
+    /// way (`towards`), or the service's first left: the board's times, how
+    /// full, running or not, still worded as /me/stops worded it ("via
+    /// UTown"; the board has no such words), then the card's buses the board
+    /// doesn't cover (`guessesAfter`). A row the board doesn't have counts down
+    /// on its own, a live time turning stale. Public buses aren't the card's.
+    static func filled(_ card: [BoardRow], from rows: [BoardRow], since: Int) -> [BoardRow] {
+        var left = rows.filter { !$0.paid }
+        return card.map { row in
+            let i = left.firstIndex { $0.svc == row.svc && $0.towards == row.towards } ?? left.firstIndex { $0.svc == row.svc }
+            guard let i else {
+                guard let eta = row.etaS, since > 0 else { return row }
+                var r = row
+                let s = eta - since
+                r.etaS = s > -60 ? max(0, s) : nil
+                r.eta = nil
+                if row.quality == "live" { r.quality = "stale" }
+                r.later = guessesAfter(row.later, since: since, shown: 0)
+                r.laterText = nil
+                return r
+            }
+            let b = left.remove(at: i)
+            var r = b
+            r.dest = row.dest
+            r.destPlace = row.destPlace
+            let mine = (row.etaS.map { [BoardRow.Later(etaS: $0, quality: row.quality, eta: nil)] } ?? []) + row.later
+            r.later = b.later + guessesAfter(mine, since: since, shown: (b.etaS == nil ? 0 : 1) + b.later.count)
+            r.laterText = nil
             return r
         }
+    }
+
+    /// The card's `buses` (next first) that a board showing `shown` buses for
+    /// the service doesn't cover, `since` seconds on: those now due gone, the
+    /// board's buses the next `shown` of the rest (counted, not matched by
+    /// time: a bus running ahead of its guess is still that bus), and of what's
+    /// left only the timetable guesses, worded again from the time left.
+    static func guessesAfter(_ buses: [BoardRow.Later], since: Int, shown: Int) -> [BoardRow.Later] {
+        let due = buses.map {
+            var l = $0
+            l.etaS -= since
+            l.eta = nil
+            return l
+        }.filter { $0.etaS > 0 }
+        return due.dropFirst(shown).filter { $0.quality == "scheduled" }
+    }
+}
+
+/// What a failed request says about what it asked for.
+enum BusAsk {
+    /// Cancelled, not refused or unanswered: the page or session that asked
+    /// went. Not a failure to show, and not counted as asked, so the next
+    /// page to want it asks at once rather than after the 15 s tick.
+    static func cancelled(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 }
 

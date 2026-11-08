@@ -35,6 +35,9 @@ final class BusesModel {
     private(set) var pinnedMissing: Set<String> = []
     /// When each pinned stop came, on the server's clock, for counting its times down.
     private(set) var pinnedGot: [String: Date] = [:]
+    /// Each pinned stop's own answer (/me/stops) and when it came, on the
+    /// server's clock: what an open page's board is merged into each time.
+    @ObservationIgnored private var pinnedOwn: [String: (stop: NearbyStop, got: Date)] = [:]
     /// When the stop open beside the home was last asked for here, for its card's guesses.
     @ObservationIgnored private var guessesAsked: [String: Date] = [:]
     /// The page showing on the home: a pinned stop, or BusPinned.addPage; nil, the first.
@@ -126,6 +129,7 @@ final class BusesModel {
         pinnedFailed = []
         pinnedMissing = []
         pinnedGot = [:]
+        pinnedOwn = [:]
         guessesAsked = [:]
         pinSelected = nil
         outs = BusOuts()
@@ -328,7 +332,7 @@ final class BusesModel {
         if case .failure(let e) = answer { failure = e }
         if let failure, refused(failure, token) { return }
         // Cancelled all the same (the session went): not failed, asked again.
-        let cancelled = failure is CancellationError || (failure as? URLError)?.code == .cancelled
+        let cancelled = failure.map(BusAsk.cancelled) ?? false
         let result = BusPinnedResult.of(asked: codes, returned: stops?.map(\.stop.code), cancelled: cancelled)
         let at = Date()
         let got = ServerClock.now
@@ -336,6 +340,7 @@ final class BusesModel {
             guard let code = codes.first(where: { $0.uppercased() == stop.stop.code.uppercased() }) else { continue }
             pinned[code] = stop
             pinnedGot[code] = got
+            pinnedOwn[code] = (stop, got)
             answeredAt["pin:" + code] = at
         }
         for code in result.askAgain { asked["pin:" + code] = nil }
@@ -343,6 +348,7 @@ final class BusesModel {
         for code in result.missing {
             pinned[code] = nil
             pinnedGot[code] = nil
+            pinnedOwn[code] = nil
         }
         pinnedFailed.subtract(result.answered + result.missing)
         pinnedFailed.formUnion(result.failed)
@@ -351,11 +357,12 @@ final class BusesModel {
     }
 
     /// A pinned stop as it stands at `now`, its times counted down since it came.
-    /// A pinned stop's card, from its page's board (BusPinned.filled).
+    /// A pinned stop's card, its own answer with its page's board (BusPinned.filled).
     private func fillPinned(_ code: String, from board: Board) {
-        guard var stop = pinned[code] else { return }
+        guard let own = pinnedOwn[code] else { return }
+        var stop = own.stop
         let now = ServerClock.now
-        stop.board = BusPinned.filled(stop.board, from: board.rows, gone: Int(now.timeIntervalSince(pinnedGot[code] ?? now)))
+        stop.board = BusPinned.filled(own.stop.board, from: board.rows, since: Int(now.timeIntervalSince(own.got)))
         stop.available = board.available
         pinned[code] = stop
         pinnedGot[code] = now
@@ -413,18 +420,28 @@ final class BusesModel {
         asked["line:" + key] = Date()
         let s = AppModel.shared.session
         await fetching("line:" + key) {
-            let api = Api(token: token)
-            do {
-                let l = try await api.line(svc: svc, stop: from)
-                guard current(s) else { return }
+            // Not cancelled with the page that asked, as a board isn't: a line
+            // opened from the list in place of the page beside it replaces the
+            // page as its request starts, and the new page skips it as just asked.
+            let answer = await Task { () -> Result<Line, Error> in
+                let api = Api(token: token)
+                do { return .success(try await api.line(svc: svc, stop: from)) } catch {
+                    // The stop isn't on this service: the line without it.
+                    if from != nil, let e = error as? ApiError, e.status == 400, let l = try? await api.line(svc: svc) {
+                        return .success(l)
+                    }
+                    return .failure(error)
+                }
+            }.value
+            guard current(s) else { return }
+            switch answer {
+            case .success(let l):
                 got(key, l)
-            } catch {
-                guard current(s) else { return }
+            case .failure(let error):
                 if refused(error, token) { return }
-                // The stop isn't on this service: the line without it.
-                if from != nil, let e = error as? ApiError, e.status == 400, let l = try? await api.line(svc: svc) {
-                    guard current(s) else { return }
-                    got(key, l)
+                // Cancelled all the same (the session went): not failed, and asked again at once.
+                if BusAsk.cancelled(error) {
+                    asked["line:" + key] = nil
                     return
                 }
                 lineFailed.insert(key)
