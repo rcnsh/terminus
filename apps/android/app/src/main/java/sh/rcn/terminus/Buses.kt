@@ -373,9 +373,9 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
     /**
      * The same stop with the times of its open page's [board] (its shuttles only, as /api/me/stops gives them), for one whose page asks for
      * it in place of this card. The rows keep the card's own words, so opening the page changes only the times. The board gives at most one
-     * later bus; after it the card keeps the timetable guesses of its own answer ([own], never a page's, which would come round again, and
-     * never a live time, which would be old), counted down by the time since that answer and dropped once due or no later than the board's
-     * last bus. A service the board doesn't have keeps its own row, counted down the same way, a live time then stale.
+     * later bus; after it come the buses of the card's own answer ([own], never a page's, which would come round again) that the board
+     * doesn't cover ([guessesAfter]), and only its timetable guesses (a live time would be old). A service the board doesn't have keeps its
+     * own row, counted down the same way, a live time then stale.
      */
     fun withBoard(board: Board): PinnedStop {
         val now = board.gotMs ?: gotMs
@@ -407,9 +407,12 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
                         stopped = b.stopped,
                         resumesAtMs = b.resumesAtMs,
                         later =
-                            (b.later + guessesAfter(row.later, since, b.later.lastOrNull()?.etaS ?: b.etaS ?: 0)).take(
-                                maxOf(b.later.size, row.later.size)
-                            ),
+                            b.later +
+                                guessesAfter(
+                                    listOfNotNull(row.etaS?.let { LaterBus(it, row.quality) }) + row.later,
+                                    since,
+                                    (if (b.etaS != null) 1 else 0) + b.later.size,
+                                ),
                         laterText = null,
                     )
                 }
@@ -421,12 +424,17 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
         /** How long the card's own answer serves an open page's merged times before it's asked again ([answerFresh]). */
         const val ANSWER_MS = 120_000L
 
-        /** The timetable guesses in [later], [since] seconds on, that are still to come and come after the board's last bus at [lastS]. */
-        internal fun guessesAfter(later: List<LaterBus>, since: Int, lastS: Int): List<LaterBus> =
-            later
-                .filter { it.quality == "scheduled" }
+        /**
+         * The card's [buses] (next first) that a board showing [shown] buses for the service doesn't cover, [since] seconds on: those now
+         * due are gone, the board's buses are the next [shown] of the rest, and of what's left only the timetable guesses stay. Counted,
+         * not matched by time, as the iPhone and the website do: a bus running a little ahead of its guess is still that bus.
+         */
+        internal fun guessesAfter(buses: List<LaterBus>, since: Int, shown: Int): List<LaterBus> =
+            buses
                 .map { it.copy(etaS = it.etaS - since, eta = null) }
-                .filter { it.etaS > maxOf(0, lastS) }
+                .filter { it.etaS > 0 }
+                .drop(shown)
+                .filter { it.quality == "scheduled" }
     }
 }
 
