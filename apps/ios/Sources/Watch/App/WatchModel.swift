@@ -94,13 +94,15 @@ final class WatchModel {
         switch v {
         case .plan:
             let before = Lang.pref
+            let came = WidgetStore.answerAt
             await WatchPlan.refresh()
             guard gen == session else { return }
             if TokenStore.read() != token { return syncSignedOut() }
             plan = WidgetStore.plan()?.0
             error = WidgetStore.error
             if Lang.pref != before { lang = Lang.pref }
-            WatchPlan.redraw()
+            // The complications show the new answer; one that didn't change needs no redraw.
+            if WidgetStore.answerAt != came || Lang.pref != before { WatchPlan.redraw() }
         case .nearby:
             do {
                 let (stops, _) = try await Api(token: token).nearby(lat: loc?.lat, lon: loc?.lon, acc: loc?.acc)
