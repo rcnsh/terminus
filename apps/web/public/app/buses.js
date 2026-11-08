@@ -601,8 +601,9 @@ const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got
  * the card.
  */
 export function withBoard(s, got, board) {
-  // Whole seconds, as the apps count it: a board a moment after the card changes nothing.
-  const gone = Math.floor((board.got - got) / 1000);
+  // Whole seconds toward zero, as the apps count it: a board a moment after the
+  // card, or stamped a moment before it when the clock estimate moved, changes nothing.
+  const gone = Math.trunc((board.got - got) / 1000);
   const on = (x) => ({ ...x, etaS: x.etaS == null ? null : x.etaS - gone, eta: null });
   const guesses = (row) =>
     (row.later ?? [])
@@ -626,7 +627,7 @@ export function withBoard(s, got, board) {
   const rows = s.board.map((row, n) => {
     const b = matched[n];
     if (!b) {
-      if (row.etaS == null || !gone) return row;
+      if (row.etaS == null || gone <= 0) return row;
       const at = on(row);
       return {
         ...at,

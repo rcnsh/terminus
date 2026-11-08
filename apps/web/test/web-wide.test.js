@@ -415,6 +415,25 @@ test('the open card counts whole seconds since its answer, as the apps do: a boa
   assert.deepEqual([d2.etaS, d2.quality], [200, 'live']);
 });
 
+test('a board stamped a moment before the card (the clock estimate moved) counts toward zero, as the apps do', () => {
+  const card = {
+    stop: { code: 'KTR' },
+    board: [
+      { svc: 'D1', etaS: 100, quality: 'live', later: [{ etaS: 700, quality: 'scheduled' }] },
+      { svc: 'D2', etaS: 200, quality: 'live', later: [{ etaS: 800, quality: 'scheduled' }] },
+    ],
+  };
+  const early = (ms) => ({ board: [{ svc: 'D1', etaS: 99, quality: 'live', later: [] }], available: true, got: 10_000 - ms });
+  const half = B.withBoard(card, 10_000, early(500)).board;
+  assert.deepEqual([half[1].etaS, half[1].quality, half[1].later.map((x) => x.etaS)], [200, 'live', [800]]);
+  const more = B.withBoard(card, 10_000, early(3200)).board;
+  assert.deepEqual(
+    more[0].later.map((x) => x.etaS),
+    [703],
+  );
+  assert.deepEqual([more[1].etaS, more[1].quality], [200, 'live']);
+});
+
 test('a pinned stop closing beside the home keeps the live times its page had, with nothing fetched', async () => {
   const now = Date.now();
   const card = {
