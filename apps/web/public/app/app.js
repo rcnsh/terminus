@@ -1108,7 +1108,7 @@ function CardSkeleton({ nearby }) {
  * its top is up in the sky and it ends on the horizon, so the sky stays as
  * the chips switch. The sky is the hour's, whatever the card says.
  */
-function CardArea({ foot = true }) {
+function CardArea() {
   const c = useStore(card);
   const to = useStore(target);
   const bar = useStore(undo);
@@ -1130,12 +1130,15 @@ function CardArea({ foot = true }) {
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
-      ${foot && html`<${CardFoot} />`}
+      <${CardFoot} />
     </section>
   `;
 }
 
-/** Under the card ("Updated 9:41 · Is this wrong?"); under Today when they're side by side. */
+/**
+ * Under the card ("Updated 9:41 · Is this wrong?"); placed under Today when
+ * they're side by side (app.css), never moved, so an open report keeps its draft.
+ */
 function CardFoot() {
   const c = useStore(card);
   const to = useStore(target);
@@ -1560,23 +1563,30 @@ function useNowSplit() {
 
 /**
  * Today beside the card, under the horizon (app.css, .now-side): out of the
- * page's flow so it starts where the sky ends, so its height is kept on Now
- * (--side-h) for Now to be at least as tall.
+ * page's flow so it starts where the sky ends, so its height and the card's
+ * foot's under it are kept on Now (--side-h, --foot-h) for Now to be at
+ * least as tall.
  */
 function NowSide() {
   const box = useRef(null);
   useEffect(() => {
     const el = box.current;
     const tab = el?.closest('main');
+    const foot = tab?.querySelector('.app-card > .card-foot');
     if (!el || !tab) return;
-    const seen = new ResizeObserver(() => tab.style.setProperty('--side-h', `${el.offsetHeight}px`));
+    const seen = new ResizeObserver(() => {
+      tab.style.setProperty('--side-h', `${el.offsetHeight}px`);
+      tab.style.setProperty('--foot-h', `${foot?.offsetHeight ?? 0}px`);
+    });
     seen.observe(el);
+    if (foot) seen.observe(foot);
     return () => {
       seen.disconnect();
       tab.style.removeProperty('--side-h');
+      tab.style.removeProperty('--foot-h');
     };
   }, []);
-  return html`<div class="now-side" ref=${box}><${Today} /><${CardFoot} /></div>`;
+  return html`<div class="now-side" ref=${box}><${Today} /></div>`;
 }
 
 /** The four tabs, shown and hidden by showTab() after the first draw (see there). */
@@ -1584,14 +1594,18 @@ function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
   const split = useNowSplit();
+  // The rail is on the left from 800, so it comes first for the keyboard
+  // too; the bar along the bottom stays last, under the page.
+  const rail = useMedia('(min-width: 800px)');
   return html`
+    ${rail && html`<${TabBar} />`}
     <main class=${split ? 'wrap app-main split' : 'wrap app-main'} id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
       <h1 class="sr-only">${t('Now')}</h1>
       <${InstallHint} />
       <${Banner} />
       <${Chips} />
       <${Where} />
-      <${CardArea} foot=${!split} />
+      <${CardArea} />
       <${GoLater} />
       ${split ? html`<${NowSide} />` : html`<${Today} />`}
     </main>
@@ -1599,7 +1613,7 @@ function App() {
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
     <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
     <${PullToRefresh} enabled=${pullable} refresh=${pullTab} />
-    <${TabBar} />
+    ${!rail && html`<${TabBar} />`}
     <${Toast} />
   `;
 }

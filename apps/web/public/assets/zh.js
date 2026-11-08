@@ -655,6 +655,7 @@ window.TERMINUS_ZH = {
   'Tap the star on a stop in Nearby or on its page to keep it here.': '在附近或车站页面点星标，就能把它固定在这里。',
   'Tap one to see its whole line.': '点一条线路，查看它经过的所有车站。',
   'Search a stop or service': '搜索车站或线路',
+  'Clear search': '清除搜索',
   'No stop or service by that name': '没有叫这个名字的车站或线路',
   'Loop from {0}': '{0} 环线',
   '{0} to {1}': '{0} 至 {1}',
