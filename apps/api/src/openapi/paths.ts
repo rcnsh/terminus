@@ -947,12 +947,20 @@ export function paths(): Record<string, unknown> {
       post: {
         tags: ['Account'],
         summary: 'Whose code is this',
-        description: 'Shows which account a pairing code belongs to, masked, without spending it. Apps ask before pairing from a link.',
+        description:
+          'Shows which account a pairing code belongs to, masked, without spending it. Apps ask before pairing from a link. An anonymous account has no address to show: `account` is then "an account without an email", in the language asked for, and `anonymous` is true.',
         operationId: 'pairCheck',
         security: [],
         requestBody: jsonBody({ type: 'object', required: ['code'], properties: { code: { type: 'string' } } }, { code: 'K7QX4M' }),
         responses: {
-          '200': ok({ type: 'object', required: ['account'], properties: { account: { type: 'string', example: 'j•••@u.nus.edu' } } }),
+          '200': ok({
+            type: 'object',
+            required: ['account', 'anonymous'],
+            properties: {
+              account: { type: 'string', description: 'The masked address, or words to show in its place.', example: 'j•••@u.nus.edu' },
+              anonymous: { type: 'boolean', description: 'The account has no email.', example: false },
+            },
+          }),
           '400': errorResponse('Wrong or expired code.'),
           '429': {
             ...errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'),
@@ -1876,16 +1884,18 @@ export function paths(): Record<string, unknown> {
         tags: ['Account'],
         summary: 'Make a pairing code',
         description:
-          'A 6-character code for `/api/pair`, shown on the account page with its QR code. It works once, for 10 minutes. Needs an account with an email.',
+          'A 6-character code for `/api/pair`, shown on the account page with its QR code, or handed by a signed-in app to another device (the iPhone to its watch). Any signed-in account can make one, an anonymous one too. It works once, for 10 minutes, and a new code replaces the one before. A device added with it emails the account, when the account has an email.',
         operationId: 'pairCode',
         security: [{ bearer: [] }, { cookie: [] }],
         responses: {
           '200': ok({
             type: 'object',
-            properties: { code: { type: 'string', example: 'K7QX4M' }, expires: { type: 'integer', description: 'Epoch milliseconds.' } },
+            properties: {
+              code: { type: 'string', example: 'K7QX4M' },
+              expires: { type: 'integer', description: 'Epoch milliseconds.', example: 1_791_000_600_000 },
+            },
           }),
           '401': errorResponse('No valid session.'),
-          '403': errorResponse('The account has no email.'),
         },
       },
     },

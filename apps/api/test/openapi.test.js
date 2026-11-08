@@ -669,7 +669,7 @@ const CASES = [
   ['DELETE /api/me/sessions', 200, { auth: 'cookie' }],
   ['DELETE /api/me/sessions', 403, { auth: 'device' }],
   ['POST /api/me/pair-code', 200, { auth: 'cookie' }],
-  ['POST /api/me/pair-code', 403, { auth: 'anon' }],
+  ['POST /api/me/pair-code', 200, { auth: 'anon' }],
   ['GET /api/me/devices', 200, { auth: 'device' }],
   [
     'DELETE /api/me/devices/{id}',

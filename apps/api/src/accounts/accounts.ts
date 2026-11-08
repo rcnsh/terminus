@@ -835,13 +835,13 @@ export async function createPairCode(db: D1Database, userId: string, nowMs: numb
   return { code, expires };
 }
 
-/** The email of the account a live pairing code belongs to, without spending it. */
-export async function pairCodeOwner(db: D1Database, code: string, nowMs: number): Promise<string | null> {
+/** The account a live pairing code belongs to, without spending it: its email, null for an account without one. Null when no live code. */
+export async function pairCodeOwner(db: D1Database, code: string, nowMs: number): Promise<{ email: string | null } | null> {
   const row = await db
     .prepare('SELECT u.email FROM pair_codes p JOIN users u ON u.id = p.user_id WHERE p.code = ? AND p.expires >= ?')
     .bind(code, nowMs)
     .first<{ email: string | null }>();
-  return row?.email ?? null;
+  return row ? { email: row.email } : null;
 }
 
 /** "j•••@gmail.com": enough to recognise your own account, not to harvest one. */
@@ -914,7 +914,8 @@ export async function revokeDevice(db: D1Database, userId: string, id: string): 
  * device. It's the one way in that doesn't pass through the inbox, and a
  * signed-in phone can make a code, so a lost phone can't add one without
  * the owner hearing. Signing in from the email needs no second email, and
- * removing a device exposes nothing.
+ * removing a device exposes nothing. An account without an email has no
+ * inbox to tell: nothing is sent, and its devices list shows the new one.
  */
 export async function mailDeviceAdded(env: Env, email: string | null, name: string, nowMs: number): Promise<void> {
   if (!email || !env.EMAIL || !env.EMAIL_FROM) return;

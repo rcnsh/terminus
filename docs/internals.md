@@ -424,7 +424,12 @@ get one of three ways:
   Works on every client, including the Mac, which can't take universal
   links without a paid Apple team.
 - **A pairing code** from `/api/me/pair-code`, made on the account page or in a
-  signed-in app, redeemed with `POST /api/pair`. A guess is tried against every
+  signed-in app, redeemed with `POST /api/pair`. Any account can make one, an
+  anonymous one too: that's how the iPhone signs in its watch. It works once,
+  for 10 minutes, and a new code replaces the account's last. `POST
+  /api/pair/check` names the code's account by its masked address, or, for
+  one without an email, says so (`anonymous: true`) in words the apps show
+  in its place. A guess is tried against every
   live code at once, so besides the per-IP limit (`RL_AUTH`, shared by
   `/api/pair` and `/api/pair/check`) there's one ceiling for everyone (`RL_PAIR`,
   60 a minute): an attacker with an IPv6 range can't spread guesses over
@@ -432,7 +437,12 @@ get one of three ways:
 
 A device added with a pairing code emails the account's owner: it's the one
 way in that doesn't go through the inbox, and it's what lets a signed-in app
-make codes (`/api/me/pair-code`). Signing in from the email sends nothing more
+make codes (`/api/me/pair-code`). An anonymous account has no inbox, so
+nothing is sent; the new device shows in its devices list, which every
+device of the account can read. Adding an email to an anonymous account
+signs all its devices out but the one adding it (`addEmailTo`), and signing
+in to another account deletes it with them, so a paired watch is paired
+again afterwards. Signing in from the email sends nothing more
 (the owner has just used the inbox), and neither does removing a device
 (`DELETE /api/me/devices/<id>`), which exposes nothing. API keys and signing out everywhere
 stay on the account page; so does deleting an account, except an anonymous

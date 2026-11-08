@@ -378,6 +378,8 @@ const en = {
     [string, string]
   >,
   aDevice: 'a device',
+  /** /api/pair/check's name for an account with no email, shown where the address would be. */
+  accountWithoutEmail: 'an account without an email',
   singaporeTime: ((when: string) => `${when} Singapore time`) as Fn<[string]>,
   deviceAddedSubject: ((device: string) => `terminus was added to ${device}`) as Fn<[string]>,
   deviceAddedButton: 'Check your devices',
@@ -702,6 +704,7 @@ const zh: Msgs = {
   codeWhyApp: (site, device) =>
     zs`你收到这封邮件，是因为有人在${device}上的 terminus 应用（${site}，NUS 校园巴士时间）输入了这个地址。如果不是你，可以忽略这封邮件。没有验证码不会发生任何事。`,
   aDevice: '一台设备',
+  accountWithoutEmail: '一个没有邮箱的账户',
   singaporeTime: (when) => `新加坡时间 ${when}`,
   deviceAddedSubject: (device) => zs`terminus 已添加到${device}`,
   deviceAddedButton: '查看你的设备',

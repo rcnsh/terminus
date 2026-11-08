@@ -367,8 +367,7 @@ interface MeRoute {
   /**
    * 'web': changes the account itself, from the account page only, never a
    * device (API keys, sign out everywhere). 'email': any session, but the
-   * account needs an email (devices: one without has only the device asking,
-   * and a pairing code emails its owner when it's used).
+   * account needs an email.
    */
   access?: 'web' | 'email';
   run: (c: MeContext) => Promise<Response>;
@@ -602,7 +601,7 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/api/me/pair-code',
-    access: 'email',
+    // An account without an email too: its phone pairs its watch this way.
     run: async ({ nowMs, db, session }) => {
       return json(await createPairCode(db, session.user.id, nowMs));
     },
@@ -1230,7 +1229,10 @@ export async function handleMe(
     const code = normalizePairCode(body?.code);
     const owner = code ? await pairCodeOwner(db, code, nowMs) : null;
     if (!owner) return json({ error: 'that code is wrong or has expired' }, 400);
-    return json({ account: maskEmail(owner) });
+    // An account without an email has nothing to recognise it by: the apps
+    // show this in place of the address, so the warning still reads.
+    if (owner.email === null) return json({ account: m().accountWithoutEmail, anonymous: true });
+    return json({ account: maskEmail(owner.email), anonymous: false });
   }
 
   if (path === '/api/pair' && req.method === 'POST') {
