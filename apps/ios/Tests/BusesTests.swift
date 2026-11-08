@@ -34,6 +34,37 @@ final class BusesTests: XCTestCase {
         XCTAssertEqual(BusPinned.page(["COM3", "UTOWN"], selected: BusPinned.addPage), BusPinned.addPage)
     }
 
+    func testACardFilledFromItsBoardKeepsOnlyItsGuessesNeverAnOldLiveTime() throws {
+        // The card from /me/stops: a live next and then, and a guess after.
+        let card = [
+            try row(
+                #"{"svc":"D2","etaS":120,"quality":"live","dest":"via UTown","later":[{"etaS":600,"quality":"live"},{"etaS":1500,"quality":"scheduled"}]}"#
+            )
+        ]
+        // A minute later the board still sends both live times: the guess stays, a minute nearer.
+        let both = BusPinned.filled(
+            card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[{"etaS":540,"quality":"live"}]}"#)], gone: 60)
+        XCTAssertEqual(both[0].later.map(\.etaS), [540, 1440])
+        XCTAssertEqual(both[0].later.map(\.quality), ["live", "scheduled"])
+        // Its times from the board, its words still the card's: the board has no "via UTown".
+        XCTAssertEqual(both[0].etaS, 60)
+        XCTAssertEqual(both[0].dest, "via UTown")
+        // The night's last bus: the board drops the "then". The card's old live
+        // then isn't carried on counting down; only the guess is.
+        let last = BusPinned.filled(card, from: [try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[]}"#)], gone: 60)
+        XCTAssertEqual(last[0].later.map(\.etaS), [1440])
+        XCTAssertEqual(last[0].later.map(\.quality), ["scheduled"])
+        // A guess the board's times have passed goes, and a service only the board has is its own.
+        let passed = BusPinned.filled(
+            card,
+            from: [
+                try row(#"{"svc":"D2","etaS":60,"quality":"live","later":[{"etaS":1600,"quality":"live"}]}"#),
+                try row(#"{"svc":"K","etaS":300,"quality":"live","later":[]}"#),
+            ], gone: 60)
+        XCTAssertEqual(passed[0].later.map(\.etaS), [1600])
+        XCTAssertEqual(passed[1].later.map(\.etaS), [])
+    }
+
     func testUnpinningTheStopShowingShowsTheOneThatTookItsPlace() {
         // Another stop unpinned: the same one stays.
         XCTAssertEqual(BusPinned.selection(old: ["A", "B", "C"], new: ["A", "C"], selected: "C"), "C")

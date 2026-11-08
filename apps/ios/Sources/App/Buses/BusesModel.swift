@@ -35,6 +35,8 @@ final class BusesModel {
     private(set) var pinnedMissing: Set<String> = []
     /// When each pinned stop came, on the server's clock, for counting its times down.
     private(set) var pinnedGot: [String: Date] = [:]
+    /// When the stop open beside the home was last asked for here, for its card's guesses.
+    @ObservationIgnored private var guessesAsked: [String: Date] = [:]
     /// The page showing on the home: a pinned stop, or BusPinned.addPage; nil, the first.
     /// Kept while the app runs, so coming back to the tab finds the same stop.
     var pinSelected: String?
@@ -92,6 +94,9 @@ final class BusesModel {
 
     /// Shorter than the refresh, so the 15 s tick always asks; longer than a swipe back.
     static let minGapS: TimeInterval = 10
+    /// How often the stop open beside the home is asked for its card's
+    /// timetable guesses: well inside the 20 minutes or so they run ahead.
+    static let guessGapS: TimeInterval = 300
 
     static func lineKey(_ svc: String, _ from: String?) -> String { "\(svc)|\(from ?? "")" }
 
@@ -121,6 +126,7 @@ final class BusesModel {
         pinnedFailed = []
         pinnedMissing = []
         pinnedGot = [:]
+        guessesAsked = [:]
         pinSelected = nil
         outs = BusOuts()
         linesAskedAt = nil
@@ -287,10 +293,16 @@ final class BusesModel {
     /// Walked from where you are only when the phone already may say.
     func refreshPinned(force: Bool = false) async {
         guard let token else { return }
-        let window = BusPinned.window(shownPins, selected: pinSelected).filter { $0 != stopBeside || pinned[$0] == nil }
-        let codes = BusPinned.toFetch(window, now: Date(), gap: Self.minGapS, force: force) { asked["pin:" + $0] }
-        guard !codes.isEmpty else { return }
         let now = Date()
+        // Open beside the home, the card is filled from its page's board, but
+        // the board has no timetable guesses: every guessGapS it's asked for
+        // here too, for them (its live times come from the edge cache the page filled).
+        let beside = stopBeside.flatMap { pinned[$0] == nil ? nil : $0 }
+        let guessesDue = beside.map { now.timeIntervalSince(guessesAsked[$0] ?? .distantPast) >= Self.guessGapS } ?? false
+        let window = BusPinned.window(shownPins, selected: pinSelected).filter { $0 != beside || guessesDue }
+        let codes = BusPinned.toFetch(window, now: now, gap: Self.minGapS, force: force) { $0 == beside ? nil : asked["pin:" + $0] }
+        guard !codes.isEmpty else { return }
+        if let beside, codes.contains(beside) { guessesAsked[beside] = now }
         for c in codes {
             asked["pin:" + c] = now
             asking.insert("pin:" + c)
@@ -338,23 +350,11 @@ final class BusesModel {
     }
 
     /// A pinned stop as it stands at `now`, its times counted down since it came.
-    /// A pinned stop's card, from its page's board: the same buses, fresher.
-    /// The board has fewer buses after the next than the card shows (/me/stops
-    /// adds a guess from the timetable): those stay, counted down.
+    /// A pinned stop's card, from its page's board (BusPinned.filled).
     private func fillPinned(_ code: String, from board: Board) {
         guard var stop = pinned[code] else { return }
         let now = ServerClock.now
-        let gone = Int(now.timeIntervalSince(pinnedGot[code] ?? now))
-        stop.board = board.rows.map { row in
-            guard let old = stop.board.first(where: { $0.svc == row.svc }), old.later.count > row.later.count else { return row }
-            var r = row
-            r.later += old.later[row.later.count...].map {
-                var l = $0
-                l.etaS -= gone
-                return l
-            }.filter { $0.etaS > (r.later.last?.etaS ?? r.etaS ?? 0) }
-            return r
-        }
+        stop.board = BusPinned.filled(stop.board, from: board.rows, gone: Int(now.timeIntervalSince(pinnedGot[code] ?? now)))
         stop.available = board.available
         pinned[code] = stop
         pinnedGot[code] = now
