@@ -145,7 +145,7 @@ final class BusesModel {
     /// A 401: this phone's token was refused, so it's signed out and the screen follows.
     private func refused(_ e: Error, _ token: String) -> Bool {
         guard let e = e as? ApiError, e.status == 401 else { return false }
-        AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+        AppModel.shared.rejected(token, reason: signedOutHere)
         return true
     }
 

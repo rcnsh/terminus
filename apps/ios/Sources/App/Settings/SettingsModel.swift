@@ -546,7 +546,7 @@ final class SettingsModel {
         // Another account's token by now: this one's settings stay.
         guard token == app.token else { return true }
         reset()
-        app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+        app.rejected(token, reason: signedOutHere)
         return true
     }
 }

@@ -126,7 +126,9 @@ private struct EmailStep: View {
         SignInGroup(
             title: L("Your email"),
             footer: model.adding
-                ? L("Keeps your settings if you lose this phone, and lets you use terminus on your Mac or the web.")
+                ? (onIPad
+                    ? L("Keeps your settings if you lose this iPad, and lets you use terminus on your Mac or the web.")
+                    : L("Keeps your settings if you lose this phone, and lets you use terminus on your Mac or the web."))
                 : L("Use the email you set up terminus with. We'll email you a code to type here.")
         ) {
             TextField(L("Email"), text: $email, prompt: Text(L("you@u.nus.edu")))
@@ -183,7 +185,7 @@ private struct WaitingStep: View {
                     Text(L("Open the link in the email, then choose"))
                         .font(.body)
                         .foregroundStyle(Color.ink)
-                    Text(L("This phone signs in by itself once you do."))
+                    Text((onIPad ? L("This iPad signs in by itself once you do.") : L("This phone signs in by itself once you do.")))
                         .font(.footnote)
                         .foregroundStyle(Color.muted)
                 }
@@ -214,19 +216,25 @@ private struct ChooseStep: View {
     let done: @MainActor () -> Void
 
     var body: some View {
-        Text(L("%@ already has a timetable and settings, and so does this phone. Keep one:", email))
-            .font(.body)
-            .foregroundStyle(Color.ink)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 4)
+        Text(
+            (onIPad
+                ? L("%@ already has a timetable and settings, and so does this iPad. Keep one:", email)
+                : L("%@ already has a timetable and settings, and so does this phone. Keep one:", email))
+        )
+        .font(.body)
+        .foregroundStyle(Color.ink)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 4)
         VStack(alignment: .leading, spacing: 10) {
             SignInAction(text: L("Keep my account's setup"), enabled: !model.busy, message: model.message, id: "signIn.keepAccount") {
                 model.choose(keepPhone: false, signedIn: done)
             }
-            Button(L("Replace it with this phone's")) { model.choose(keepPhone: true, signedIn: done) }
-                .buttonStyle(.secondary)
-                .disabled(model.busy)
-                .accessibilityIdentifier("signIn.keepPhone")
+            Button((onIPad ? L("Replace it with this iPad's") : L("Replace it with this phone's"))) {
+                model.choose(keepPhone: true, signedIn: done)
+            }
+            .buttonStyle(.secondary)
+            .disabled(model.busy)
+            .accessibilityIdentifier("signIn.keepPhone")
             Text(L("Replacing changes it on every device signed in to %@.", email))
                 .font(.footnote)
                 .foregroundStyle(Color.muted)

@@ -20,9 +20,13 @@ struct SettingsDevicesPane: View {
         if app.email == nil {
             SettingsGroup(
                 title: L("Not signed in"),
-                hint: L(
-                    "Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web."
-                )
+                hint: (onIPad
+                    ? L(
+                        "Your settings are stored only on this iPad. Add an email to keep them if you lose your iPad, and to use terminus on your Mac or the web."
+                    )
+                    : L(
+                        "Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web."
+                    ))
             ) {
                 Button(L("Add your email"), action: settingsAddEmail)
                     .buttonStyle(SettingsInkButtonStyle(full: true))
@@ -80,7 +84,8 @@ struct SettingsDevicesPane: View {
             } message: { d in
                 Text(
                     d.current == true
-                        ? L("This phone will be signed out.") : L("It will be signed out, and you'll receive an email confirming this."))
+                        ? (onIPad ? L("This iPad will be signed out.") : L("This phone will be signed out."))
+                        : L("It will be signed out, and you'll receive an email confirming this."))
             }
         }
     }
@@ -97,7 +102,7 @@ struct SettingsDevicesPane: View {
                 HStack(spacing: 6) {
                     Text(name).fontWeight(.medium).foregroundStyle(Color.ink).lineLimit(1)
                     if d.current == true {
-                        Text(L("This phone"))
+                        Text((onIPad ? L("This iPad") : L("This phone")))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(Color.muted)
                             .padding(.horizontal, 6)
@@ -246,9 +251,13 @@ struct SettingsAccountPane: View {
         } else {
             SettingsGroup(
                 title: L("Not signed in"),
-                hint: L(
-                    "Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web."
-                )
+                hint: (onIPad
+                    ? L(
+                        "Your settings are stored only on this iPad. Add an email to keep them if you lose your iPad, and to use terminus on your Mac or the web."
+                    )
+                    : L(
+                        "Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web."
+                    ))
             ) {
                 Button(L("Add your email"), action: settingsAddEmail)
                     .buttonStyle(SettingsInkButtonStyle(full: true))
@@ -288,7 +297,7 @@ struct SettingsAccountPane: View {
                 }
             }
         }
-        .alert(L("Sign out of this phone?"), isPresented: $confirmSignOut) {
+        .alert((onIPad ? L("Sign out of this iPad?") : L("Sign out of this phone?")), isPresented: $confirmSignOut) {
             Button(L("Sign out"), role: .destructive) { model.signOut() }
             Button(L("Cancel"), role: .cancel) {}
         } message: {

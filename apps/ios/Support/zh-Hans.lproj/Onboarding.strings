@@ -1,4 +1,5 @@
 " (off campus)" = "（校外）";
+"%@ already has a timetable and settings, and so does this iPad. Keep one:" = "%@ 已经有课表和设置，这台 iPad 也有。保留其中一个：";
 "%@ already has a timetable and settings, and so does this phone. Keep one:" = "%@ 已经有课表和设置，这部手机也有。保留其中一个：";
 "%@ AM" = "上午 %@";
 "%@ classes had a venue we couldn't place. Pick the nearest stop, or skip it:" = "有 %@ 节课的地点我们无法确定。选择最近的车站，或跳过：";
@@ -51,6 +52,7 @@
 "Included in your departure time when your location isn't available." = "无法获取你的位置时，会计入出发时间。";
 "instead of" = "而不是";
 "Keep my account's setup" = "保留账户的设置";
+"Keeps your settings if you lose this iPad, and lets you use terminus on your Mac or the web." = "即使 iPad 遗失也能保留你的设置，并可在 Mac 或网页上使用 terminus。";
 "Keeps your settings if you lose this phone, and lets you use terminus on your Mac or the web." = "即使手机遗失也能保留你的设置，并可在 Mac 或网页上使用 terminus。";
 "Leave in 5 min for GEA1000" = "5 分钟后出发去上 GEA1000";
 "Mon" = "周一";
@@ -69,6 +71,8 @@
 "Open the link in the email, then choose" = "打开邮件里的链接，然后选择";
 "Pace" = "步速";
 "Pair" = "配对";
+"Pair this iPad" = "配对这台 iPad";
+"Pair this iPad?" = "配对这台 iPad？";
 "Pair this phone" = "配对这部手机";
 "Pair this phone?" = "配对这部手机？";
 "Pair with a code instead" = "改用代码配对";
@@ -82,6 +86,7 @@
 "Privacy" = "隐私";
 "R2 from PGP at %@" = "%@ 在 PGP 搭 R2";
 "Reading it on another device?" = "在另一台设备上看邮件？";
+"Replace it with this iPad's" = "用这台 iPad 的设置替换";
 "Replace it with this phone's" = "用这部手机的设置替换";
 "Replacing changes it on every device signed in to %@." = "替换会改变所有登录 %@ 的设备上的设置。";
 "Room %@" = "教室 %@";
@@ -107,6 +112,8 @@
 "That request expired. Send a new one." = "请求已失效。请重新发送。";
 "The number to choose: %@" = "要选择的数字：%@";
 "The sign-in was cancelled from the email. If that was you, send a new one." = "登录已在邮件中取消。如果是你取消的，请重新发送。";
+"This iPad signs in by itself once you do." = "选好后，这台 iPad 会自动登录。";
+"This link pairs this iPad with %@. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account." = "此链接会将这台 iPad 与 %@ 配对。仅当这个代码是你在自己的账户页面上创建的才继续。他人的代码会把你的行程和位置发送到他们的账户。";
 "This link pairs this phone with %@. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account." = "此链接会将这部手机与 %@ 配对。仅当这个代码是你在自己的账户页面上创建的才继续。他人的代码会把你的行程和位置发送到他们的账户。";
 "This phone signs in by itself once you do." = "选好后，这部手机会自动登录。";
 "Thu" = "周四";

@@ -250,7 +250,7 @@ func settingsPaceName(_ pace: String) -> String {
 }
 
 /// Following the device's own setting, named as the device it's on.
-@MainActor var settingsFollowDevice: String { UIDevice.current.userInterfaceIdiom == .pad ? L("Follow this iPad") : L("Follow this phone") }
+var settingsFollowDevice: String { onIPad ? L("Follow this iPad") : L("Follow this phone") }
 
 @MainActor func settingsThemeName(_ theme: String) -> String {
     switch theme {

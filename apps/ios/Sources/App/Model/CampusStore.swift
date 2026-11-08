@@ -135,7 +135,7 @@ final class CampusStore {
     /// this phone out.
     static func signOut(_ e: ApiError, token: String?) {
         guard e.status == 401, let token else { return }
-        AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+        AppModel.shared.rejected(token, reason: signedOutHere)
     }
 }
 

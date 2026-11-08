@@ -136,7 +136,7 @@ final class MapModel {
                 campus = try await CampusStore.shared.load(self, token: token) { [weak self] in self?.campus = $0.map }.map
                 campusArrived()
             } catch let e as ApiError where e.status == 401 {
-                if let token { app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email.")) }
+                if let token { app.rejected(token, reason: signedOutHere) }
             } catch {}
         }
         if changed || style == nil { style = await MapFiles.style(dark: dark, zh: zh) ?? style }
@@ -221,7 +221,7 @@ final class MapModel {
             if case .bus(let b) = sheet, !buses.contains(where: { $0.id == b.id }) { sheet = nil }
             return false
         } catch let e as ApiError where e.status == 401 {
-            app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+            app.rejected(token, reason: signedOutHere)
             return false
         } catch {
             guard !Task.isCancelled, svc == selected else { return false }
@@ -321,7 +321,7 @@ final class MapModel {
             guard code == openStop else { return false }
             switch e.status {
             case 401:
-                app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                app.rejected(token, reason: signedOutHere)
                 return false
             case 404:
                 // A stop the server doesn't know: no times, which is true.
@@ -446,7 +446,7 @@ final class MapModel {
             saved(try await Self.addPlace(token: token, code: code, name: name), session: session)
             announce(L("In your favourites"))
         } catch let e as ApiError where e.status == 401 {
-            app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+            app.rejected(token, reason: signedOutHere)
         } catch {
             say(failureMessage(error, otherwise: L("Not saved. Check your connection.")))
         }
@@ -467,7 +467,7 @@ final class MapModel {
                 Task { await self?.restore(removed) }
             }
         } catch let e as ApiError where e.status == 401 {
-            app.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+            app.rejected(token, reason: signedOutHere)
         } catch {
             say(failureMessage(error, otherwise: L("Not saved. Check your connection.")))
         }
