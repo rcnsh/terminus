@@ -318,10 +318,14 @@ private struct PinnedPager: View {
             }
             .padding(.horizontal, -Self.gutter)
         }
-        // Wide, a pinned stop open beside the home (picked on Now, say): its card is the one showing.
-        .onChange(of: model.chosen, initial: true) { _, open in
-            if case .stop(let code) = open, pins.contains(code), model.pinSelected != code { model.pinSelected = code }
-        }
+        // Wide, a pinned stop open beside the home (picked on Now, say, or
+        // pinned with its star while open): its card is the one showing.
+        .onChange(of: model.chosen, initial: true) { showOpenPin() }
+        .onChange(of: pins) { showOpenPin() }
+    }
+
+    private func showOpenPin() {
+        if case .stop(let code) = model.chosen, pins.contains(code), model.pinSelected != code { model.pinSelected = code }
     }
 
     /// A pinned stop's page: its sign as Nearby draws it, its times counted
@@ -704,6 +708,7 @@ private struct BusSearchResults: View {
     let query: String
     let onPick: (BusHit) -> Void
     @Environment(BusesModel.self) private var model
+    @Environment(\.listPane) private var listPane
 
     var body: some View {
         let campus = model.campus
@@ -723,12 +728,24 @@ private struct BusSearchResults: View {
                     row(hit, campus)
                 }
                 .buttonStyle(BusRowPress())
+                .chosenRow(chosen(hit))
                 .accessibilityIdentifier("hit-\(hit.id)")
                 Divider().overlay(Color.line)
             }
         }
-        .column()
+        // In the list pane the rows are inset, so the chosen one's tint has
+        // room around its words; they stay where a phone has them.
+        .column(gutter: listPane ? 4 : 16)
         .padding(.bottom, 24)
+    }
+
+    /// Whether `hit` is what's open beside the list.
+    private func chosen(_ hit: BusHit) -> Bool {
+        switch (hit, model.chosen) {
+        case (.service(let svc), .line(let open, _)?): svc == open
+        case (.stop(let code, _, _, _), .stop(let open)?): code == open
+        default: false
+        }
     }
 
     @ViewBuilder private func row(_ hit: BusHit, _ campus: BusCampus?) -> some View {
@@ -751,6 +768,7 @@ private struct BusSearchResults: View {
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint).accessibilityHidden(true)
         }
         .padding(.vertical, 10)
+        .padding(.horizontal, listPane ? 12 : 0)
         .contentShape(Rectangle())
     }
 }
