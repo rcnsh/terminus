@@ -23,7 +23,8 @@ iPhone changes reach users only through a release
   and entitlements aren't in git: `project.yml` is the source. CI doesn't
   run the UI tests: on a Mac, `apps/ios/scripts/ui-tests.sh [simulator]
   [suite]` starts a stub of its own, runs them against it and leaves
-  screenshots in `apps/ios/build/shots`. Look at them.
+  screenshots in `apps/ios/build/shots`. Look at them. The whole UI
+  suite takes about 35 minutes.
 - The mac and ios jobs are skipped when a run with exactly the same inputs
   has already passed (`swift-changes` in `ci.yml` hashes them). A file
   either job reads from outside its own app needs adding to that hash.
