@@ -439,7 +439,9 @@ A device added with a pairing code emails the account's owner: it's the one
 way in that doesn't go through the inbox, and it's what lets a signed-in app
 make codes (`/api/me/pair-code`). An anonymous account has no inbox, so
 nothing is sent; the new device shows in its devices list, which every
-device of the account can read. Adding an email to an anonymous account
+device of the account can read, and any of them can remove it (`DELETE
+/api/me/devices/<id>`): without that, a lost watch could be cut off only
+by deleting the account. Adding an email to an anonymous account
 signs all its devices out but the one adding it (`addEmailTo`), and signing
 in to another account deletes it with them, so a paired watch is paired
 again afterwards. Signing in from the email sends nothing more

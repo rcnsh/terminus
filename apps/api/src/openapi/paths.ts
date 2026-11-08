@@ -1952,7 +1952,7 @@ export function paths(): Record<string, unknown> {
       delete: {
         tags: ['Account'],
         summary: 'Remove a device',
-        description: 'Signs the device out. Needs an account with an email.',
+        description: 'Signs the device out. Any device of the account can remove any other, or itself, an anonymous account’s too.',
         operationId: 'removeDevice',
         security: [{ bearer: [] }, { cookie: [] }],
         parameters: [
@@ -1960,7 +1960,6 @@ export function paths(): Record<string, unknown> {
         ],
         responses: {
           '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
-          '403': errorResponse('The account has no email.'),
           '404': errorResponse('No such device.'),
         },
       },

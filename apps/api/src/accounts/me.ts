@@ -366,10 +366,9 @@ interface MeRoute {
   path: string;
   /**
    * 'web': changes the account itself, from the account page only, never a
-   * device (API keys, sign out everywhere). 'email': any session, but the
-   * account needs an email.
+   * device (API keys, sign out everywhere).
    */
-  access?: 'web' | 'email';
+  access?: 'web';
   run: (c: MeContext) => Promise<Response>;
 }
 
@@ -646,7 +645,8 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/api/me/devices/',
-    access: 'email',
+    // An account without an email too: once it has paired a watch, this is
+    // how a lost one is cut off without deleting the account.
     run: async ({ db, session, rest }) => {
       const name = await revokeDevice(db, session.user.id, rest);
       if (name === null) return json({ error: 'no such device' }, 404);
@@ -1298,7 +1298,6 @@ export async function handleMe(
     const prefix = r.path.endsWith('/');
     if (prefix ? !path.startsWith(r.path) : path !== r.path) continue;
     if (r.access === 'web' && session.kind !== 'web') return json({ error: 'do this from the account page' }, 403);
-    if (r.access === 'email' && !session.user.email) return json({ error: 'add an email to this account first' }, 403);
     return r.run({ req, url, env, ctx, nowMs, deps, db, session, rest: prefix ? path.slice(r.path.length) : '' });
   }
 

@@ -682,7 +682,7 @@ const CASES = [
       path: (w) => `/api/me/devices/${w.deviceId}`,
     },
   ],
-  ['DELETE /api/me/devices/{id}', 403, { auth: 'anon', path: '/api/me/devices/nope' }],
+  ['DELETE /api/me/devices/{id}', 404, { auth: 'anon', path: '/api/me/devices/nope' }],
   ['DELETE /api/me/devices/{id}', 404, { auth: 'cookie', path: '/api/me/devices/nope' }],
 
   // The map.

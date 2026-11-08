@@ -179,6 +179,17 @@ test('an anonymous account pairs another device: same account, no email to send'
   assert.equal(client, 'ios-watch/3.11.0');
 });
 
+test("an anonymous account's phone removes its paired watch, which is signed out", async () => {
+  const { env } = setup();
+  const phone = await anon(env);
+  const watch = await pairWatch(env, phone);
+  const { devices } = await (await call(env, '/api/me/devices', { token: phone })).json();
+  const id = devices.find((d) => !d.current).id;
+  assert.equal((await call(env, `/api/me/devices/${id}`, { method: 'DELETE', token: phone })).status, 200);
+  assert.equal((await call(env, '/api/me', { token: watch })).status, 401);
+  assert.equal((await call(env, '/api/me', { token: phone })).status, 200);
+});
+
 test("an anonymous account's pairing codes work once, last 10 minutes, and a new one replaces the old", async () => {
   const { env } = setup();
   const phone = await anon(env);

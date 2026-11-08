@@ -825,7 +825,6 @@ export const ERRORS_ZH: Record<string, string> = {
   'Update terminus to keep using it.': '请更新 terminus 以继续使用。',
   'sign in to send feedback': '请先登录再发送反馈',
   'do this from the account page': '请在账户页面进行',
-  'add an email to this account first': '请先给这个账户添加邮箱',
   'too many wrong codes; start again': '验证码错误次数太多，请重新开始',
   'too many wrong codes for this address today; use the link in the email': '这个邮箱今天输错验证码的次数太多，请用邮件里的链接',
   'that request expired; start again': '这个请求已失效，请重新开始',
