@@ -351,6 +351,38 @@ test("the open card counts the board's buses off its own, so a bus running ahead
   );
 });
 
+test("a board row with no next bus (ended) takes none of the card's off, so all its guesses stay", () => {
+  const card = {
+    stop: { code: 'KTR' },
+    board: [
+      {
+        svc: 'D2',
+        etaS: 120,
+        quality: 'scheduled',
+        later: [
+          { etaS: 600, quality: 'scheduled' },
+          { etaS: 1200, quality: 'scheduled' },
+        ],
+      },
+    ],
+  };
+  const board = {
+    board: [{ svc: 'D2', etaS: null, quality: 'ended', running: false, stopped: 'ended', later: [] }],
+    available: true,
+    got: 60_000,
+  };
+  const [d2] = B.withBoard(card, 0, board).board;
+  assert.equal(d2.etaS, null);
+  assert.deepEqual(
+    d2.later.map((x) => [x.etaS, x.quality]),
+    [
+      [60, 'scheduled'],
+      [540, 'scheduled'],
+      [1140, 'scheduled'],
+    ],
+  );
+});
+
 test('a pinned stop closing beside the home keeps the live times its page had, with nothing fetched', async () => {
   const now = Date.now();
   const card = {
