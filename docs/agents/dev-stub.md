@@ -53,12 +53,14 @@ each agent its own `PORT` and stop only the stub you started, by its PID.
 - **iPhone (Simulator, debug build):** the app reads `TERMINUS_*`
   variables from its environment (the list and what each does are in
   `DevLaunch`, `apps/ios/Sources/App/TerminusApp.swift`). Set them in the
-  simulator's launchd, then launch the app:
+  simulator's launchd, then launch the app. On a simulator leased from
+  Simlock, run `simctl` through Simlock (`simlock simctl`, as here); on
+  one of Xcode's own, `xcrun simctl`:
 
   ```sh
   TOK=$(curl -s -X POST http://127.0.0.1:$PORT/__stub/session | python3 -I -c 'import sys,json; print(json.load(sys.stdin)["token"])')
   for kv in TERMINUS_API_BASE=http://127.0.0.1:$PORT TERMINUS_RESET=1 TERMINUS_TOKEN=$TOK TERMINUS_EMAIL=you@u.nus.edu TERMINUS_LANG=en; do
-    xcrun simctl spawn <udid> launchctl setenv "${kv%%=*}" "${kv#*=}"
+    simlock simctl spawn <udid> launchctl setenv "${kv%%=*}" "${kv#*=}"
   done
   ```
 
@@ -66,11 +68,14 @@ each agent its own `PORT` and stop only the stub you started, by its PID.
   from a fresh install. They last until the simulator restarts: afterwards,
   `launchctl unsetenv` each one, so the next run on that simulator isn't
   pointed at a stub that's gone. `scripts/ui-tests.sh` starts and stops a
-  stub of its own and needs none of this.
+  stub of its own and needs none of this, but it runs only on a simulator
+  in Xcode's own set, not on one leased from Simlock.
 - **Android (emulator, debug build):** the app's stub server is always
   `http://localhost:8787`; map it to yours with
-  `adb -s <serial> reverse tcp:8787 tcp:$PORT`, then choose
+  `simlock adb -s <serial> reverse tcp:8787 tcp:$PORT` (plain `adb` on an
+  emulator outside Simlock), then choose
   `http://localhost:8787` under Developer at the bottom of Settings, About
-  (always there in a debug or beta build). `adb reverse --remove tcp:8787` afterwards.
+  (always there in a debug or beta build). Remove the mapping the same way
+  afterwards (`reverse --remove tcp:8787`).
 - A fresh worktree has no `node_modules`: `pnpm install` before starting
   the stub, and `curl http://127.0.0.1:$PORT/` before launching anything.
