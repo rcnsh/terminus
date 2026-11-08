@@ -357,10 +357,10 @@ object PinPages {
 
 /**
  * A pinned stop as Nearby shows it (/api/me/stops), and when this phone got its times, on the server's clock ([ServerClock]): [gotMs] for
- * the times as they stand (an open page's board's, [withBoard]), [answeredMs] for the card's own answer, whose timetable guesses it
+ * the times as they stand (an open page's board's, [withBoard]), [answeredMs] for the card's own answer, [own], whose timetable guesses it
  * carries.
  */
-data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Long? = gotMs) {
+data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Long? = gotMs, val own: NearbyStop = stop) {
     /** The stop as it stands at [nowMs]: its rows [BusTimes.aged], so nothing old passes for live while refreshes fail. */
     fun aged(nowMs: Long): NearbyStop = if (gotMs == null) stop else stop.copy(board = stop.board.map { BusTimes.aged(it, gotMs, nowMs) })
 
@@ -373,18 +373,30 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
     /**
      * The same stop with the times of its open page's [board] (its shuttles only, as /api/me/stops gives them), for one whose page asks for
      * it in place of this card. The rows keep the card's own words, so opening the page changes only the times. The board gives at most one
-     * later bus; after it the card keeps its own timetable guesses (never a live time, which would be old), counted down by the time since
-     * its times were got and dropped once due or no later than the board's last bus. A service the board doesn't have keeps its row.
+     * later bus; after it the card keeps the timetable guesses of its own answer ([own], never a page's, which would come round again, and
+     * never a live time, which would be old), counted down by the time since that answer and dropped once due or no later than the board's
+     * last bus. A service the board doesn't have keeps its own row, counted down the same way, a live time then stale.
      */
     fun withBoard(board: Board): PinnedStop {
         val now = board.gotMs ?: gotMs
-        val since = if (now != null && gotMs != null) ((now - gotMs) / 1000).toInt() else 0
+        val since = if (now != null && answeredMs != null) ((now - answeredMs) / 1000).toInt() else 0
         val left = board.rows.filterNot { it.paid }.toMutableList()
         val rows =
-            stop.board.map { row ->
+            own.board.map { row ->
                 val b = left.firstOrNull { it.svc == row.svc && it.towards == row.towards } ?: left.firstOrNull { it.svc == row.svc }
-                if (b == null) row
-                else {
+                if (b == null) {
+                    if (row.etaS == null || since <= 0) row
+                    else
+                        (row.etaS - since).let { s ->
+                            row.copy(
+                                etaS = if (s > -60) maxOf(0, s) else null,
+                                eta = null,
+                                quality = if (row.quality == "live") "stale" else row.quality,
+                                later = guessesAfter(row.later, since, 0),
+                                laterText = null,
+                            )
+                        }
+                } else {
                     left.remove(b)
                     row.copy(
                         etaS = b.etaS,
@@ -394,12 +406,15 @@ data class PinnedStop(val stop: NearbyStop, val gotMs: Long?, val answeredMs: Lo
                         running = b.running,
                         stopped = b.stopped,
                         resumesAtMs = b.resumesAtMs,
-                        later = b.later + guessesAfter(row.later, since, b.later.lastOrNull()?.etaS ?: b.etaS ?: 0),
+                        later =
+                            (b.later + guessesAfter(row.later, since, b.later.lastOrNull()?.etaS ?: b.etaS ?: 0)).take(
+                                maxOf(b.later.size, row.later.size)
+                            ),
                         laterText = null,
                     )
                 }
             }
-        return PinnedStop(stop.copy(board = rows, available = board.available), now, answeredMs)
+        return PinnedStop(stop.copy(board = rows, available = board.available), now, answeredMs, own)
     }
 
     companion object {

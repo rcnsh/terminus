@@ -385,6 +385,34 @@ class BusesTest {
     }
 
     @Test
+    fun anOpenPinnedCardNeverShowsThePagesOwnGuessTwice() {
+        val card = PinnedStop(NearbyStop("COM3", "COM 3", null, true, listOf(BoardRow("D1", 300, "live"))), gotMs = 0L)
+        fun board(atMs: Long, laterS: Int) =
+            Board(
+                "COM3",
+                "Computing 3",
+                null,
+                true,
+                listOf(BoardRow("D1", 240, "live", later = listOf(LaterBus(laterS, "scheduled")))),
+                null,
+                gotMs = atMs,
+            )
+        // The page's timetabled later bus moves from 900 s to 880 s: still one bus, not that one and the last board's guess for it.
+        val one = card.withBoard(board(60_000L, 900))
+        val two = one.withBoard(board(75_000L, 880))
+        assertEquals(listOf(LaterBus(880, "scheduled")), two.stop.board[0].later)
+    }
+
+    @Test
+    fun anOpenPinnedCardsMissingServiceCountsDownFromItsOwnAnswer() {
+        val card = PinnedStop(NearbyStop("COM3", "COM 3", null, true, listOf(BoardRow("D2", 300, "live"))), gotMs = 0L)
+        val empty = { atMs: Long -> Board("COM3", "Computing 3", null, true, emptyList(), null, gotMs = atMs) }
+        val row = card.withBoard(empty(60_000L)).withBoard(empty(75_000L)).stop.board[0]
+        assertEquals("75 s since the card's answer, not frozen by each merge", 225, row.etaS)
+        assertEquals("its live time is old now", "stale", row.quality)
+    }
+
+    @Test
     fun anOpenPinnedCardAsksAgainWhenItsOwnAnswerIsOld() {
         val card = PinnedStop(NearbyStop("COM3", "COM 3", null, true, emptyList()), gotMs = 0L)
         assertTrue(card.answerFresh(PinnedStop.ANSWER_MS - 1))
