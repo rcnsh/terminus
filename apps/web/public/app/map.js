@@ -688,13 +688,57 @@ function choose(svc) {
   if (map) paintBus();
   status.set(null);
   if (!svc) return;
-  map.fitBounds(boundsOf(campusData.get().routes[svc].line), {
-    padding: { top: 80, bottom: 40, left: 40, right: 40 },
-    maxZoom: 16.5,
-    duration: 600,
-  });
   status.set(t('Finding {0} buses…', svc));
+  // After the status line is drawn, so the fit clears it too.
+  requestAnimationFrame(() => {
+    if (selected.get() !== svc) return;
+    map.fitBounds(boundsOf(campusData.get().routes[svc].line), { padding: freePadding(...coversOnMap()), maxZoom: 16.5, duration: 600 });
+  });
   pollBuses();
+}
+
+/** The map's box and what lies over it: the pills and the status line, MapLibre's buttons, an open sheet. */
+function coversOnMap() {
+  const box = map.getContainer().getBoundingClientRect();
+  // Seen: not a list kept off screen until it has the focus (StopList).
+  const seen = (el) => el.offsetWidth > 2 && el.offsetHeight > 2;
+  const over = (sel, side) => [...document.querySelectorAll(sel)].filter(seen).map((el) => ({ rect: el.getBoundingClientRect(), side }));
+  const covers = [...over('.map-top > *', 'top'), ...over('.map .maplibregl-ctrl-bottom-right > .maplibregl-ctrl', 'right')];
+  // A sheet floats in the corner from 700 wide (app.css), so it's cleared beside; under that it lies across the bottom.
+  const sheet = document.querySelector('.map-sheet');
+  if (sheet && seen(sheet))
+    covers.push({ rect: sheet.getBoundingClientRect(), side: window.matchMedia('(min-width: 700px)').matches ? 'left' : 'bottom' });
+  return [box, covers];
+}
+
+/**
+ * MapLibre padding that keeps a fit inside the map's free area: `margin` in
+ * from each edge, and clear of each of `covers` ({ rect, side? }, rects in
+ * the same coordinates as `box`), from its `side`, else from the edge it's
+ * nearest. However much is covered, a quarter of each way stays free.
+ */
+export function freePadding(box, covers, margin = 24) {
+  const pad = { top: margin, right: margin, bottom: margin, left: margin };
+  for (const { rect, side } of covers) {
+    const clear = {
+      top: rect.bottom - box.top,
+      bottom: box.bottom - rect.top,
+      left: rect.right - box.left,
+      right: box.right - rect.left,
+    };
+    const edge = side ?? Object.keys(clear).reduce((a, b) => (clear[b] < clear[a] ? b : a));
+    pad[edge] = Math.max(pad[edge], clear[edge] + margin);
+  }
+  const fit = (a, b, size) => {
+    if (pad[a] + pad[b] > size * 0.75) {
+      const k = (size * 0.75) / (pad[a] + pad[b]);
+      pad[a] = Math.round(pad[a] * k);
+      pad[b] = Math.round(pad[b] * k);
+    }
+  };
+  fit('left', 'right', box.right - box.left);
+  fit('top', 'bottom', box.bottom - box.top);
+  return pad;
 }
 
 /** Polls for the buses in a row that failed: each one doubles the wait before the next. */
