@@ -211,11 +211,15 @@ import sh.rcn.terminus.runningFirst
 private const val NEAR_CAMPUS_DEG = 0.027
 
 /**
- * Room round the campus's core when the map frames it: the pills are along the top; [left] is a floating sheet's ([MapCover.left]) and
- * [bottom] the system's gesture bar under a map that runs to the window's foot ([MapCover.inset]).
+ * Room round the campus's core when the map frames it: [top] is what the pills and any status line under them cover ([MapCover.top], 72 dp
+ * before they're measured); [left] is a floating sheet's ([MapCover.left]) and [bottom] the system's gesture bar under a map that runs to
+ * the window's foot ([MapCover.inset]).
  */
-private fun corePadding(left: Dp = 0.dp, bottom: Dp = 0.dp) =
-    DpPadding(left = 24.dp + left, top = 96.dp, right = 24.dp, bottom = 24.dp + bottom)
+private fun corePadding(top: Dp = 0.dp, left: Dp = 0.dp, bottom: Dp = 0.dp) =
+    DpPadding(left = MARGIN + left, top = MARGIN + (if (top > 0.dp) top else 72.dp), right = MARGIN, bottom = MARGIN + bottom)
+
+/** The gap between the campus and whatever's at the map's edge. */
+private val MARGIN = 24.dp
 
 private fun Long.color() = Color(this.toInt())
 
@@ -268,8 +272,8 @@ private class MapCover(campusOnly: MutableState<Boolean>) {
     val loose: Boolean
         get() = !started || moving > 0
 
-    /** [corePadding], clear of a floating sheet and the bar at the foot. */
-    fun padding(density: Density) = with(density) { corePadding(left.toDp(), inset.toDp()) }
+    /** [corePadding], clear of the pills and status lines, a floating sheet and the bar at the foot. */
+    fun padding(density: Density) = with(density) { corePadding(top.toDp(), left.toDp(), inset.toDp()) }
 }
 
 /** The bar at the foot under a sheet across the bottom, which the sheet's rows keep clear of. */
@@ -797,17 +801,18 @@ private suspend fun firstView(state: MapState, ui: MapUi, campus: CampusMap, ctx
 }
 
 /**
- * The whole campus fitted to each size the map takes while it's showing just that ([MapCover.campusOnly]): the map is first measured before
- * the window settles (the rail, the system bars), and a fold or a resized window changes it again.
+ * The whole campus fitted to each size the map takes, and each change in what covers it, while it's showing just that
+ * ([MapCover.campusOnly]): the map is first measured before the window settles (the rail, the system bars), a fold or a resized window
+ * changes it again, and a status line under the pills comes and goes.
  */
 private suspend fun refitCampus(state: MapState, ui: MapUi, campus: CampusMap, cover: MapCover, density: Density) {
-    snapshotFlow { state.viewport?.size }
+    snapshotFlow { state.viewport?.size?.let { it to cover.padding(density) } }
         .filterNotNull()
-        .filter { it.width.value > 0 && it.height.value > 0 }
+        .filter { (size) -> size.width.value > 0 && size.height.value > 0 }
         .distinctUntilChanged()
         .filter { cover.campusOnly }
-        .collectLatest {
-            cover.loosened { state.fitCameraToBounds(box(campus.coreExtent(ui.core)), CameraFit(fitPadding = cover.padding(density))) }
+        .collectLatest { (_, padding) ->
+            cover.loosened { state.fitCameraToBounds(box(campus.coreExtent(ui.core)), CameraFit(fitPadding = padding)) }
             cover.started = true
         }
 }
