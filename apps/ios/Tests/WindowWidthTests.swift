@@ -84,13 +84,21 @@ final class WindowWidthTests: XCTestCase {
         XCTAssertEqual(m.path, [.about, .licences])
     }
 
-    func testOnlyTheDuoTurnsOnItsSide() {
-        // iPhone 17 Pro Max, iPhone 17, iPhone SE: portrait only.
-        XCTAssertFalse(WindowWidth.phoneTurns(shortSide: 440))
-        XCTAssertFalse(WindowWidth.phoneTurns(shortSide: 402))
-        XCTAssertFalse(WindowWidth.phoneTurns(shortSide: 375))
-        // The Duo's outer panel (the tent position) and its inner one.
-        XCTAssertTrue(WindowWidth.phoneTurns(shortSide: 466))
-        XCTAssertTrue(WindowWidth.phoneTurns(shortSide: 669))
+    func testShortUnder500Tall() {
+        // iPhone 17 Pro Max, iPhone 17 and iPhone SE on their side; a Duo's
+        // outer panel on its side; an iPhone and an iPad mini upright.
+        XCTAssertTrue(WindowWidth.short(440))
+        XCTAssertTrue(WindowWidth.short(402))
+        XCTAssertTrue(WindowWidth.short(375))
+        XCTAssertTrue(WindowWidth.short(499.5))
+        XCTAssertFalse(WindowWidth.short(500))
+        XCTAssertFalse(WindowWidth.short(669))
+        XCTAssertFalse(WindowWidth.short(874))
+        XCTAssertFalse(WindowWidth.short(1133))
+    }
+
+    func testShortPutsNowsNoticesUnderTheCard() {
+        XCTAssertEqual(NoticesAt.of(short: true), .underCard)
+        XCTAssertEqual(NoticesAt.of(short: false), .sky)
     }
 }

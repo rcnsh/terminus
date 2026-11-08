@@ -34,14 +34,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
 
-    /// Info.plist lets an iPhone turn on its side; this narrows it to the
-    /// screens tall enough on their side (WindowWidth.phoneTurns).
-    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        guard UIDevice.current.userInterfaceIdiom == .phone, let screen = window?.windowScene?.screen else { return .all }
-        let b = screen.bounds
-        return WindowWidth.phoneTurns(shortSide: min(b.width, b.height)) ? .allButUpsideDown : .portrait
-    }
-
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async
         -> UIBackgroundFetchResult
     {
