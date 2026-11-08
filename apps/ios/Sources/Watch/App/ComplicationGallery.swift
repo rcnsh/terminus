@@ -13,14 +13,17 @@
                     paired: paired, answer: paired ? WidgetStore.plan()?.0 : nil, error: WidgetStore.error,
                     now: ctx.date.addingTimeInterval(ServerClock.skew))
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
                         caption("inline")
                         InlineGlance(g: g).font(.system(size: 15, weight: .semibold)).lineLimit(1).frame(maxWidth: .infinity)
-                        caption("circular")
-                        CircularGlance(g: g).frame(width: 50, height: 50).frame(maxWidth: .infinity)
                         caption("rectangular")
                         RectangularGlance(g: g).padding(8).frame(height: 76)
                             .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                        HStack {
+                            caption("circular")
+                            Spacer()
+                            CircularGlance(g: g).frame(width: 50, height: 50)
+                        }
                     }
                 }
             }
