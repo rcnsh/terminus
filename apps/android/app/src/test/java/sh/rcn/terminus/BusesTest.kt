@@ -297,6 +297,50 @@ class BusesTest {
     }
 
     @Test
+    fun theStopOpenBesideTheHomeIsLeftToItsPage() {
+        // Wide, the stop whose page is open is asked for by the page; the home's pinned refresh asks only for the rest.
+        assertEquals(listOf("A", "C"), PinPages.due(listOf("A", "B", "C"), { null }, 100_000L, 10_000L, open = "B"))
+        assertEquals(listOf("A", "B", "C"), PinPages.due(listOf("A", "B", "C"), { null }, 100_000L, 10_000L, open = null))
+    }
+
+    @Test
+    fun aPinnedCardTakesItsOpenPagesTimes() {
+        val guess = LaterBus(2_400, "scheduled")
+        val old =
+            PinnedStop(
+                NearbyStop(
+                    "COM3",
+                    "COM 3",
+                    null,
+                    true,
+                    listOf(
+                        BoardRow("D1", 600, "live", later = listOf(LaterBus(900, "live"), guess), dest = "via UTown"),
+                        BoardRow("D2", 700, "live", dest = "to PGP"),
+                    ),
+                ),
+                1_000L,
+            )
+        val board =
+            Board(
+                "COM3",
+                "Computing 3",
+                null,
+                true,
+                listOf(BoardRow("D1", 120, "live", later = listOf(LaterBus(800, "live"))), BoardRow("95", 300, "live", paid = true)),
+                null,
+                gotMs = 50_000L,
+            )
+        val now = old.withBoard(board)
+        val d1 = now.stop.board[0]
+        assertEquals("the page's time", 120, d1.etaS)
+        assertEquals("the page's next bus, then the card's own guess after it", listOf(LaterBus(800, "live"), guess), d1.later)
+        assertEquals("the card's words", "via UTown", d1.dest)
+        assertEquals("a service the page doesn't have keeps its row; no paid bus joins", listOf("D1", "D2"), now.stop.board.map { it.svc })
+        assertEquals(50_000L, now.gotMs)
+        assertEquals("the walk and name are the card's own", "COM 3", now.stop.name)
+    }
+
+    @Test
     fun theLinesAreAskedForAtMostOnceAMinute() {
         assertEquals("never asked: now", 0L, LinesPoll.waitMs(null, 1_000_000L))
         assertEquals(40_000L, LinesPoll.waitMs(1_000_000L, 1_020_000L))

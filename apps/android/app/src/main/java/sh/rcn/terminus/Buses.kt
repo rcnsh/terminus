@@ -349,16 +349,45 @@ object PinPages {
 
     /**
      * Of the stops [codes], the ones to ask for now, each once: those not asked within [gapMs] ([askedAt] says when each last was), so a
-     * swipe back and forth doesn't ask again at once.
+     * swipe back and forth doesn't ask again at once. Not [open], the stop whose page is open beside the home: its page asks for it.
      */
-    fun due(codes: List<String>, askedAt: (String) -> Long?, nowMs: Long, gapMs: Long): List<String> =
-        codes.distinct().filter { code -> askedAt(code)?.let { nowMs - it < gapMs } != true }
+    fun due(codes: List<String>, askedAt: (String) -> Long?, nowMs: Long, gapMs: Long, open: String? = null): List<String> =
+        codes.distinct().filter { code -> code != open && askedAt(code)?.let { nowMs - it < gapMs } != true }
 }
 
 /** A pinned stop as Nearby shows it (/api/me/stops), and when this phone got it, on the server's clock ([ServerClock]). */
 data class PinnedStop(val stop: NearbyStop, val gotMs: Long?) {
     /** The stop as it stands at [nowMs]: its rows [BusTimes.aged], so nothing old passes for live while refreshes fail. */
     fun aged(nowMs: Long): NearbyStop = if (gotMs == null) stop else stop.copy(board = stop.board.map { BusTimes.aged(it, gotMs, nowMs) })
+
+    /**
+     * The same stop with the times of its open page's [board] (its shuttles only, as /api/me/stops gives them), for one whose page asks for
+     * it in place of this card. The rows keep the card's own words and its timetable guesses after the board's last bus, so opening the
+     * page changes only the times; a service the board doesn't have keeps its row.
+     */
+    fun withBoard(board: Board): PinnedStop {
+        val left = board.rows.filterNot { it.paid }.toMutableList()
+        val rows =
+            stop.board.map { row ->
+                val b = left.firstOrNull { it.svc == row.svc && it.towards == row.towards } ?: left.firstOrNull { it.svc == row.svc }
+                if (b == null) row
+                else {
+                    left.remove(b)
+                    row.copy(
+                        etaS = b.etaS,
+                        quality = b.quality,
+                        eta = b.eta,
+                        crowd = b.crowd,
+                        running = b.running,
+                        stopped = b.stopped,
+                        resumesAtMs = b.resumesAtMs,
+                        later = b.later + row.later.drop(b.later.size),
+                        laterText = null,
+                    )
+                }
+            }
+        return PinnedStop(stop.copy(board = rows, available = board.available), board.gotMs ?: gotMs)
+    }
 }
 
 /** One service's buses on the road (/api/lines), in the server's words ([outText]: "3 out", "None out"). */
