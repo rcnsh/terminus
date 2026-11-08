@@ -96,4 +96,9 @@ final class WindowWidthTests: XCTestCase {
         XCTAssertFalse(WindowWidth.short(874))
         XCTAssertFalse(WindowWidth.short(1133))
     }
+
+    func testShortPutsNowsNoticesUnderTheCard() {
+        XCTAssertEqual(NoticesAt.of(short: true), .underCard)
+        XCTAssertEqual(NoticesAt.of(short: false), .sky)
+    }
 }

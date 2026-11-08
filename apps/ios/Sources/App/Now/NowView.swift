@@ -13,6 +13,7 @@ struct NowView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.windowWidth) private var width
+    @Environment(\.windowShort) private var short
     private let sky = SkyClock.shared
     private let locator = Locator.shared
     @State private var searching = false
@@ -38,6 +39,9 @@ struct NowView: View {
     /// The sky's words: the wide column beside Today; else, the card alone, the page's.
     private var skyWidth: CGFloat { beside ? wideColumnWidth : columnWidth }
 
+    /// Where the notices go: short, under the card, so the answer comes first.
+    private var noticesAt: NoticesAt { NoticesAt.of(short: short) }
+
     var body: some View {
         let phase = sky.phase
         let p = SkyPalette.of(phase, dark: scheme == .dark)
@@ -47,8 +51,13 @@ struct NowView: View {
                     // The sky, from the status bar down to the horizon.
                     VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: 0) {
-                            header
-                            notices
+                            if short {
+                                // The wordmark leads the chips' row instead (`chips`).
+                                Spacer().frame(height: 10)
+                            } else {
+                                header
+                            }
+                            if noticesAt == .sky { notices }
                             chips
                             if searching {
                                 NowSearch { searching = false }
@@ -73,7 +82,11 @@ struct NowView: View {
                                     NowHead(shows: shows, now: ServerClock.now)
                                         .column()
                                 }
-                                Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
+                                if short {
+                                    LowHorizon(palette: p, phase: phase)
+                                } else {
+                                    Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
+                                }
                             }
                         }
                     }
@@ -94,6 +107,7 @@ struct NowView: View {
                             VStack(alignment: .leading, spacing: 0) {
                                 card
                                 goLater
+                                if noticesAt == .underCard { notices(under: true) }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             VStack(alignment: .leading, spacing: 0) {
@@ -103,10 +117,13 @@ struct NowView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .column(width: wideColumnWidth)
+                        // Clear of the low horizon's near hill, which ends where the ground starts.
+                        .padding(.top, short ? LowHorizon.gap : 0)
                         .padding(.bottom, 24)
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             card
+                            if noticesAt == .underCard { notices(under: true) }
                             if !app.showNearby && app.target == .plan, let day = app.day {
                                 DayTimeline(day: day)
                             }
@@ -114,6 +131,8 @@ struct NowView: View {
                             footer
                         }
                         .column()
+                        // Clear of the low horizon's near hill, which ends where the ground starts.
+                        .padding(.top, short ? LowHorizon.gap : 0)
                         .padding(.bottom, 24)
                     }
                 }
@@ -126,7 +145,11 @@ struct NowView: View {
             .scrollDismissesKeyboard(.interactively)
             // Pulled down at the top, what's shown (the card or Nearby) is asked
             // for again: the sky stretches, and your bus drives to your stop on its horizon.
-            .skyPull(pull, livery: Self.road(app).bus.map(\.color), scene: { [app] w in .road(w / roadScale, Self.road(app)) }) {
+            // Short, the horizon is the bands' hills, and the pull's sign grows out of them as on a band.
+            .skyPull(
+                pull, livery: Self.road(app).bus.map(\.color),
+                scene: { [app, short] w in short ? .hill(w) : .road(w / roadScale, Self.road(app)) }
+            ) {
                 await app.pull()
             }
             .background(Color.page)
@@ -205,13 +228,17 @@ struct NowView: View {
         .frame(minHeight: 56)
     }
 
-    /// An update needed, location off: said above the chips, on glass over the sky.
-    @ViewBuilder private var notices: some View {
+    /// An update needed, location off: said above the chips, on glass over
+    /// the sky; or, `under` the card's buttons on the ground, in the page's colours.
+    private var notices: some View { notices(under: false) }
+
+    @ViewBuilder private func notices(under: Bool) -> some View {
         if app.updateRequired {
             SkyNotice(text: L("Update terminus to keep using it.")) {
                 Link(L("Update"), destination: URL(string: Api.site)!)
             }
-            .padding(.bottom, 12)
+            .padding(.top, under ? 14 : 0)
+            .padding(.bottom, under ? 0 : 12)
         }
         if !locator.allowed {
             SkyNotice(
@@ -226,7 +253,8 @@ struct NowView: View {
                     Button(L("Continue")) { locator.ask() }
                 }
             }
-            .padding(.bottom, 12)
+            .padding(.top, under ? 14 : 0)
+            .padding(.bottom, under ? 0 : 12)
         }
     }
 
@@ -243,6 +271,7 @@ struct NowView: View {
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
+                        if short { NowWordmark().padding(.trailing, 8) }
                         NowChip(label: L("Next"), selected: !app.showNearby && app.target == .plan, id: "chip.next") { app.select(.plan) }
                         NowChip(label: L("Nearby"), selected: app.showNearby, id: "chip.nearby") { app.selectNearby() }
                         ForEach(app.places, id: \.key) { place in
@@ -476,6 +505,46 @@ private struct Room: View {
                 }
                 .accessibilityHidden(true)
             }
+    }
+}
+
+/// Where Now's notices (location off, an update needed) go: over the chips
+/// in the sky, or in a short window under the card's buttons, so the answer
+/// comes first.
+enum NoticesAt {
+    case sky, underCard
+
+    static func of(short: Bool) -> NoticesAt { short ? .underCard : .sky }
+}
+
+/// Where the sky ends in a short window: the bands' low horizon, just the
+/// hills, with no road, bus, sign or town (the card says in words where the
+/// bus is). Pulled down, the pull's sign grows out of the near hill and a
+/// bus drives to it, as on a band.
+private struct LowHorizon: View {
+    let palette: SkyPalette
+    let phase: SkyPhase
+    @Environment(\.skyPull) private var pull
+
+    /// As tall as a band's hills.
+    static let height: CGFloat = 52
+    /// Between the near hill and the card's first line.
+    static let gap: CGFloat = 8
+
+    var body: some View {
+        let m = pull?.picture()
+        let pulling = m?.open ?? false
+        let paint = pull?.paint
+        Canvas { g, size in
+            let top = size.height - 58
+            SkyDraw.horizon(&g, size: size, top: top, page: .page, p: palette, phase: phase, road: Road(shuttle: false), withSun: false)
+            if pulling, let m, let paint {
+                PullDraw.hill(&g, m, paint: paint, p: palette, top: top, d: 1, width: size.width, lights: phase.lights)
+            }
+        }
+        .frame(height: Self.height)
+        .clipped()
+        .accessibilityHidden(true)
     }
 }
 
