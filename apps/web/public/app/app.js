@@ -1589,16 +1589,23 @@ function NowSide() {
   return html`<div class="now-side" ref=${box}><${Today} /></div>`;
 }
 
+/**
+ * The tabs as the rail on the left, from 800 wide, in #rail ahead of the
+ * wordmark (app/index.html), so the keyboard meets them first, as the eye does.
+ */
+function Rail() {
+  return useMedia('(min-width: 800px)') ? html`<${TabBar} />` : null;
+}
+
 /** The four tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
   const split = useNowSplit();
-  // The rail is on the left from 800, so it comes first for the keyboard
-  // too; the bar along the bottom stays last, under the page.
+  // From 800 the tabs are a rail drawn ahead of the page (Rail); the bar
+  // along the bottom stays last, under the page.
   const rail = useMedia('(min-width: 800px)');
   return html`
-    ${rail && html`<${TabBar} />`}
     <main class=${split ? 'wrap app-main split' : 'wrap app-main'} id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
       <h1 class="sr-only">${t('Now')}</h1>
       <${InstallHint} />
@@ -1632,6 +1639,7 @@ async function start() {
   const opening = tabInAddress();
   markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));
+  render(html`<${Rail} />`, document.getElementById('rail'));
   // Settings' code and the account alongside the card, not after /api/me.
   if (opening === 'settings') openSettings();
   // The plan from last time at once, if it still holds (a look in the cache),

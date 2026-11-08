@@ -586,11 +586,48 @@ const plateName = (code) => signs.get().get(code)?.s?.stop.name ?? stopOf(code)?
 const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got, now)) });
 
 /**
+ * Pinned stop `s` (/api/me/stops) with the times of its open page's `board`
+ * (/api/arrivals), for the stop whose page asks for it in place of its card
+ * (signsToAsk), as the Android app does. Each row keeps the card's own
+ * words (where it's going) and its timetable guesses after the board's
+ * last bus, so only the times change; a service the board doesn't have
+ * keeps its row. Public buses aren't on the card.
+ */
+export function withBoard(s, board) {
+  const left = board.board.filter((b) => !b.paid);
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const rows = s.board.map((row) => {
+    let i = left.findIndex((b) => b.svc === row.svc && same(b.towards, row.towards));
+    if (i < 0) i = left.findIndex((b) => b.svc === row.svc);
+    if (i < 0) return row;
+    const [b] = left.splice(i, 1);
+    const later = b.later ?? [];
+    return {
+      ...row,
+      etaS: b.etaS,
+      eta: b.eta,
+      quality: b.quality,
+      crowd: b.crowd,
+      running: b.running,
+      stopped: b.stopped,
+      resumesAt: b.resumesAt,
+      later: [...later, ...(row.later ?? []).slice(later.length)],
+      laterText: null,
+    };
+  });
+  return { ...s, board: rows, available: board.available };
+}
+
+/**
  * One pinned stop's page: its sign as Nearby shows it, and under it why it
  * couldn't update, or what a "~" means when one is showing. Before its
  * times come, its plate with its rows as shapes.
  */
-function PinPage({ code, entry, pinned, now, open }) {
+function PinPage({ code, entry: own, pinned, now, open }) {
+  // Open beside the home, its page's board is the live one: the card takes its times (withBoard).
+  const board = useStore(boards).get(code);
+  const entry =
+    open && own?.s && board?.board && shownCode(code) === code ? { s: withBoard(own.s, board), got: board.got, error: board.error } : own;
   const s = entry?.s
     ? agedSign(entry.s, entry.got, now)
     : { stop: { code, name: plateName(code) }, walkS: null, available: true, board: [] };
@@ -641,7 +678,12 @@ function PinnedStops({ pinned }) {
   const moved = useRef(false);
   // A stop unpinned (its star, here or on its page): pageOf finds the page that took its place.
   const gone = pick != null && pick !== ADD && !pinned.includes(pick);
-  const index = pageOf(pinned, pick);
+  // Beside its page, the stop open is the card showing, however it was opened (Now, Nearby, the map).
+  const openPin = split && r.kind === 'stop' && pinned.includes(r.code) ? r.code : null;
+  useEffect(() => {
+    if (openPin && chosen.get() !== openPin) chosen.set(openPin);
+  }, [openPin]);
+  const index = pageOf(pinned, openPin ?? pick);
   const at = useRef(index);
   at.current = index;
   // Swiped: once the pager settles, the page it rests on is the one picked.
@@ -1176,6 +1218,10 @@ export function BusesTab({ visible, locate: where = null }) {
   const wide = useMedia('(min-width: 800px)');
   split = wide;
   const typed = useStore(findText);
+  // Widened past 800 with a page open: the home comes on screen beside it, its pinned stops with it.
+  useEffect(() => {
+    if (wide && visible) freshenSigns();
+  }, [wide]);
   const home = visible && (r.kind === 'home' || wide);
 
   useEffect(() => {

@@ -58,7 +58,7 @@ test('every part of the app switches to two panes at the same width', () => {
 
 test('dialogs are centred from 600 wide and at most 560 wide; sign-in and setup stay in the 560 column', () => {
   const account = read('account/account.css');
-  assert.match(account, /@media \(min-width: 600px\) \{ \.report-sheet \{ inset: 0; margin: auto;/);
+  assert.match(account, /@media \(min-width: 600px\) \{\n {2}\.report-sheet \{ inset: 0; margin: auto;/);
   const max = Number(/\.report-sheet \{[^}]*max-width: (\d+)px/.exec(account)[1]);
   assert.ok(max <= 560, `report sheet ${max} wide`);
   // The wrap's 16 px gutters each side make these 560 in all.
@@ -74,7 +74,7 @@ test('chosen is a rounded fill of the accent and nothing else, and only the trai
   assert.match(read('assets/site.css'), /--chosen: color-mix\(in srgb, var\(--accent\) 12%, transparent\);/);
   const stops = /\n {2}\.bt-split :is\(\.bt-service, \.bt-result\)\[aria-current\][^{]*\{([^}]*)\}/.exec(css)[1];
   assert.match(stops, /border-radius: 12px; background: var\(--chosen\);/);
-  assert.match(css, /\.bt-pager-page\.open \.stop-sign \.plate \{ background: var\(--chosen\); \}/);
+  assert.match(css, /\.bt-pager-page\.open \.stop-sign \.plate \{ border-color: transparent; background: var\(--chosen\); \}/);
   assert.match(account, /\.settings-row\[aria-current\] \{ background: var\(--chosen\); \}/);
   // No bar, no outline, no coloured chevron.
   assert.doesNotMatch(css + account, /aria-current\][^{]*\{[^}]*(box-shadow|border-color|outline)/);
@@ -193,4 +193,89 @@ test('beside the home, the open pinned stop is asked for by its page alone once 
   render(null, root);
   await settle();
   P.profile.set({ pinnedStops: [] });
+});
+
+test('the open pinned card shows the times its page has', async () => {
+  const now = Date.now();
+  const card = {
+    stop: { code: 'KTR', name: 'KTR', longName: 'KTR' },
+    walkS: null,
+    available: true,
+    board: [
+      {
+        svc: 'A1',
+        dest: 'to LT13',
+        destPlace: 'LT13',
+        etaS: 900,
+        quality: 'scheduled',
+        later: [
+          { etaS: 1500, quality: 'scheduled' },
+          { etaS: 2100, quality: 'scheduled' },
+        ],
+      },
+    ],
+  };
+  P.profile.set({ pinnedStops: ['KTR', 'LT13'] });
+  B.chosen.set('KTR');
+  B.route.set({ kind: 'stop', code: 'KTR' });
+  B.signs.set(new Map([['KTR', { s: card, at: now, got: now }]]));
+  // The page's board: live, two buses.
+  B.boards.set(
+    new Map([
+      [
+        'KTR',
+        {
+          stop: { code: 'KTR', name: 'KTR' },
+          board: [{ svc: 'A1', etaS: 120, quality: 'live', later: [{ etaS: 720, quality: 'live' }] }],
+          available: true,
+          at: now,
+          got: now,
+        },
+      ],
+    ]),
+  );
+  render(html`<${B.BusesTab} visible=${false} />`, root);
+  await settle();
+  const row = root.querySelector('.bt-list .bt-pager-page.open .nearby-row');
+  const times = [...row.querySelectorAll('.nb-time')].map((x) => x.textContent.replace(/\s+/g, ''));
+  // The page's two live buses, then the card's own guess for the third; its own words for where it goes.
+  assert.deepEqual(times, ['2min', '12', '~35']);
+  assert.match(row.textContent, /LT13/);
+  render(null, root);
+  await settle();
+  B.boards.set(new Map());
+  B.signs.set(new Map());
+  P.profile.set({ pinnedStops: [] });
+});
+
+test('beside the home, a pinned stop opened from elsewhere is the card the list shows, and marked', async () => {
+  P.profile.set({ pinnedStops: ['KTR', 'LT13', 'AS5'] });
+  B.chosen.set('KTR');
+  B.route.set({ kind: 'stop', code: 'AS5' });
+  render(html`<${B.BusesTab} visible=${false} />`, root);
+  await settle();
+  assert.equal(root.querySelector('.bt-pins input:checked').nextElementSibling.textContent, 'AS5');
+  const open = root.querySelector('.bt-pager-page.open');
+  assert.equal(open.getAttribute('aria-label'), 'AS5');
+  assert.equal(open.getAttribute('aria-current'), 'true');
+  render(null, root);
+  await settle();
+  P.profile.set({ pinnedStops: [] });
+});
+
+test("Stops' sky runs edge to edge at every width, the report has Cancel from 600, and the rail comes before the wordmark", () => {
+  const css = read('app/app.css');
+  assert.doesNotMatch(css, /\.bt-sky-top, \.buses-tab > \.bt-sky/);
+  assert.match(css, /\n\.bt-sky \{ margin: 0 calc\(50% - var\(--half\)\); padding: 0 calc\(var\(--half\) - 50%\);/);
+  assert.match(
+    css,
+    /\.bt-split \.bt-pager-page\.open \.stop-sign, \.bt-split \.bt-pager-page\.open \.stop-sign \.plate \{ border-color: transparent; background: var\(--chosen\); \}/,
+  );
+  const account = read('account/account.css');
+  assert.match(
+    account,
+    /\.report-cancel \{ display: none; \}\n@media \(min-width: 600px\) \{[^@]*\.report-cancel \{ display: inline-flex;/,
+  );
+  const page = read('app/index.html');
+  assert.ok(page.indexOf('<div id="rail"></div>') < page.indexOf('<header class="wrap nav">'));
 });
