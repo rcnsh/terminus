@@ -62,7 +62,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -496,7 +495,7 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
                 when (Lang.pref(ctx)) {
                     Lang.EN -> "English"
                     Lang.ZH -> "中文"
-                    else -> stringResource(followDevice())
+                    else -> stringResource(R.string.follow_device)
                 },
                 when (state.profile?.clock) {
                     Clock.H12 -> stringResource(R.string.clock_12)
@@ -507,7 +506,7 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
             .joinToString(" · ")
     } else {
         listOfNotNull(
-                stringResource(themeName(Theme.pref(ctx), followDevice())),
+                stringResource(themeName(Theme.pref(ctx))),
                 stringResource(CardStyle.name(CardStyle.pref(ctx))),
                 stringResource(R.string.new_to_nus).takeIf { NewToNus.on(ctx) },
             )
@@ -515,16 +514,13 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
     }
 }
 
-private fun themeName(theme: String, follow: Int) =
+/** "Follow this phone", or "Follow this tablet" on a tablet (values-sw600dp, as every string that names the device). */
+private fun themeName(theme: String) =
     when (theme) {
         Theme.LIGHT -> R.string.theme_light
         Theme.DARK -> R.string.theme_dark
-        else -> follow
+        else -> R.string.follow_device
     }
-
-/** "Follow this tablet" on a tablet (600 dp or more at its narrowest, whichever way it's held), "Follow this phone" otherwise. */
-@Composable
-private fun followDevice() = if (LocalConfiguration.current.smallestScreenWidthDp >= 600) R.string.follow_tablet else R.string.follow_device
 
 private fun paceName(pace: String) =
     when (pace) {
