@@ -53,12 +53,14 @@ final class WatchUITests: XCTestCase {
         shot("setup", app)
     }
 
-    /// Signed in: the class trip's countdown, then Nearby from the list, then signing out back to setup.
+    /// Signed in: the trip to the stub's class, then Nearby from the list, then signing out back to setup.
     func testNowNearbyAndSignOut() {
         let app = app(signedIn: true)
         app.launch()
-        let leave = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Leave'")).firstMatch
-        XCTAssertTrue(leave.waitForExistence(timeout: 30), "the class trip's countdown")
+        // "To GEA1000 @ UTown" heads the card whether it says when to leave or, with the
+        // simulator's location at the stop, which bus to catch.
+        let trip = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'GEA1000'")).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 30), "the trip to the class")
         shot("now", app)
 
         app.buttons["targets"].firstMatch.tap()
