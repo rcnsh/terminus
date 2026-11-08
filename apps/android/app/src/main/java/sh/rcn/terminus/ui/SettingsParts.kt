@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.R
 
 /*
@@ -286,7 +287,8 @@ internal fun Context.openWeb(url: String) {
     try {
         startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
     } catch (_: android.content.ActivityNotFoundException) {
-        android.widget.Toast.makeText(this, sh.rcn.terminus.L.s(R.string.no_browser), android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, sh.rcn.terminus.L.s(DeviceKind.word(R.string.no_browser)), android.widget.Toast.LENGTH_SHORT)
+            .show()
     }
 }
 

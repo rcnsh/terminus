@@ -94,6 +94,13 @@ data class UiState(
     val answer: NextAnswer?
         get() = answers[target]
 
+    /**
+     * There's a day to show beside the card when wide: its items, or the one just taken off with its Undo. A removal left over from a day
+     * that's gone isn't one, or the pane beside the card would be empty.
+     */
+    val hasDay: Boolean
+        get() = day != null && (day.items.isNotEmpty() || removed != null)
+
     /** Signed in, maybe to another account than the last: nothing it was shown stays on screen. */
     fun withoutAccount() =
         copy(

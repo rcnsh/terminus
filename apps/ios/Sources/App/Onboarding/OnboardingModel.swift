@@ -50,7 +50,7 @@ final class OnboardingModel {
             if link.isEmpty { link = share ?? "" }
             syncLang()
         } catch let e as ApiError where e.status == 401 {
-            AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+            AppModel.shared.rejected(token, reason: signedOutHere)
             return
         } catch {
             message = failureMessage(error)
@@ -259,7 +259,7 @@ final class OnboardingModel {
                 saveTask = nil
                 pending = []
                 if let e = error as? ApiError, e.status == 401 {
-                    AppModel.shared.rejected(token, reason: L("This phone was signed out of your account. Sign in again with your email."))
+                    AppModel.shared.rejected(token, reason: signedOutHere)
                     return
                 }
                 if let confirmed { profile = confirmed }

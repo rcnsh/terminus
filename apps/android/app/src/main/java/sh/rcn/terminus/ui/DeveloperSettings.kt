@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.Diagnostics
 import sh.rcn.terminus.L
 import sh.rcn.terminus.R
@@ -121,7 +122,7 @@ private fun DiagnosticsGroup() {
     val allowed = stringResource(R.string.diag_allowed)
     val notAllowed = stringResource(R.string.diag_not_allowed)
     fun yes(b: Boolean?) = if (b == false) notAllowed else allowed
-    Group(stringResource(R.string.diagnostics), stringResource(R.string.diagnostics_hint)) {
+    Group(stringResource(R.string.diagnostics), stringResource(DeviceKind.word(R.string.diagnostics_hint))) {
         ValueRow(stringResource(R.string.diag_server), f.server.substringAfter("://"))
         RowDivider()
         val clock = f.skewMs / 1000
@@ -147,7 +148,7 @@ private fun DiagnosticsGroup() {
             stringResource(R.string.diag_push),
             stringResource(
                 when {
-                    !f.pushAvailable -> R.string.diag_push_unavailable
+                    !f.pushAvailable -> DeviceKind.word(R.string.diag_push_unavailable)
                     f.pushActive -> R.string.diag_push_active
                     else -> R.string.diag_push_inactive
                 }

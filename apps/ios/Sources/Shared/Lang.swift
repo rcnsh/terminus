@@ -60,6 +60,24 @@ func L(_ en: String, _ args: String...) -> String {
     return args.isEmpty ? s : String(format: s, locale: Lang.locale, arguments: args)
 }
 
+/// This is an iPad: words naming the device say "this iPad", not "this
+/// phone". From the model's name, which any thread and the widgets can read:
+/// a simulator's from its environment, a device's from the kernel.
+let onIPad: Bool = {
+    if let sim = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return sim.hasPrefix("iPad") }
+    var u = utsname()
+    uname(&u)
+    let machine = withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    return machine.hasPrefix("iPad")
+}()
+
+/// The server no longer knows this device's sign-in.
+var signedOutHere: String {
+    onIPad
+        ? L("This iPad was signed out of your account. Sign in again with your email.")
+        : L("This phone was signed out of your account. Sign in again with your email.")
+}
+
 /// `s` as VoiceOver should say it: "~09:11", an estimate, as "about
 /// 09:11" ("约 09:11"), since the "~" alone isn't read out.
 func spokenTimes(_ s: String) -> String {

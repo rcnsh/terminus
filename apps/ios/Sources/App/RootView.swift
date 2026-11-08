@@ -15,6 +15,8 @@ struct RootView: View {
                 MainTabs()
             }
         }
+        // The layout follows the window's width, the welcome and setup included.
+        .readsWindowWidth()
         .environment(app)
         .environment(prefs)
         .tint(.brand)
@@ -39,6 +41,9 @@ struct MainTabs: View {
 
     enum Tab: Hashable { case now, buses, map, settings }
 
+    /// A keyboard is up (keyboardRoom()).
+    @State private var keyboard = false
+
     var body: some View {
         // The Map tab tapped while on it goes back to how it opened, as on Android.
         let selection = Binding(
@@ -49,19 +54,26 @@ struct MainTabs: View {
             })
         TabView(selection: selection) {
             NowView()
+                .keyboardRoom()
                 .tabItem { Label(L("Now"), systemImage: "clock") }
                 .tag(Tab.now)
             // Stops: a stop sign on its pole, drawn (Support/Assets.xcassets), as SF Symbols has none.
             BusesView()
+                .keyboardRoom()
                 .tabItem { Label(L("Stops"), image: "StopSign") }
                 .tag(Tab.buses)
             MapTab()
+                .keyboardRoom()
                 .tabItem { Label(L("Map"), systemImage: "map") }
                 .tag(Tab.map)
             SettingsView()
+                .keyboardRoom()
                 .tabItem { Label(L("Settings"), systemImage: "gearshape") }
                 .tag(Tab.settings)
         }
+        .environment(\.keyboardUp, keyboard)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
         .onGeometryChange(for: Bool.self) {
             // One side only: a landscape iPhone's notch and corners inset both.
             $0.safeAreaInsets.top == 0 && ($0.safeAreaInsets.leading == 0) != ($0.safeAreaInsets.trailing == 0)

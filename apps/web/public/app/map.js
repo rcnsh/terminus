@@ -163,6 +163,8 @@ function openSheet(what) {
     opener = f && f !== document.body && !f.closest('.map-sheet') ? f : null;
   }
   sheet.set(what);
+  // The room a line's fit took below the map file (fitLine) goes with the sheet.
+  if (!what) map?.setMaxBounds(BOUNDS);
   // Closed: focus back where it was (a stop in the list, the map), else the map.
   if (!what && was) {
     const back = opener;
@@ -295,8 +297,7 @@ async function build(container) {
   if (!protocolAdded) ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
   protocolAdded = true;
 
-  const core = data.stops.filter((s) => s.core);
-  fit = boundsOf(core.map((s) => [s.lon, s.lat]));
+  fit = campusBounds(data);
   map = new ml.Map({
     container,
     style: (styled = styleUrl()),
@@ -352,6 +353,14 @@ async function build(container) {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', restyle);
   document.addEventListener('themechange', restyle);
   map.on('click', onClick);
+  // Moved by hand: the line chosen is no longer fitted to the window, and a resize leaves the view where it was put.
+  map.on('movestart', (e) => {
+    if (e.originalEvent) lineFitted = null;
+  });
+  // A new size (a window resized, a phone turned) with the line as fitted: fitted again, clear of what's over the map now.
+  map.on('resize', () => {
+    if (lineFitted && lineFitted === selected.get()) fitLine(0);
+  });
   for (const layer of ['stops', 'stop-names', 'buses']) {
     map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', layer, () => (map.getCanvas().style.cursor = ''));
@@ -379,6 +388,20 @@ export function home() {
   openSheet(null);
   if (selected.get()) choose(null);
   toCampus();
+}
+
+/**
+ * The main campus as the first view frames it: its stops, and the whole line
+ * of each service that stays on it, since a line bends out past the stops at
+ * its ends (K's east loop). P, out to the Botanic Gardens, would frame half
+ * the island, so its line isn't counted. The same rule as the apps
+ * (MapData.swift coreBounds), so the three open on the same view.
+ */
+export function campusBounds(data) {
+  const core = new Set(data.stops.filter((s) => s.core).map((s) => s.code));
+  if (!core.size) return boundsOf(data.stops.map((s) => [s.lon, s.lat]));
+  const lines = Object.values(data.routes ?? {}).filter((r) => r.seq?.length && r.seq.every((code) => core.has(code)));
+  return boundsOf([...data.stops.filter((s) => core.has(s.code)).map((s) => [s.lon, s.lat]), ...lines.flatMap((r) => r.line)]);
 }
 
 function boundsOf(points) {
@@ -675,13 +698,136 @@ function choose(svc) {
   if (map) paintBus();
   status.set(null);
   if (!svc) return;
-  map.fitBounds(boundsOf(campusData.get().routes[svc].line), {
-    padding: { top: 80, bottom: 40, left: 40, right: 40 },
-    maxZoom: 16.5,
-    duration: 600,
-  });
   status.set(t('Finding {0} buses…', svc));
+  // After the status line is drawn, so the fit clears it too.
+  requestAnimationFrame(() => {
+    if (selected.get() === svc) fitLine(600);
+  });
   pollBuses();
+}
+
+/** The chosen service whose whole line is in view as fitted, until the map is moved by hand or to a stop: a resize fits it again. */
+let lineFitted = null;
+
+/**
+ * The chosen service's whole line in the map's free area (freePadding).
+ * MapLibre adds the padding a sheet left on the camera (the stop's easeTo
+ * in MapTab) to a fit's own, so that's taken off: counted twice it can
+ * leave no room, and MapLibre then doesn't move at all.
+ */
+function fitLine(duration) {
+  const svc = selected.get();
+  const line = svc && campusData.get()?.routes[svc]?.line;
+  if (!map || !line) return;
+  const [box, covers] = coversOnMap();
+  const kept = map.getPadding();
+  const camera = (margin) => {
+    const free = freePadding(box, covers, margin);
+    const padding = Object.fromEntries(Object.entries(free).map(([side, px]) => [side, px - (kept[side] ?? 0)]));
+    return map.cameraForBounds(boundsOf(line), { padding, maxZoom: 16.5 });
+  };
+  // The street map can't be shown smaller than the window (a tall window
+  // with a sheet beside): the margins go before the line goes under the sheet.
+  let to = camera(24);
+  if (to && to.zoom < leastZoom(box, covers)) to = camera(4);
+  if (!to) return;
+  map.setMaxBounds(underSheet(covers, to.zoom));
+  map.easeTo({ ...to, duration });
+  lineFitted = svc;
+}
+
+/**
+ * The least zoom the pan limit (underSheet) lets the map in `box` show: the
+ * map file fills the window, less a sheet's side, which may reach past it.
+ */
+function leastZoom(box, covers) {
+  const sheet = covers.find((c) => c.sheet);
+  const across = sheet?.side === 'bottom' ? sheet.rect.bottom - sheet.rect.top : 0;
+  const beside = sheet?.side === 'left' ? sheet.rect.right - sheet.rect.left : 0;
+  const y = (lat) => (1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2;
+  const [[west, south], [east, north]] = BOUNDS;
+  const tall = (box.bottom - box.top - across) / ((y(south) - y(north)) * 512);
+  const wide = (box.right - box.left - beside) / (((east - west) / 360) * 512);
+  return Math.log2(Math.max(tall, wide));
+}
+
+/**
+ * The pan limit with a sheet open: BOUNDS, reaching past the map file on
+ * the sheet's side (south under a phone's, west beside a floating one) as
+ * far as the sheet is big at `zoom`. Fitted beside a sheet, a line puts the
+ * view's centre well off it, and the plain limit would push the view back,
+ * the line behind the sheet; what lies past the map file is under the
+ * sheet. Back to BOUNDS when the sheet closes (openSheet).
+ */
+function underSheet(covers, zoom) {
+  const sheet = covers.find((c) => c.sheet);
+  if (!sheet) return BOUNDS;
+  const deg = (px) => (px * 360) / (512 * 2 ** zoom);
+  const [[west, south], [east, north]] = BOUNDS;
+  return sheet.side === 'bottom'
+    ? [
+        [west, south - deg(sheet.rect.bottom - sheet.rect.top)],
+        [east, north],
+      ]
+    : [
+        [west - deg(sheet.rect.right - sheet.rect.left), south],
+        [east, north],
+      ];
+}
+
+/** The map's box and what lies over it: the pills and the status line, MapLibre's buttons, an open sheet. */
+function coversOnMap() {
+  const box = map.getContainer().getBoundingClientRect();
+  // Seen: not a list kept off screen until it has the focus (StopList).
+  const seen = (el) => el.offsetWidth > 2 && el.offsetHeight > 2;
+  const over = (sel, side) => [...document.querySelectorAll(sel)].filter(seen).map((el) => ({ rect: el.getBoundingClientRect(), side }));
+  const covers = [...over('.map-top > *', 'top'), ...over('.map .maplibregl-ctrl-bottom-right > .maplibregl-ctrl', 'right')];
+  // A sheet floats in the corner from 700 wide (app.css), so it's cleared beside; under that it lies across the bottom.
+  const sheet = document.querySelector('.map-sheet');
+  if (sheet && seen(sheet))
+    covers.push({
+      rect: sheet.getBoundingClientRect(),
+      side: window.matchMedia('(min-width: 700px)').matches ? 'left' : 'bottom',
+      sheet: true,
+    });
+  return [box, covers];
+}
+
+/**
+ * MapLibre padding that keeps a fit inside the map's free area: `margin` in
+ * from each edge, and clear of each of `covers` ({ rect, side? }, rects in
+ * the same coordinates as `box`), from its `side`, else from the edge it's
+ * nearest. However much is covered, 15% of each way stays free,
+ * the margins given up before any of the room clear of the covers.
+ */
+export function freePadding(box, covers, margin = 24) {
+  const pad = { top: margin, right: margin, bottom: margin, left: margin };
+  for (const { rect, side } of covers) {
+    const clear = {
+      top: rect.bottom - box.top,
+      bottom: box.bottom - rect.top,
+      left: rect.right - box.left,
+      right: box.right - rect.left,
+    };
+    const edge = side ?? Object.keys(clear).reduce((a, b) => (clear[b] < clear[a] ? b : a));
+    pad[edge] = Math.max(pad[edge], clear[edge] + margin);
+  }
+  // Too little left (a phone's sheet under the pills): the margins go first, then everything in proportion.
+  const fit = (a, b, size) => {
+    const most = size * 0.85;
+    if (pad[a] + pad[b] <= most) return;
+    const less = Math.min(margin - 4, (pad[a] + pad[b] - most) / 2);
+    pad[a] -= less;
+    pad[b] -= less;
+    if (pad[a] + pad[b] > most) {
+      const k = most / (pad[a] + pad[b]);
+      pad[a] = Math.round(pad[a] * k);
+      pad[b] = Math.round(pad[b] * k);
+    }
+  };
+  fit('left', 'right', box.right - box.left);
+  fit('top', 'bottom', box.bottom - box.top);
+  return pad;
 }
 
 /** Polls for the buses in a row that failed: each one doubles the wait before the next. */
@@ -1519,11 +1665,20 @@ export function MapTab({ visible: on, onGoTo, onSaved }) {
       : open?.stop === code && campusData.get()?.stops.find((s) => s.code === code);
     if (!at || at.lat == null || !map) return;
     centreOn = null;
+    // On a stop or a bus now, not the whole line: a resize doesn't take it back there.
+    lineFitted = null;
+    // Clear of the sheet: above it where it lies across the bottom, beside it
+    // where it floats in the corner (from 700 wide, app.css). MapLibre keeps
+    // padding from one move to the next, so each side is always given.
+    const sheet = sheetBox.current;
+    const beside = window.matchMedia('(min-width: 700px)').matches;
     const go = () =>
       map.easeTo({
         center: [at.lon, at.lat],
         zoom: Math.max(map.getZoom(), 17),
-        padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 },
+        padding: beside
+          ? { top: 70, bottom: 20, left: (sheet?.offsetWidth ?? 0) + 36, right: 20 }
+          : { top: 70, bottom: (sheet?.offsetHeight ?? 0) + 20, left: 0, right: 0 },
         duration: 600,
       });
     // Not loaded: the map is still being built (from Nearby), or a source is

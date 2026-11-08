@@ -12,6 +12,7 @@ struct NowView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.windowWidth) private var width
     private let sky = SkyClock.shared
     private let locator = Locator.shared
     @State private var searching = false
@@ -23,6 +24,19 @@ struct NowView: View {
     @State private var signingIn = false
     @State private var goingLater = false
     @State private var pull = SkyPull()
+    /// The chips' own width, and the row's room for them: from 600 wide, all
+    /// of them fitting, the row neither fades nor leaves room for the fade.
+    @State private var chipsWidth: CGFloat = 0
+    @State private var chipsRoom: CGFloat = 0
+
+    /// Wide, with a day to show: the card's steps in the left half, Today in the right.
+    private var beside: Bool { width.panes && hasDay }
+
+    /// Today has something in it: an entry, or one just removed with its Undo.
+    private var hasDay: Bool { (app.day.map { !$0.items.isEmpty } ?? false) || app.removed != nil }
+
+    /// The sky's words: the wide column beside Today; else, the card alone, the page's.
+    private var skyWidth: CGFloat { beside ? wideColumnWidth : columnWidth }
 
     var body: some View {
         let phase = sky.phase
@@ -41,15 +55,24 @@ struct NowView: View {
                                     .padding(.top, 12)
                             }
                         }
-                        .column()
+                        .column(width: skyWidth)
                         // Comes down a little with a pull; the room opens under it.
                         .pullLead()
                         TimelineView(.periodic(from: .now, by: 1)) { _ in
                             let shows = NowShows.of(app, now: ServerClock.now)
                             VStack(alignment: .leading, spacing: 0) {
                                 Room(height: shows.room, phase: phase, scrolled: scrolled)
-                                NowHead(shows: shows, now: ServerClock.now)
-                                    .column()
+                                if beside {
+                                    // The head tops the card's half, as wide as the half under it.
+                                    HStack(alignment: .top, spacing: Self.halvesGap) {
+                                        NowHead(shows: shows, now: ServerClock.now).frame(maxWidth: .infinity, alignment: .leading)
+                                        Color.clear.frame(maxWidth: .infinity).frame(height: 0)
+                                    }
+                                    .column(width: wideColumnWidth)
+                                } else {
+                                    NowHead(shows: shows, now: ServerClock.now)
+                                        .column()
+                                }
                                 Horizon(road: shows.road, palette: p, phase: phase, scrolled: scrolled)
                             }
                         }
@@ -66,23 +89,33 @@ struct NowView: View {
                     }
 
                     // The ground.
-                    VStack(alignment: .leading, spacing: 0) {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in
-                            NowGround(shows: NowShows.of(app, now: ServerClock.now), now: ServerClock.now)
+                    if beside {
+                        HStack(alignment: .top, spacing: Self.halvesGap) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                card
+                                goLater
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 0) {
+                                if let day = app.day { DayTimeline(day: day, top: 0) }
+                                footer
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        if !app.showNearby && app.target == .plan, let day = app.day {
-                            DayTimeline(day: day)
+                        .column(width: wideColumnWidth)
+                        .padding(.bottom, 24)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            card
+                            if !app.showNearby && app.target == .plan, let day = app.day {
+                                DayTimeline(day: day)
+                            }
+                            goLater
+                            footer
                         }
-                        if !app.showNearby && app.target != .plan && app.paired {
-                            Button(L("Go later today at…")) { goingLater = true }
-                                .buttonStyle(ChipButtonStyle())
-                                .padding(.top, 14)
-                                .accessibilityIdentifier("goLater")
-                        }
-                        footer
+                        .column()
+                        .padding(.bottom, 24)
                     }
-                    .column()
-                    .padding(.bottom, 24)
                 }
                 .onGeometryChange(for: CGFloat.self) {
                     $0.frame(in: .scrollView).minY
@@ -132,8 +165,28 @@ struct NowView: View {
                 if addEmail { (addEmail, signingIn) = (false, true) }
             }
         ) { ReportSheet(addEmail: $addEmail) }
-        .sheet(isPresented: $signingIn) { SignInSheet() }
+        .sheet(isPresented: $signingIn) { SignInSheet().centredSheet() }
         .sheet(isPresented: $goingLater) { GoLaterSheet() }
+    }
+
+    /// Between the card's half and Today's.
+    private static let halvesGap: CGFloat = 32
+
+    /// The card's steps and buttons (or Nearby), under the horizon.
+    private var card: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            NowGround(shows: NowShows.of(app, now: ServerClock.now), now: ServerClock.now)
+        }
+    }
+
+    /// A favourite or a place chosen: going there later instead of now.
+    @ViewBuilder private var goLater: some View {
+        if !app.showNearby && app.target != .plan && app.paired {
+            Button(L("Go later today at…")) { goingLater = true }
+                .buttonStyle(ChipButtonStyle())
+                .padding(.top, 14)
+                .accessibilityIdentifier("goLater")
+        }
     }
 
     /// The horizon's road now, with your bus on it only when it stops for you.
@@ -184,6 +237,8 @@ struct NowView: View {
     /// wouldn't both fit, the row's last chip.
     private var chips: some View {
         let searchInRow = typeSize.isAccessibilitySize
+        // A phone keeps its fade and the room after the last chip whatever fits.
+        let allFit = width != .narrow && chipsWidth > 0 && chipsWidth <= chipsRoom
         return HStack(spacing: 8) {
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -203,11 +258,23 @@ struct NowView: View {
                         }
                         if searchInRow { elsewhere }
                     }
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.width
+                    } action: {
+                        chipsWidth = $0
+                    }
                     .padding(.vertical, 2)
                     // Scrolled to the end, the last chip clears the fade.
-                    .padding(.trailing, FadeEnd.width)
+                    .padding(.trailing, allFit ? 0 : FadeEnd.width)
                 }
-                .mask(FadeEnd())
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: {
+                    chipsRoom = $0
+                }
+                .mask {
+                    if allFit { Rectangle() } else { FadeEnd() }
+                }
                 // Chosen here, or on the map or Buses (Go there) while Now was away: in view either way.
                 .onChange(of: app.target) { _, t in
                     if case .code(let c, _) = t { withAnimation { reader.scrollTo(c, anchor: .trailing) } }

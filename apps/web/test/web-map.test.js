@@ -21,7 +21,7 @@ registerHooks({
   resolve: (spec, ctx, next) => next(/^\/(assets|account|app|vendor)\//.test(spec) ? new URL(`.${spec}`, PUBLIC).href : spec, ctx),
 });
 globalThis.document ??= { addEventListener() {} };
-const { aheadBy, busesWaitMs, pathOf, pointAt, positionAt, slideMs } = await import('../public/app/map.js');
+const { aheadBy, busesWaitMs, campusBounds, freePadding, pathOf, pointAt, positionAt, slideMs } = await import('../public/app/map.js');
 
 const CAMPUS = buildCampusMap(GRAPH);
 const SERVICES = Object.keys(GRAPH.routes).filter((svc) => shapeFor(svc, GRAPH.routes[svc]));
@@ -132,4 +132,98 @@ test('failed polls for the buses back off from 5 s to a minute, never before the
   // A Retry-After still running (dom.js quietMs) holds the next poll back.
   assert.equal(busesWaitMs(0, 30_000), 30_000);
   assert.equal(busesWaitMs(4, 90_000), 90_000);
+});
+
+test("the first view frames the campus's stops and the whole line of each service that stays on it, not P's trip out", () => {
+  const core = new Set(CAMPUS.stops.filter((s) => s.core).map((s) => s.code));
+  const [[west, south], [east, north]] = campusBounds(CAMPUS);
+  const stopsEast = Math.max(...CAMPUS.stops.filter((s) => core.has(s.code)).map((s) => s.lon));
+  // Every service but P stays on campus, and each of their lines is wholly in the frame.
+  const onCampus = Object.keys(CAMPUS.routes).filter((svc) => CAMPUS.routes[svc].seq.every((code) => core.has(code)));
+  assert.ok(!onCampus.includes('P') && onCampus.includes('K'), onCampus.join());
+  for (const svc of onCampus)
+    for (const [lon, lat] of CAMPUS.routes[svc].line)
+      assert.ok(lon >= west && lon <= east && lat >= south && lat <= north, `${svc} at ${lon},${lat}`);
+  // K's east loop turns past the last stop: the stops alone would cut it off.
+  const kEast = Math.max(...CAMPUS.routes.K.line.map((p) => p[0]));
+  assert.ok(kEast > stopsEast && east === Math.max(kEast, ...onCampus.map((svc) => Math.max(...CAMPUS.routes[svc].line.map((p) => p[0])))));
+  // Nothing of P's trip to the Botanic Gardens: the frame stays on campus.
+  assert.ok(east < 103.79 && north < 1.31, `${east},${north}`);
+});
+
+/**
+ * Where MapLibre puts `points` when it fits their bounds into `box` less
+ * `pad` (Web Mercator, 512 px tiles), up to `maxZoom`, as screen points.
+ */
+function fitted(points, box, pad, maxZoom) {
+  const merc = ([lon, lat]) => [(lon + 180) / 360, (1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2];
+  const m = points.map(merc);
+  const [x0, x1] = [Math.min(...m.map((p) => p[0])), Math.max(...m.map((p) => p[0]))];
+  const [y0, y1] = [Math.min(...m.map((p) => p[1])), Math.max(...m.map((p) => p[1]))];
+  const w = box.right - box.left - pad.left - pad.right;
+  const h = box.bottom - box.top - pad.top - pad.bottom;
+  const scale = Math.min(w / (x1 - x0), h / (y1 - y0), 512 * 2 ** maxZoom);
+  const cx = box.left + pad.left + w / 2;
+  const cy = box.top + pad.top + h / 2;
+  return m.map(([x, y]) => [cx + (x - (x0 + x1) / 2) * scale, cy + (y - (y0 + y1) / 2) * scale]);
+}
+
+test("a chosen service's whole line fits the map's free area: clear of the pills, the status line, the buttons and an open sheet, at every width", () => {
+  const rect = (left, top, right, bottom) => ({ left, top, right, bottom });
+  // The boxes as the browser lays them out (the stub, R2 chosen): the pills' row, "3 buses on R2", Back to campus and the zoom buttons.
+  const layout = (w, h, rail = 0) => ({
+    box: rect(rail, 0, w, h),
+    covers: [
+      { rect: rect(rail, 10, w, 54), side: 'top' },
+      { rect: rect(rail + 12, 62, rail + 128, 95), side: 'top' },
+      { rect: rect(w - 39, h - 107, w - 10, h - 78), side: 'right' },
+      { rect: rect(w - 39, h - 68, w - 10, h - 10), side: 'right' },
+    ],
+  });
+  const widths = [
+    layout(390, 784),
+    layout(700, 940),
+    layout(834, 1112, 88),
+    layout(1024, 768, 88),
+    layout(1210, 834, 88),
+    layout(1280, 860, 88),
+  ];
+  // A stop's sheet open too (UHall's, as the browser lays it out): across the bottom of a phone, floating in the corner from 700.
+  const sheet = (w, h, rail, r, side) => {
+    const l = layout(w, h, rail);
+    l.covers.push({ rect: r, side, sheet: true });
+    return l;
+  };
+  const sheets = [
+    sheet(390, 784, 0, rect(0, 298, 390, 784), 'bottom'),
+    sheet(390, 784, 0, rect(0, 420, 390, 784), 'bottom'),
+    sheet(700, 940, 0, rect(16, 402, 376, 924), 'left'),
+    sheet(834, 1112, 88, rect(104, 574, 464, 1096), 'left'),
+    sheet(1024, 768, 88, rect(104, 300, 464, 752), 'left'),
+    sheet(1280, 860, 88, rect(104, 340, 464, 844), 'left'),
+  ];
+  for (const { box, covers } of [...widths, ...sheets]) {
+    const pad = freePadding(box, covers);
+    for (const svc of Object.keys(CAMPUS.routes)) {
+      if (svc === 'P') continue;
+      for (const [x, y] of fitted(CAMPUS.routes[svc].line, box, pad, 16.5)) {
+        const where = `${svc} at ${Math.round(x)},${Math.round(y)} in ${box.right - box.left}x${box.bottom}`;
+        assert.ok(x >= box.left + 23.5 && x <= box.right - 23.5 && y >= box.top + 23.5 && y <= box.bottom - 23.5, `${where}: the margin`);
+        for (const c of covers)
+          assert.ok(
+            x < c.rect.left - 23.5 || x > c.rect.right + 23.5 || y < c.rect.top - 23.5 || y > c.rect.bottom + 23.5,
+            `${where}: under a cover`,
+          );
+      }
+    }
+  }
+  // However much is covered, 15% of each way stays free for the line, the margins given up first.
+  const crowded = freePadding(rect(0, 0, 390, 400), [{ rect: rect(0, 0, 390, 380), side: 'top' }]);
+  assert.ok(crowded.top + crowded.bottom <= 340);
+  const tight = freePadding(rect(0, 0, 390, 784), [
+    { rect: rect(0, 10, 390, 54), side: 'top' },
+    { rect: rect(0, 200, 390, 784), side: 'bottom' },
+  ]);
+  // 54 + 584 clear and two 24 px margins is 686, past 85% of 784 (666.4): each margin gives up 10.
+  assert.deepEqual([tight.top, tight.bottom], [54 + 14, 584 + 14], 'clear of both, the margins smaller');
 });

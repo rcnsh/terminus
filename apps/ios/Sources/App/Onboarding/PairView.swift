@@ -14,7 +14,7 @@ struct PairView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(L("Pair this phone"))
+                Text((onIPad ? L("Pair this iPad") : L("Pair this phone")))
                     .font(.largeTitle.bold())
                     .accessibilityAddTraits(.isHeader)
                 Text(L("Type the code from a phone or computer that's already signed in."))

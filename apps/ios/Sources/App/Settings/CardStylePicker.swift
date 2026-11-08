@@ -11,7 +11,12 @@ struct SettingsCardStyles: View {
     private static let styles = ["steps", "route"]
 
     var body: some View {
-        SettingsGroup(title: L("Card style"), hint: L("How the card and widgets show a trip by bus. Only on this phone.")) {
+        SettingsGroup(
+            title: L("Card style"),
+            hint: (onIPad
+                ? L("How the card and widgets show a trip by bus. Only on this iPad.")
+                : L("How the card and widgets show a trip by bus. Only on this phone."))
+        ) {
             let chosen = JourneyStyle.of(prefs.cardStyle).rawValue
             SettingSegments(
                 label: L("Card style"), options: Self.styles.map { ($0, settingsCardStyleName($0)) },

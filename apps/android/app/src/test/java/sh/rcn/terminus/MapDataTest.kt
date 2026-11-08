@@ -1,5 +1,6 @@
 package sh.rcn.terminus
 
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -374,6 +375,20 @@ class MapDataTest {
     }
 
     @Test
+    fun panLimitReachesPastTheMapUnderAnOpenSheet() {
+        // A tablet held upright, 720 by 1280 dp, at zoom 15, with a stop's sheet floating in the corner: 376 dp wide, 560 dp tall.
+        val world = 512 * Math.pow(2.0, 15.0)
+        val plain = PanLimit.centre(720.0, 1280.0, 15.0)
+        val under = PanLimit.centre(720.0, 1280.0, 15.0, west = 376.0, south = 560.0)
+        // The centre may go as far past the map's south and west edges as the sheet covers: what shows there is under the sheet.
+        assertEquals(560.0 / world, merc(under[1]) - merc(plain[1]), 1e-12)
+        assertEquals(376.0 / world * 360, plain[0] - under[0], 1e-9)
+        assertEquals("north and east stay as they were", listOf(plain[2], plain[3]), listOf(under[2], under[3]))
+        // And zooms out as far as the part of the screen the sheet leaves would let it.
+        assertEquals(PanLimit.minZoom(720.0 - 376, 1280.0 - 560), PanLimit.minZoom(720.0, 1280.0, 376.0, 560.0), 1e-12)
+    }
+
+    @Test
     fun panLimitKeepsTheScreenOnTheMap() {
         val e = PanLimit.EXTENT
         // A phone, 400 by 800 dp: tall, so its height fills the map first.
@@ -429,5 +444,54 @@ class MapDataTest {
         assertTrue(line.buses.isEmpty())
         assertNull(line.here?.row)
         assertNull(Line.fromCampus(campus, "Z", from = null))
+    }
+
+    @Test
+    fun theMapFitsTheCampussLinesNotJustItsStops() {
+        // The real stops and lines (apps/api/data), with the API's own core: within three times the median distance of the middle.
+        val data = listOf("../../../apps/api/data", "../../api/data").map(::File).first { it.isDirectory }
+        val js = JSONObject(File(data, "stops.json").readText()).getJSONArray("stops")
+        val stops =
+            (0 until js.length())
+                .map { js.getJSONObject(it) }
+                .map { MapStop(it.getString("code"), it.getString("name"), it.getDouble("lat"), it.getDouble("lon"), emptyList()) }
+        val shapes = JSONObject(File(data, "shapes.json").readText()).getJSONObject("routes")
+        val routes =
+            shapes.keys().asSequence().associateWith { svc ->
+                val l = shapes.getJSONObject(svc).getJSONArray("line")
+                MapRoute(
+                    svc,
+                    0,
+                    (0 until l.length()).map { doubleArrayOf(l.getJSONArray(it).getDouble(0), l.getJSONArray(it).getDouble(1)) },
+                )
+            }
+        val mid = stops.map { it.lat }.sorted()[stops.size / 2] to stops.map { it.lon }.sorted()[stops.size / 2]
+        val dist = stops.associate {
+            it.code to Math.hypot((it.lat - mid.first), (it.lon - mid.second) * Math.cos(Math.toRadians(mid.first)))
+        }
+        val median = dist.values.sorted()[dist.size / 2]
+        val core = stops.filter { dist.getValue(it.code) <= 3 * median }.map { it.code }.toSet()
+        val lines =
+            shapes.keys().asSequence().toList().map { svc ->
+                val seq = shapes.getJSONObject(svc).getJSONArray("stops")
+                ServiceRoute(svc, (0 until seq.length()).map { seq.getString(it) }, false)
+            }
+        val campus = CampusMap(stops, routes, lines = lines)
+        val onCampus = lines.filter { l -> l.seq.all { it in core } }.map { it.svc }
+        assertTrue("P leaves campus; the loops don't", "P" !in onCampus && onCampus.containsAll(listOf("A1", "A2", "D1", "D2", "K")))
+        val east = onCampus.maxOf { svc -> routes.getValue(svc).line.maxOf { it[0] } }
+        assertTrue("the stops alone stop short of the east loops' turn", campus.coreBounds(core)[2] < east)
+        val (w, s, e, n) = campus.coreExtent(core).toList()
+        for (svc in onCampus) {
+            assertTrue("every point of $svc is in", routes.getValue(svc).line.all { (lon, lat) -> lon in w..e && lat in s..n })
+        }
+        // Nothing of P's widens it: the frame is exactly the core stops and the on-campus lines.
+        val pts = stops.filter { it.code in core }.map { doubleArrayOf(it.lon, it.lat) } + onCampus.flatMap { routes.getValue(it).line }
+        val want = listOf(pts.minOf { it[0] }, pts.minOf { it[1] }, pts.maxOf { it[0] }, pts.maxOf { it[1] })
+        assertEquals(want, listOf(w, s, e, n))
+        assertTrue(
+            "P's trip to the Botanic Gardens runs outside it",
+            routes.getValue("P").line.any { (lon, lat) -> lon !in w..e || lat !in s..n },
+        )
     }
 }

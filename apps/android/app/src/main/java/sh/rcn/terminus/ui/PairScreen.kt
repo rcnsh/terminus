@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.CODE_LENGTH
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.R
 import sh.rcn.terminus.codeEdit
 
@@ -75,7 +76,7 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
                 Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
             }
             Text(
-                stringResource(R.string.pair_title),
+                stringResource(DeviceKind.word(R.string.pair_title)),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp),
@@ -131,7 +132,7 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
                     ctx.openWeb("${BuildConfig.LINK_BASE}/account")
                 }
             }
-            Hint(stringResource(R.string.pair_scan), Modifier.padding(top = 14.dp))
+            Hint(stringResource(DeviceKind.word(R.string.pair_scan)), Modifier.padding(top = 14.dp))
             Spacer(Modifier.height(16.dp))
         }
         Button(

@@ -215,6 +215,14 @@ final class NowUITests: XCTestCase {
         stubPost("/__stub/freeze")
         let app = launch(sky: "day")
         let later = app.buttons["step.later"]
+        // The first answer can still be from where the last suite left the
+        // simulator (at PGP's stop, "At the stop", with no Later bus): pulled
+        // down, it's asked again from where setUp put it. Each pull waits out
+        // Pull.freshS so it asks, and the last comes after Locator's 60 s, when
+        // a fix kept from before the move is asked again.
+        for _ in 0..<4 where !later.waitForExistence(timeout: 16) {
+            app.swipeDown(velocity: .fast)
+        }
         reveal(later, in: app)
         XCTAssertTrue(app.buttons["step.earlier"].exists)
         XCTAssertFalse(app.buttons["step.best"].exists)

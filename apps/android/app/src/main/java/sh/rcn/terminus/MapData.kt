@@ -33,16 +33,27 @@ object PanLimit {
     val EXTENT = doubleArrayOf(103.755, 1.28, 103.83, 1.332)
     private const val TILE = 512.0
 
-    /** The furthest out a [width] by [height] screen can zoom and still be full of map. */
-    fun minZoom(width: Double, height: Double): Double =
-        max(log2(width / (TILE * (x(EXTENT[2]) - x(EXTENT[0])))), log2(height / (TILE * (y(EXTENT[1]) - y(EXTENT[3])))))
+    /**
+     * The furthest out a [width] by [height] screen can zoom and still be full of map, where [west] and [south] dp of it, along those
+     * edges, are under a sheet and may show past the map ([centre]).
+     */
+    fun minZoom(width: Double, height: Double, west: Double = 0.0, south: Double = 0.0): Double =
+        max(
+            log2((width - west) / (TILE * (x(EXTENT[2]) - x(EXTENT[0])))),
+            log2((height - south) / (TILE * (y(EXTENT[1]) - y(EXTENT[3])))),
+        )
 
-    /** West, south, east, north of where the centre may go at [zoom]; a point mid-map on a side the screen is wider than. */
-    fun centre(width: Double, height: Double, zoom: Double): DoubleArray {
+    /**
+     * West, south, east, north of where the centre may go at [zoom]; a point mid-map on a side the screen is wider than. Under an open
+     * sheet the screen may show past the map by as much as the sheet covers, [west] dp beside one floating in the corner and [south] dp
+     * above it or under one across the foot: a line fitted clear of the sheet puts the centre well off it, and the plain limit would pull
+     * the line back under it (the website's underSheet).
+     */
+    fun centre(width: Double, height: Double, zoom: Double, west: Double = 0.0, south: Double = 0.0): DoubleArray {
         val world = TILE * 2.0.pow(zoom)
-        val (west, east) = inset(x(EXTENT[0]), x(EXTENT[2]), width / 2 / world)
-        val (top, bottom) = inset(y(EXTENT[3]), y(EXTENT[1]), height / 2 / world)
-        return doubleArrayOf(lon(west), lat(bottom), lon(east), lat(top))
+        val (w, e) = inset(x(EXTENT[0]) - west / world, x(EXTENT[2]), width / 2 / world)
+        val (top, bottom) = inset(y(EXTENT[3]), y(EXTENT[1]) + south / world, height / 2 / world)
+        return doubleArrayOf(lon(w), lat(bottom), lon(e), lat(top))
     }
 
     private fun inset(a: Double, b: Double, by: Double): Pair<Double, Double> =
@@ -192,10 +203,27 @@ data class CampusMap(
         return known.minByOrNull { (it.lat - lat).pow(2) + ((it.lon - lon) * k).pow(2) }?.code ?: codes.firstOrNull()
     }
 
-    /** [west, south, east, north] of the main campus (not P's trip to the Botanic Gardens). */
+    /** [west, south, east, north] of the main campus's stops (not P's trip to the Botanic Gardens). */
     fun coreBounds(core: Set<String>): DoubleArray {
         val pts = stops.filter { it.code in core }.ifEmpty { stops }
         return doubleArrayOf(pts.minOf { it.lon }, pts.minOf { it.lat }, pts.maxOf { it.lon }, pts.maxOf { it.lat })
+    }
+
+    /**
+     * [west, south, east, north] of the main campus as the map draws it: its stops ([coreBounds]) and the whole line of every service whose
+     * stops are all on it, so a loop that turns past the last stop (K's and D2's in the east) isn't cut off at the window's edge, and P's
+     * trip to the Botanic Gardens stays out. The iPhone's `coreBounds` and the website's `campusBounds` frame the same.
+     */
+    fun coreExtent(core: Set<String>): DoubleArray {
+        val b = coreBounds(core)
+        if (stops.none { it.code in core }) return b
+        val pts = lines.filter { l -> l.seq.isNotEmpty() && l.seq.all { it in core } }.flatMap { routes[it.svc]?.line.orEmpty() }
+        return doubleArrayOf(
+            minOf(b[0], pts.minOfOrNull { it[0] } ?: b[0]),
+            minOf(b[1], pts.minOfOrNull { it[1] } ?: b[1]),
+            maxOf(b[2], pts.maxOfOrNull { it[0] } ?: b[2]),
+            maxOf(b[3], pts.maxOfOrNull { it[1] } ?: b[3]),
+        )
     }
 
     companion object {

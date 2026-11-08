@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -156,7 +158,9 @@ internal fun <T> PageStack(
         for (layer in layers) {
             key(layer.depth, layer.key) {
                 if (layer.page) {
-                    Box(Modifier.fillMaxSize().then(layer.modifier).background(background)) { content(layer.key) }
+                    Box(Modifier.fillMaxSize().then(layer.modifier).background(background)) {
+                        CompositionLocalProvider(LocalPageDepth provides layer.depth) { content(layer.key) }
+                    }
                 } else {
                     Box(Modifier.fillMaxSize().then(layer.modifier))
                 }
@@ -164,6 +168,12 @@ internal fun <T> PageStack(
         }
     }
 }
+
+/**
+ * How deep in its [PageStack] the page being drawn is: 1 for the first page over home, 0 for home. Its own through a back swipe, as it
+ * peels away after leaving the stack.
+ */
+internal val LocalPageDepth = compositionLocalOf { 0 }
 
 private class Layer<T>(val depth: Int, val key: T?, val modifier: Modifier, val page: Boolean = true)
 

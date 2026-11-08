@@ -1,5 +1,6 @@
 package sh.rcn.terminus.widget
 
+import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.L
@@ -71,7 +72,7 @@ internal data class Face(
             now: Long,
             clock: (Long) -> String,
         ): Face {
-            if (!paired) return Face(null, "terminus", sub = error ?: L.s(R.string.tap_to_pair))
+            if (!paired) return Face(null, "terminus", sub = error ?: L.s(DeviceKind.word(R.string.tap_to_pair)))
             // A problem, or a refresh under way, says so under the headline, in place of what's there.
             val problem = error?.let { if (it == UPDATING) L.s(R.string.updating) else it }
             if (offline != null) {

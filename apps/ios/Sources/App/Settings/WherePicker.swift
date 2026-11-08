@@ -66,6 +66,7 @@ struct SettingsWherePicker: View {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Cancel")) { dismiss() } }
             }
         }
+        .centredSheet()
     }
 
     private func row(_ d: WhereItem) -> some View {

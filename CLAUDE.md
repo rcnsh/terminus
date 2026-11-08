@@ -44,6 +44,8 @@ Each of these is required reading for its case, before the first edit:
   [docs/agents/addresses.md](docs/agents/addresses.md).
 - **Screenshots:** checking a web UI change, or running any client against
   a fake feed: [docs/agents/dev-stub.md](docs/agents/dev-stub.md).
+- **Window sizes:** laying out any screen, or checking one on a tablet,
+  a foldable or a wide window: [docs/agents/window-sizes.md](docs/agents/window-sizes.md).
 - **Apps:** building or testing Android, Mac or iPhone, and their CI:
   [docs/agents/apps.md](docs/agents/apps.md).
 - **Cloud:** working from a Linux container:
@@ -193,9 +195,14 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
     with the thing it acts on, and things that look alike behave alike.
   - Use the look each platform's users already know for that job, rather
     than a new one.
-  - The four clients show the same thing the same way. Before building
-    or changing something in one, look at how the others already do it
-    and match them, or improve all of them together.
+  - The four clients show the same thing the same way, at every window
+    size. Before building or changing something in one, look at how the
+    others already do it and match them, or improve all of them together.
+  - The window's width picks the layout, never the device: under 600
+    the phone layout, 600 to 799 that layout in a centred 560 column,
+    800 and over two panes (ADR 0015). The same widths and the same
+    panes in every client; only the navigation takes each platform's
+    own large-screen look.
   - Judge it from a screenshot of every state (chosen and not, empty and
     full, light and dark) with fresh eyes, as a new user would, not from
     the code.

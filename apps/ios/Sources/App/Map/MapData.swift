@@ -22,11 +22,18 @@ enum PanLimit {
     }
 
     /// [west, south, east, north] of where the centre may go at `zoom`; a point mid-map on a side the screen is wider than.
-    static func centre(width: Double, height: Double, zoom: Double) -> [Double] {
+    /// A sheet hiding the screen's `bottom` points lets the centre go that much
+    /// further south, and one floating in the corner, `left` points wide, that
+    /// much further west too: a line fitted above or beside the sheet puts the
+    /// centre well off it, and what lies past the map file is under the sheet
+    /// (as the web's underSheet).
+    static func centre(width: Double, height: Double, zoom: Double, left: Double = 0, bottom: Double = 0) -> [Double] {
         let world = tile * pow(2, zoom)
-        let (west, east) = inset(x(extent[0]), x(extent[2]), by: width / 2 / world)
-        let (top, bottom) = inset(y(extent[3]), y(extent[1]), by: height / 2 / world)
-        return [lon(west), lat(bottom), lon(east), lat(top)]
+        var (west, east) = inset(x(extent[0]), x(extent[2]), by: width / 2 / world)
+        var (top, south) = inset(y(extent[3]), y(extent[1]), by: height / 2 / world)
+        west -= left / world
+        south += bottom / world
+        return [lon(west), lat(south), lon(east), lat(top)]
     }
 
     private static func inset(_ a: Double, _ b: Double, by: Double) -> (Double, Double) {
@@ -57,14 +64,17 @@ struct MapRoute {
     let color: String
     let line: [[Double]]
     let loop: Bool
+    /// Its stops' codes in order, as /campus lists them.
+    let seq: [String]
     /// The line measured for sliding buses along it.
     let path: RoutePath
 
-    init(svc: String, color: String, line: [[Double]], loop: Bool = false) {
+    init(svc: String, color: String, line: [[Double]], loop: Bool = false, seq: [String] = []) {
         self.svc = svc
         self.color = color
         self.line = line
         self.loop = loop
+        self.seq = seq
         path = RoutePath(line, loop: loop)
     }
 
@@ -180,11 +190,17 @@ struct CampusMap {
         }?.code ?? codes.first
     }
 
-    /// [west, south, east, north] of the main campus.
+    /// [west, south, east, north] of the main campus: its stops, and the
+    /// whole line of each service that stays on it (a line bends out past
+    /// the stops at its ends). A service out to stops off it (P to Botanic
+    /// Gardens) would frame half the island, so its line isn't counted.
     var coreBounds: [Double] {
         let inCore = stops.filter { core.contains($0.code) }
-        let pts = inCore.isEmpty ? stops : inCore
-        return [pts.map(\.lon).min()!, pts.map(\.lat).min()!, pts.map(\.lon).max()!, pts.map(\.lat).max()!]
+        var pts = (inCore.isEmpty ? stops : inCore).map { [$0.lon, $0.lat] }
+        if !inCore.isEmpty {
+            for r in routes.values where !r.seq.isEmpty && r.seq.allSatisfy(core.contains) { pts += r.line }
+        }
+        return [pts.map { $0[0] }.min()!, pts.map { $0[1] }.min()!, pts.map { $0[0] }.max()!, pts.map { $0[1] }.max()!]
     }
 
     /// The stops and routes from `/campus`; nil when it isn't that.
@@ -212,7 +228,9 @@ struct CampusMap {
                 return [lon, lat]
             }
             if line.count >= 2 {
-                routes[svc] = MapRoute(svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false)
+                routes[svc] = MapRoute(
+                    svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false,
+                    seq: x["seq"] as? [String] ?? [])
             }
         }
         guard !stops.isEmpty else { return nil }
@@ -380,9 +398,12 @@ struct BusStrip: Equatable {
 
 /// GeoJSON for the map's sources.
 enum MapGeoJson {
+    /// In /api/campus's order (A1 first, R2 last, on top where lines share a
+    /// road), as the web and Android draw them; a dictionary's order changes
+    /// from launch to launch.
     static func routes(_ campus: CampusMap) -> Data {
         collection(
-            campus.routes.values.map { r in
+            campus.routes.values.sorted { $0.svc < $1.svc }.map { r in
                 feature(["type": "LineString", "coordinates": r.line], ["svc": r.svc, "color": r.color])
             })
     }

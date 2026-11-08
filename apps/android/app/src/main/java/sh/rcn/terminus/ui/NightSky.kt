@@ -26,6 +26,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,8 +51,10 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -865,7 +868,14 @@ internal fun SkyBand(
     val page = MaterialTheme.colorScheme.background
     val p = palette(phase, page.luminance() < 0.5f)
     val pull = LocalPull.current
-    NightStatusBar(p.lightInk)
+    NightStatusBar(p.lightInk, p.sky[0])
+    // Beside another pane's band: grown to the taller of the two, so the horizons meet, and the moon only in the trailing one.
+    val pane = LocalSkyPane.current
+    val band = remember { Any() }
+    if (pane != null) DisposableEffect(pane) { onDispose { pane.skies.gone(band) } }
+    val shown = moon && pane?.leading != true
+    var natural by remember { mutableIntStateOf(0) }
+    val grow = with(LocalDensity.current) { ((pane?.skies?.tallest ?: 0) - natural).coerceAtLeast(0).toDp() }
     Column(
         Modifier.fillMaxWidth().drawBehind {
             val d = 1.dp.toPx()
@@ -878,7 +888,7 @@ internal fun SkyBand(
             val mid = (row.start + row.endInclusive) / 2
             val r = 11 * d
             val centre = Offset(size.width - 22 * d - r, mid)
-            if (phase == Phase.NIGHT && moon) {
+            if (phase == Phase.NIGHT && shown) {
                 for ((x, y, a) in if (moonLow) LOW_STARS else BAND_STARS) drawCircle(
                     Color.White.copy(alpha = a),
                     1.1f * d,
@@ -897,33 +907,53 @@ internal fun SkyBand(
             }
         }
     ) {
-        Spacer(Modifier.height(top))
-        SkyInk(true, p.lightInk) { Box(if (padded) Modifier.padding(horizontal = 16.dp) else Modifier) { content() } }
-        // The moon's own line, under the content, so it never sits on a button;
-        // without it ([moonLine] false), the content's last line leaves the right clear for it.
-        if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
-        Spacer(Modifier.height(LOW))
+        Column(
+            Modifier.onSizeChanged {
+                natural = it.height
+                pane?.skies?.report(band, it.height)
+            }
+        ) {
+            Spacer(Modifier.height(top))
+            // In the page's column, as what's under it is; the sky goes on to the edges.
+            SkyInk(true, p.lightInk) { Box(if (padded) Modifier.column().padding(horizontal = 16.dp) else Modifier.column()) { content() } }
+            // The moon's own line, under the content, so it never sits on a button;
+            // without it ([moonLine] false), the content's last line leaves the right clear for it.
+            if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
+        }
+        Spacer(Modifier.height(grow + LOW))
     }
 }
 
 /** Which screen set the status bar's icons last, so one going away doesn't undo the next one's. */
 private var statusOwner: Any? = null
 
-/** Light status bar icons over a dark sky, back to the theme's when it goes. */
+/**
+ * The colour under the status bar's light icons while a dark sky is up ([NightStatusBar]), for the navigation rail to paint its own strip
+ * of the status bar with, so the clock over the rail reads too. Null while the icons are the theme's.
+ */
+internal object StatusSky {
+    var color by mutableStateOf<Color?>(null)
+}
+
+/** Light status bar icons over a dark sky ([sky], its top colour), back to the theme's when it goes. */
 @Composable
-internal fun NightStatusBar(night: Boolean) {
+internal fun NightStatusBar(night: Boolean, sky: Color) {
     val view = LocalView.current
     val dark = isSystemInDarkTheme()
     if (view.isInEditMode) return
-    DisposableEffect(night, dark) {
+    DisposableEffect(night, dark, sky) {
         val me = Any()
         statusOwner = me
         val window = view.context.activity()?.window
         val bars = window?.let { WindowCompat.getInsetsController(it, view) }
         bars?.isAppearanceLightStatusBars = !dark && !night
+        StatusSky.color = if (night) sky else null
         onDispose {
             // A tab fading out after the next one has set its own: leave them.
-            if (statusOwner === me) bars?.isAppearanceLightStatusBars = !dark
+            if (statusOwner === me) {
+                bars?.isAppearanceLightStatusBars = !dark
+                StatusSky.color = null
+            }
         }
     }
 }

@@ -21,16 +21,21 @@ struct WelcomeFlow: View {
         }
         // A pairing link: whose account it is, and a yes before anything happens.
         .alert(
-            L("Pair this phone?"), isPresented: Binding(get: { model.pendingPair != nil }, set: { if !$0 { model.pendingPair = nil } }),
+            (onIPad ? L("Pair this iPad?") : L("Pair this phone?")),
+            isPresented: Binding(get: { model.pendingPair != nil }, set: { if !$0 { model.pendingPair = nil } }),
             presenting: model.pendingPair
         ) { p in
             Button(L("Pair")) { model.pair(p.code) }
             Button(L("Cancel"), role: .cancel) { model.pendingPair = nil }
         } message: { p in
             Text(
-                L(
-                    "This link pairs this phone with %@. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account.",
-                    p.account))
+                onIPad
+                    ? L(
+                        "This link pairs this iPad with %@. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account.",
+                        p.account)
+                    : L(
+                        "This link pairs this phone with %@. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account.",
+                        p.account))
         }
     }
 }

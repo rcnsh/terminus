@@ -167,6 +167,7 @@ class TerminusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         L.init(this)
+        DeviceKind.init(this)
         Servers.init(this)
         // Crashes are written down from here on; earlier ones are sent now, in the background.
         CrashReports.install(this)

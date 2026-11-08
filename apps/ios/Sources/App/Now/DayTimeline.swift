@@ -6,6 +6,8 @@ import SwiftUI
 /// says so with Undo for 20 seconds, as on Android and the web app.
 struct DayTimeline: View {
     let day: DayPlan
+    /// Room above it: under the card, or none at the top of its own half when wide.
+    var top: CGFloat = 20
     @Environment(AppModel.self) private var app
 
     var body: some View {
@@ -43,7 +45,7 @@ struct DayTimeline: View {
                 }
                 if noteAt == day.items.count, let removed { RemovedRow(note: removed) }
             }
-            .padding(.top, 20)
+            .padding(.top, top)
             .animation(.snappy, value: day.items.map(\.key))
         }
     }

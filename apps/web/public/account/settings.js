@@ -151,7 +151,7 @@ export function Settings({
   const offer = useStore(importOffer);
   useStore(theme);
   useStore(cardStyle);
-  const wide = useMedia('(min-width: 900px)');
+  const wide = useMedia('(min-width: 800px)');
   // Room for the widget beside the page, rather than above the list.
   const roomy = useMedia('(min-width: 1100px)');
   const rail = Boolean(side) && roomy;
@@ -337,8 +337,9 @@ export function Settings({
   const shown = view.shown;
   const leaving = view.leaving;
   // A band of the sky at the top of the list and of each page, under it all
-  // plain. set-sky tells Now's sky (sky.js) to colour the browser's bar for it.
-  const skyHere = sky && !wide;
+  // plain; side by side, one over each pane. set-sky tells Now's sky (sky.js)
+  // to colour the browser's bar for it.
+  const skyHere = sky;
   useEffect(() => {
     document.body.classList.toggle('set-sky', skyHere);
     return () => document.body.classList.remove('set-sky');
