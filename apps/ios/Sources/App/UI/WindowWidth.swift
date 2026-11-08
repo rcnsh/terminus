@@ -135,6 +135,15 @@ private struct ReadsWindowWidth: ViewModifier {
             } action: {
                 width = $0
             }
+            // A fold moves the window to the other panel, and iOS asks which
+            // way it may turn only when told to (AppDelegate's orientations).
+            .onGeometryChange(for: CGSize.self) {
+                $0.size
+            } action: { _ in
+                for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                    scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            }
             .environment(\.windowWidth, width)
     }
 }
