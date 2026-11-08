@@ -628,12 +628,14 @@ export function withBoard(s, got, board) {
     const later = b.later ?? [];
     // Counted, not compared: the card's buses still to come, less as many as
     // the board shows, are the ones after them. A time would keep a guess
-    // whose bus runs a little ahead of it, and show that bus twice.
+    // whose bus runs a little ahead of it, and show that bus twice. A row
+    // with no next bus (the service has ended) shows none for it.
+    const shown = (b.etaS != null ? 1 : 0) + later.length;
     const after = [row, ...(row.later ?? [])]
       .filter((x) => x.etaS != null)
       .map(on)
       .filter((x) => x.etaS > 0)
-      .slice(1 + later.length)
+      .slice(shown)
       .filter((x) => x.quality === 'scheduled');
     return {
       ...row,
@@ -644,7 +646,8 @@ export function withBoard(s, got, board) {
       running: b.running,
       stopped: b.stopped,
       resumesAt: b.resumesAt,
-      later: [...later, ...after].slice(0, Math.max(later.length, row.later?.length ?? 0)),
+      // As many as the card had, the next bus's place too when the board has none.
+      later: [...later, ...after].slice(0, Math.max(later.length, (row.later?.length ?? 0) + (b.etaS != null ? 0 : 1))),
       laterText: null,
     };
   });
