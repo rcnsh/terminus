@@ -45,29 +45,52 @@ struct NearbyList: View {
     }
 
     /// One line at a stop: its badge, where it's going, then its next bus large and the two after it.
+    /// At the largest text sizes where it's going takes its own line under the times, as there's no
+    /// room beside them for more than a word.
     private struct Row: View {
         let row: BoardRow
         let cells: [NearbyCell]
+        @Environment(\.dynamicTypeSize) private var size
 
         var body: some View {
-            HStack(alignment: .center, spacing: 6) {
-                BusBadge(svc: row.svc, color: row.color, size: 13, paid: row.paid, even: true)
-                Text(NearbyCells.destText(row)).font(.caption2).foregroundStyle(Color.muted).lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .trailing, spacing: 0) {
-                    let next = cells[0]
-                    (Text(next.mark + next.figure).font(.body.weight(.bold)) + Text(next.trail).font(.caption2))
-                        .lineLimit(1).fixedSize()
-                    let then = cells.dropFirst().filter(\.hasBus).map(\.text)
-                    if !then.isEmpty {
-                        Text(then.joined(separator: ", ")).font(.caption2).foregroundStyle(Color.muted).lineLimit(1).fixedSize()
+            Group {
+                if size.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .center, spacing: 6) {
+                            BusBadge(svc: row.svc, color: row.color, size: 13, paid: row.paid, even: true)
+                            Spacer(minLength: 0)
+                            times
+                        }
+                        dest
+                    }
+                } else {
+                    HStack(alignment: .center, spacing: 6) {
+                        BusBadge(svc: row.svc, color: row.color, size: 13, paid: row.paid, even: true)
+                        dest.frame(maxWidth: .infinity, alignment: .leading)
+                        times
                     }
                 }
-                .monospacedDigit()
             }
             .padding(.vertical, 2)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(NearbyCells.spoken(row, cells: cells))
+        }
+
+        private var dest: some View {
+            Text(NearbyCells.destText(row)).font(.caption2).foregroundStyle(Color.muted).lineLimit(2)
+        }
+
+        private var times: some View {
+            VStack(alignment: .trailing, spacing: 0) {
+                let next = cells[0]
+                (Text(next.mark + next.figure).font(.body.weight(.bold)) + Text(next.trail).font(.caption2))
+                    .lineLimit(1).fixedSize()
+                let then = cells.dropFirst().filter(\.hasBus).map(\.text)
+                if !then.isEmpty {
+                    Text(then.joined(separator: ", ")).font(.caption2).foregroundStyle(Color.muted).lineLimit(1).fixedSize()
+                }
+            }
+            .monospacedDigit()
         }
     }
 }
