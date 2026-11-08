@@ -1,13 +1,17 @@
 package sh.rcn.terminus.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -97,3 +101,37 @@ internal class PaneSkies {
 internal class SkyPane(val skies: PaneSkies, val leading: Boolean)
 
 internal val LocalSkyPane = compositionLocalOf<SkyPane?> { null }
+
+/**
+ * Where each page of a list-and-detail tab is scrolled to, by the page's own key, so a page keeps its place as the window goes from one
+ * pane to two (a fold, a resize) and back. The page is drawn by the other layout in the same frame the first lets it go, before saved state
+ * would be handed over, so the scroll state itself is shared, not saved and restored.
+ */
+internal class PaneScrolls {
+    private val states = mutableMapOf<String, ScrollState>()
+
+    fun of(key: String): ScrollState = states.getOrPut(key) { ScrollState(0) }
+
+    companion object {
+        val Saver: Saver<PaneScrolls, Any> =
+            Saver(
+                save = { p -> p.states.flatMap { (k, v) -> listOf(k, v.value) } },
+                restore = { saved ->
+                    PaneScrolls().apply { (saved as List<*>).chunked(2).forEach { (k, v) -> states[k as String] = ScrollState(v as Int) } }
+                },
+            )
+    }
+}
+
+@Composable internal fun rememberPaneScrolls(): PaneScrolls = rememberSaveable(saver = PaneScrolls.Saver) { PaneScrolls() }
+
+/** The page's scroll from its tab's [PaneScrolls] ([Keeps]), or its own where there's none. */
+private val LocalPaneScroll = compositionLocalOf<ScrollState?> { null }
+
+/** [content], a page whose scroll is kept under [key] in [scrolls]. */
+@Composable
+internal fun Keeps(scrolls: PaneScrolls, key: String, content: @Composable () -> Unit) =
+    CompositionLocalProvider(LocalPaneScroll provides scrolls.of(key), content = content)
+
+/** A page's own scroll: kept by its tab across the window's layouts when it's in [Keeps]. */
+@Composable internal fun rememberPaneScroll(): ScrollState = LocalPaneScroll.current ?: rememberScrollState()
