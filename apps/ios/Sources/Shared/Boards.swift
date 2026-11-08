@@ -121,7 +121,7 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     let stop: Stop
     /// The walk there; nil from /me/stops without a location.
     let walkS: Int?
-    let available: Bool
+    var available: Bool
     var board: [BoardRow]
     let opposite: String?
     /// Whether `opposite` is across the road (else only near), and its name:

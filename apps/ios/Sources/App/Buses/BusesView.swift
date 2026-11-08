@@ -115,14 +115,15 @@ struct NoteView: View {
 /// Runs `action` now and every 15 s (longer while the server asked for a
 /// wait), only while this is on screen and the app is in front.
 struct BusRefreshing: ViewModifier {
-    let id: String
+    /// Nil: no loop, as on the home while searching.
+    let id: String?
     let action: () async -> Void
     @Environment(\.scenePhase) private var phase
     @Environment(BusesModel.self) private var model
 
     func body(content: Content) -> some View {
-        content.task(id: "\(id)|\(phase == .active)") {
-            guard phase == .active else { return }
+        content.task(id: "\(id ?? "")|\(phase == .active)") {
+            guard phase == .active, let id else { return }
             while !Task.isCancelled {
                 await action()
                 let wait = max(BusTimes.refreshS, Quiet.wait())
@@ -135,7 +136,7 @@ struct BusRefreshing: ViewModifier {
 }
 
 extension View {
-    func busRefreshing(_ id: String, _ action: @escaping () async -> Void) -> some View {
+    func busRefreshing(_ id: String?, _ action: @escaping () async -> Void) -> some View {
         modifier(BusRefreshing(id: id, action: action))
     }
 }
@@ -200,8 +201,8 @@ struct BusesHome: View {
         // The pinned stop showing and its neighbours, at most every 15 s (the
         // API's own cache), while the home is on screen: none while searching or
         // with a page over it (a phone); wide, beside the open page, it's still in view.
-        .busRefreshing(searching ? "searching" : "pins:\(model.shownPins):\(model.pinFocus ?? ""):\(model.stopBeside ?? "")") {
-            if !searching { await model.refreshPinned() }
+        .busRefreshing(searching ? nil : "pins:\(model.shownPins):\(model.pinFocus ?? ""):\(model.stopBeside ?? "")") {
+            await model.refreshPinned()
         }
         // The lines' buses out, from when the list is first on screen, at most once a minute
         // while the home is on screen (it reads every service from NUS): none with a page

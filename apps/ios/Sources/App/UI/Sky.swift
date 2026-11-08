@@ -165,6 +165,8 @@ private struct MatchedBand: ViewModifier {
     let bands: PaneBands?
     let id: UUID
     let pulling: Bool
+    /// Its last top and height at rest: counted again when a page over it goes.
+    @State private var rest: CGSize?
 
     func body(content: Content) -> some View {
         if let bands {
@@ -175,8 +177,12 @@ private struct MatchedBand: ViewModifier {
                     let s = $0.frame(in: .scrollView).minY
                     return CGSize(width: g == s ? g : g - s, height: $0.size.height)
                 } action: { v in
-                    if !pulling { bands.set(id, top: v.width, height: v.height) }
+                    guard !pulling else { return }
+                    rest = v
+                    bands.set(id, top: v.width, height: v.height)
                 }
+                // Back from a page over it its frame hasn't changed, so nothing above reports it.
+                .onAppear { if let rest { bands.set(id, top: rest.width, height: rest.height) } }
                 .onDisappear { bands.set(id, height: nil) }
                 .frame(minHeight: bands.height(top: bands.top(id)), alignment: .top)
         } else {

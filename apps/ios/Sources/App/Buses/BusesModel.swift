@@ -355,6 +355,7 @@ final class BusesModel {
             }.filter { $0.etaS > (r.later.last?.etaS ?? r.etaS ?? 0) }
             return r
         }
+        stop.available = board.available
         pinned[code] = stop
         pinnedGot[code] = now
         asked["pin:" + code] = asked[code]
@@ -444,9 +445,7 @@ final class BusesModel {
     /// When the timed refresh brings new times for `key`: at its next run, or
     /// the one after when that's too soon after `key` was last asked.
     private func nextUpdate(_ key: String) -> Date? {
-        // A pinned stop open beside the home is refreshed by its page's loop.
-        let pins = key.hasPrefix("pin:") && key != stopBeside.map { "pin:" + $0 }
-        guard let at = pins ? nextPinsAt : nextTimedAt, at > Date() else { return nil }
+        guard let at = key.hasPrefix("pin:") ? nextPinsAt : nextTimedAt, at > Date() else { return nil }
         let last = asked[key] ?? .distantPast
         return at.timeIntervalSince(last) < Self.minGapS ? at.addingTimeInterval(BusTimes.refreshS) : at
     }
@@ -488,7 +487,8 @@ final class BusesModel {
         await loadProfile()
         if pinsState == .failed { return .failed }
         guard let code = pinFocus else { return .upToDate(nextInS: nil) }
-        if code == stopBeside { return await pulled("pin:" + code) { await refreshPage(code, force: true) } }
+        // Open beside the home, the card is filled from its page's board (refreshPinned leaves it).
+        if code == stopBeside, pinned[code] != nil { return await pulled(code) { await refreshPage(code, force: true) } }
         return await pulled("pin:" + code) { await refreshPinned(force: true) }
     }
 
