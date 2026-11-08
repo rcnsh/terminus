@@ -53,14 +53,12 @@ each agent its own `PORT` and stop only the stub you started, by its PID.
 - **iPhone (Simulator, debug build):** the app reads `TERMINUS_*`
   variables from its environment (the list and what each does are in
   `DevLaunch`, `apps/ios/Sources/App/TerminusApp.swift`). Set them in the
-  simulator's launchd, then launch the app. On a simulator leased from
-  Simlock, run `simctl` through Simlock (`simlock simctl`, as here); on
-  one of Xcode's own, `xcrun simctl`:
+  simulator's launchd, then launch the app:
 
   ```sh
   TOK=$(curl -s -X POST http://127.0.0.1:$PORT/__stub/session | python3 -I -c 'import sys,json; print(json.load(sys.stdin)["token"])')
   for kv in TERMINUS_API_BASE=http://127.0.0.1:$PORT TERMINUS_RESET=1 TERMINUS_TOKEN=$TOK TERMINUS_EMAIL=you@u.nus.edu TERMINUS_LANG=en; do
-    simlock simctl spawn <udid> launchctl setenv "${kv%%=*}" "${kv#*=}"
+    xcrun simctl spawn <udid> launchctl setenv "${kv%%=*}" "${kv#*=}"
   done
   ```
 
@@ -72,10 +70,12 @@ each agent its own `PORT` and stop only the stub you started, by its PID.
   in Xcode's own set, not on one leased from Simlock.
 - **Android (emulator, debug build):** the app's stub server is always
   `http://localhost:8787`; map it to yours with
-  `simlock adb -s <serial> reverse tcp:8787 tcp:$PORT` (plain `adb` on an
-  emulator outside Simlock), then choose
+  `adb -s <serial> reverse tcp:8787 tcp:$PORT`, then choose
   `http://localhost:8787` under Developer at the bottom of Settings, About
-  (always there in a debug or beta build). Remove the mapping the same way
-  afterwards (`reverse --remove tcp:8787`).
+  (always there in a debug or beta build). `adb reverse --remove tcp:8787`
+  afterwards.
+- On a device leased from [Simlock](https://callstackincubator.github.io/simlock/docs/introduction),
+  run these through it instead: `simlock simctl …` for `xcrun simctl …`,
+  `simlock adb …` for `adb …`.
 - A fresh worktree has no `node_modules`: `pnpm install` before starting
   the stub, and `curl http://127.0.0.1:$PORT/` before launching anything.
