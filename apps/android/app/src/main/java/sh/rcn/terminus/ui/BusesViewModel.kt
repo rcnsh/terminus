@@ -277,7 +277,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
                     { asked[pinKey(it)] },
                     System.currentTimeMillis(),
                     MIN_GAP_MS,
-                    openStop?.takeIf { it in _state.value.pinned },
+                    // Left to its page while the card's own answer is fresh; then asked once, for its guesses after the board's buses.
+                    openStop?.takeIf { _state.value.pinned[it]?.answerFresh(ServerClock.now()) == true },
                 )
         if (ask.isEmpty()) return
         val token = store.token ?: return
