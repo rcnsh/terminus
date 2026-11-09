@@ -431,6 +431,7 @@ test('pairing: an app that names its platform in the body, with no client header
   assert.equal(paired.status, 200);
   const { devices } = await (await call(env, '/api/me/devices', { cookie })).json();
   assert.equal(devices[0].platform, 'ios');
+  assert.equal(devices[0].watch, false, 'an iPhone, not a watch');
 });
 
 test('an expired pairing code is refused', async () => {

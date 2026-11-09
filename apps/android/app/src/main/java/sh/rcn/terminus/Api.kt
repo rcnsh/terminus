@@ -985,6 +985,7 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
                     d.optLong("created"),
                     d.optLong("lastSeen"),
                     d.optBoolean("current", false),
+                    d.optBoolean("watch", false),
                 )
             }
         }
@@ -1503,7 +1504,28 @@ data class SignInRequest(val request: String, val poll: String, val match: Int)
 /** status: pending | approved | denied | expired. outcome as in applogin.ts. */
 data class SignInPoll(val status: String, val token: String?, val email: String?, val outcome: String?)
 
-data class Device(val id: String, val name: String, val platform: String?, val createdMs: Long, val lastSeenMs: Long, val current: Boolean)
+/** [watch]: an Apple Watch, whose [platform] is "ios"; an older server never says so. */
+data class Device(
+    val id: String,
+    val name: String,
+    val platform: String?,
+    val createdMs: Long,
+    val lastSeenMs: Long,
+    val current: Boolean,
+    val watch: Boolean = false,
+) {
+    /** "Android", "iPhone": product names, the same in every language. */
+    val platformName: String?
+        get() =
+            if (watch) "Apple Watch"
+            else
+                when (platform) {
+                    "android" -> "Android"
+                    "mac" -> "Mac"
+                    "ios" -> "iPhone"
+                    else -> null
+                }
+}
 
 /** A stop, with the services that call there (for its sign in setup). */
 data class Stop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String> = emptyList())

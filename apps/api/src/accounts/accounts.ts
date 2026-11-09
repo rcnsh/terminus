@@ -848,9 +848,10 @@ export async function createPairCode(db: D1Database, userId: string, nowMs: numb
 /**
  * The watch app, which alone redeems a code from an account without an
  * email: nothing else names that account, so a code from one sent as a link
- * can't pair someone's phone to a stranger's account.
+ * can't pair someone's phone to a stranger's account. The devices list
+ * names it a watch by this too.
  */
-export function isWatch(client: Client): boolean {
+export function isWatch(client: Pick<Client, 'client'>): boolean {
   return client.client?.startsWith('ios-watch/') ?? false;
 }
 
@@ -902,6 +903,8 @@ export interface DeviceRow {
   id: string;
   name: string | null;
   platform: string | null;
+  /** An Apple Watch: its platform stays `ios`, which older apps show as an iPhone. */
+  watch: boolean;
   created: number;
   lastSeen: number;
   /** The device asking. */
@@ -913,11 +916,19 @@ export interface DeviceRow {
 export async function listDevices(db: D1Database, userId: string, currentHash: string | null = null): Promise<DeviceRow[]> {
   const { results } = await db
     .prepare(
-      "SELECT substr(token_hash, 1, 16) AS id, name, platform, created, last_seen AS lastSeen FROM sessions WHERE user_id = ? AND kind = 'device' ORDER BY created",
+      "SELECT substr(token_hash, 1, 16) AS id, name, platform, client, created, last_seen AS lastSeen FROM sessions WHERE user_id = ? AND kind = 'device' ORDER BY created",
     )
     .bind(userId)
-    .all<Omit<DeviceRow, 'current'>>();
-  return results.map((d) => ({ ...d, current: currentHash !== null && currentHash.startsWith(d.id) }));
+    .all<Omit<DeviceRow, 'current' | 'watch'> & { client: string | null }>();
+  return results.map((d) => ({
+    id: d.id,
+    name: d.name,
+    platform: d.platform,
+    watch: isWatch(d),
+    created: d.created,
+    lastSeen: d.lastSeen,
+    current: currentHash !== null && currentHash.startsWith(d.id),
+  }));
 }
 
 /** Revokes one device; returns its name ('' when it had none), or null if there was no such device. */

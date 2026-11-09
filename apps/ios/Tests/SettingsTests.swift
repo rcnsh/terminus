@@ -184,3 +184,19 @@ final class WherePickerTests: XCTestCase {
         XCTAssertFalse(building.isPlace(of: row))
     }
 }
+
+/// Settings › Devices names a watch from the server's `watch`, not its
+/// platform (which is "ios", as for an iPhone).
+final class SettingsDevicesTests: XCTestCase {
+    private func device(_ json: String) -> Device {
+        try! JSONDecoder().decode(Device.self, from: Data(json.utf8))
+    }
+
+    func testAWatchIsNamedAWatch() {
+        XCTAssertEqual(settingsPlatformName(device(#"{"id":"a","platform":"ios","watch":true}"#)), "Apple Watch")
+        XCTAssertEqual(settingsPlatformName(device(#"{"id":"b","platform":"ios","watch":false}"#)), "iPhone")
+        // An older server sends no `watch`.
+        XCTAssertEqual(settingsPlatformName(device(#"{"id":"c","platform":"ios"}"#)), "iPhone")
+        XCTAssertEqual(settingsPlatformName(device(#"{"id":"d","platform":"android","watch":false}"#)), "Android")
+    }
+}

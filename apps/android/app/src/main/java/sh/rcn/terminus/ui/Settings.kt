@@ -1044,7 +1044,7 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
                                     now,
                                     android.text.format.DateUtils.MINUTE_IN_MILLIS,
                                 )
-                        Hint(listOfNotNull(platformName(d.platform), stringResource(R.string.used_when, used)).joinToString(" · "))
+                        Hint(listOfNotNull(d.platformName, stringResource(R.string.used_when, used)).joinToString(" · "))
                     }
                     RemoveButton({ removing = d })
                 }
@@ -1096,14 +1096,6 @@ private fun Tag(text: String) {
                 .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
-
-private fun platformName(p: String?) =
-    when (p) {
-        "android" -> "Android"
-        "mac" -> "Mac"
-        "ios" -> "iPhone"
-        else -> null
-    }
 
 /** The code to type on a Mac, and a QR code another phone's camera opens. */
 @Composable
