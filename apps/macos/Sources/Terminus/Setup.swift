@@ -1053,7 +1053,12 @@ struct DevicesView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let devices = setup.devices {
                 List(devices) { d in
-                    HStack {
+                    HStack(spacing: 10) {
+                        Image(systemName: deviceSymbol(d))
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(d.name ?? L("Device")) + Text(d.current == true ? "  " + L("This Mac") : "").foregroundColor(.secondary)
                             Hint(
@@ -1103,6 +1108,12 @@ func devicePlatformName(_ d: Device) -> String? {
     case "ios": "iPhone"
     default: nil
     }
+}
+
+/// Each device's kind, drawn as the iPhone app draws it: a watch, a Mac, else a phone.
+func deviceSymbol(_ d: Device) -> String {
+    if d.watch == true { return "applewatch" }
+    return d.platform == "mac" ? "laptopcomputer" : "iphone"
 }
 
 /// Over the code once it's been used: a tick that springs in, and the device's name.

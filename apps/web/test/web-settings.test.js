@@ -65,3 +65,14 @@ test("a class's weeks, each run of them, and none when it's every week", () => {
   assert.equal(S.weeksText([1, 2, 3, 8, 9, 10, 11, 12, 13]), '第 1–3，8–13 周');
   page('en', 'en-SG');
 });
+
+test('Devices draws each device as its kind: a paired watch as a watch, not the iPhone its platform says', () => {
+  const watch = S.deviceIcon({ platform: 'ios', watch: true });
+  const phone = S.deviceIcon({ platform: 'ios', watch: false });
+  const mac = S.deviceIcon({ platform: 'mac', watch: false });
+  assert.notEqual(watch, phone);
+  assert.notEqual(mac, phone);
+  assert.equal(S.deviceIcon({ platform: 'android', watch: false }), phone);
+  // A device from before the server named platforms.
+  assert.equal(S.deviceIcon({ platform: null }), phone);
+});

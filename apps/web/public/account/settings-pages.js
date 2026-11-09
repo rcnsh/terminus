@@ -3,6 +3,7 @@
 // profile (profile.js).
 
 import {
+  Icon,
   Rich,
   html,
   noteRow,
@@ -920,6 +921,14 @@ function loadQr() {
   });
 }
 
+/** Each device's kind, drawn as the other apps draw it: a watch, a Mac, else a phone. */
+const DEVICE_ICONS = {
+  phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+  mac: '<rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/>',
+  watch: '<rect x="6.5" y="6.5" width="11" height="11" rx="3"/><path d="M9 6.5 9.5 3h5l.5 3.5M9 17.5l.5 3.5h5l.5-3.5"/>',
+};
+export const deviceIcon = (d) => DEVICE_ICONS[d.watch ? 'watch' : d.platform] ?? DEVICE_ICONS.phone;
+
 export function Devices({ me }) {
   const version = useStore(lists);
   const [devices, setDevices] = useState(null);
@@ -942,7 +951,8 @@ export function Devices({ me }) {
         html`<${Group} title=${t('Your devices')}>
         <ul class="list group-body">
           ${devices.map(
-            (d) => html`<li key=${d.id}>
+            (d) => html`<li key=${d.id} class="device">
+              <${Icon} class="dev-ico" paths=${deviceIcon(d)} />
               <span><strong>${d.name ?? t('Device')}</strong><div class="meta">${t('Added {0} · used {1}', shortDate(d.created), shortDate(d.lastSeen))}</div></span>
               <button
                 type="button"
