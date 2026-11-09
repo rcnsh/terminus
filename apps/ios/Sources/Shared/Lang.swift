@@ -73,6 +73,14 @@ let onIPad: Bool = {
 
 /// The server no longer knows this device's sign-in.
 var signedOutHere: String {
+    #if os(watchOS)
+        return L("This watch was signed out of your account.")
+    #else
+        return signedOutPhone
+    #endif
+}
+
+private var signedOutPhone: String {
     onIPad
         ? L("This iPad was signed out of your account. Sign in again with your email.")
         : L("This phone was signed out of your account. Sign in again with your email.")

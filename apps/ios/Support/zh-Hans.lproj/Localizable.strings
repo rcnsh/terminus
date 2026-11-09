@@ -28,6 +28,7 @@
 "Couldn't put it back. Try again." = "无法放回，请再试一次。";
 "Couldn't reach terminus. Check your connection and try again." = "无法连接 terminus。请检查网络后再试。";
 "Couldn't reach terminus. Try again in a moment." = "无法连接 terminus。请稍后再试。";
+"Couldn't reach your watch. Try again in a moment." = "无法连接你的手表，请稍后再试。";
 "Couldn't save. Try again." = "无法保存，请再试一次。";
 "Couldn't send. Try again." = "无法发送，请再试一次。";
 "First bus" = "首班车";
@@ -72,6 +73,7 @@
 "Or %@ at %@ from %@" = "或在 %3$@ 搭 %2$@ 的 %1$@";
 "Or go now: %@ at %@ from %@" = "或现在走：在 %3$@ 搭 %2$@ 的 %1$@";
 "Pull to refresh" = "下拉刷新";
+"Sent. Open terminus on your watch." = "已发送。请在手表上打开 terminus。";
 "Settings" = "设置";
 "starts %@" = "%@ 开始";
 "Starts at %@" = "%@ 开始";
@@ -85,6 +87,7 @@
 "This iPad's setup was removed after a long time unused. Start again or sign in." = "这台 iPad 的设置因长时间未使用已被删除。请重新开始或登录。";
 "This phone was signed out of your account. Sign in again with your email." = "这部手机已从你的账户退出登录。请用你的邮箱重新登录。";
 "This phone's setup was removed after a long time unused. Start again or sign in." = "这部手机的设置因长时间未使用已被删除。请重新开始或登录。";
+"This watch was signed out of your account." = "这块手表已退出你的账户。";
 "Times may be out of date · tap ↻ to refresh" = "时间可能已过时 · 点按 ↻ 刷新";
 "Timetable" = "课表";
 "To %@" = "去 %@";

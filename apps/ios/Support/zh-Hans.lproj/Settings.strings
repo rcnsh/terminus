@@ -55,6 +55,7 @@
 "API docs" = "API 文档";
 "API keys, and signing out everywhere" = "API 密钥，以及在所有设备上退出登录";
 "Appearance" = "外观";
+"Apple Watch" = "Apple Watch";
 "Arrive %@" = "%@ 到达";
 "Auto" = "自动";
 "Available in one tap from Now and the widgets. To go somewhere every week, add it to your timetable." = "在“现在”和小组件里一点就到。要每周去某个地方，请把它加到课表里。";
@@ -116,6 +117,7 @@
 "Importing…" = "正在导入…";
 "In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here. Re-import each semester." = "在 NUSMods 中：打开 Timetable，然后 Share/Sync。复制链接并粘贴到这里。每学期重新导入一次。";
 "In your timetable" = "在你的课表里";
+"Install terminus on your watch first, from the Watch app on this phone." = "请先在这部手机的 Watch App 里把 terminus 安装到手表上。";
 "iPad's clock" = "iPad 时钟";
 "It has to end after it starts." = "结束时间必须晚于开始时间。";
 "It will be signed out, and you'll receive an email confirming this." = "该设备将退出登录，你会收到一封确认邮件。";
@@ -205,6 +207,7 @@
 "Send the pairing code" = "发送配对代码";
 "Sending…" = "正在发送…";
 "Server" = "服务器";
+"Set up your watch" = "设置你的手表";
 "Show buses between" = "在这段时间显示巴士";
 "Show buses from" = "从这个时间开始显示巴士";
 "Show buses until" = "显示巴士到这个时间";
@@ -212,6 +215,7 @@
 "Sign out of this iPad?" = "在这台 iPad 上退出登录？";
 "Sign out of this phone?" = "在这部手机上退出登录？";
 "Signed in" = "已登录";
+"Signs in terminus on your Apple Watch to this account. It works without your phone after that." = "让 Apple Watch 上的 terminus 登录这个账户。之后不带手机也能用。";
 "Skip" = "跳过";
 "Slow" = "慢";
 "So we can reply to you. Your setup stays as it is." = "这样我们才能回复你。你的设置会保持不变。";

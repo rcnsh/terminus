@@ -141,6 +141,7 @@ final class AppModel {
     /// A token was just stored (a new account, a sign-in, a pairing): start
     /// showing answers. [needsSetup] nil: /me couldn't be asked, so it's found out later.
     func signedIn(token: String, anonymous: Bool, email: String? = nil, needsSetup: Bool? = false) {
+        let addedEmail = paired && self.anonymous && !anonymous
         TokenStore.save(token)
         session += 1
         // Maybe another account than the one the map last read (a sign-in from a guest).
@@ -161,6 +162,7 @@ final class AppModel {
         target = .plan
         showNearby = false
         TripSync.signedIn()
+        if addedEmail { WatchLink.shared.accountChanged(token: token) }
         Task { await load(restart: true) }
         Task { await refreshMe() }
     }

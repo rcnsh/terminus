@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         CrashReporter.shared.start()
+        WatchLink.shared.start()
         Push.launched(application)
         return true
     }

@@ -120,7 +120,8 @@ jobs:
       - id: keys
         run: |
           echo "mac=mac-passed-${{ hashFiles('apps/macos/**', '**/*.swift', '.swift-format', 'scripts/format-swift.sh', 'fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
-          echo "ios=ios-passed-${{ hashFiles('apps/ios/**', 'fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
+          # The watch app's sources are under apps/ios (Sources/Watch, WatchTests, WatchUITests, Support/Watch).
+          echo "ios=ios-passed-${{ hashFiles('apps/ios/**', 'apps/ios/Sources/Watch/**', 'apps/ios/WatchTests/**', 'fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
       - id: mac
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -195,7 +196,15 @@ jobs:
         run: |
           SIM=$(xcrun simctl list devices available -j | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k in sorted(d, reverse=True) if "iOS" in k for x in d[k] if x["name"].startswith("iPhone")))')
           xcodebuild test -project terminus.xcodeproj -scheme Terminus -destination "id=$SIM" -only-testing:TerminusTests CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -quiet
-      # The optimised build a release would make, for a device, unsigned.
+      # The watch app's unit tests on the newest Apple Watch simulator the
+      # runner has (its UI test, like the iPhone's, needs the dev stub).
+      - name: watch unit tests
+        working-directory: apps/ios
+        run: |
+          WATCH=$(xcrun simctl list devices available -j | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k in sorted(d, reverse=True) if "watchOS" in k for x in d[k] if x["name"].startswith("Apple Watch")))')
+          xcodebuild test -project terminus.xcodeproj -scheme "Terminus Watch" -destination "id=$WATCH" -only-testing:TerminusWatchTests CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -quiet
+      # The optimised build a release would make, for a device, unsigned:
+      # the watch app and its complications are built inside it.
       - run: xcodebuild build -project terminus.xcodeproj -scheme Terminus -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
         working-directory: apps/ios
       # Every step above passed: this job's inputs need no second run.
