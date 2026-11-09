@@ -43,6 +43,8 @@ struct MainTabs: View {
 
     /// A keyboard is up (keyboardRoom()).
     @State private var keyboard = false
+    /// The status bar sits beside the page (an iPhone Duo open).
+    @State private var beside = false
 
     var body: some View {
         // The Map tab tapped while on it goes back to how it opened, as on Android.
@@ -79,7 +81,12 @@ struct MainTabs: View {
             $0.safeAreaInsets.top == 0 && ($0.safeAreaInsets.leading == 0) != ($0.safeAreaInsets.trailing == 0)
         } action: {
             StatusBar.beside = $0
+            beside = $0
         }
+        // With no status bar above it, the page's top edge is the system's
+        // swipe down, which took the taps on what sits there (the map's pills):
+        // there, the first touch at the top is the app's.
+        .defersSystemGestures(on: beside ? .top : [])
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { n in
             if let t = n.object as? Tab { app.tab = t }
         }
