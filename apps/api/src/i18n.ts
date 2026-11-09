@@ -378,6 +378,8 @@ const en = {
     [string, string]
   >,
   aDevice: 'a device',
+  /** /api/pair/check's name for an account with no email, shown where the address would be. */
+  accountWithoutEmail: 'an account without an email',
   singaporeTime: ((when: string) => `${when} Singapore time`) as Fn<[string]>,
   deviceAddedSubject: ((device: string) => `terminus was added to ${device}`) as Fn<[string]>,
   deviceAddedButton: 'Check your devices',
@@ -702,6 +704,7 @@ const zh: Msgs = {
   codeWhyApp: (site, device) =>
     zs`你收到这封邮件，是因为有人在${device}上的 terminus 应用（${site}，NUS 校园巴士时间）输入了这个地址。如果不是你，可以忽略这封邮件。没有验证码不会发生任何事。`,
   aDevice: '一台设备',
+  accountWithoutEmail: '一个没有邮箱的账户',
   singaporeTime: (when) => `新加坡时间 ${when}`,
   deviceAddedSubject: (device) => zs`terminus 已添加到${device}`,
   deviceAddedButton: '查看你的设备',
@@ -777,6 +780,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'id must be a report id': 'id 必须是一条反馈的 id',
   'something went wrong on our side': '我们这边出了问题',
   'delete the account from the account page': '请在账户页面删除账户',
+  'only the device that started this account can do that': '只有创建这个账户的设备才能这样做',
   'send the profile as JSON': '请以 JSON 发送资料',
   "send place (a favourite's key) or to (a stop, place or room code)": '请发送 place（收藏的键）或 to（车站、地点或教室代码）',
   'atMin must be minutes past midnight, Singapore time': 'atMin 必须是新加坡时间午夜后的分钟数',
@@ -822,7 +826,6 @@ export const ERRORS_ZH: Record<string, string> = {
   'Update terminus to keep using it.': '请更新 terminus 以继续使用。',
   'sign in to send feedback': '请先登录再发送反馈',
   'do this from the account page': '请在账户页面进行',
-  'add an email to this account first': '请先给这个账户添加邮箱',
   'too many wrong codes; start again': '验证码错误次数太多，请重新开始',
   'too many wrong codes for this address today; use the link in the email': '这个邮箱今天输错验证码的次数太多，请用邮件里的链接',
   'that request expired; start again': '这个请求已失效，请重新开始',

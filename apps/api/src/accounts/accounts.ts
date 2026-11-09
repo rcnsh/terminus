@@ -54,6 +54,13 @@ export interface SessionInfo {
   user: User;
   kind: 'web' | 'device';
   tokenHash: string;
+  /**
+   * A device paired by code to an account without an email, rather than the
+   * one that started it. It uses the account but can't delete it, give it an
+   * email, pair or remove devices: with no email to prove who owns the
+   * account, the device that started it does.
+   */
+  paired: boolean;
   /** The saved profile as read with the session (authenticate's `withProfile`): null for none, absent when not read. */
   profileJson?: unknown;
 }
@@ -755,10 +762,10 @@ export async function authenticate(
   const row = await db
     .prepare(
       withProfile
-        ? `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email, p.json AS profile
+        ? `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email, s.paired, p.json AS profile
              FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN profiles p ON p.user_id = u.id
             WHERE s.token_hash = ?`
-        : `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email
+        : `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email, s.paired
              FROM sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = ?`,
     )
@@ -771,6 +778,7 @@ export async function authenticate(
       client: string | null;
       id: string;
       email: string | null;
+      paired: number;
       profile?: string | null;
     }>();
   if (!row) return null;
@@ -796,7 +804,8 @@ export async function authenticate(
     if (ctx) ctx.waitUntil(touch.catch((err) => console.error('last_seen not updated:', err instanceof Error ? err.message : String(err))));
     else await touch;
   }
-  const session: SessionInfo = { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash };
+  const paired = row.email === null && row.paired === 1;
+  const session: SessionInfo = { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash, paired };
   if (withProfile) session.profileJson = row.profile ? JSON.parse(row.profile) : null;
   return session;
 }
@@ -835,13 +844,24 @@ export async function createPairCode(db: D1Database, userId: string, nowMs: numb
   return { code, expires };
 }
 
-/** The email of the account a live pairing code belongs to, without spending it. */
-export async function pairCodeOwner(db: D1Database, code: string, nowMs: number): Promise<string | null> {
+/** The account a live pairing code belongs to, without spending it: its email, null for an account without one. Null when no live code. */
+/**
+ * The watch app, which alone redeems a code from an account without an
+ * email: nothing else names that account, so a code from one sent as a link
+ * can't pair someone's phone to a stranger's account.
+ */
+export function isWatch(client: Client): boolean {
+  return client.client?.startsWith('ios-watch/') ?? false;
+}
+
+export async function pairCodeOwner(db: D1Database, code: string, nowMs: number, client: Client): Promise<{ email: string | null } | null> {
   const row = await db
-    .prepare('SELECT u.email FROM pair_codes p JOIN users u ON u.id = p.user_id WHERE p.code = ? AND p.expires >= ?')
-    .bind(code, nowMs)
+    .prepare(
+      'SELECT u.email FROM pair_codes p JOIN users u ON u.id = p.user_id WHERE p.code = ? AND p.expires >= ? AND (u.email IS NOT NULL OR ?)',
+    )
+    .bind(code, nowMs, isWatch(client) ? 1 : 0)
     .first<{ email: string | null }>();
-  return row?.email ?? null;
+  return row ? { email: row.email } : null;
 }
 
 /** "j•••@gmail.com": enough to recognise your own account, not to harvest one. */
@@ -865,10 +885,11 @@ export async function redeemPairCode(
   const [made] = await db.batch([
     db
       .prepare(
-        `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client)
-         SELECT ?, user_id, 'device', ?, ?, ?, NULL, ?, ? FROM pair_codes WHERE code = ? AND expires >= ? RETURNING user_id`,
+        `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client, paired)
+         SELECT ?, p.user_id, 'device', ?, ?, ?, NULL, ?, ?, 1 FROM pair_codes p JOIN users u ON u.id = p.user_id
+          WHERE p.code = ? AND p.expires >= ? AND (u.email IS NOT NULL OR ?) RETURNING user_id`,
       )
-      .bind(tokenHash, name, nowMs, nowMs, client.platform, client.client, code, nowMs),
+      .bind(tokenHash, name, nowMs, nowMs, client.platform, client.client, code, nowMs, isWatch(client) ? 1 : 0),
     db.prepare('DELETE FROM pair_codes WHERE code = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)').bind(code, tokenHash),
   ]);
   const userId = (made?.results?.[0] as { user_id: string } | undefined)?.user_id;
@@ -914,7 +935,8 @@ export async function revokeDevice(db: D1Database, userId: string, id: string): 
  * device. It's the one way in that doesn't pass through the inbox, and a
  * signed-in phone can make a code, so a lost phone can't add one without
  * the owner hearing. Signing in from the email needs no second email, and
- * removing a device exposes nothing.
+ * removing a device exposes nothing. An account without an email has no
+ * inbox to tell: nothing is sent, and its devices list shows the new one.
  */
 export async function mailDeviceAdded(env: Env, email: string | null, name: string, nowMs: number): Promise<void> {
   if (!email || !env.EMAIL || !env.EMAIL_FROM) return;
