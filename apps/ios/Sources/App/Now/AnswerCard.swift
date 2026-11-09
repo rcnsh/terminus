@@ -1,56 +1,11 @@
 import SwiftUI
 
-/// What Now shows under the chips, worked out once a second from the
-/// model: its top goes up in the sky ([NowHead]), the rest on the ground
-/// under the horizon ([NowGround]).
-enum NowShows {
-    case nearby
-    /// No answer yet and one on its way: the card's shape in bars.
-    case checking
-    /// No answer yet, and none coming: "No answer yet".
-    case waiting(String)
-    /// Offline with the plan's answer stale: the next thing on the kept day plan.
-    case offline(OfflineDay.Lines)
-    /// Nothing to catch: the day's done, a free day, or you're there.
-    case dayDone(NextAnswer)
-    /// A trip by bus or on foot, in the card style chosen in Settings.
-    case journey(NextAnswer, Journey)
-    case classPlan(NextAnswer)
-    /// Anything else, or a card past its staleAt (`old`), its times dimmed.
-    case plain(NextAnswer, old: Bool)
-
+extension NowShows {
     @MainActor static func of(_ app: AppModel, now: Date) -> NowShows {
-        if app.showNearby { return .nearby }
-        let a = app.answer
-        // The last refresh failed: the day plan kept for it stands in for a stale answer.
-        if app.target == .plan, app.paired, app.error != nil, !app.loading, a == nil || a!.isOld(at: now),
-            let pick = OfflineDay.next(app.day, now: now)
-        {
-            return .offline(OfflineDay.lines(pick))
-        }
-        guard let a else { return app.loading || app.error == nil ? .checking : .waiting(L("No answer yet")) }
-        if a.mode == "rest" || a.isFree || a.arrived { return .dayDone(a) }
-        let old = a.isOld(at: now)
-        if let j = a.card?.journey, !old { return .journey(a, j) }
-        if a.isClassPlan && !old { return .classPlan(a) }
-        return .plain(a, old: old)
+        of(
+            nearby: app.showNearby, answer: app.answer, onPlan: app.target == .plan, paired: app.paired, error: app.error,
+            loading: app.loading, day: app.day, now: now)
     }
-
-    /// The room above the words, for the stars and the moon at night.
-    var room: CGFloat {
-        switch self {
-        case .nearby: 26
-        case .dayDone: 72
-        default: 34
-        }
-    }
-
-    /// What's on the horizon's road.
-    func road(now: Date) -> Road {
-        if case .journey(_, let j) = self { return Road.of(j, now: now) }
-        return Road()
-    }
-    var road: Road { road(now: ServerClock.now) }
 }
 
 // MARK: the top, in the sky
@@ -202,10 +157,7 @@ struct PlainCard: View {
         let a = answer
         CardLead(answer: a, now: now)
         // The server's ("Going to KR MRT", "Long gap · Home").
-        let head =
-            a.card?.heading
-            ?? (a.mode == "nearby" ? L("Nearby") : a.dest?.why == "gap-home" ? L("%@ · long gap", a.dest?.label ?? "") : a.dest?.label)
-        if let head { Text(head).foregroundStyle(inks.muted).accessibilityAddTraits(.isHeader) }
+        if let head = a.plainHeading { Text(head).foregroundStyle(inks.muted).accessibilityAddTraits(.isHeader) }
         VStack(alignment: .leading, spacing: 4) {
             Text(a.title)
                 .font(.system(size: 30 * scale, weight: .bold))
@@ -251,13 +203,7 @@ struct Countdown: View {
 
     /// `left` seconds to the departure, in words. Gone: a minute ago from the
     /// moment it leaves, never "0 min ago", as the web, Android and the Mac say it.
-    nonisolated static func words(left: Int) -> String {
-        left > 60
-            ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)")
-            : left > 0
-                ? L("Leaves in %@ s", "\(left)")
-                : L("Left %@ min ago", "\(max(1, (-left + 59) / 60))")
-    }
+    nonisolated static func words(left: Int) -> String { JourneyText.leaves(left: left) }
 }
 
 /// A class: when to leave is the headline, the bus that goes with it and
@@ -282,7 +228,7 @@ struct ClassPlan: View {
             // Counting down to leaving; at the stop the headline is the bus and its time.
             let left = a.phase == "waiting" ? 0 : Int(at.timeIntervalSince(now))
             if left > 0 {
-                Text(left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
+                Text(JourneyText.inTime(left))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(inks.smallAccent)
                     .monospacedDigit()
@@ -331,7 +277,7 @@ struct DayDoneHead: View {
 
     var body: some View {
         let upcoming = answer.card?.upcoming
-        let sub = upcoming?.off ?? (upcoming == nil && !answer.detail.isEmpty ? answer.detail : nil)
+        let sub = answer.doneSub
         Text(answer.label)
             .font(.system(size: 44 * scale, weight: .heavy))
             .tracking(-1)

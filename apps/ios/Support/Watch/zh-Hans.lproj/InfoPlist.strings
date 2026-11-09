@@ -1,0 +1,2 @@
+/* What watchOS shows when the watch app asks for permission, in Chinese (the English is in project.yml). */
+"NSLocationWhenInUseUsageDescription" = "用来从离你最近的车站开始规划路线。位置会取整到约 11 米，服务器不会保存；手表上最多保留最后一次位置 2 小时，供复杂功能使用。";

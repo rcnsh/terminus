@@ -159,15 +159,19 @@ apps/macos/
   Tests/              swift test, on the API's answer fixtures
   build.sh            Builds terminus.app (CHANNEL=beta for the beta)
 apps/ios/
-  project.yml         XcodeGen: the app, widgets, notification service, tests; version, bundle ids, app group
+  project.yml         XcodeGen: the app, widgets, notification service, the watch app, tests; version, bundle ids, app group
   Sources/Shared/     Shared by the app and its extensions: Api.swift, Answer.swift (types), Account.swift,
                       JourneyText.swift, Spoken.swift (VoiceOver's sentences), OfflineDay.swift, SkyDraw.swift
   Sources/App/        Now/, Buses/, Map/, Settings/, Onboarding/, Model/ (AppModel), UI/ (Sky, theme),
                       System/ (Push.swift: APNs and Live Activities, TripSync.swift, Links.swift: terminus://)
   Sources/Widgets/    WidgetKit widgets and the Live Activity
   Sources/NotificationService/  Rewords a push before it's shown
+  Sources/Watch/      The Apple Watch app (ADR 0016): App/ (Now, Nearby, setup, PhoneLink), Widgets/
+                      (complications), Common/ (WatchPlan: the one fetch; Glance: the complications' words)
+  Sources/App/System/WatchLink.swift  The phone's side of setting up the watch (Settings › Devices)
   Support/            zh-Hans strings (a table per part), assets
   Tests/, UITests/    Unit tests on the API's fixtures; XCUITests against the dev stub
+  WatchTests/, WatchUITests/  The same for the watch app
   scripts/            strings.py (fills and checks the Chinese), fetch-maplibre.sh, run.sh,
                       sideload.sh (a free Apple ID's build, on a plugged-in iPhone or as an .ipa; SIDELOAD.md)
   store/              App Store listing (listing.md, English and Chinese), the screenshots and

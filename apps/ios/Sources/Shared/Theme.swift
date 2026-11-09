@@ -1,5 +1,8 @@
 import SwiftUI
-import UIKit
+
+#if os(iOS)
+    import UIKit
+#endif
 
 /// The site's colours (assets/site.css), light and dark, as the Android app
 /// and the Mac use them, so the iPhone looks like the same product.
@@ -35,16 +38,25 @@ extension Color {
     }
 
     /// One colour in light mode and another in dark, following the appearance.
+    /// A watch is always dark, and watchOS has no colour that follows one:
+    /// the dark one there. (`canImport(UIKit)` can't tell them apart: the
+    /// watch has a UIKit too, without dynamic colours.)
     static func themed(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light) })
+        #if os(iOS)
+            Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light) })
+        #else
+            Color(rgb: dark)
+        #endif
     }
 }
 
-extension UIColor {
-    convenience init(rgb v: UInt32) {
-        self.init(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+#if os(iOS)
+    extension UIColor {
+        convenience init(rgb v: UInt32) {
+            self.init(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+        }
     }
-}
+#endif
 
 /// "#rrggbb" as a number (0xRRGGBB); nil for anything else.
 func hexRGB(_ hex: String) -> UInt32? {
