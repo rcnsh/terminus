@@ -353,6 +353,9 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 0.93rem; }
 .list li:first-child { border-top: 0; }
 .list .meta { color: var(--muted); font-size: 0.82rem; }
+.list li.device { justify-content: flex-start; gap: 12px; }
+.list li.device > span { flex: 1; min-width: 0; }
+.dev-ico { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 /* Earlier bus, Best bus, Later bus: the earlier at the left, the later at the right, under the bus. */

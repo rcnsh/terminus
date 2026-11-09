@@ -1008,6 +1008,14 @@ private fun AccountSection(
     }
 }
 
+/** Each device's kind, as the other apps draw it: a watch, a Mac, else a phone. */
+internal fun deviceIcon(d: Device): Int =
+    when {
+        d.watch -> R.drawable.ic_device_watch
+        d.platform == "mac" -> R.drawable.ic_device_mac
+        else -> R.drawable.ic_device_phone
+    }
+
 /** Your devices, each removable (this phone signs out), then Add a device. */
 @Composable
 private fun Devices(state: AccountState, account: AccountViewModel, main: MainViewModel, onSignedOut: () -> Unit) {
@@ -1023,6 +1031,12 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
                     Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Icon(
+                        painterResource(deviceIcon(d)),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 12.dp).size(24.dp),
+                    )
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
