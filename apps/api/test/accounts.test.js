@@ -1169,7 +1169,7 @@ test('pair/check names the account (masked) without spending the code', async ()
   const cookie = await signIn(env, email);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
   const r = await call(env, '/api/pair/check', { method: 'POST', body: { code } });
-  assert.deepEqual(await r.json(), { account: 'f•••@u.nus.edu' });
+  assert.deepEqual(await r.json(), { account: 'f•••@u.nus.edu', anonymous: false });
   assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code, name: 'p' } })).status, 200, 'still usable');
   assert.equal((await call(env, '/api/pair/check', { method: 'POST', body: { code } })).status, 400, 'spent now');
 });

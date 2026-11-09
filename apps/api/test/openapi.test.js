@@ -669,7 +669,7 @@ const CASES = [
   ['DELETE /api/me/sessions', 200, { auth: 'cookie' }],
   ['DELETE /api/me/sessions', 403, { auth: 'device' }],
   ['POST /api/me/pair-code', 200, { auth: 'cookie' }],
-  ['POST /api/me/pair-code', 403, { auth: 'anon' }],
+  ['POST /api/me/pair-code', 200, { auth: 'anon' }],
   ['GET /api/me/devices', 200, { auth: 'device' }],
   [
     'DELETE /api/me/devices/{id}',
@@ -682,7 +682,7 @@ const CASES = [
       path: (w) => `/api/me/devices/${w.deviceId}`,
     },
   ],
-  ['DELETE /api/me/devices/{id}', 403, { auth: 'anon', path: '/api/me/devices/nope' }],
+  ['DELETE /api/me/devices/{id}', 404, { auth: 'anon', path: '/api/me/devices/nope' }],
   ['DELETE /api/me/devices/{id}', 404, { auth: 'cookie', path: '/api/me/devices/nope' }],
 
   // The map.
