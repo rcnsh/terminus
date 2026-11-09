@@ -30,6 +30,8 @@ struct Device: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String?
     let platform: String?
+    /// An Apple Watch, whose `platform` is "ios". Absent from an older server.
+    let watch: Bool?
     let created: Double?
     let lastSeen: Double?
     let current: Bool?

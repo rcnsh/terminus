@@ -778,6 +778,8 @@ struct Device: Decodable, Identifiable, Hashable {
     let id: String
     let name: String?
     let platform: String?
+    /// An Apple Watch, whose `platform` is "ios". Absent from an older server.
+    var watch: Bool? = nil
     let lastSeen: Double?
     let current: Bool?
 }

@@ -467,7 +467,11 @@ device's session (`/api/auth/anon`, the app sign-in, `/api/pair`) take a
 `platform` named in the body; otherwise the platform is guessed from the
 User-Agent, which counts any CFNetwork client as the Mac: the iPhone app
 always sends the header. Feedback and reports (`POST /api/me/feedback`)
-name their own `platform`: those three, or `web`.
+name their own `platform`: those three, or `web`. The Apple Watch app is an
+iPhone flavour (`ios-watch/<version>`), so its platform is `ios`;
+`GET /api/me/devices` marks it `watch: true` from the stored header, and
+the devices lists show a watch. `platform` stays `ios` there, so an app
+that doesn't know `watch` shows it as an iPhone, as it always has.
 
 **Oldest app still served.** KV `config:minClient` holds the oldest version
 served per platform, as JSON: `{"android":"2.6.0","mac":"2.6.0"}`. A missing

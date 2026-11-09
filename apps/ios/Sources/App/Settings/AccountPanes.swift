@@ -83,7 +83,7 @@ struct SettingsDevicesPane: View {
                 if let code = model.pairCode { SettingsPairCodeSheet(code: code) { model.closePairCode() }.centredSheet() }
             }
             .alert(
-                removing.map { L("Remove %@?", $0.name ?? settingsPlatformName($0.platform) ?? L("this device")) } ?? "",
+                removing.map { L("Remove %@?", $0.name ?? settingsPlatformName($0) ?? L("this device")) } ?? "",
                 isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing
             ) { d in
                 Button(L("Remove"), role: .destructive) { model.removeDevice(d) }
@@ -98,9 +98,9 @@ struct SettingsDevicesPane: View {
     }
 
     private func row(_ d: Device) -> some View {
-        let name = d.name ?? settingsPlatformName(d.platform) ?? L("A device")
+        let name = d.name ?? settingsPlatformName(d) ?? L("A device")
         return HStack(spacing: 12) {
-            Image(systemName: icon(d.platform))
+            Image(systemName: icon(d))
                 .font(.title3)
                 .foregroundStyle(Color.muted)
                 .frame(width: 28)
@@ -117,7 +117,7 @@ struct SettingsDevicesPane: View {
                             .background(Color.surface2, in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
-                SettingsHint([settingsPlatformName(d.platform), used(d)].compactMap { $0 }.joined(separator: " · "))
+                SettingsHint([settingsPlatformName(d), used(d)].compactMap { $0 }.joined(separator: " · "))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             QuietRemove(says: L("Remove %@", name)) { removing = d }
@@ -135,8 +135,9 @@ struct SettingsDevicesPane: View {
         return L("used %@", at.formatted(.relative(presentation: .named).locale(Lang.locale)))
     }
 
-    private func icon(_ p: String?) -> String {
-        switch p {
+    private func icon(_ d: Device) -> String {
+        if d.watch == true { return "applewatch" }
+        return switch d.platform {
         case "mac": "laptopcomputer"
         case "web": "globe"
         default: "iphone"
@@ -186,8 +187,9 @@ struct SettingsWatchGroup: View {
     }
 }
 
-func settingsPlatformName(_ p: String?) -> String? {
-    switch p {
+func settingsPlatformName(_ d: Device) -> String? {
+    if d.watch == true { return "Apple Watch" }
+    return switch d.platform {
     case "android": "Android"
     case "mac": "Mac"
     case "ios": "iPhone"

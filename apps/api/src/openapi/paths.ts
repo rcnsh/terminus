@@ -1924,7 +1924,8 @@ export function paths(): Record<string, unknown> {
       get: {
         tags: ['Account'],
         summary: 'Your devices',
-        description: 'The apps signed in to the account. `current` is the device asking.',
+        description:
+          'The apps signed in to the account. `current` is the device asking. `watch` marks an Apple Watch, told by the app it runs (`x-terminus-client: ios-watch/…`); its `platform` stays `ios`, so an app that doesn’t know `watch` shows it as an iPhone.',
         operationId: 'listDevices',
         security: [{ bearer: [] }, { cookie: [] }],
         responses: {
@@ -1939,6 +1940,7 @@ export function paths(): Record<string, unknown> {
                     id: { type: 'string' },
                     name: { type: ['string', 'null'] },
                     platform: { type: ['string', 'null'], example: 'android' },
+                    watch: { type: 'boolean', description: 'An Apple Watch (its `platform` is `ios`).', example: false },
                     created: { type: 'integer' },
                     lastSeen: { type: 'integer' },
                     current: { type: 'boolean' },

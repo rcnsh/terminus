@@ -166,17 +166,34 @@ test('an anonymous account pairs another device: same account, no email to send'
   assert.deepEqual((await (await call(env, '/api/me/profile', { token: watch })).json()).home, HOME.home);
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
 
-  // The phone sees the watch in its devices.
+  // The phone sees the watch in its devices, as a watch; its platform stays ios for older apps.
   const { devices } = await (await call(env, '/api/me/devices', { token: phone })).json();
   assert.deepEqual(
-    devices.map((d) => [d.name, d.platform, d.current]),
+    devices.map((d) => [d.name, d.platform, d.watch, d.current]),
     [
-      ['Pixel 8', 'android', true],
-      ['Apple Watch', 'ios', false],
+      ['Pixel 8', 'android', false, true],
+      ['Apple Watch', 'ios', true, false],
     ],
   );
   const client = db._db.prepare("SELECT client FROM sessions WHERE name = 'Apple Watch'").get().client;
   assert.equal(client, 'ios-watch/3.11.0');
+});
+
+test('a watch is a watch in the devices list by the app it runs, whatever it is named; an iPhone is not', async () => {
+  const { env } = setup();
+  const phone = await anon(env);
+  const made = await call(env, '/api/me/pair-code', { method: 'POST', token: phone });
+  const { code } = await made.json();
+  // Named as an iPhone would be, and without a platform in the body: the header alone says watch.
+  assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone' }, headers: WATCH })).status, 200);
+  const { devices } = await (await call(env, '/api/me/devices', { token: phone })).json();
+  assert.deepEqual(
+    devices.map((d) => [d.platform, d.watch]),
+    [
+      ['android', false],
+      ['ios', true],
+    ],
+  );
 });
 
 test("an anonymous account's phone removes its paired watch, which is signed out", async () => {

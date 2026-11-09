@@ -1058,7 +1058,7 @@ struct DevicesView: View {
                             Text(d.name ?? L("Device")) + Text(d.current == true ? "  " + L("This Mac") : "").foregroundColor(.secondary)
                             Hint(
                                 [
-                                    platform(d.platform),
+                                    devicePlatformName(d),
                                     d.lastSeen.map {
                                         L(
                                             "last used %@",
@@ -1092,14 +1092,16 @@ struct DevicesView: View {
             Button(L("Add a device…")) { Task { await setup.newPairCode() } }.disabled(setup.busy)
         }
     }
+}
 
-    private func platform(_ p: String?) -> String? {
-        switch p {
-        case "android": "Android"
-        case "mac": "Mac"
-        case "ios": "iPhone"
-        default: nil
-        }
+/// "Android", "iPhone": product names, the same in every language.
+func devicePlatformName(_ d: Device) -> String? {
+    if d.watch == true { return "Apple Watch" }
+    return switch d.platform {
+    case "android": "Android"
+    case "mac": "Mac"
+    case "ios": "iPhone"
+    default: nil
     }
 }
 

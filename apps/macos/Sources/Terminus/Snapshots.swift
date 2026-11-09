@@ -375,6 +375,9 @@
                 Device(
                     id: "b", name: "Google Pixel 8", platform: "android", lastSeen: (Date().timeIntervalSince1970 - 7200) * 1000,
                     current: false),
+                Device(
+                    id: "c", name: "Apple Watch", platform: "ios", watch: true, lastSeen: (Date().timeIntervalSince1970 - 600) * 1000,
+                    current: false),
             ]
             let app = AppModel(snapshot: true)
             var views: [(String, AnyView)] = (0..<4).map {
