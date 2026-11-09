@@ -20,6 +20,9 @@ final class StoreShotsUITests: XCTestCase {
         stubPost("/__stub/freeze")
         stubPost("/__stub/at?t=2026-10-09T01:26:00Z")
         stubPost("/__stub/class?in=34")
+        // capture.sh's TURN=1: the iPad on its side; upright otherwise, so a
+        // turned simulator doesn't stay turned for the next run.
+        XCUIDevice.shared.orientation = env["STORE_TURN"] == "1" ? .landscapeLeft : .portrait
     }
 
     func place(_ lat: Double, _ lng: Double) {
@@ -41,12 +44,28 @@ final class StoreShotsUITests: XCTestCase {
         app.launchEnvironment["TERMINUS_EMAIL"] = "you@u.nus.edu"
         for (k, v) in extra where k != "at" { app.launchEnvironment[k] = v }
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons.firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(tab(app, 0).waitForExistence(timeout: 15))
         return app
     }
 
+    /// Tab `i` (Now, Stops, Map, Settings): in the tab bar, or in the rail
+    /// beside the page on a wide window (the open Duo), which isn't a tab bar.
+    func tab(_ app: XCUIApplication, _ i: Int) -> XCUIElement {
+        if app.tabBars.buttons.count > i { return app.tabBars.buttons.element(boundBy: i) }
+        let names = lang == "zh" ? ["现在", "车站", "地图", "设置"] : ["Now", "Stops", "Map", "Settings"]
+        return app.buttons[names[i]].firstMatch
+    }
+
     func save(_ file: String, _ target: XCUIApplication) {
-        shot("\(lang)-\(file)", target)
+        // On the open Duo and an iPad on its side, XCUITest's own screenshot
+        // comes out sideways or black: capture.sh (SHOT_DISPLAY) takes it
+        // with simctl instead, when this asks and until the picture is there.
+        guard env["STORE_HOST_SHOT"] == "1", let dir = env["TERMINUS_SHOTS"] else { return shot("\(lang)-\(file)", target) }
+        let png = "\(dir)/\(lang)-\(file).png"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: "\(dir)/\(lang)-\(file).ready", contents: nil)
+        for _ in 0..<60 where !FileManager.default.fileExists(atPath: png) { usleep(500_000) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: png), "capture.sh took no screenshot")
     }
 
     func test1LeaveBy() {
@@ -86,9 +105,20 @@ final class StoreShotsUITests: XCTestCase {
         save("2-widget", springboard)
     }
 
+    /// The big screens' second scene in place of the home screen's widgets:
+    /// Now's Nearby, the buses at the stops around you, as the widget shows.
+    func test2Nearby() {
+        let app = launch(sky: "day")
+        let chip = app.buttons["chip.nearby"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 15))
+        chip.tap()
+        sleep(5)
+        save("2-nearby", app)
+    }
+
     func test3Map() {
         let app = launch(sky: "golden", extra: ["TERMINUS_MAP_SVC": "A1"])
-        app.tabBars.buttons.element(boundBy: 2).tap()
+        tab(app, 2).tap()
         XCTAssertTrue(app.buttons["map.pill.A1"].waitForExistence(timeout: 20))
         let downloading = app.staticTexts.containing(NSPredicate(format: "label CONTAINS '4 MB'")).firstMatch
         for _ in 0..<30 where downloading.exists { sleep(1) }
@@ -101,9 +131,11 @@ final class StoreShotsUITests: XCTestCase {
         setProfile { $0["pinnedStops"] = ["COM3", "UTOWN"] }
         defer { resetProfile() }
         let app = launch(sky: "day")
-        app.tabBars.buttons.element(boundBy: 1).tap()
+        tab(app, 1).tap()
         XCTAssertTrue(
             app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.COM3.'")).firstMatch.waitForExistence(timeout: 15))
+        // Two panes (capture.sh's PANES=1): COM 3 open beside the list, not an empty pane.
+        if env["STORE_WIDE"] == "1" { app.buttons["nearby.COM3"].firstMatch.tap() }
         sleep(3)
         save("4-buses", app)
     }
