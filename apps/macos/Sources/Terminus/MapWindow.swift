@@ -303,7 +303,7 @@ struct MapWindow: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if let campus = map.campus {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: 8) {
                     Pills(campus: campus, selected: map.selected) { map.choose($0) }
                     if let refused = map.refused {
                         StatusChip(text: refused.text).announced(refused.text)
@@ -319,7 +319,10 @@ struct MapWindow: View {
                         StatusChip(text: L("The street map hasn’t downloaded yet. Routes and stops are still available."))
                     }
                 }
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 12)
                 .padding(.top, 12)
+                .frame(maxWidth: .infinity)
             }
         }
         .overlay(alignment: .bottomLeading) {
@@ -423,39 +426,61 @@ extension MapModel.BusStatus {
     }
 }
 
-/// A pill per service: one at a time shows its line and live buses.
+/// A pill per service, in one bar: one at a time shows its line and live buses.
+/// The bar is as wide as its pills, centred; in a window too narrow for them
+/// it runs the width and scrolls inside itself. As the iPhone's.
 private struct Pills: View {
     let campus: CampusMap
     let selected: String?
     let choose: (String) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(campus.services, id: \.self) { svc in
-                    let hex = campus.color(svc)
-                    let c = Color(hex: hex) ?? .gray
-                    let on = svc == selected
-                    Button {
-                        choose(svc)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Circle().fill(on ? inkOn(hex) : c).frame(width: 8, height: 8)
-                            Text(svc).font(.system(size: 12, weight: .semibold))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .foregroundStyle(on ? inkOn(hex) : .primary)
-                        .background(on ? AnyShapeStyle(c) : AnyShapeStyle(.regularMaterial), in: Capsule())
-                        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+        ViewThatFits(in: .horizontal) {
+            row.floatingBar()
+            ScrollView(.horizontal, showsIndicators: false) { row }
+                .clipShape(Capsule())
+                .floatingBar()
+        }
+    }
+
+    private var row: some View {
+        HStack(spacing: 2) {
+            ForEach(campus.services, id: \.self) { svc in
+                let hex = campus.color(svc)
+                let c = Color(hex: hex) ?? .gray
+                let on = svc == selected
+                Button {
+                    choose(svc)
+                } label: {
+                    HStack(spacing: 5) {
+                        Circle().fill(on ? inkOn(hex) : c).frame(width: 8, height: 8)
+                        Text(svc).font(.system(size: 12, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L("%@: show its line and live buses", svc))
-                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .foregroundStyle(on ? inkOn(hex) : .primary)
+                    .background(on ? c : .clear, in: Capsule())
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("map.pill.\(svc)")
+                .accessibilityLabel(L("%@: show its line and live buses", svc))
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 2)
+        }
+        .padding(3)
+    }
+}
+
+extension View {
+    /// The look of what floats over the map: Liquid Glass from macOS 26, the
+    /// window's material before.
+    @ViewBuilder fileprivate func floatingBar() -> some View {
+        if #available(macOS 26, *) {
+            glassEffect(.regular, in: Capsule())
+        } else {
+            background(.regularMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
         }
     }
 }
@@ -538,7 +563,7 @@ extension View {
     }
 }
 
-/// A line of status over the map, under the pills.
+/// A line of status over the map, centred under the pills' bar.
 struct StatusChip: View {
     let text: String
     var busy = false
@@ -550,8 +575,7 @@ struct StatusChip: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(.regularMaterial, in: Capsule())
-        .padding(.horizontal, 12)
+        .floatingBar()
     }
 }
 
