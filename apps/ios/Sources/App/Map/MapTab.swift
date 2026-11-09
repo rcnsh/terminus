@@ -24,6 +24,8 @@ struct MapTab: View {
     @State private var bottom: CGFloat = 800
     /// Location was refused: "Show where you are" offers Settings.
     @State private var locationOff = false
+    /// The tab bar floats along the top (an iPad): the pills' bar tucks under it.
+    @State private var tabsAbove = false
 
     private var active: Bool { onScreen && phase == .active }
     private var dark: Bool { scheme == .dark }
@@ -69,6 +71,13 @@ struct MapTab: View {
             $0.frame(in: .global).maxY
         } action: {
             bottom = $0
+        }
+        // The page's top inset is more than the window's only under a tab bar along the top.
+        .onGeometryChange(for: CGFloat.self) {
+            $0.safeAreaInsets.top
+        } action: { top in
+            let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? top
+            tabsAbove = top > window + 1
         }
         .overlay(alignment: .bottomTrailing) {
             // Under a sheet across the bottom they'd be covered; beside a floating one they stay.
@@ -142,9 +151,9 @@ struct MapTab: View {
 
     // MARK: over the map
 
-    /// The pills, and the status lines under them.
+    /// The pills, in one bar, and the status lines under it, centred over the map.
     private func top(_ campus: CampusMap) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 8) {
             Pills(campus: campus, selected: map.selected) { map.choose($0) }
             Group {
                 if let status = map.busStatus, let svc = map.selected {
@@ -162,9 +171,13 @@ struct MapTab: View {
                     StatusChip(text: L("The street map hasn't downloaded yet. Routes and stops are still available."))
                 }
             }
-            .padding(.horizontal, 12)
+            .multilineTextAlignment(.center)
         }
-        .padding(.top, 8)
+        .padding(.horizontal, 8)
+        // Under the iPad's floating tab bar the page starts 20 points below
+        // it: the bar sits 8 under it instead, as a second tier of the same control.
+        .padding(.top, tabsAbove ? -12 : 8)
+        .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self) {
             $0.frame(in: .global).maxY
         } action: {
@@ -256,47 +269,69 @@ extension View {
     }
 }
 
-/// A pill per service: one at a time shows its line and live buses.
+/// A pill per service, in one bar: one at a time shows its line and live buses.
+/// The bar is as wide as its pills, centred; where they don't fit (a phone) it
+/// runs the width and scrolls inside itself.
 private struct Pills: View {
     let campus: CampusMap
     let selected: String?
     let choose: (String) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(campus.services, id: \.self) { svc in
-                    let hex = campus.color(svc)
-                    let rgb = hexRGB(hex) ?? 0x8A939C
-                    let on = svc == selected
-                    Button {
-                        choose(svc)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Circle().fill(on ? inkOn(rgb) : Color(rgb: rgb)).frame(width: 10, height: 10)
-                            Text(verbatim: svc).font(.subheadline.weight(.semibold))
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 36)
-                        .foregroundStyle(on ? inkOn(rgb) : Color.ink)
-                        .background(on ? AnyShapeStyle(Color(rgb: rgb)) : AnyShapeStyle(Color.surface), in: Capsule())
-                        .overlay(Capsule().strokeBorder(on ? Color.clear : Color.line))
-                        .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
-                        .contentShape(Capsule())
+        ViewThatFits(in: .horizontal) {
+            row.floatingBar()
+            ScrollView(.horizontal, showsIndicators: false) { row }
+                .clipShape(Capsule())
+                .floatingBar()
+        }
+    }
+
+    private var row: some View {
+        HStack(spacing: 0) {
+            ForEach(campus.services, id: \.self) { svc in
+                let hex = campus.color(svc)
+                let rgb = hexRGB(hex) ?? 0x8A939C
+                let on = svc == selected
+                Button {
+                    choose(svc)
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle().fill(on ? inkOn(rgb) : Color(rgb: rgb)).frame(width: 10, height: 10)
+                        Text(verbatim: svc).font(.subheadline.weight(.semibold))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("map.pill.\(svc)")
-                    .accessibilityLabel(L("%@: show its line and live buses", svc))
-                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 36)
+                    .foregroundStyle(on ? inkOn(rgb) : Color.ink)
+                    .background(on ? Color(rgb: rgb) : .clear, in: Capsule())
+                    // The bar's height is the tap's: 44 points, round the 36 drawn.
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("map.pill.\(svc)")
+                .accessibilityLabel(L("%@: show its line and live buses", svc))
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+extension View {
+    /// The floating tab bar's look, for what floats over the map with it:
+    /// Liquid Glass from iOS 26, the bar's material before.
+    @ViewBuilder fileprivate func floatingBar() -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.regular, in: Capsule())
+        } else {
+            background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.line.opacity(0.6), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 1)
         }
     }
 }
 
-/// A line of status over the map, under the pills.
+/// A line of status over the map, centred under the pills' bar.
 private struct StatusChip: View {
     let text: String
     var busy = false
@@ -315,8 +350,7 @@ private struct StatusChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(Color.surface, in: Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+        .floatingBar()
         .accessibilityElement(children: undo == nil ? .combine : .contain)
     }
 }
