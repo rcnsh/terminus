@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// A small band of the hour's sky behind Now's head, as on the phone and
-/// the widgets (SkyDraw): the sky's colours, the hills along its foot with
-/// your stop and your bus on the road, the stars and moon at night. In
-/// always-on, plain black: the screen dims and the sky would only blur.
+/// A band of the hour's sky behind Now's head, as on the phone and the
+/// widgets (SkyDraw): the sky's colours, the hills along its foot with your
+/// stop and your bus on the road, the stars at night. Its top fades into the
+/// screen's background (SkyBackdrop), the same sky behind the clock, so there
+/// is no edge between them. In always-on, plain black: the screen dims and
+/// the sky would only blur.
 struct SkyBand<Content: View>: View {
     let road: Road
     @ViewBuilder var content: (Inks) -> Content
@@ -33,11 +35,35 @@ struct SkyBand<Content: View>: View {
                         if phase.lights { SkyDraw.starsAndMoon(&g, width: size.width, room: max(30, top), alpha: 0.8, moonRoom: 0) }
                         SkyDraw.horizon(&g, size: size, top: top, page: .black, p: p, phase: phase, road: road, scale: scale)
                     }
-                    // Edge to edge, and up behind the clock.
+                    .mask {
+                        LinearGradient(
+                            stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.25)], startPoint: .top,
+                            endPoint: .bottom)
+                    }
+                    // Edge to edge.
                     .padding(.horizontal, -30)
-                    .ignoresSafeArea(edges: .top)
                     .accessibilityHidden(true)
                 }
+        }
+    }
+}
+
+/// The top of the hour's sky as the screen's own background: behind the
+/// clock and the title and into the round corners, where the band's top
+/// fades into it, then down into black behind the steps once the band has
+/// scrolled away. Black in always-on.
+struct SkyBackdrop: View {
+    @Environment(\.isLuminanceReduced) private var dimmed
+
+    var body: some View {
+        if dimmed {
+            Color.black
+        } else {
+            let p = SkyPalette.of(SkyPhase.at(Date()), dark: true)
+            let top = p.sky.first ?? .black
+            LinearGradient(
+                stops: [.init(color: top, location: 0), .init(color: top, location: 0.3), .init(color: .black, location: 0.85)],
+                startPoint: .top, endPoint: .bottom)
         }
     }
 }
