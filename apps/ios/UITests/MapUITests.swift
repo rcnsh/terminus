@@ -86,8 +86,8 @@ final class MapUITests: XCTestCase {
         let close = app.buttons["map.sheet.close"]
         XCTAssertTrue(close.waitForExistence(timeout: 15))
         sleep(3)
-        // The stop sits in the middle of what the pills and the sheet leave uncovered.
-        let top = app.buttons["map.pill.A1"].frame.maxY + 4
+        // The stop sits in the middle of what the pills' bar and the sheet leave uncovered.
+        let top = app.buttons["map.pill.A1"].frame.maxY
         let sheetTop = close.frame.minY - 22
         let y = (top + sheetTop) / 2
         close.tap()

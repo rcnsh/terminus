@@ -114,6 +114,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -478,7 +479,14 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions, home: Flow
             else -> CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
         if (campus != null) {
-            Column(Modifier.onSizeChanged { cover.top = it.height }.statusBarsPadding().padding(top = 8.dp)) {
+            // The pills' bar and the status lines under it, centred over the map.
+            Column(
+                Modifier.fillMaxWidth()
+                    .onSizeChanged { cover.top = it.height }
+                    .statusBarsPadding()
+                    .padding(start = 8.dp, top = 8.dp, end = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Pills(campus, ui.selected, actions.choose)
                 ui.busStatus?.let { BusStatusLine(it, ui.selected.orEmpty()) }
                 // The feed is down: these are where the buses were last seen.
@@ -963,31 +971,42 @@ private fun BusLayers(look: BusLook, slides: Slides, now: LongState, onOpen: (St
     )
 }
 
-/** A pill per service: one at a time shows its line and live buses. */
+/**
+ * A pill per service, in one bar: one at a time shows its line and live buses. The bar is as wide as its pills, centred; where they don't
+ * fit (a phone) it runs the width and scrolls inside itself.
+ */
 @Composable
 private fun Pills(campus: CampusMap, selected: String?, onChoose: (String?) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        for (svc in campus.services) {
-            val c = campus.routes[svc]?.color?.color() ?: Color.Gray
-            val on = svc == selected
-            FilterChip(
-                selected = on,
-                onClick = { onChoose(svc) },
-                label = { Text(svc, fontWeight = FontWeight.SemiBold) },
-                leadingIcon = { Box(Modifier.size(10.dp).background(if (on) inkOn(c) else c, CircleShape)) },
-                colors =
-                    FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        selectedContainerColor = c,
-                        selectedLabelColor = inkOn(c),
-                    ),
-                elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
-            )
+    FloatingBar {
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (svc in campus.services) {
+                val c = campus.routes[svc]?.color?.color() ?: Color.Gray
+                val on = svc == selected
+                FilterChip(
+                    selected = on,
+                    onClick = { onChoose(svc) },
+                    label = { Text(svc, fontWeight = FontWeight.SemiBold) },
+                    leadingIcon = { Box(Modifier.size(10.dp).background(if (on) inkOn(c) else c, CircleShape)) },
+                    shape = CircleShape,
+                    // The bar is their background: only the chosen one is filled.
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            containerColor = Color.Transparent,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            selectedContainerColor = c,
+                            selectedLabelColor = inkOn(c),
+                        ),
+                    border = null,
+                )
+            }
         }
     }
+}
+
+/** What floats over the map with the map's buttons, in their look: the pills' bar and the status lines under it. */
+@Composable
+private fun FloatingBar(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Surface(modifier = modifier, shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp, content = content)
 }
 
 @Composable
@@ -1003,21 +1022,21 @@ private fun BusStatusLine(status: BusStatus, svc: String) {
     StatusChip(text)
 }
 
-/** A line of status over the map, under the pills. */
+/** A line of status over the map, centred under the pills' bar. */
 @Composable
 private fun StatusChip(text: String, busy: Boolean = false) {
-    Surface(
-        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-    ) {
+    FloatingBar(Modifier.padding(top = 8.dp)) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (busy) {
                 CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.size(8.dp))
             }
-            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

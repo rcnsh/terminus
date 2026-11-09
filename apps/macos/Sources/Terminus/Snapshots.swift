@@ -269,7 +269,7 @@
             let view = VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(statuses.enumerated()), id: \.offset) { _, s in StatusChip(text: s.text("D2")) }
             }
-            .padding(.vertical, 12)
+            .padding(12)
             .frame(width: 360, alignment: .leading)
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
                 write(
