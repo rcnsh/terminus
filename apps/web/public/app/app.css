@@ -56,8 +56,9 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 @media (forced-colors: active) {
   .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
   .map-pills .dot, .bt-bus { forced-color-adjust: none; }
-  /* A pill's clear border is the bar's: kept out of sight, chosen or not. */
-  .map-pills button, .map-pills button[aria-pressed="true"] { border-color: Canvas; }
+  /* A pill's clear border is the bar's: kept out of sight, chosen or not.
+     The class twice outranks the pill rules further down the file. */
+  .map-pills.map-pills button, .map-pills.map-pills button[aria-pressed="true"] { border-color: Canvas; }
 }
 /* Elsewhere at the trailing end of the chips' row, worded so it reads as one more place to go, and the search it opens. */
 .app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 7px 14px 7px 10px; }
