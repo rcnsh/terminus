@@ -37,6 +37,9 @@ struct CampusMapView: UIViewRepresentable {
     /// How much of the map the pills (top) and the sheet (bottom, or left
     /// where it floats beside the map) cover, in points.
     let cover: UIEdgeInsets
+    /// The bars the map runs under (the tab bar or home bar, the Duo's status
+    /// bar at the side), in points from its edges: room as `cover` is.
+    let bars: UIEdgeInsets
     /// How far up from the map's foot a sheet floating in its corner reaches (0 with none): it hides only that corner.
     let floating: CGFloat
     /// The tab is on screen and the app active: the buses' slides are drawn only then.
@@ -88,9 +91,10 @@ struct CampusMapView: UIViewRepresentable {
         c.campus = campus
         c.still = still
         c.shown = shown
-        if c.cover != cover || c.floating != floating {
+        if c.cover != cover || c.bars != bars || c.floating != floating {
             let was = c.cover
             c.cover = cover
+            c.bars = bars
             c.floating = floating
             c.coverChanged(from: was)
             // Beside a sheet floating on the left, so the sheet doesn't hide it.
@@ -125,7 +129,12 @@ struct CampusMapView: UIViewRepresentable {
         var shown = true
         var loaded = false
         var cover = UIEdgeInsets.zero
+        var bars = UIEdgeInsets.zero
         var floating: CGFloat = 0
+        /// What's hidden from each edge: what the pills and the sheet cover, and the bars under them.
+        private var room: UIEdgeInsets {
+            UIEdgeInsets(top: cover.top, left: cover.left + bars.left, bottom: cover.bottom + bars.bottom, right: cover.right + bars.right)
+        }
         var applied: (selected: String?, stretch: Bool, bus: String?, stale: Bool)?
 
         private var slides = Slides()
@@ -258,8 +267,8 @@ struct CampusMapView: UIViewRepresentable {
         private func centreBox(_ view: MLNMapView, zoom: Double) -> [Double] {
             // What a sheet hides needn't be over the map (PanLimit.centre).
             PanLimit.centre(
-                width: view.bounds.width, height: view.bounds.height, zoom: zoom, left: Double(cover.left),
-                bottom: Double(cover.bottom + floating))
+                width: view.bounds.width, height: view.bounds.height, zoom: zoom, left: Double(room.left),
+                bottom: Double(room.bottom + floating))
         }
 
         /// How far (in degrees, the larger way) `c` is outside `box`; 0 inside it.
@@ -489,7 +498,7 @@ struct CampusMapView: UIViewRepresentable {
 
         /// Room round what's framed: the pills along the top, the sheet at the bottom or the left.
         private func padding(_ side: CGFloat, _ more: CGFloat = 16) -> UIEdgeInsets {
-            UIEdgeInsets(top: cover.top + more, left: cover.left + side, bottom: cover.bottom + more, right: side)
+            UIEdgeInsets(top: room.top + more, left: room.left + side, bottom: room.bottom + more, right: room.right + side)
         }
 
         /// First view: your nearest stop when you're on campus, otherwise the
@@ -536,10 +545,12 @@ struct CampusMapView: UIViewRepresentable {
             let size = view.bounds.size
             // A sheet across the bottom hides the buttons (MapTab).
             let shown = cover.bottom == 0
-            var covers = [cover]
-            if floating > 0 { covers.append(UIEdgeInsets(top: cover.top, left: 0, bottom: floating, right: 0)) }
+            var covers = [room]
+            if floating > 0 {
+                covers.append(UIEdgeInsets(top: cover.top, left: bars.left, bottom: bars.bottom + floating, right: bars.right))
+            }
             let buttons = shown ? [CGSize(width: Self.buttonsWidth, height: 0), CGSize(width: 0, height: Self.buttonsHeight)] : [.zero]
-            let pads = covers.flatMap { c in buttons.map { LineRoom.padding(cover: c, buttons: $0, in: size) } }
+            let pads = covers.flatMap { c in buttons.map { LineRoom.padding(cover: c, buttons: $0, bars: bars, in: size) } }
             // The fitting camera's zoom counts the padding, but its centre is the line's own: only the zoom is compared.
             let pad = pads.min {
                 view.cameraThatFitsCoordinateBounds(box, edgePadding: $0).altitude
@@ -618,11 +629,11 @@ struct CampusMapView: UIViewRepresentable {
         private func showSheetSpot() {
             guard let view, let spot = map.sheetSpot else { return keepOnMap() }
             let p = view.convert(CLLocationCoordinate2D(latitude: spot.lat, longitude: spot.lon), toPointTo: view)
-            let top = cover.top + 24
-            let bottom = view.bounds.height - cover.bottom - 24
+            let top = room.top + 24
+            let bottom = view.bounds.height - room.bottom - 24
             // A floating sheet hides only its corner.
-            let cornered = p.x < cover.left && p.y > view.bounds.height - floating - 24
-            guard bottom > top, p.y < top || p.y > bottom || cornered || p.x > view.bounds.width else { return keepOnMap() }
+            let cornered = p.x < room.left && p.y > view.bounds.height - bars.bottom - floating - 24
+            guard bottom > top, p.y < top || p.y > bottom || cornered || p.x > view.bounds.width - room.right else { return keepOnMap() }
             centre(on: spot)
         }
 
@@ -636,8 +647,8 @@ struct CampusMapView: UIViewRepresentable {
             // How far above and right of the map's middle the uncovered part's
             // middle is, in points, then in degrees at that zoom (the world is
             // 512 points round at zoom 0, its north-south scale cos(lat) of that).
-            let up = Double(cover.bottom - cover.top) / 2
-            let right = Double(cover.left - cover.right) / 2
+            let up = Double(room.bottom - room.top) / 2
+            let right = Double(room.left - room.right) / 2
             let degrees = 360 / (512 * pow(2, zoom))
             let lat = spot.lat - up * degrees * cos(spot.lat * .pi / 180)
             let lon = spot.lon - right * degrees
@@ -723,18 +734,19 @@ struct CampusMapView: UIViewRepresentable {
 /// The room round a chosen line, as MapLibre padding: under the pills and
 /// their status lines (`cover.top`), beside a sheet floating on the left
 /// (`cover.left`) or above one across the bottom (`cover.bottom`), and clear
-/// of the corner `buttons` (their room to the right, or above the foot).
+/// of the corner `buttons` (their room to the right, or above the foot),
+/// which sit inside the `bars` the map runs under (already in `cover`).
 /// However much is covered, a quarter of each way stays free, so the line is
 /// never fitted into a sliver: as the web's freePadding.
 enum LineRoom {
-    static func padding(cover: UIEdgeInsets, buttons: CGSize, in size: CGSize) -> UIEdgeInsets {
+    static func padding(cover: UIEdgeInsets, buttons: CGSize, bars: UIEdgeInsets = .zero, in size: CGSize) -> UIEdgeInsets {
         var p = UIEdgeInsets(
             top: cover.top + 24,
             left: cover.left > 0 ? cover.left + 24 : 40,
             bottom: cover.bottom > 0 ? cover.bottom + 24 : 40,
-            right: 40)
-        if buttons.width > 0 { p.right = buttons.width + 24 }
-        if buttons.height > 0 { p.bottom = max(p.bottom, buttons.height + 24) }
+            right: cover.right > 0 ? cover.right + 24 : 40)
+        if buttons.width > 0 { p.right = bars.right + buttons.width + 24 }
+        if buttons.height > 0 { p.bottom = max(p.bottom, bars.bottom + buttons.height + 24) }
         let across = size.width * 0.75
         if p.left + p.right > across {
             let k = across / (p.left + p.right)

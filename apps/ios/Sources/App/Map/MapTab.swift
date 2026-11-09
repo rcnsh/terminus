@@ -38,7 +38,8 @@ struct MapTab: View {
             if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: dark, still: reduceMotion,
-                    cover: cover, floating: wide && sheetCover > 0 ? sheetCover + 16 : 0, shown: active,
+                    cover: cover, bars: UIEdgeInsets(top: 0, left: under.leading, bottom: under.bottom, right: under.trailing),
+                    floating: wide && sheetCover > 0 ? sheetCover + 16 : 0, shown: active,
                     drawn: .init(
                         selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet,
                         me: map.me,
@@ -65,9 +66,13 @@ struct MapTab: View {
             if map.campus != nil, map.style != nil {
                 // Behind the clock, the page fading into the map, so the time
                 // and the street names under it don't run into each other.
-                LinearGradient(colors: [Color.page.opacity(0.85), Color.page.opacity(0)], startPoint: .top, endPoint: .bottom)
+                // (A background, so it can reach up past the safe area's top.)
+                Color.clear
                     .frame(height: 8)
-                    .ignoresSafeArea(edges: .top)
+                    .background(alignment: .bottom) {
+                        LinearGradient(colors: [Color.page.opacity(0.85), Color.page.opacity(0)], startPoint: .top, endPoint: .bottom)
+                            .ignoresSafeArea(edges: .top)
+                    }
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -87,15 +92,11 @@ struct MapTab: View {
         }
         .onGeometryChange(for: EdgeInsets.self) {
             $0.safeAreaInsets
-        } action: {
-            under = $0
-        }
-        // The page's top inset is more than the window's only under a tab bar along the top.
-        .onGeometryChange(for: CGFloat.self) {
-            $0.safeAreaInsets.top
-        } action: { top in
-            let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? top
-            tabsAbove = top > window + 1
+        } action: { insets in
+            under = insets
+            // The page's top inset is more than the window's only under a tab bar along the top.
+            let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? insets.top
+            tabsAbove = insets.top > window + 1
         }
         .overlay(alignment: .bottomTrailing) {
             // Under a sheet across the bottom they'd be covered; beside a floating one they stay.
@@ -161,11 +162,10 @@ struct MapTab: View {
     }
 
     /// What the pills and the sheet hide of the map, so a stop it centres on
-    /// is in view: a floating sheet hides its left, one across the bottom its
-    /// foot, and the bars the map runs under their edges.
+    /// is in view: a floating sheet hides its left, one across the bottom its foot.
     private var cover: UIEdgeInsets {
-        guard wide else { return UIEdgeInsets(top: topCover, left: 0, bottom: sheetCover + under.bottom, right: under.trailing) }
-        return UIEdgeInsets(top: topCover, left: sheetCover > 0 ? mapSheetWidth + 16 : 0, bottom: under.bottom, right: under.trailing)
+        guard wide else { return UIEdgeInsets(top: topCover, left: 0, bottom: sheetCover, right: 0) }
+        return UIEdgeInsets(top: topCover, left: sheetCover > 0 ? mapSheetWidth + 16 : 0, bottom: 0, right: 0)
     }
 
     // MARK: over the map

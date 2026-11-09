@@ -488,6 +488,19 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(p == UIEdgeInsets(top: 210, left: 400, bottom: 40, right: 80))
 }
 
+@Test func theButtonsKeepTheirRoomAboveTheBarsTheMapRunsUnder() {
+    // A phone, no sheet: the map runs under the tab bar, and the buttons sit on it.
+    let phone = LineRoom.padding(
+        cover: UIEdgeInsets(top: 120, left: 0, bottom: 83, right: 0), buttons: CGSize(width: 0, height: 114),
+        bars: UIEdgeInsets(top: 0, left: 0, bottom: 83, right: 0), in: CGSize(width: 402, height: 874))
+    #expect(phone == UIEdgeInsets(top: 144, left: 40, bottom: 83 + 114 + 24, right: 40))
+    // The Duo open: its status bar along the right, the buttons inside it.
+    let duo = LineRoom.padding(
+        cover: UIEdgeInsets(top: 60, left: 0, bottom: 20, right: 28), buttons: CGSize(width: 56, height: 0),
+        bars: UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 28), in: CGSize(width: 951, height: 669))
+    #expect(duo == UIEdgeInsets(top: 84, left: 40, bottom: 44, right: 28 + 56 + 24))
+}
+
 @Test func aQuarterOfEachWayStaysFreeHoweverMuchIsCovered() {
     // The sheet up to the pills (UHall's, on a phone): never a sliver of map.
     let size = CGSize(width: 402, height: 874)
