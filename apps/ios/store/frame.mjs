@@ -19,6 +19,22 @@
 //   node apps/ios/store/frame.mjs            # all of them
 //   node apps/ios/store/frame.mjs 3-map      # one, both languages
 //   node apps/ios/store/frame.mjs header     # the product page's header
+//   node apps/ios/store/frame.mjs --device ipad   # the iPad 13" set
+//   node apps/ios/store/frame.mjs --device duo    # the open iPhone Duo set
+//   node apps/ios/store/frame.mjs --device watch  # the Apple Watch set
+//
+// The other sets use the same strip, at App Store Connect's size for each:
+// - the iPad (capture.sh's DEVICE=ipad TURN=1) on its side, 2752×2064, the
+//   headline on one line and the device with no iPhone keys or Dynamic Island;
+// - the open iPhone Duo (DEVICE=duo PANES=1) on its inner display, 2853×2007,
+//   wide as it's held: the iPad's page, but the device drawn as a foldable
+//   iPhone, its titanium band and keys, round corners and the fold down the
+//   middle (the inner display is two outer ones side by side), so the two
+//   sets don't look alike;
+// - the watch (captures/watch, from the watch app on a simulator) at the
+//   Ultra's 422×514, in an Ultra's case under a headline with no line under it.
+// The iPad and the Duo show Nearby in place of the home screen, which only the
+// iPhone's capture has.
 //
 // Draws with Chromium, headless: CHROME if set, else Playwright's download
 // (~/Library/Caches/ms-playwright), else Google Chrome. The Chinese uses the
@@ -31,8 +47,24 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fonts = join(here, '../../web/public/assets/fonts');
-const W = 1320;
-const H = 2868;
+const args = process.argv.slice(2);
+const flag = args.indexOf('--device');
+const DEVICE = flag >= 0 ? args.splice(flag, 2)[1] : 'iphone';
+const DEVICES = {
+  iphone: { w: 1320, h: 2868, dir: '' },
+  ipad: { w: 2752, h: 2064, dir: 'ipad' },
+  duo: { w: 2853, h: 2007, dir: 'duo' },
+  watch: { w: 422, h: 514, dir: 'watch' },
+};
+const DEV = DEVICES[DEVICE];
+if (!DEV) throw new Error(`--device is one of ${Object.keys(DEVICES).join(', ')}`);
+const W = DEV.w;
+const H = DEV.h;
+const WIDE = W > H;
+const PHONE = DEVICE === 'iphone';
+const WATCH = DEVICE === 'watch';
+// A tall page's sizes against the iPhone's (1 on the iPhone itself).
+const U = WIDE ? 1 : W / 1320;
 // The Play set's landscape is drawn for 1080 wide: scaled to this width and
 // lowered to the bottom of the taller page.
 const S = W / 1080;
@@ -41,7 +73,7 @@ const LAND_Y = H - 1920 * S;
 // The words, in the listing's order: the Play set's, so both stores say the
 // same. The headline is two lines, split at "|", so every phone sits at the
 // same height; its part in braces is in the accent colour.
-const SLIDES = [
+const IPHONE_SLIDES = [
   {
     file: '1-leave-by',
     sky: 'dawn',
@@ -78,6 +110,23 @@ const SLIDES = [
     zh: { head: '上车以后，|{一路}都在身边', sub: '在车上：下一站是哪里，什么时候到。' },
   },
 ];
+
+// On the big screens Nearby stands in for the home screen's widgets, in the day's sky.
+const NEARBY = {
+  file: '2-nearby',
+  sky: 'day',
+  en: { head: 'Every bus near you,|{at a glance}', sub: 'The next buses at the stops around you, live.' },
+  zh: { head: '{附近的巴士}，|一眼看清', sub: '你身边每个车站的下一班巴士，实时到站。' },
+};
+// The watch's own five, each a headline alone: there's no room for a line under it.
+const WATCH_SLIDES = [
+  { file: '1-now', sky: 'dawn', en: { head: 'Know when to|{leave for class}' }, zh: { head: '{什么时候出发}，|一看就知道' } },
+  { file: '2-steps', sky: 'day', en: { head: 'Every step,|{on your wrist}' }, zh: { head: '每一步，|{抬手就看到}' } },
+  { file: '3-nearby', sky: 'golden', en: { head: 'Every bus|{near you}' }, zh: { head: '{附近的巴士}，|一眼看清' } },
+  { file: '4-place', sky: 'dusk', en: { head: 'Wherever|{you’re heading}' }, zh: { head: '去哪里，|{都帮你算好}' } },
+  { file: '5-targets', sky: 'night', en: { head: 'Switch with|{one tap}' }, zh: { head: '{轻点一下}，|随时切换' } },
+];
+const SLIDES = PHONE ? IPHONE_SLIDES : WATCH ? WATCH_SLIDES : IPHONE_SLIDES.map((s) => (s.home ? NEARBY : s));
 
 // The skies of apps/web/public/assets/sky.css (light), and night's from the
 // dark one: top to horizon, the far hills, the trees, the city, the ground
@@ -130,11 +179,14 @@ const SKIES = {
 // Where the phones sit, and the iPhone's own proportions at this size: its
 // corners, its bezel and the Dynamic Island, which a simulator's screenshot
 // leaves out.
-const SCREEN_W = 900;
-const SCREEN_H = Math.round((SCREEN_W * H) / W);
-const BEZEL = 20;
-const PHONE_TOP = 600;
-const SCREEN_R = 118;
+// A wide page's device fills the height between the words and the road.
+const ROAD_Y = H - (1920 - 1866) * S;
+const DUO = DEVICE === 'duo';
+const BEZEL = PHONE ? 20 : DUO ? Math.round(W * 0.009) : WIDE ? Math.round(W * 0.014) : 16;
+const PHONE_TOP = PHONE ? 600 : WIDE ? Math.round(H * 0.215) : 96;
+const SCREEN_H = PHONE ? Math.round((900 * H) / W) : Math.round(ROAD_Y - (WATCH ? 34 : 60) - PHONE_TOP - 2 * BEZEL);
+const SCREEN_W = PHONE ? 900 : Math.round((SCREEN_H * W) / H);
+const SCREEN_R = PHONE ? 118 : Math.round(SCREEN_W * (DUO ? 0.065 : WIDE ? 0.022 : 0.2));
 const K = SCREEN_W / W;
 
 // The home screen's capture (both languages lay it out alike): the two
@@ -180,7 +232,8 @@ function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = tru
   const col = (x, key, k) => { const [i, t] = at(x); const a = k === undefined ? P[i][key] : P[i][key][k], b = k === undefined ? P[i + 1][key] : P[i + 1][key][k]; return mix(a, b, t); };
   const dark = (x) => { const [i, t] = at(x); return (P[i].dark ? 1 : 0) * (1 - t) + (P[i + 1].dark ? 1 : 0) * t; };
   // The sky, in strips, its horizon where the landscape's is.
-  const stops = [0, 0.35, 0.62, 0.8].map((o) => o === 0 ? 0 : (o * H * S + LAND_Y) / DH);
+  // On a wide page the landscape starts above the page's top, so the higher stops are clamped to it.
+  const stops = [0, 0.35, 0.62, 0.8].map((o) => o === 0 ? 0 : Math.max(0, (o * H * S + LAND_Y) / DH));
   for (let x = 0; x < DW * N; x += 4) {
     const gr = g.createLinearGradient(0, 0, 0, DH);
     stops.forEach((o, k) => gr.addColorStop(o, col((x + 2) / S, 's', k)));
@@ -192,12 +245,12 @@ function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = tru
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let n = 0; n < 640; n++) {
     const x = rnd() * DW * N, y = rnd() * (1380 * S + LAND_Y), local = x % DW;
-    const words = CLEAR && y > 80 && y < 540 && local > 60 && local < DW - 60;
+    const words = CLEAR && y > ${80 * U} && y < ${540 * U} && local > ${60 * U} && local < DW - ${60 * U};
     const phone = CLEAR && y > ${PHONE_TOP - 40} && local > ${(W - SCREEN_W) / 2 - BEZEL - 40} && local < ${(W + SCREEN_W) / 2 + BEZEL + 40};
     const a = dark(x / S) * (0.35 + rnd() * 0.6);
     if (words || phone || a < 0.05) continue;
     g.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')';
-    g.beginPath(); g.arc(x, y, rnd() < 0.15 ? 3.4 : 2.1, 0, 7); g.fill();
+    g.beginPath(); g.arc(x, y, (rnd() < 0.15 ? 3.4 : 2.1) * ${Math.max(U, 0.45)}, 0, 7); g.fill();
   }
   // From here on, the Play set's landscape in its own units.
   g.setTransform(S, 0, 0, S, 0, LAND_Y);
@@ -311,10 +364,13 @@ function homeScreen(shot, time) {
 
 /** "Know when to|{leave for class}": two lines, the braces' part in the accent colour. */
 function head(text) {
-  return text
-    .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
-    .replace(/\{(.+?)\}/, '<em>$1</em>')
-    .replace('|', '<br>');
+  return (
+    text
+      .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
+      .replace(/\{(.+?)\}/, '<em>$1</em>')
+      // On one line, the Chinese needs nothing after its full-width comma.
+      .replace('|', WIDE ? (/[，、]\|/.test(text) ? '' : ' ') : '<br>')
+  );
 }
 
 function page(index, lang) {
@@ -329,14 +385,21 @@ function page(index, lang) {
   const body = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Inter', sans-serif`;
   // Every slide's phone, in the middle of its own fifth of the strip.
   const phones = SLIDES.map((s, i) => {
-    const shot = join(here, 'captures', lang, `${s.file}.png`);
+    const shot = join(here, 'captures', DEV.dir, lang, `${s.file}.png`);
     const time = s.home ? readFileSync(join(here, 'captures', lang, `${s.file}.time`), 'utf8').trim() : '';
-    const cover = s.hide
-      ? `<div style="position:absolute;left:0;right:0;top:${s.hide.y * K}px;height:${s.hide.h * K}px;background:${s.hide.colour}"></div>`
-      : '';
+    // The cover is placed for the iPhone's capture.
+    const cover =
+      s.hide && PHONE
+        ? `<div style="position:absolute;left:0;right:0;top:${s.hide.y * K}px;height:${s.hide.h * K}px;background:${s.hide.colour}"></div>`
+        : '';
     const screen = s.home ? homeScreen(shot, time) : `<img src="${pathToFileURL(shot)}">${cover}`;
     const left = i * W + W / 2 - SCREEN_W / 2 - BEZEL;
-    return `<div class="phone" style="left:${left}px"><div class="screen">${screen}</div></div>`;
+    // The watch's band, drawn first so the case sits on it.
+    const band = WATCH
+      ? `<i class="strap up" style="left:${left + BEZEL + SCREEN_W * 0.11}px"></i><i class="strap down" style="left:${left + BEZEL + SCREEN_W * 0.11}px"></i>`
+      : '';
+    const parts = PHONE ? '' : DUO ? '<i class="hinge top"></i><i class="hinge bottom"></i>' : '<i class="cam"></i>';
+    return `${band}<div class="phone" style="left:${left}px">${parts}<div class="screen">${screen}</div></div>`;
   }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @font-face { font-family: 'Space Grotesk'; font-weight: 300 700; src: url('${pathToFileURL(join(fonts, 'space-grotesk-latin.woff2'))}') format('woff2'); }
@@ -363,11 +426,67 @@ function page(index, lang) {
     .home .sys { display: flex; gap: 14px; align-items: center; }
     .home .label { position: absolute; width: 300px; text-align: center; color: #fff; font: 500 36px -apple-system, 'SF Pro Text', sans-serif; text-shadow: 0 1px 4px rgba(0,0,0,0.35); }
     .home .pill { position: absolute; left: 50%; bottom: 24px; width: 420px; height: 15px; margin-left: -210px; border-radius: 8px; background: rgba(255,255,255,0.9); }
+    ${PHONE ? '' : WATCH ? watchStyle(zh) : wideStyle(zh) + (DUO ? duoStyle() : '')}
   </style></head><body>
     <div class="world"><canvas id="pano" width="${W * SLIDES.length}" height="${H}"></canvas>${phones}</div>
-    <div class="words"><h1>${head(words.head)}</h1><p>${words.sub}</p></div>
+    <div class="words"><h1>${head(words.head)}</h1>${words.sub ? `<p>${words.sub}</p>` : ''}</div>
     <script>${panoramaScript()}</script>
   </body></html>`;
+}
+
+/**
+ * A wide page's differences: the headline on one line, smaller against the
+ * width; the device with no iPhone keys or Dynamic Island, and its front
+ * camera in the middle of the iPad's long edge (the Duo has hinges instead).
+ */
+function wideStyle(zh) {
+  const cam = `left: 50%; margin-left: -${Math.round(BEZEL * 0.17)}px;`;
+  return `
+    .words { top: 96px; left: 120px; right: 120px; }
+    h1 { font-size: ${zh ? 122 : 128}px; }
+    p { font-size: ${zh ? 52 : 54}px; margin-top: 22px; max-width: none; }
+    .phone::before, .phone::after, .screen::after { content: none; }
+    .phone .cam { position: absolute; top: ${Math.round(BEZEL * 0.42)}px; ${cam} width: ${Math.round(BEZEL * 0.34)}px; height: ${Math.round(BEZEL * 0.34)}px; border-radius: 50%; background: #0b0b12; box-shadow: 0 0 0 2px #2a2a30; }`;
+}
+
+/**
+ * The open Duo over the wide page's plain device: the iPhone's titanium band
+ * with its keys along the top edge, as an iPhone held on its side has them,
+ * and the fold down the middle of the screen, with the hinge's notches in
+ * the band above and below it. No camera dot: the status bar sits there.
+ */
+function duoStyle() {
+  const key = Math.round(BEZEL * 0.45);
+  const band = Math.round(BEZEL * 0.18);
+  return `
+    .phone { background: linear-gradient(145deg, #4a4a4f, #151517 40%, #2c2c30); box-shadow: 0 0 0 ${band}px #5a5a60 inset, 0 0 0 ${band * 2}px #0d0d0f inset, 0 ${Math.round(H * 0.03)}px ${Math.round(H * 0.055)}px rgba(10,12,30,0.35), 0 ${Math.round(H * 0.007)}px ${Math.round(H * 0.018)}px rgba(10,12,30,0.22); }
+    .phone::before, .phone::after { content: ''; position: absolute; height: ${key}px; width: auto; background: linear-gradient(0deg, #2a2a2e, #4a4a50); }
+    .phone::before { top: -${key - 2}px; left: ${Math.round(SCREEN_W * 0.12)}px; width: ${Math.round(SCREEN_W * 0.045)}px; border-radius: 4px 4px 0 0; box-shadow: ${Math.round(SCREEN_W * 0.075)}px 0 0 0 #3a3a3f, ${Math.round(SCREEN_W * 0.15)}px 0 0 0 #3a3a3f; }
+    .phone::after { top: -${key - 2}px; right: ${Math.round(SCREEN_W * 0.14)}px; width: ${Math.round(SCREEN_W * 0.11)}px; border-radius: 4px 4px 0 0; }
+    .screen::before { content: ''; position: absolute; z-index: 2; top: 0; bottom: 0; left: 50%; width: ${Math.round(SCREEN_W * 0.012)}px; margin-left: -${Math.round(SCREEN_W * 0.006)}px; background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.07) 40%, rgba(255,255,255,0.12) 60%, rgba(0,0,0,0)); }
+    .phone .hinge { position: absolute; left: 50%; width: ${Math.round(BEZEL * 0.9)}px; margin-left: -${Math.round(BEZEL * 0.45)}px; height: ${band * 2}px; background: #0b0b0d; }
+    .phone .hinge.top { top: 0; }
+    .phone .hinge.bottom { bottom: 0; }`;
+}
+
+/**
+ * An Apple Watch Ultra: a dark titanium case, the Digital Crown and side
+ * button on the right, the orange Action button on the left, and the band
+ * fading into the page below, and just above, clear of the headline.
+ */
+function watchStyle(zh) {
+  const caseH = SCREEN_H + 2 * BEZEL;
+  return `
+    .words { top: 14px; left: 8px; right: 8px; }
+    h1 { font-size: ${zh ? 27 : 29}px; line-height: 1.1; letter-spacing: ${zh ? '0.01em' : '-0.02em'}; }
+    .phone { background: linear-gradient(145deg, #4a4a4f, #151517 45%, #2c2c30); box-shadow: 0 0 0 1.5px #6a6a70 inset, 0 0 0 4px #0b0b0d inset, 0 18px 30px rgba(10,12,30,0.35), 0 5px 12px rgba(10,12,30,0.25); }
+    .phone::before { left: auto; right: -9px; top: ${Math.round(caseH * 0.24)}px; width: 10px; height: 36px; border-radius: 3px; box-shadow: none; background: repeating-linear-gradient(0deg, #8a8a90 0 2px, #55555a 2px 4px); }
+    .phone::after { right: -5px; top: ${Math.round(caseH * 0.56)}px; width: 5px; height: 50px; border-radius: 0 3px 3px 0; }
+    .screen::after { content: none; }
+    .phone .cam { position: absolute; left: -5px; top: ${Math.round(caseH * 0.3)}px; width: 5px; height: 40px; border-radius: 3px 0 0 3px; background: #f26b1d; }
+    .strap { position: absolute; width: ${Math.round(SCREEN_W * 0.78)}px; height: 130px; background: #24232a; }
+    .strap.up { top: ${PHONE_TOP - 16}px; height: 36px; -webkit-mask-image: linear-gradient(to top, #000 50%, transparent); }
+    .strap.down { top: ${PHONE_TOP + caseH - 20}px; -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent); }`;
 }
 
 // The product page's header (App Store Connect's 3840×1646): the same strip
@@ -412,7 +531,7 @@ function chrome() {
   throw new Error('no Chromium: set CHROME to one');
 }
 
-const only = process.argv[2];
+const only = args[0];
 const bin = chrome();
 const tmp = mkdtempSync(join(tmpdir(), 'terminus-frames-'));
 function shoot(html, out, w, h) {
@@ -434,15 +553,19 @@ function shoot(html, out, w, h) {
   console.log(`wrote ${out}`);
 }
 try {
-  if (!only || only === 'header') {
+  if ((!only || only === 'header') && DEVICE === 'iphone') {
     const html = join(tmp, 'header.html');
     writeFileSync(html, headerPage());
     shoot(html, join(here, 'header.png'), HEADER.w, HEADER.h);
   }
+  if (only && only !== 'header' && !SLIDES.some((s) => s.file === only)) {
+    throw new Error(`no slide ${only} for ${DEVICE}: ${SLIDES.map((s) => s.file).join(', ')}`);
+  }
+  if (only === 'header' && DEVICE !== 'iphone') throw new Error('the header is drawn with the iPhone set only');
   SLIDES.forEach((slide, index) => {
     if (only && slide.file !== only) return;
     for (const lang of ['en', 'zh']) {
-      const outDir = join(here, 'screenshots', lang === 'en' ? '' : 'zh');
+      const outDir = join(here, 'screenshots', DEV.dir, lang === 'en' ? '' : 'zh');
       mkdirSync(outDir, { recursive: true });
       const html = join(tmp, `${lang}-${slide.file}.html`);
       writeFileSync(html, page(index, lang));
