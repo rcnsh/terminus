@@ -202,6 +202,7 @@ dependencies {
     runtimeOnly(libs.maplibre.compose.runtime)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.androidx.fragment)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 
