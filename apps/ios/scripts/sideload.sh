@@ -40,9 +40,15 @@ if [ "${1:-}" = --ipa ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>com.apple.security.application-groups</key><array><string>$GROUP</string></array></dict></plist>
 EOF
-  # Inside out: frameworks, then the extensions, then the app.
+  # Inside out: frameworks, then the extensions, the watch app (its
+  # complications first), then the app.
   for f in "$APP"/Frameworks/*.framework; do [ -e "$f" ] && codesign -f -s - "$f"; done
   for x in "$APP"/PlugIns/*.appex; do codesign -f -s - --entitlements "$ENT" "$x"; done
+  for w in "$APP"/Watch/*.app; do
+    [ -e "$w" ] || continue
+    for x in "$w"/PlugIns/*.appex; do [ -e "$x" ] && codesign -f -s - --entitlements "$ENT" "$x"; done
+    codesign -f -s - --entitlements "$ENT" "$w"
+  done
   codesign -f -s - --entitlements "$ENT" "$APP"
   rm -rf "$OUT/Payload" && mkdir "$OUT/Payload" && cp -R "$APP" "$OUT/Payload/"
   IPA="$OUT/terminus-$VERSION.ipa"

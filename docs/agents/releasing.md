@@ -124,9 +124,17 @@ release.
       -derivedDataPath build/dd-release DEVELOPMENT_TEAM=BUKSCHP3SV
       -allowProvisioningUpdates archive`.
     - Check the archive's entitlements (`codesign -d --entitlements -` on
-      `Terminus.app` and each `PlugIns/*.appex`): the app group in all
-      three, and push, Time Sensitive and `applinks:terminus.run` in the
-      app. Never archive with `CODE_SIGNING_ALLOWED=NO`: the export then
+      `Terminus.app`, each `PlugIns/*.appex`, `Watch/TerminusWatch.app` and
+      its `PlugIns/TerminusWatchWidgets.appex`): the app group in all five,
+      and push, Time Sensitive and `applinks:terminus.run` in the app.
+    - A new target's App ID gets its capability from automatic signing but
+      not its app group: archiving fails with "doesn't match the
+      entitlements file's value for the com.apple.security.application-groups
+      entitlement" until `group.sh.rcn.terminus` is ticked under the App ID's
+      App Groups in the developer portal (or the target's Signing &
+      Capabilities in Xcode). Then delete its cached profile in
+      `~/Library/Developer/Xcode/UserData/Provisioning Profiles` and archive
+      again. Never archive with `CODE_SIGNING_ALLOWED=NO`: the export then
       signs the app without any of them, and widgets and push break.
     - Upload: `xcodebuild -exportArchive -archivePath
       build/appstore/terminus.xcarchive -exportPath build/appstore/upload
