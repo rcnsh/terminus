@@ -92,6 +92,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
@@ -589,6 +590,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // per bus, and turns with the road).
     val busIcon = remember(color, edge) { BusIcon(Color(color), edge) }
     val ringIcon = remember(ink) { RingIcon(ink) }
+    val stopMark = remember { ColorPainter(Color.Transparent) }
     val busSize = interpolate(linear(), zoom(), 13 to const(0.64f), 17 to const(1f))
     // Where the buses were last seen, not where they are: faded.
     val busOpacity = const(if (ui.busesStale) 0.4f else 1f)
@@ -677,8 +679,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 textSize = interpolate(linear(), zoom(), 15 to const(11.sp), 18 to const(14.sp)),
                 textColor = const(ink),
                 textHaloColor = const(paper),
-                textHaloWidth = const(1.5.dp),
-                // Below the dot, or another side of it when a bus is there.
+                // Wide enough to part the lines it sits on.
+                textHaloWidth = const(2.5.dp),
+                // Below the dot, or another side of it when a bus or another stop is there.
                 textVariableAnchor = const(listOf(SymbolAnchor.Top, SymbolAnchor.Bottom, SymbolAnchor.Right, SymbolAnchor.Left)),
                 textRadialOffset = const(0.9.em),
                 textOptional = const(true),
@@ -686,6 +689,17 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 textOpacity = switch(condition(onRoute, const(1f)), fallback = const(0.4f)),
                 hitPadding = 4.dp,
                 onClick = openNearestStop,
+            )
+            // Each dot again, unseen, for the names to keep off: placed before
+            // them (the higher layer goes first), so no name covers another stop.
+            SymbolLayer(
+                id = "stop-marks",
+                source = stopSource,
+                minZoom = 15f,
+                iconImage = image(stopMark, size = DpSize(16.dp, 16.dp)),
+                iconSize = interpolate(linear(), zoom(), 15 to const(0.6f), 18 to const(1f)),
+                iconAllowOverlap = const(true),
+                iconOpacity = const(0f),
             )
             CircleLayer(id = "me-halo", source = meSource, radius = const(14.dp), color = const(Color(0xFF2B7BF3)), opacity = const(0.18f))
             CircleLayer(
