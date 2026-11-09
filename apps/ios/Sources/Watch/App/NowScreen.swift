@@ -8,6 +8,12 @@ import SwiftUI
 struct NowScreen: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.isLuminanceReduced) private var dimmed
+    /// How tall the band is and how far the page has scrolled: the sky behind
+    /// the clock fades out as the band's black ground comes up to the clock.
+    @State private var band: CGFloat = 160
+    @State private var down: CGFloat = 0
+    /// The room the clock takes at the top, where content fades out as it scrolls under it.
+    @State private var clock: CGFloat = 0
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: dimmed ? 60 : 1)) { _ in
@@ -24,6 +30,11 @@ struct NowScreen: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .accessibilityIdentifier("now.head")
+                            .onGeometryChange(for: CGFloat.self) {
+                                $0.size.height
+                            } action: {
+                                band = $0
+                            }
                             if let e = model.error {
                                 Text(e).font(.footnote).foregroundStyle(Color.warn).padding(.top, 6)
                             }
@@ -34,6 +45,38 @@ struct NowScreen: View {
                         Color.clear.frame(height: 1).id("foot")
                     }
                     .padding(.horizontal, 6)
+                    // Clear of the fade under the clock at rest.
+                    .padding(.top, 10)
+                }
+                .clearUnderClock()
+                .mask {
+                    VStack(spacing: 0) {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0), .init(color: .clear, location: clock / (clock + 12)),
+                                .init(color: .black, location: 1),
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .frame(height: clock + 12)
+                        Color.black
+                    }
+                    .ignoresSafeArea()
+                }
+                .onScrollGeometryChange(for: CGFloat.self) {
+                    $0.contentInsets.top
+                } action: { _, top in
+                    // The bar shrinks as the page scrolls; the fade keeps to where the
+                    // page starts at rest, so rows fade before they reach the title.
+                    clock = max(clock, top)
+                }
+                .onScrollGeometryChange(for: CGFloat.self) {
+                    $0.contentOffset.y + $0.contentInsets.top
+                } action: { _, d in
+                    down = d
+                }
+                .containerBackground(for: .navigation) {
+                    if case .nearby = shows { Color.black } else { SkyBackdrop().opacity(skyLeft).background(.black) }
                 }
                 #if DEBUG
                     .task {
@@ -47,6 +90,14 @@ struct NowScreen: View {
                 #endif
             }
         }
+    }
+
+    /// The sky behind the clock: whole while the band is under it, then fading
+    /// over the band's second half to none as its ground reaches the clock.
+    private var skyLeft: Double {
+        let gone = max(band - SkyBand<EmptyView>.strip, 1)
+        let start = gone * 0.5
+        return min(1, max(0, 1 - Double((down - start) / (gone - start))))
     }
 
     /// Your bus on the road only when it stops for you, as on the phone's horizon.
@@ -100,8 +151,13 @@ struct CardHead: View {
                 let under = [JourneyText.by(a, j, now: now), j.slack].compactMap { $0 }.joined(separator: " · ")
                 if !under.isEmpty { Text(under).font(.footnote).foregroundStyle(a.leaveLate ? inks.late : inks.muted) }
                 if j.live || (!a.isClassPlan && a.card?.crowd != nil) {
-                    HStack(spacing: 4) {
-                        if j.live { SkyPill(text: L("Live"), color: inks.good) }
+                    HStack(spacing: 6) {
+                        if j.live {
+                            HStack(spacing: 3) {
+                                Circle().fill(inks.good).frame(width: 5, height: 5)
+                                SkyPill(text: L("Live"), color: inks.good)
+                            }
+                        }
                         if !a.isClassPlan, let crowd = a.card?.crowd { SkyPill(text: crowd, color: inks.muted) }
                     }
                     .padding(.top, 2)
@@ -191,9 +247,7 @@ struct SkyPill: View {
         Text(text)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(inks.chip ?? color.opacity(0.16), in: Capsule())
+
     }
 }
 
@@ -515,6 +569,17 @@ private struct LocationNotice: View {
                     Button(L("Continue")) { locator.ask() }.accessibilityIdentifier("location.continue")
                 }
             }
+        }
+    }
+}
+
+extension View {
+    /// No system blur under the clock (watchOS 26 and later): the content fades out there instead (NowScreen's mask).
+    @ViewBuilder fileprivate func clearUnderClock() -> some View {
+        if #available(watchOS 26, *) {
+            scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            self
         }
     }
 }
