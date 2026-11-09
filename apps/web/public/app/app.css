@@ -56,6 +56,8 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 @media (forced-colors: active) {
   .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
   .map-pills .dot, .bt-bus { forced-color-adjust: none; }
+  /* A pill's clear border is the bar's: kept out of sight, chosen or not. */
+  .map-pills button, .map-pills button[aria-pressed="true"] { border-color: Canvas; }
 }
 /* Elsewhere at the trailing end of the chips' row, worded so it reads as one more place to go, and the search it opens. */
 .app-chips .chip-search { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 7px 14px 7px 10px; }
@@ -418,30 +420,38 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .map-top {
   position: absolute;
   inset: 0 0 auto 0;
-  padding: max(10px, env(safe-area-inset-top)) 12px 0;
+  padding: max(10px, env(safe-area-inset-top)) 8px 0;
   display: grid;
   gap: 8px;
-  justify-items: start;
+  justify-items: center;
   pointer-events: none;
 }
 .map-top > * { pointer-events: auto; }
-.map-pills { width: 100%; margin: 0; padding-bottom: 2px; }
-/* Edge to edge: scrolled pills go off the screen's edge, not under an inset
-   line 12 px in. They still start 12 px in, lined up with what's below. */
-.map-top > .map-pills { width: calc(100% + 24px); margin: 0 -12px; padding: 4px 0 2px 12px; scroll-padding-inline: 12px; }
+/* The pills in one bar, centred over the map, frosted as the map's own
+   controls are surfaced; where they don't fit (a phone) it runs the width
+   and scrolls inside itself, starting at the first. */
+.map-pills, .map-status {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.14), inset 0 0 0 0.5px var(--line);
+}
+.map-top > .map-pills { max-width: 100%; margin: 0; padding: 0 0 0 4px; gap: 0; border-radius: 999px; scroll-padding-inline: 4px; }
 /* Room after the last pill (end padding in a scrolling row isn't reliable). */
 .map-pills::after { content: ''; flex: none; width: 4px; }
-.map-pills button { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+/* The bar is their background: only the chosen one is filled, inside a
+   clear border that makes the tap the bar's full 44 px. */
+.map-pills button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 3px 8px; border: 4px solid transparent; background: transparent; background-clip: padding-box; font-weight: 600; }
 .map-pills .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--svc); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15); }
-.map-pills button[aria-pressed="true"] { background: var(--svc); border-color: var(--svc); color: var(--svc-ink, #fff); }
+.map-pills button[aria-pressed="true"] { border-color: transparent; background: var(--svc) padding-box; color: var(--svc-ink, #fff); }
 .map-pills button[aria-pressed="true"] .dot { background: currentColor; box-shadow: none; }
 .map-status {
+  max-width: 100%;
   padding: 6px 12px;
   border-radius: 999px;
-  background: var(--surface);
   color: var(--muted);
   font-size: 0.85rem;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
+  text-align: center;
 }
 /* The stops as a list (map.js StopList): seen only while it has the focus. */
 .map-stops { display: flex; gap: 6px; max-width: 100%; }
