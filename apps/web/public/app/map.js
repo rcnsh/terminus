@@ -560,13 +560,29 @@ function addLayers() {
       'text-field': ['get', 'name'],
       'text-font': ['Noto Sans Medium'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 18, 14],
-      // Below the dot, or another side of it when a bus is there.
+      // Below the dot, or another side of it when a bus or another stop is there.
       'text-variable-anchor': ['top', 'bottom', 'right', 'left'],
       'text-radial-offset': 0.9,
       'text-optional': true,
       'text-max-width': 8,
     },
-    paint: { 'text-color': ink, 'text-halo-color': paper, 'text-halo-width': 1.5 },
+    // The halo wide enough to part the lines a name sits on.
+    paint: { 'text-color': ink, 'text-halo-color': paper, 'text-halo-width': 2.5 },
+  });
+  // Each dot again, unseen, for the names to keep off: placed before them
+  // (the higher layer goes first), so no name covers another stop.
+  if (!map.hasImage('stop-mark')) map.addImage('stop-mark', { width: 16, height: 16, data: new Uint8Array(16 * 16 * 4) });
+  map.addLayer({
+    id: 'stop-marks',
+    type: 'symbol',
+    source: 'stops',
+    minzoom: 15,
+    layout: {
+      'icon-image': 'stop-mark',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.6, 18, 1],
+      'icon-allow-overlap': true,
+    },
+    paint: { 'icon-opacity': 0 },
   });
   map.addLayer({
     id: 'me-halo',

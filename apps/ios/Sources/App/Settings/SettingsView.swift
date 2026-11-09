@@ -156,17 +156,24 @@ private struct SettingsList: View {
                     .frame(width: 32, height: 32)
                     .background(Color.brandSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .accessibilityHidden(true)
+                let under = VStack(alignment: .leading, spacing: 2) {
+                    Text(page.title).foregroundStyle(Color.ink)
+                    said
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 if type.isAccessibilitySize || listPane {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(page.title).foregroundStyle(Color.ink)
-                        said
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    under
                 } else {
-                    Text(page.title).foregroundStyle(Color.ink).lineLimit(1).layoutPriority(1)
-                    (said ?? Text(verbatim: ""))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    // Beside the name where it fits whole, else under it, so nothing is cut off.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 14) {
+                            Text(page.title).foregroundStyle(Color.ink).lineLimit(1).layoutPriority(1)
+                            (said ?? Text(verbatim: ""))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        under
+                    }
                 }
                 Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(Color.faint)
             }

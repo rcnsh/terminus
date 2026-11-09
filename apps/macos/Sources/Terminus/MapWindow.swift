@@ -1382,13 +1382,24 @@ struct CampusMapView: NSViewRepresentable {
             names.textFontSize = zoomed(15, 11, 18, 14)
             names.textColor = NSExpression(forConstantValue: ink)
             names.textHaloColor = NSExpression(forConstantValue: paper)
-            names.textHaloWidth = NSExpression(forConstantValue: 1.5)
-            // Below the dot, or another side of it when a bus is there.
+            // Wide enough to part the lines it sits on.
+            names.textHaloWidth = NSExpression(forConstantValue: 2.5)
+            // Below the dot, or another side of it when a bus or another stop is there.
             names.textVariableAnchor = NSExpression(forConstantValue: ["top", "bottom", "right", "left"])
             names.textRadialOffset = NSExpression(forConstantValue: 0.9)
             names.textOptional = NSExpression(forConstantValue: true)
             names.maximumTextWidth = NSExpression(forConstantValue: 8)
             style.addLayer(names)
+            // Each dot again, unseen, for the names to keep off: placed before
+            // them (the higher layer goes first), so no name covers another stop.
+            style.setImage(NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in true }, forName: "stop-mark")
+            let marks = MLNSymbolStyleLayer(identifier: "stop-marks", source: stops)
+            marks.minimumZoomLevel = 15
+            marks.iconImageName = NSExpression(forConstantValue: "stop-mark")
+            marks.iconScale = zoomed(15, 0.6, 18, 1)
+            marks.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            marks.iconOpacity = NSExpression(forConstantValue: 0)
+            style.addLayer(marks)
 
             let halo = MLNCircleStyleLayer(identifier: "me-halo", source: me)
             halo.circleRadius = NSExpression(forConstantValue: 14)

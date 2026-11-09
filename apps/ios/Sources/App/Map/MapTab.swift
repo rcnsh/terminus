@@ -22,6 +22,8 @@ struct MapTab: View {
     @State private var wide = false
     /// Where the map's room ends at the bottom, in the window: a floating sheet's foot is 16 points above it.
     @State private var bottom: CGFloat = 800
+    /// The bars the map runs under at the foot and the side: the tab bar or home bar, the Duo's status bar.
+    @State private var under = EdgeInsets()
     /// Location was refused: "Show where you are" offers Settings.
     @State private var locationOff = false
     /// The tab bar floats along the top (an iPad): the pills' bar tucks under it.
@@ -36,13 +38,16 @@ struct MapTab: View {
             if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: dark, still: reduceMotion,
-                    cover: cover, floating: wide && sheetCover > 0 ? sheetCover + 16 : 0, shown: active,
+                    cover: cover, bars: UIEdgeInsets(top: 0, left: under.leading, bottom: under.bottom, right: under.trailing),
+                    floating: wide && sheetCover > 0 ? sheetCover + 16 : 0, shown: active,
                     drawn: .init(
                         selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet,
                         me: map.me,
                         recentre: map.recentre, focusCount: map.focusCount, locateCount: map.locateCount)
                 )
-                .ignoresSafeArea(edges: .top)
+                // Edge to edge: under the status bar, the tab bar that floats
+                // over it, the home bar, and the Duo's status bar at the side.
+                .ignoresSafeArea()
                 // The stops and buses are reached only by a finger on them. To
                 // VoiceOver it says so, and offers the same as a list.
                 .accessibilityLabel(L("Campus map. For stops and buses as a list, use the Stops tab."))
@@ -58,6 +63,19 @@ struct MapTab: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            if map.campus != nil, map.style != nil {
+                // Behind the clock, the page fading into the map, so the time
+                // and the street names under it don't run into each other.
+                // (A background, so it can reach up past the safe area's top.)
+                Color.clear
+                    .frame(height: 8)
+                    .background(alignment: .bottom) {
+                        LinearGradient(colors: [Color.page.opacity(0.85), Color.page.opacity(0)], startPoint: .top, endPoint: .bottom)
+                            .ignoresSafeArea(edges: .top)
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             if let campus = map.campus {
                 top(campus)
             }
@@ -72,12 +90,13 @@ struct MapTab: View {
         } action: {
             bottom = $0
         }
-        // The page's top inset is more than the window's only under a tab bar along the top.
-        .onGeometryChange(for: CGFloat.self) {
-            $0.safeAreaInsets.top
-        } action: { top in
-            let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? top
-            tabsAbove = top > window + 1
+        .onGeometryChange(for: EdgeInsets.self) {
+            $0.safeAreaInsets
+        } action: { insets in
+            under = insets
+            // The page's top inset is more than the window's only under a tab bar along the top.
+            let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? insets.top
+            tabsAbove = insets.top > window + 1
         }
         .overlay(alignment: .bottomTrailing) {
             // Under a sheet across the bottom they'd be covered; beside a floating one they stay.
@@ -281,6 +300,7 @@ private struct Pills: View {
         ViewThatFits(in: .horizontal) {
             row.floatingBar()
             ScrollView(.horizontal, showsIndicators: false) { row }
+                .fadedEnds()
                 .clipShape(Capsule())
                 .floatingBar()
         }
@@ -317,7 +337,41 @@ private struct Pills: View {
     }
 }
 
+/// The fade for `fadedEnds()`: at the start once scrolled, at the end until
+/// scrolled to it (before iOS 18, which can't tell, at the end always).
+private struct FadedEnds: ViewModifier {
+    @State private var before = false
+    @State private var after = true
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content
+                .onScrollGeometryChange(for: [Bool].self) { g in
+                    [g.contentOffset.x > 1, g.contentOffset.x + g.containerSize.width < g.contentSize.width - 1]
+                } action: { _, ends in
+                    before = ends[0]
+                    after = ends[1]
+                }
+                .mask(fade)
+        } else {
+            content.mask(fade)
+        }
+    }
+
+    private var fade: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [before ? .clear : .black, .black], startPoint: .leading, endPoint: .trailing).frame(width: 28)
+            Color.black
+            LinearGradient(colors: [.black, after ? .clear : .black], startPoint: .leading, endPoint: .trailing).frame(width: 28)
+        }
+    }
+}
+
 extension View {
+    /// A row that scrolls sideways, faded at an end with more past it, so a
+    /// pill cut by the edge reads as more to scroll to rather than cut off.
+    fileprivate func fadedEnds() -> some View { modifier(FadedEnds()) }
+
     /// The floating tab bar's look, for what floats over the map with it:
     /// Liquid Glass from iOS 26, the bar's material before.
     @ViewBuilder fileprivate func floatingBar() -> some View {
