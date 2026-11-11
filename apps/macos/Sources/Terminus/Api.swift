@@ -81,6 +81,8 @@ struct NextAnswer: Decodable {
         let goNow: String?
         let note: String?
         let estimate: String?
+        /// The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's.
+        let fromNus: Bool?
         /// Where the trip is (idle, due, heading, waiting, riding, missed, arrived).
         let phase: String?
         /// "On your way", above the answer. Nil when idle.
@@ -123,7 +125,7 @@ struct NextAnswer: Decodable {
         enum CodingKeys: String, CodingKey {
             case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, late, goNow, note, estimate, phase, phaseText, glance,
                 line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
-            case title, heading, remindAt, journey, ride, gone, step
+            case title, heading, remindAt, journey, ride, gone, step, fromNus
         }
 
         init(from d: Decoder) throws {
@@ -141,6 +143,7 @@ struct NextAnswer: Decodable {
             goNow = s(.goNow)
             note = s(.note)
             estimate = s(.estimate)
+            fromNus = try? c.decodeIfPresent(Bool.self, forKey: .fromNus)
             phase = s(.phase)
             phaseText = s(.phaseText)
             glance = s(.glance)

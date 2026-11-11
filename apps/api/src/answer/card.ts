@@ -257,6 +257,11 @@ export interface Card {
   note: string | null;
   /** Class only, when the leave-by rests on a headway guess. */
   estimate: string | null;
+  /** The journey's bus times are live (`journey.live`) and every bus in it
+   *  is a shuttle, so a report that one never came or was off is about NUS's
+   *  feed: the report sheet says so. Absent for a public bus (LTA), an
+   *  estimate, a kept plan or old reading, no live times or a walk. */
+  fromNus?: true;
 
   /* By where the trip is: every surface picks what fits. */
   /** Where the trip is. 'idle' when there is no trip in progress. */
@@ -380,12 +385,14 @@ export function cardFor(
   // Only on an answer that wanted a live time and has none: the feed may be
   // back before the monitor's next check, and a day with no bus needs none.
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
+  const journey = journeyOf(a, card, h12, trip.phase, nowMs);
   return {
     ...card,
     ...phaseFields(a, card, h12, trip, nowMs),
     notice,
     h12,
-    journey: journeyOf(a, card, h12, trip.phase, nowMs),
+    journey,
+    ...(journey?.live && journey.bus && !journey.bus.paid && !journey.change?.bus.paid ? { fromNus: true as const } : {}),
     upcoming: a.upcoming ?? null,
     step: stepOf(a, card.kind, trip),
     title: titleOf(a, h12),

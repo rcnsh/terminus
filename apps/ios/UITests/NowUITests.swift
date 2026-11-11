@@ -250,6 +250,44 @@ final class NowUITests: XCTestCase {
         app.buttons["report.done"].tap()
     }
 
+    /// On a shuttle's live NUS time (the card's `fromNus`), "Bus never came"
+    /// says those times are NUS's and Send reads "Send anyway"; a reason
+    /// about terminus's own plan doesn't. At a moment the stub has live times.
+    func testReportSaysLiveTimesAreNUSs() {
+        stubPost("/__stub/freeze")
+        stubPost("/__stub/at?t=2026-10-09T01:26:00Z")
+        defer { stubPost("/__stub/reset") }
+        let app = launch(sky: "day")
+        reveal(app.buttons["report"], in: app)
+        app.buttons["report"].tap()
+        let reason = app.buttons["reason.never-came"]
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        reason.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["report.nus"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["report.send"].label, "Send anyway")
+        shot("now-report-nus", app)
+        app.buttons["reason.wrong-stop"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["report.nus"].exists)
+        XCTAssertEqual(app.buttons["report.send"].label, "Send")
+    }
+
+    /// An estimated leave-by is terminus's own: no note that the times are NUS's.
+    func testReportOnAnEstimateSaysNothingOfNUS() {
+        stubPost("/__stub/freeze")
+        stubPost("/__stub/at?t=2026-10-07T02:00:00Z")
+        defer { stubPost("/__stub/reset") }
+        let app = launch(sky: "day")
+        reveal(app.buttons["report"], in: app)
+        app.buttons["report"].tap()
+        let reason = app.buttons["reason.never-came"]
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        // The answer the sheet is about is an estimate: its line says "~".
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '~'")).firstMatch.exists, "not an estimate")
+        reason.tap()
+        XCTAssertFalse(app.descendants(matching: .any)["report.nus"].waitForExistence(timeout: 2))
+        XCTAssertEqual(app.buttons["report.send"].label, "Send")
+    }
+
     /// Without an email the server takes no reports: "Add your email" opens
     /// the email sign-in over Now, which stays where it was.
     func testReportWithoutAnEmailAsksForOne() {

@@ -121,6 +121,8 @@ final class AppModel {
     /// "Is this wrong?": the form is open, the reason picked, what's typed, and how sending went.
     var reporting = false
     var reportReason: String?
+    /// The reported answer's times are NUS's live ones (`card.fromNus`).
+    var reportFromNus = false
     var reportNote = ""
     var reportSending = false
     var reportResult: String?
@@ -842,6 +844,7 @@ final class AppModel {
 
     func startReport() {
         reported = showNearby ? nil : shown?.raw
+        reportFromNus = !showNearby && shown?.card?.fromNus == true
         reportSentLine = shown?.card?.line
         reportReason = nil
         reportNote = ""

@@ -14,6 +14,7 @@ struct ReportSheet: View {
     /// The answer as it was when the sheet opened: what the report is about, whatever refreshes meanwhile.
     @State private var raw: Data?
     @State private var line = ""
+    @State private var fromNus = false
     @FocusState private var noteFocused: Bool
     @Environment(\.windowWidth) private var width
     @ScaledMetric(relativeTo: .body) private var threeLines: CGFloat = 66
@@ -24,6 +25,7 @@ struct ReportSheet: View {
         let a = AppModel.shared.answer
         _raw = State(initialValue: a?.raw)
         _line = State(initialValue: a?.card?.line ?? a?.label ?? "")
+        _fromNus = State(initialValue: a?.card?.fromNus ?? false)
     }
 
     /// The reasons, as /me/feedback takes them (REASONS in the API's feedback.ts).
@@ -33,6 +35,10 @@ struct ReportSheet: View {
             ("walk-longer", L("Walk is longer")), ("wrong-class", L("Wrong class")),
         ]
     }
+
+    /// Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent.
+    private static let nusReasons: Set<String> = ["never-came", "times-off"]
+    private var aboutNus: Bool { fromNus && (reason.map(Self.nusReasons.contains) ?? false) }
 
     var body: some View {
         Group {
@@ -66,6 +72,7 @@ struct ReportSheet: View {
             let a = app.answer
             raw = a?.raw
             line = a?.card?.line ?? a?.label ?? ""
+            fromNus = a?.card?.fromNus ?? false
         }
     }
 
@@ -156,6 +163,26 @@ struct ReportSheet: View {
                     .accessibilityIdentifier("reason.\(key)")
                 }
             }
+            if aboutNus {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L("Bus times come from NUS")).font(.subheadline.weight(.semibold))
+                    Text(
+                        L(
+                            "terminus shows the times NUS's shuttle system gives it. When a bus doesn't come or its time is off, that's usually on NUS's side, and we can't fix it from here."
+                        )
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(Color.muted)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.brandSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityElement(children: .combine)
+                .announced(L("Bus times come from NUS"))
+                .padding(.top, 12)
+                .accessibilityIdentifier("report.nus")
+            }
             TextField(text: $note, prompt: Text(L("What happened? A time or a stop helps.")), axis: .vertical) { Text(L("Your note")) }
                 .lineLimit(3...6)
                 // Asked for its height (a centred sheet sizing itself) it says one line; it draws three.
@@ -176,7 +203,7 @@ struct ReportSheet: View {
             if let failure = app.reportResult {
                 Text(failure).font(.footnote).foregroundStyle(Color.bad).padding(.top, 8).announced(failure)
             }
-            Button(app.reportSending ? L("Sending…") : L("Send")) {
+            Button(app.reportSending ? L("Sending…") : aboutNus ? L("Send anyway") : L("Send")) {
                 noteFocused = false
                 app.report(reason: reason, note: note, answer: raw)
             }

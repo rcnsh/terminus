@@ -1341,7 +1341,9 @@ Settings. It uses the same routes as the account page, with the session cookie.
   `Report`, a modal `<dialog>`): the answer it's about, the reasons as
   chips, a note, and who the reply goes to. It sends to `/api/me/feedback`
   and then says so in the sheet, which is the only confirmation; Android's
-  sheet is the same. Not for Nearby. A stop's name in Nearby opens its board
+  sheet is the same. When the card has `fromNus` (a shuttle's live NUS
+  time, decided in card.ts), picking "Bus never came" or "Times were off"
+  adds a note that those times are NUS's, and Send reads "Send anyway". Not for Nearby. A stop's name in Nearby opens its board
   in the Stops tab, a row its service's line there, and the star on its sign
   pins it. Any other stop is on the Stops tab, from the tab bar.
 - **Stops tab** (app/buses.js). Its home is the search, then the pinned

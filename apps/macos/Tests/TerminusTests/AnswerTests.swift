@@ -780,3 +780,10 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(lesson.dest?.place == nil)
     #expect(lesson.startsAt(try #require(lesson.classAt)).hasPrefix("starts "))
 }
+
+/// "Is this wrong?" says a missed or late bus is NUS's only for a shuttle's live time, which the server decides.
+@Test func theReportSheetKnowsWhenTimesAreNUSs() throws {
+    #expect(try golden("class-late").card?.fromNus == true)
+    #expect(try golden("public-wins").card?.fromNus == nil, "a public bus's times are LTA's")
+    #expect(try golden("scheduled").card?.fromNus == nil, "an estimate is ours")
+}
