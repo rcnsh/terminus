@@ -222,6 +222,8 @@ data class Card(
     val remindAtMs: Long? = null,
     /** "Earlier bus", "Later bus", "Best bus" under the bus; null once you've set off, or with no bus to change. */
     val step: Step? = null,
+    /** The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's. */
+    val fromNus: Boolean = false,
 ) {
     companion object {
         fun parse(o: JSONObject) =
@@ -239,6 +241,7 @@ data class Card(
                 goNow = o.optStringOrNull("goNow"),
                 note = o.optStringOrNull("note"),
                 estimate = o.optStringOrNull("estimate"),
+                fromNus = o.optBoolean("fromNus", false),
                 phase = o.optString("phase", "idle"),
                 phaseText = o.optStringOrNull("phaseText"),
                 glance = o.optStringOrNull("glance"),

@@ -210,6 +210,7 @@
       "backupText": null,
       "summary": "arrive 09:15 · R2 09:06 at PGP"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "4:545:UTOWN",

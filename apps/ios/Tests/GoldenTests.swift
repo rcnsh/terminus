@@ -147,3 +147,11 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     let starts = JourneyText.to(lesson, try #require(lesson.card?.journey))
     #expect(starts.hasPrefix("To GEA1000 @ UTown · starts "), "\(starts)")
 }
+
+/// "Is this wrong?" says a missed or late bus is NUS's only for a shuttle's live time, which the server decides.
+@Test func theReportSheetKnowsWhenTimesAreNUSs() throws {
+    let card = { (name: String) in try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("\(name).json"))).card }
+    #expect(try card("class-late")?.fromNus == true)
+    #expect(try card("public-wins")?.fromNus == false, "a public bus's times are LTA's")
+    #expect(try card("scheduled")?.fromNus == false, "an estimate is ours")
+}

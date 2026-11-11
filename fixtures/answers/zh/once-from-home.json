@@ -201,6 +201,7 @@
       "backupText": null,
       "summary": "12:06 到达 · 在 PGP Foyer 搭 12:03 的 D2"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "4:720:COM3",

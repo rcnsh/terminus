@@ -154,6 +154,7 @@
       "backupText": "Or R2 at ~09:05 from PGP",
       "summary": "D2 09:21 at PGP"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "to:UTOWN",
