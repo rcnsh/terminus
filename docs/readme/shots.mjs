@@ -1,5 +1,5 @@
 // The README's pictures, light and dark, from the real site run by the dev
-// stub: the web app's Now and Buses tabs, and the map with D2 picked. The
+// stub: the web app's Now and Stops tabs, and the map with D2 picked. The
 // banner and the clients picture are composed from them afterwards:
 // node docs/readme/hero.mjs, then sh docs/readme/features.sh
 //
@@ -8,7 +8,9 @@
 // Needs Playwright (PLAYWRIGHT=/path/to/node_modules/playwright if it isn't
 // resolvable from here), a Chromium (CHROME, or Playwright's own) and cwebp.
 // Take it in Singapore's daytime: the stub's class is 50 minutes from the real
-// clock, and the app's sky follows the real hour.
+// clock, and the app's sky follows the real hour. At any other hour, give the
+// stub and the pages one morning to be in, as the store screenshots have:
+//   STUB_NOW=2026-10-09T01:26:00Z CLASS_IN_MIN=34 SHOTS_AT=2026-10-09T01:26:00Z node docs/readme/shots.mjs
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -39,11 +41,19 @@ try {
   await signIn.request.post(`${origin}/api/auth/login`, { data: { email } });
   await until(() => /sign-in code: (\w{6})/.test(out));
   await signIn.request.post(`${origin}/api/auth/code`, { data: { email, code: out.match(/sign-in code: (\w{6})/)[1] } });
+  // Two stops pinned, as in the store's screenshots, so the Stops tab shows a board.
+  const profile = await (await signIn.request.get(`${origin}/api/me/profile`)).json();
+  await signIn.request.put(`${origin}/api/me/profile`, { data: { ...profile, pinnedStops: ['COM3', 'PGP'] } });
   const storageState = await signIn.storageState();
   await signIn.close();
 
   const webp = (png, to) => execFileSync('cwebp', ['-quiet', '-q', '85', png, '-o', join(root, to)]);
-  const shoot = async (scheme, { name, to, viewport, path, signedIn = true, at, act, clip }) => {
+  // A phone's own room under the tab bar (its home indicator's), which a
+  // browser window doesn't have: without it the frames the README draws
+  // round the bar's first and last labels off at their corners.
+  const HOME_ROOM =
+    '.tabbar { padding-bottom: 28px; min-height: calc(var(--tabbar-h) + 28px); } body.app { padding-bottom: calc(var(--tabbar-h) + 28px); }';
+  const shoot = async (scheme, { name, to, viewport, path, signedIn = true, at = process.env.SHOTS_AT, act, clip, css }) => {
     const ctx = await browser.newContext({
       viewport,
       deviceScaleFactor: 2,
@@ -54,6 +64,7 @@ try {
     const page = await ctx.newPage();
     if (at) await page.clock.install({ time: new Date(at) });
     await page.goto(origin + path);
+    if (css) await page.addStyleTag({ content: css });
     await page.waitForTimeout(4000);
     if (act) await act(page);
     const png = join(tmp, `${name}-${scheme}.png`);
@@ -69,8 +80,8 @@ try {
   const phone = { width: 390, height: 844 };
 
   for (const scheme of ['light', 'dark']) {
-    await shoot(scheme, { name: 'now', to: 'docs/readme', viewport: phone, path: '/app/' });
-    await shoot(scheme, { name: 'buses', to: 'docs/readme', viewport: phone, path: '/app/', act: tab('Buses') });
+    await shoot(scheme, { name: 'now', to: 'docs/readme', viewport: phone, path: '/app/', css: HOME_ROOM });
+    await shoot(scheme, { name: 'buses', to: 'docs/readme', viewport: phone, path: '/app/', css: HOME_ROOM, act: tab('Stops') });
     await shoot(scheme, {
       name: 'map',
       to: 'apps/web/public/assets/shots',
