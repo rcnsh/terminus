@@ -724,8 +724,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!restart) return
             loadJob?.cancel()
         }
-        // This load sends its own fix; one waited for by an earlier load is no longer the one on screen.
+        // This load sends its own fix; one waited for by an earlier load, or by Nearby's, is no longer the one on screen.
         refixJob?.cancel()
+        nearbyRefixJob?.cancel()
         loadJob =
             viewModelScope.launch(account) {
                 _state.update { it.copy(loading = true, liveUpdates = store.liveUpdates) }
@@ -813,7 +814,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!restart) return
             nearbyJob?.cancel()
         }
+        // As in [load]: the card's ask again would be for a tab that has left the screen.
         nearbyRefixJob?.cancel()
+        refixJob?.cancel()
         nearbyJob =
             viewModelScope.launch(account) {
                 _state.update { it.copy(nearbyLoading = true) }

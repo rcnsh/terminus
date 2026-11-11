@@ -35,9 +35,9 @@ internal class LocationAsk(
     val recheck: () -> Unit,
 )
 
-/** The location permission as it stands; [onAnswered] runs once Android's dialog has been answered, either way. */
+/** The location permission as it stands; [onAnswered] runs once Android's dialog has been answered, with whether it's now allowed. */
 @Composable
-internal fun rememberLocationAsk(onAnswered: () -> Unit): LocationAsk {
+internal fun rememberLocationAsk(onAnswered: (allowed: Boolean) -> Unit): LocationAsk {
     val ctx = LocalContext.current
     val answered by rememberUpdatedState(onAnswered)
     var allowed by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -47,7 +47,7 @@ internal fun rememberLocationAsk(onAnswered: () -> Unit): LocationAsk {
             allowed = Locator.hasForeground(ctx)
             val activity = ctx as? android.app.Activity
             blocked = !allowed && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
-            answered()
+            answered(allowed)
         }
     return LocationAsk(
         allowed,

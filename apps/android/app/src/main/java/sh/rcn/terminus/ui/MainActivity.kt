@@ -695,6 +695,8 @@ private fun Tabs(
                             // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                             Tab.Now ->
                                 Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                                    // The account's own settings (its clock, language and email), asked for as the app opens.
+                                    LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
                                     MainScreen(state, vm, insets = inner, email = acct.email, onAddEmail = onAddEmail)
                                 }
                             // Edge to edge, as Stops is: its band of the sky reaches the top.

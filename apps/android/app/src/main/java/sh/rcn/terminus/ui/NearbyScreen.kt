@@ -51,7 +51,8 @@ import sh.rcn.terminus.widget.clock
 internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, act: NearbyActions) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val location = rememberLocationAsk { vm.loadNearby(restart = true) }
+    // Allowed: asked again from where you are. Refused, the stops already asked for stand: the server would send the same.
+    val location = rememberLocationAsk { allowed -> if (allowed) vm.loadNearby(restart = true) }
     // Once while the app is open, not each time the tab comes back: refused, the card under the title is the way to allow it.
     var asked by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
