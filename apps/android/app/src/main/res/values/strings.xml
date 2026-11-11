@@ -360,6 +360,9 @@
     <string name="report_wrong_class">Wrong class</string>
     <string name="report_sent_body">We\'ll look at this answer, and reply to %1$s if we need to know more.</string>
     <string name="report_title">What was wrong?</string>
+    <string name="report_nus_title">Bus times come from NUS</string>
+    <string name="report_nus_body">terminus shows the times NUS\'s shuttle system gives it. When a bus doesn\'t come or its time is off, that\'s usually on NUS\'s side, and we can\'t fix it from here.</string>
+    <string name="send_anyway">Send anyway</string>
     <string name="request_expired">That request expired. Send a new one.</string>
     <string name="rest_hint_none">No buses are shown until your day starts. Tap Nearby to check anyway.</string>
     <string name="room_code">Room %1$s</string>

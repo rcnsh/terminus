@@ -275,6 +275,7 @@
       "backupText": "Or go now: R2 at 09:06 from PGP",
       "summary": "arrive 09:55 · K 09:23 at PGP · change at Kent Vale to P"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "4:600:CG",

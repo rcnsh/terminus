@@ -203,6 +203,7 @@
       "backupText": "Or D2 at 09:14 from PGP",
       "summary": "Walk to PGP · A1 09:09"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "place:mrt",

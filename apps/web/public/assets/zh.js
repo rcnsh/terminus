@@ -724,6 +724,10 @@ window.TERMINUS_ZH = {
   'Pause the moving buses': '暂停行驶中的巴士',
   'Bus never came': '车一直没来',
   'Times were off': '时间不准',
+  'Bus times come from NUS': '巴士时间来自 NUS',
+  'terminus shows the times NUS’s shuttle system gives it. When a bus doesn’t come or its time is off, that’s usually on NUS’s side, and we can’t fix it from here.':
+    'terminus 显示的是 NUS 校园巴士系统给出的时间。车没来或时间不准，通常是 NUS 那边的问题，我们这边修不了。',
+  'Send anyway': '仍然发送',
   'Wrong stop': '车站不对',
   'Walk is longer': '步行更久',
   'Wrong class': '课不对',

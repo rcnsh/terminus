@@ -677,4 +677,12 @@ class AnswerTest {
         assertNotNull(broken.card)
         assertNull(broken.card!!.step)
     }
+
+    /** "Is this wrong?" says a missed or late bus is NUS's only for a shuttle's live time, which the server decides. */
+    @Test
+    fun theReportSheetKnowsWhenTimesAreNUSs() {
+        assertTrue(golden("class-late").card!!.fromNus)
+        assertFalse("a public bus's times are LTA's", golden("public-wins").card!!.fromNus)
+        assertFalse("an estimate is ours", golden("scheduled").card!!.fromNus)
+    }
 }

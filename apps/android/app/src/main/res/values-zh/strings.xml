@@ -357,6 +357,9 @@
     <string name="report_wrong_class">课不对</string>
     <string name="report_sent_body">我们会查看这个答案，需要了解更多时会回复到 %1$s。</string>
     <string name="report_title">哪里不对？</string>
+    <string name="report_nus_title">巴士时间来自 NUS</string>
+    <string name="report_nus_body">terminus 显示的是 NUS 校园巴士系统给出的时间。车没来或时间不准，通常是 NUS 那边的问题，我们这边修不了。</string>
+    <string name="send_anyway">仍然发送</string>
     <string name="request_expired">请求已失效。请重新发送。</string>
     <string name="rest_hint_none">在你的一天开始前不显示巴士。仍可点按“附近”查看。</string>
     <string name="room_code">教室 %1$s</string>

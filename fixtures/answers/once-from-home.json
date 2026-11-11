@@ -201,6 +201,7 @@
       "backupText": null,
       "summary": "arrive 12:06 · D2 12:03 at PGP Foyer"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "4:720:COM3",

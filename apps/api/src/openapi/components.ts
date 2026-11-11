@@ -1195,6 +1195,12 @@ export function components(): Record<string, unknown> {
                     type: ['string', 'null'],
                     description: 'Class only: said under a leave-by that rests on the usual gap between buses.',
                   },
+                  fromNus: {
+                    type: 'boolean',
+                    enum: [true],
+                    description:
+                      'The headline bus is a shuttle and its time is NUS’s live one, with a leave-by that is not an estimate. The “Is this wrong?” sheet then says that a bus that never came or times that were off are NUS’s. Absent otherwise: a public bus, an estimate, an old reading, no live times or a walk.',
+                  },
                   phase: {
                     type: 'string',
                     enum: ['idle', 'due', 'heading', 'waiting', 'riding', 'missed', 'arrived'],

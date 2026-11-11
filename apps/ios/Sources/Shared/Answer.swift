@@ -205,13 +205,15 @@ struct Card: Decodable, Sendable {
     let walkTo: WalkTo?
     /// "Earlier bus" and "Later bus" on a trip by bus you haven't set off on; nil otherwise.
     let step: Step?
+    /// The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's.
+    let fromNus: Bool
 
     static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
 
     enum CodingKeys: String, CodingKey {
         case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, catchLine, late, goNow, note, estimate, phase, phaseText,
             glance, line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
-        case title, heading, remindAt, journey, ride, gone, walkTo, step
+        case title, heading, remindAt, journey, ride, gone, walkTo, step, fromNus
     }
 
     init(from d: Decoder) throws {
@@ -229,6 +231,7 @@ struct Card: Decodable, Sendable {
         goNow = c.string(.goNow)
         note = c.string(.note)
         estimate = c.string(.estimate)
+        fromNus = c.bool(.fromNus) ?? false
         phase = c.string(.phase) ?? "idle"
         phaseText = c.string(.phaseText)
         glance = c.string(.glance)

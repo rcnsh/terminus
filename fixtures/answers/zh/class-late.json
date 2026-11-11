@@ -210,6 +210,7 @@
       "backupText": null,
       "summary": "09:15 到达 · 在 PGP 搭 09:06 的 R2"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "4:545:UTOWN",

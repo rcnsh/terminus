@@ -62,6 +62,17 @@
                 ),
                 ("rest", model(nearbyTab: false, resting: true)),
                 (
+                    "report-nus",
+                    {
+                        // "Is this wrong?" with a reason about the bus itself: the note that its times are NUS's.
+                        let m = model(nearbyTab: false)
+                        m.reporting = true
+                        m.reportReason = "never-came"
+                        m.reportFromNus = true
+                        return m
+                    }()
+                ),
+                (
                     "loading",
                     {
                         // Before the first answer: the card's skeleton.

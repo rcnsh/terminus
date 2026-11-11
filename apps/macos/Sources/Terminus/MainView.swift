@@ -213,6 +213,10 @@ struct ReportForm: View {
         ]
     }
 
+    /// Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent.
+    private static let nusReasons: Set<String> = ["never-came", "times-off"]
+    private var aboutNus: Bool { model.reportFromNus && (model.reportReason.map(Self.nusReasons.contains) ?? false) }
+
     private var ready: Bool {
         model.reportReason != nil || !model.reportNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -256,6 +260,24 @@ struct ReportForm: View {
                         .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
+            if aboutNus {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("Bus times come from NUS")).font(.caption.weight(.semibold))
+                    Text(
+                        L(
+                            "terminus shows the times NUS's shuttle system gives it. When a bus doesn't come or its time is off, that's usually on NUS's side, and we can't fix it from here."
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityElement(children: .combine)
+                .announced(L("Bus times come from NUS"))
+            }
             TextField(L("What happened? A time or a stop helps."), text: $model.reportNote, axis: .vertical)
                 .lineLimit(2...4)
                 .textFieldStyle(.roundedBorder)
@@ -267,7 +289,7 @@ struct ReportForm: View {
             HStack {
                 Spacer()
                 Button(L("Cancel")) { model.cancelReport() }.controlSize(.small).keyboardShortcut(.cancelAction)
-                Button(L("Send")) { model.sendReport() }
+                Button(aboutNus ? L("Send anyway") : L("Send")) { model.sendReport() }
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.reportSending || !ready)

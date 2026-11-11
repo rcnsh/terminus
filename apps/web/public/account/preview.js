@@ -429,6 +429,9 @@ export const REPORT_REASONS = [
   ['wrong-class', 'Wrong class'],
 ];
 
+/** Reasons about the bus itself: on an answer with NUS's live times (`card.fromNus`), picking one says they're NUS's before it's sent. */
+const NUS_REASONS = new Set(['never-came', 'times-off']);
+
 /**
  * "Is this wrong?": a link that opens a bottom sheet (a modal dialog) about
  * the answer on screen (`answer`, as it was when the sheet opened: the card
@@ -477,6 +480,7 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
     }
   };
   const line = reported?.card?.line || reported?.label || '';
+  const aboutNus = reported?.card?.fromNus === true && NUS_REASONS.has(reason);
   const body = sent
     ? html`<div class="report-sent">
         <div class="report-tick" aria-hidden="true">✓</div>
@@ -503,6 +507,13 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
               >${t(label)}</button>`,
             )}
           </div>
+          <div role="status">${
+            aboutNus &&
+            html`<div class="report-nus">
+              <strong>${t('Bus times come from NUS')}</strong>
+              <p>${t('terminus shows the times NUS’s shuttle system gives it. When a bus doesn’t come or its time is off, that’s usually on NUS’s side, and we can’t fix it from here.')}</p>
+            </div>`
+          }</div>
           <textarea
             class="report-note"
             rows="3"
@@ -513,7 +524,7 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
             onInput=${(e) => setNote(e.currentTarget.value)}
           ></textarea>
           ${email && html`<p class="hint report-who"><${Fill} text=${t('We’ll reply to {0}. This answer is sent with your report.', MARK)} parts=${[html`<strong>${email}</strong>`]} /></p>`}
-          <button type="submit" class="btn accent report-send" disabled=${!ready}>${sending ? t('Sending…') : t('Send')}</button>
+          <button type="submit" class="btn accent report-send" disabled=${!ready}>${sending ? t('Sending…') : aboutNus ? t('Send anyway') : t('Send')}</button>
           <p class="hint report-error" role="status">${msg}</p>
         </form>`;
   return html`

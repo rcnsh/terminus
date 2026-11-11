@@ -203,6 +203,7 @@
       "backupText": "或在 PGP 搭 09:14 的 D2",
       "summary": "步行到 PGP · 09:09 的 A1"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "place:mrt",

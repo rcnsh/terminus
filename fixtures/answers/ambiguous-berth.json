@@ -163,6 +163,7 @@
       "backupText": "Or D1 at ~09:05 from COM 3",
       "summary": "D2 09:03 at COM 3"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "to:UTOWN",

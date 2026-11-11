@@ -170,6 +170,7 @@
       "backupText": "Or 95 ($) at 09:07 from IT",
       "summary": "A2 09:06 at IT"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT-OPP",
