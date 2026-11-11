@@ -65,7 +65,7 @@ above is for those.
   app: the system's (iPad's tab bar at the top or its sidebar, the
   Duo's side rail), from `TabView` as it is. Android: a
   `NavigationRail` on the leading edge from 600, Material's own
-  threshold, with the same four items and icons as the bar. Web: a rail
+  threshold, with the same five items and icons as the bar. Web: a rail
   on the left edge from 800, icons over labels, in place of the bottom
   bar.
 - **Now.** The sky runs the window's width. Its words (the wordmark,
@@ -80,6 +80,9 @@ above is for those.
   into that 560 column too, so they line up with the card. The search
   ("Elsewhere") sits at the trailing end of the chips' row at every
   width.
+- **Nearby.** The phone layout in the centred 560 column, its band of
+  sky the window's width. It has no pages of its own: a stop or a row
+  opens in the Stops tab's detail pane (ADR 0017).
 - **Stops.** List and detail. The home (search, pinned stops,
   services) in a pane 360 wide on the leading side; the page opened
   from it (a stop, a line, and the pages opened from those) fills the

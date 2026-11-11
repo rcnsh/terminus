@@ -32,7 +32,7 @@ function importsOf(file) {
  * together. When SHELL_FILES changes, bump SHELL in sw.js too (so browsers
  * drop the old copy and its files), then put both here.
  */
-const SHELL_PIN = { shell: 'shell-v23', files: 'd7d676a6580742d1' };
+const SHELL_PIN = { shell: 'shell-v24', files: 'a8a12b8a77f02725' };
 
 test('the list of files kept for offline changes only with a new SHELL', () => {
   const shell = /const SHELL = '([^']+)'/.exec(read('sw.js'))[1];

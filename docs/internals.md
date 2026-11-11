@@ -1254,8 +1254,8 @@ with the domain if the project changes hands.
 ### The web app
 
 `/app/` is terminus as an installable web app, meant for iPhones: the answer
-card, chips for favourites and Nearby, and Today; the campus map; and
-Settings. It uses the same routes as the account page, with the session cookie.
+card, chips for favourites, and Today; Nearby; the Stops tab; the campus
+map; and Settings. It uses the same routes as the account page, with the session cookie.
 
 - **How the pages are built.** Preact components with htm templates
   (`assets/ui.js`, Preact vendored by `scripts/vendor/vendor-preact.sh`), loaded as
@@ -1343,9 +1343,13 @@ Settings. It uses the same routes as the account page, with the session cookie.
   and then says so in the sheet, which is the only confirmation; Android's
   sheet is the same. When the card has `fromNus` (a shuttle's live NUS
   time, decided in card.ts), picking "Bus never came" or "Times were off"
-  adds a note that those times are NUS's, and Send reads "Send anyway". Not for Nearby. A stop's name in Nearby opens its board
-  in the Stops tab, a row its service's line there, and the star on its sign
-  pins it. Any other stop is on the Stops tab, from the tab bar.
+  adds a note that those times are NUS's, and Send reads "Send anyway".
+- **Nearby** (app/app.js `NearbyArea`, ADR 0017). A tab of its own: the
+  stops around you as their signs (`/api/me/nearby`), asked for when the
+  tab opens and every 30 s while it's on screen, never otherwise. A stop's
+  name opens its board in the Stops tab, a row its service's line there,
+  and the star on its sign pins it. Any other stop is on the Stops tab,
+  from the tab bar. Which tab an address opens is `app/tabs.js`.
 - **Stops tab** (app/buses.js). Its home is the search, then the pinned
   stops in one card, a page each, as Nearby's signs (`/api/me/stops`,
   refreshed every 15 s while the home is on screen), then every service in
@@ -1356,7 +1360,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   as tall as the tallest answer so far, or the page on screen when taller; a
   skeleton never holds it open. A stop opens its own page
   (`#buses/stop/<code>`), a service its line (`#buses/line/<svc>/<stop>`).
-  The stops around you aren't here: they're Nearby's (ADR 0014).
+  The stops around you aren't here: they're the Nearby tab's (ADR 0014, 0017).
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`

@@ -711,7 +711,6 @@ window.TERMINUS_ZH = {
   '1 result': '1 个结果',
   '{0} results': '{0} 个结果',
   '{0} · terminus': '{0} · terminus',
-  'Buses near you': '你附近的巴士',
   'Buses near you: {0}': '你附近的巴士：{0}',
   'Tabs': '标签页',
   'Back to {0}': '返回 {0}',

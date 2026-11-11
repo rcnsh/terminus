@@ -24,7 +24,7 @@
 //   background. A changed one replaces it, and the pages are told to read
 //   it again; a 401 there is passed on, as it would have been in front.
 
-const SHELL = 'shell-v23';
+const SHELL = 'shell-v24';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -37,6 +37,7 @@ const SHELL_FILES = [
   '/app/map-files.js',
   '/app/timing.js',
   '/app/pull.js',
+  '/app/tabs.js',
   // The Buses tab too, so it opens offline and says it needs a connection.
   '/app/buses.js',
   '/app/board.js',

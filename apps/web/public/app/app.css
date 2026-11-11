@@ -102,7 +102,7 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .go-later-error { animation: none; } }
 
-/* Nearby: each stop as its sign (app.js NearbyCard). The plate is the
+/* Nearby: each stop as its sign (app.js NearbySigns, sign.js). The plate is the
    sign's inverted colours; under it a row per service, read like a bus
    stop's board: where it's going, its next bus, and the one after. */
 .nearby { display: grid; gap: 12px; }
@@ -141,6 +141,10 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 /* Under the signs, as under a stop's board (.bt-foot). */
 .nb-foot { display: grid; gap: 2px; padding: 0 6px; font-size: 0.8rem; color: var(--muted); }
 .nb-foot p { margin: 0; }
+/* The Nearby tab (app.js NearbyArea): its signs under the band, then when they came. */
+.nb-tab { display: grid; gap: 10px; margin-top: 20px; }
+.nb-tab .hint { margin: 0; padding: 0 6px; }
+.nb-updated { font-size: 0.8rem; }
 /* The stop's name opens its board: a chevron says so, as on the Stops tab's pinned stops. */
 .plate-go { display: inline-block; flex: none; width: 15px; height: 15px; margin-left: 3px; vertical-align: -2px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* The star on a sign's plate: pins the stop to the Stops tab. */
@@ -190,8 +194,8 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 
 /* Its search takes the header's place, as Settings' title does, at the top
    of the sky. */
-body.on-buses > .nav { display: none; }
-.buses-tab { max-width: 560px; padding-bottom: 32px; }
+body.on-buses > .nav, body.on-nearby > .nav { display: none; }
+.buses-tab, .nearby-tab { max-width: 560px; padding-bottom: 32px; }
 
 /* The sky (buses.js Sky), as Settings' band: the search at its top, then
    each page's own sky from the same colour down to its low hills, so the
@@ -203,7 +207,7 @@ body.on-buses > .nav { display: none; }
 .bt-sky-top::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
 .bt-sky { margin: 0 calc(50% - var(--half)); padding: 0 calc(var(--half) - 50%); background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
 /* A page of its own starts the sky itself. */
-.bt-page.alone > .bt-sky, .buses-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
+.bt-page.alone > .bt-sky, .buses-tab > .bt-sky, .nearby-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
 .bt-sky .sky-head { --room: 0px; --moon: 22px; padding-bottom: 2px; }
 /* Stars across the whole sky; the moon low on the right, clear of a long name. */
 .bt-sky .celestial { height: 100%; }
@@ -236,7 +240,7 @@ body.sky .bt-sky-top { --sk: color-mix(in srgb, var(--k-ink) 13%, transparent); 
 
 /* The home (buses.js Home): its title in the sky, then your pinned stops,
    one at a time as Nearby's sign, then every service. */
-.bt-home .bt-top { padding-bottom: 6px; }
+.bt-home .bt-top, .nearby-tab .bt-top { padding-bottom: 6px; }
 .bt-section { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 6px 8px; }
 .bt-section > span { font-size: 0.75rem; color: var(--muted); text-align: right; }
 .bt-star.small { width: 36px; height: 36px; background: none; }
@@ -721,7 +725,7 @@ body.sky #tab-now::before {
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
 body.sky > .nav { position: relative; z-index: 1; }
-body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head {
+body.sky:not(.on-map, .on-settings, .on-buses, .on-nearby) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head {
   --bg: var(--k-bg); --surface: var(--k-surface); --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --faint: var(--k-faint);
   --line: var(--k-line); --line-strong: var(--k-line-strong); --accent: var(--k-accent); --accent-soft: var(--k-accent-soft);
   --good: var(--k-good); --good-ink: var(--k-good); --warn: var(--k-warn); --warn-ink: var(--k-warn); --bad: var(--k-bad); --bad-ink: var(--k-bad);
@@ -730,9 +734,8 @@ body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.
 /* The card's top, with a short room above its words: the card is the
    picture, not the sky. At night the moon is in it. */
 /* A focus ring in the sky's ink: the accent can be under 3:1 on a day sky. */
-body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --focus: var(--k-ink); }
+body.sky:not(.on-map, .on-settings, .on-buses, .on-nearby) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --focus: var(--k-ink); }
 .sky-head { position: relative; isolation: isolate; padding-top: var(--room); --room: 34px; --moon: 28px; }
-.nearby-sky { --room: 26px; --moon: 22px; }
 /* Small words in the accent (a countdown, the trip's phase, when the next
    class is) take its stronger shade: the headline's is for large words. */
 body.sky .sky-head :is(.countdown:not(.gone), .phase, .upcoming .eyebrow) { color: var(--k-accent-small); }
@@ -808,7 +811,7 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 
 /* Less see-through, when the device asks: the glass on the sky solid. */
 @media (prefers-reduced-transparency: reduce) {
-  body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --surface: var(--k-bg); --surface-2: var(--k-bg); --k-chip: var(--k-bg); }
+  body.sky:not(.on-map, .on-settings, .on-buses, .on-nearby) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --surface: var(--k-bg); --surface-2: var(--k-bg); --k-chip: var(--k-bg); }
 }
 
 /* Pull to refresh (pull.js): the sky stretches. The room above the words
@@ -873,7 +876,7 @@ body.sky-dusk .pull .beam, body.sky-night .pull .beam { display: inline; }
 
 /* Wider windows (docs/agents/window-sizes.md, ADR 0015): by the window's
    width alone. Under 600 the phone layout above; from 600 the same in a
-   centred column at most 560 wide (.app-main, .buses-tab); from 800 the
+   centred column at most 560 wide (.app-main, .nearby-tab, .buses-tab); from 800 the
    rail (tabbar.css) and two panes on Now, Stops and Settings. Text,
    controls and cards keep their phone sizes: the room is for what sits
    beside them. */

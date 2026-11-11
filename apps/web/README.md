@@ -8,7 +8,7 @@ everything in `public/`.
 | --- | --- |
 | [`/`](public/index.html) | Landing page |
 | [`/account`](public/account) | Sign in, import your timetable, set home and places, pair devices. Shows a live preview of your widget |
-| [`/app`](public/app) | The installed web app, with four tabs along the bottom: Now (the answer card and today), Buses (what's coming at a stop, and a service's line; `app/buses.js`), the campus map (`app/map.js`) and Settings, each of the last three loaded on first open |
+| [`/app`](public/app) | The installed web app, with five tabs along the bottom: Now (the answer card and today), Nearby (the stops around you), Stops (what's coming at a stop, and a service's line; `app/buses.js`), the campus map (`app/map.js`) and Settings, each of the last three loaded on first open |
 | [`/pair`](public/pair) | Where a pairing QR code lands: opens the app, or shows the code |
 | [`/privacy`](public/privacy) | Privacy summary; the full policy is at [`/privacy/policy`](public/privacy/policy). Each has a Chinese copy in `zh/` |
 | [`/status`](public/status) | Whether NUS's live feed is answering, and recent outages |

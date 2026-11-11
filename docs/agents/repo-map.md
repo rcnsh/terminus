@@ -127,7 +127,8 @@ apps/web/public/
                       (the services' stripes)
   app/                Installed web app: app.js (Now, tabs), buses.js (Stops tab), map.js
                       (Map tab), board.js (a stop's board, shared by both), map-files.js,
-                      offline.js, pull.js (pull to refresh), timing.js (when Now refetches)
+                      offline.js, pull.js (pull to refresh), timing.js (when Now refetches),
+                      tabs.js (the tabs, and which one an address opens)
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
                       each with zh/), not-found/ (the Worker's 404 page). The dashboard's
                       sections link to each other by hash (#/feed) from views.js: moving

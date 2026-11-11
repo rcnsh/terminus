@@ -176,7 +176,7 @@ To get on a bus.
 _Avoid_: board (the verb), take
 
 **Nearby**:
-The boards of the stops closest to where you are.
+The boards of the stops closest to where you are, and the app's tab that shows them (ADR 0017). On the Mac it's a chip in the popover.
 _Avoid_: around me, near you
 
 **Pinned stop**:
@@ -184,7 +184,7 @@ A stop whose board the user keeps on the Stops tab, pinned with the star on its 
 _Avoid_: saved stop, favourite stop
 
 **Stops tab**:
-The app's tab for any stop: the pinned stops' boards, a search for any stop or service, and every service's line. The stops around you are Nearby's, on Now. In code and addresses it keeps the name `buses` (ADR 0014).
+The app's tab for any stop: the pinned stops' boards, a search for any stop or service, and every service's line. The stops around you are the Nearby tab's. In code and addresses it keeps the name `buses` (ADR 0014).
 _Avoid_: Buses tab
 
 ## Your day

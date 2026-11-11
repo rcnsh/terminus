@@ -67,6 +67,7 @@ import {
   staleText,
 } from '/app/timing.js';
 import { PullToRefresh } from '/app/pull.js';
+import { TABS, tabOf } from '/app/tabs.js';
 
 /** How often the timed refresh asks for Today too: it moves slowly, and
  *  each one is an answer per class on the server. */
@@ -78,7 +79,7 @@ const iPhone =
   !/Android/.test(navigator.userAgent) &&
   (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-/** What the card is for: the plan, a favourite (its key), a stop picked on the map or in the search, or the buses nearby. */
+/** What the card is for: the plan, a favourite (its key), or a stop picked on the map or in the search. */
 const target = store({ kind: 'plan' });
 /** The favourites, for their chips: from the last answer, and from the profile as Settings or the map change it. */
 const places = store([]);
@@ -95,8 +96,8 @@ profile.subscribe((p) => {
   if (p && account) keepPinCount(account, (p.pinnedStops ?? []).length);
 });
 /**
- * The card: an answer (`a`), "Checking…" or another line (`text`), the
- * offline plan (`offline`), or Nearby's stops (`nearby`).
+ * The card: an answer (`a`), "Checking…" or another line (`text`), or the
+ * offline plan (`offline`).
  */
 const card = store({ text: t('Checking…'), loading: true });
 /** "Updated 9:41", or "Updating…" while a card already seen is shown again. */
@@ -115,8 +116,15 @@ const removed = store(new Map());
 const undo = store(null);
 /** The search under the chips is open. */
 const searching = store(false);
-/** Now, Stops (`buses`), Map or Settings; null until the first draw. */
+/** Now, Nearby, Stops (`buses`), Map or Settings; null until the first draw. */
 const tab = store(null);
+/**
+ * The Nearby tab: the stops around you (`stops`), "Checking…" before the
+ * first answer (`loading`), or a line saying why there are none (`text`).
+ */
+const nearby = store({ loading: true });
+/** "Updated 9:41" under Nearby's signs. */
+const nearbyUpdated = store('');
 /** app/buses.js, once the Stops tab has been opened. */
 const busesModule = store(null);
 /** app/map.js, once the map has been opened. */
@@ -241,7 +249,7 @@ let lastFix = null;
 /**
  * Where the phone is, only when location is already allowed: the plan then
  * starts from the nearest stop, as in the phone app. Never asks by itself;
- * the Nearby chip does. Null without one.
+ * the Nearby tab does. Null without one.
  */
 async function position({ ask = false } = {}) {
   if (!navigator.geolocation) return null;
@@ -300,7 +308,7 @@ let planAt = 0;
 /** Refreshes on their way: a timed one waits for them rather than piling another on a slow connection. */
 let pending = 0;
 
-/** When the card (or Nearby) last came live from the server, by this device's clock. */
+/** When the card last came live from the server, by this device's clock. */
 let fetchedAt = 0;
 
 /**
@@ -324,7 +332,6 @@ async function refreshNow(timed) {
   // This refresh's answer sets the next mark.
   clearTimeout(markTimer);
   const to = target.get();
-  if (to.kind === 'nearby') return refreshNearby(mine);
   try {
     const { sent, fresh } = await hereSoon();
     if (mine !== generation) return;
@@ -426,12 +433,7 @@ async function drawSeen() {
 /** Shows the card for `to` (a chip tapped, a search result, Go there on the map). */
 function choose(to) {
   target.set(to);
-  if (to.kind === 'nearby') {
-    card.set({ text: t('Checking…'), loading: true });
-    updated.set('');
-  } else {
-    drawSeen();
-  }
+  drawSeen();
   refresh();
 }
 
@@ -458,20 +460,50 @@ function goToStop({ code, name, place }) {
   showTab();
 }
 
-/** Every bus at the stops around you, from the browser's location. */
-async function refreshNearby(mine) {
-  const at = await here({ ask: true });
-  if (mine !== generation) return;
-  if (!at) return card.set({ text: t('Allow location for this site to see the buses near you.') });
+/** Whether Nearby is what the user is looking at: its timed refreshes wait otherwise. */
+const nearbyShown = () => document.visibilityState === 'visible' && tab.get() === 'nearby';
+
+/** Counts Nearby's refreshes: one that finishes after a newer one started is dropped. */
+let nearbyAsked = 0;
+/** Nearby's refreshes on their way: a timed one waits for them, as the card's does. */
+let nearbyPending = 0;
+/** When Nearby last came from the server, by this device's clock; 0 when it shows no signs. */
+let nearbyAt = 0;
+/** How long Nearby's signs stay up while its timed refreshes fail: a few of them. */
+const NEARBY_KEEP_MS = 120_000;
+
+/**
+ * Every bus at the stops around you, from the browser's location, which
+ * this asks for: the Nearby tab is for nothing else. [timed]: by the clock,
+ * so it waits for one already on its way, and one that fails leaves signs
+ * under NEARBY_KEEP_MS old as they are, under the time they came: a missed
+ * refresh (the GPS slow, a tunnel) isn't worth losing them for.
+ */
+async function refreshNearby({ timed = false } = {}) {
+  if (timed && nearbyPending) return;
+  const mine = ++nearbyAsked;
+  const none = (text) => {
+    if (timed && nearby.get().stops && Date.now() - nearbyAt < NEARBY_KEEP_MS) return;
+    nearby.set({ text });
+    nearbyUpdated.set('');
+    // Nothing to call fresh: a pull asks again.
+    nearbyAt = 0;
+  };
+  nearbyPending++;
   try {
+    const at = await here({ ask: true });
+    if (mine !== nearbyAsked) return;
+    if (!at) return none(t('Allow location for this site to see the buses near you.'));
     const { data } = await get(`/api/me/nearby${query(at)}`);
-    if (mine !== generation) return;
-    stale(null);
-    fetchedAt = Date.now();
-    updated.set(t('Updated {0}', clock(new Date(serverNow()).toISOString())));
-    card.set(data.stops?.length ? { nearby: data.stops } : { text: t('No campus bus stops near you.') });
+    if (mine !== nearbyAsked) return;
+    if (!data.stops?.length) return none(t('No campus bus stops near you.'));
+    nearbyAt = Date.now();
+    nearby.set({ stops: data.stops });
+    nearbyUpdated.set(t('Updated {0}', clock(new Date(serverNow()).toISOString())));
   } catch (err) {
-    if (err.message !== 'signed out' && mine === generation) card.set({ text: t('Nearby needs a connection.') });
+    if (err.message !== 'signed out' && mine === nearbyAsked) none(t('Nearby needs a connection.'));
+  } finally {
+    nearbyPending--;
   }
 }
 
@@ -486,12 +518,21 @@ async function pullNow() {
   return fetchedAt >= asked ? 'updated' : 'failed';
 }
 
-/** Pulled down on the tab on screen: Now, or Stops once it has loaded. */
+/** Nearby pulled down to refresh, as Now is (pullNow). */
+async function pullNearby() {
+  if (Date.now() - nearbyAt < PULL_FRESH_MS) return 'fresh';
+  const asked = Date.now();
+  await refreshNearby();
+  return nearbyAt >= asked ? 'updated' : 'failed';
+}
+
+/** Pulled down on the tab on screen: Now, Nearby, or Stops once it has loaded. */
 function pullTab() {
   if (tab.get() === 'now') return pullNow();
+  if (tab.get() === 'nearby') return pullNearby();
   return busesModule.get()?.pullRefresh?.() ?? Promise.resolve('failed');
 }
-const pullable = () => tab.get() === 'now' || (tab.get() === 'buses' && Boolean(busesModule.get()?.pullRefresh));
+const pullable = () => tab.get() === 'now' || tab.get() === 'nearby' || (tab.get() === 'buses' && Boolean(busesModule.get()?.pullRefresh));
 
 /** An answer from a card's button or Undo: shown, then everything fetched again so Today and its offline copy follow. */
 function answered(a) {
@@ -565,7 +606,6 @@ async function removeFromToday(it, at, before) {
   refresh();
 }
 
-const TABS = ['now', 'buses', 'map', 'settings'];
 /** Each tab's section, set as they're drawn. */
 const views = {};
 /** Counts switches: a fade that finishes after a newer tap is left to that one. */
@@ -583,6 +623,7 @@ function markTab(next) {
   document.body.classList.toggle('on-map', next === 'map');
   document.body.classList.toggle('on-settings', next === 'settings');
   document.body.classList.toggle('on-buses', next === 'buses');
+  document.body.classList.toggle('on-nearby', next === 'nearby');
 }
 
 /**
@@ -599,14 +640,7 @@ const askMe = () =>
     },
   ));
 
-const tabInAddress = () =>
-  location.hash === '#map'
-    ? 'map'
-    : location.hash.startsWith('#settings')
-      ? 'settings'
-      : location.hash.startsWith('#buses')
-        ? 'buses'
-        : 'now';
+const tabInAddress = () => tabOf(location.hash);
 
 /**
  * Material's fade through, as on the phone: the old tab fades out quickly,
@@ -628,8 +662,7 @@ const fadeOut = (node) =>
   node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
 /**
- * Now, Stops, Map or Settings, from the address (#buses, #buses/line/D1,
- * #map, #settings, #settings/trips),
+ * Now, Nearby, Stops, Map or Settings, from the address (tabs.js tabOf),
  * so Back and a reload keep the tab. The sections are shown and hidden here,
  * not by Preact, so the fade can swap them between its two halves.
  */
@@ -662,6 +695,8 @@ async function showTab() {
     loadTab(busesModule, '/app/buses.js');
   } else if (next === 'settings') {
     openSettings();
+  } else if (next === 'nearby') {
+    refreshNearby();
   } else if (from !== null) {
     // start() refreshes once it has drawn the first tab.
     refresh();
@@ -917,7 +952,7 @@ function InstallHint() {
 const installDismissed = store(false);
 
 /**
- * Next, Nearby, each favourite, then places added from the search: the phone
+ * Next, each favourite, then places added from the search: the phone
  * app's chips, then Elsewhere, which opens the search. In a short window the
  * wordmark leads the row, in place of the header (app.css).
  */
@@ -935,7 +970,6 @@ function Chips() {
     <div class="app-chips" role="group" aria-label=${t('Where to')}>
       ${short && html`<a class="brand" href="/app/"><img src="/assets/mark.svg" alt="" /><span class="wordmark">termi<b>nus</b></span></a>`}
       ${chip(t('Next'), { kind: 'plan' })}
-      ${chip(t('Nearby'), { kind: 'nearby' })}
       ${list.map((p) => chip(p.label, { kind: 'place', key: p.key }))}
       ${extra.map(
         (x) => html`<span class="chip-added" key=${x.to}>
@@ -1032,25 +1066,24 @@ function NearbyFoot({ stops }) {
 }
 
 /**
- * Nearby: the stops around you as their signs, the name plate with the walk
- * there, then a row per service read like a stop's board: where it's going,
- * its next bus and the two after, in minutes, the next one large. Every bus is shown as it comes: Nearby
- * doesn't weigh the walk there. Every sign is the same size. The name opens the stop's board and a row
- * its service's line, both in the Stops tab; the star pins the stop there.
- * Last, the way to the Stops tab, for any other stop.
+ * Nearby's stops as their signs, the name plate with the walk there, then a
+ * row per service read like a stop's board: where it's going, its next bus
+ * and the two after, in minutes, the next one large. Every bus is shown as it
+ * comes: Nearby doesn't weigh the walk there. Every sign is the same size.
+ * The name opens the stop's board and a row its service's line, both in the
+ * Stops tab; the star pins the stop there.
  */
-function NearbyCard({ stops }) {
+function NearbySigns({ stops }) {
   const p = useStore(profile);
   // Until the profile has come, what's pinned isn't known: no star to read wrong, or to unpin with.
-  // Now doesn't need it otherwise, so Nearby asks for it (the account, not the feed).
+  // Nothing else has asked for it when the app opens on Nearby (the account, not the feed).
   useEffect(() => {
     if (!profile.get()) loadProfile().catch(() => {});
   }, []);
   // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
-    <div class="widget nearby">
-      <h2 class="sr-only">${t('Buses near you')}</h2>
+    <div class="nearby">
       <${Say} text=${t('Buses near you: {0}', names)} />
       ${stops.map(
         (s) => html`<${StopSign}
@@ -1066,6 +1099,27 @@ function NearbyCard({ stops }) {
   `;
 }
 
+/**
+ * The Nearby tab (ADR 0017): its title in a band of sky, as Stops has, then
+ * the stops around you as their signs, shapes until the first come, or a
+ * line saying why there are none; under them, when they came.
+ */
+function NearbyArea() {
+  const n = useStore(nearby);
+  const when = useStore(nearbyUpdated);
+  let body;
+  if (n.stops) body = html`<${NearbySigns} stops=${n.stops} />`;
+  else if (n.loading) body = html`<${Skeleton} said=${t('Checking…')} inner="nearby"><${SignSkeleton} /><${SignSkeleton} /><//>`;
+  else body = html`<p class="hint nb-none" role="status">${n.text}</p>`;
+  return html`
+    <div class="bt-sky">
+      <div class="sky-head"><${Celestial} band /><div class="bt-top"><div class="bt-title"><h2 class="bt-head">${t('Nearby')}</h2></div></div></div>
+      <${Horizon} on=${null} low />
+    </div>
+    <div class="nb-tab">${body}${when && html`<p class="hint nb-updated">${when}</p>`}</div>
+  `;
+}
+
 /** A point on the skeleton's line: its time, its dot, and what's there with what's under it, as bars. */
 const SkPoint = ({ dot, line = null, what, below = null }) => html`
   <li class=${['pt', dot, line].filter(Boolean).join(' ')}>
@@ -1078,16 +1132,11 @@ const SkPoint = ({ dot, line = null, what, below = null }) => html`
 /**
  * Now before its first answer, drawn as a trip's card (journey.js Steps):
  * where it's for and the large "Leave in" in the sky, the bus idling on
- * the road, then the bus's line and the trip's three points. For Nearby,
- * its signs. Buttons aren't drawn: nothing there can be pressed yet. Its
+ * the road, then the bus's line and the trip's three points. Buttons
+ * aren't drawn: nothing there can be pressed yet. Its
  * "Checking…" is there to be read, not announced, as the card says itself when it comes.
  */
-function CardSkeleton({ nearby }) {
-  if (nearby) {
-    return html`<div class="sky-head nearby-sky"><${Celestial} /></div>
-      <${Horizon} />
-      <${Skeleton} said=${t('Checking…')} quiet cls="widget" inner="nearby"><${SignSkeleton} /><${SignSkeleton} /><//>`;
-  }
+function CardSkeleton() {
   return html`
     <${Skeleton} said=${t('Checking…')} quiet cls="widget">
       <div class="journey steps sk-card">
@@ -1117,7 +1166,6 @@ function CardSkeleton({ nearby }) {
  */
 function CardArea() {
   const c = useStore(card);
-  const to = useStore(target);
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a =
@@ -1129,11 +1177,9 @@ function CardArea() {
     ? html`<${Card} a=${a} sky onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />`
     : c.offline
       ? html`<${InSky} sky><${OfflineCard} ...${c.offline} /><//>`
-      : c.nearby
-        ? html`<div class="sky-head nearby-sky"><${Celestial} /></div><${Horizon} /><${NearbyCard} stops=${c.nearby} />`
-        : c.loading
-          ? html`<${CardSkeleton} nearby=${to.kind === 'nearby'} />`
-          : html`<${InSky} sky><${Message} text=${c.text} /><//>`;
+      : c.loading
+        ? html`<${CardSkeleton} />`
+        : html`<${InSky} sky><${Message} text=${c.text} /><//>`;
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
@@ -1154,7 +1200,7 @@ function CardFoot() {
   return html`
     <div class="card-foot">
       <div class="updated hint">${when}</div>
-      ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />`}
+      <${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />
     </div>
   `;
 }
@@ -1497,8 +1543,10 @@ function SettingsArea() {
   return html`<${Settings} me=${who} inApp sky Notify=${canNotify ? Notify : null} notifyOn=${notify.on} />`;
 }
 
+/** The tabs' links, in tabs.js TABS' order. Nearby's icon is the arrow a map points where you are with. */
 const TABBAR = [
   { id: 'now', href: '#now', label: () => t('Now'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>' },
+  { id: 'nearby', href: '#nearby', label: () => t('Nearby'), icon: '<path d="M20.5 3.5 3.5 10.6l6.9 3 3 6.9 7.1-17Z"/>' },
   {
     id: 'buses',
     href: '#buses',
@@ -1618,7 +1666,7 @@ function railRoot() {
   return made;
 }
 
-/** The four tabs, shown and hidden by showTab() after the first draw (see there). */
+/** The five tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
@@ -1640,6 +1688,7 @@ function App() {
       ${short && html`<div class="short-notices">${notices}</div>`}
       ${split ? html`<${NowSide} />` : html`<${Today} />`}
     </main>
+    <main id="tab-nearby" class="wrap nearby-tab" hidden=${first !== 'nearby'} ref=${keep('nearby')}><h1 class="sr-only">${t('Nearby')}</h1><${NearbyArea} /></main>
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Stops')}</h1><${BusesArea} /></main>
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
     <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
@@ -1687,9 +1736,13 @@ async function start() {
   await first;
   setInterval(() => nowShown() && refresh({ timed: true }), REFRESH_MS);
   document.addEventListener('visibilitychange', () => nowShown() && refresh({ timed: true, back: true }));
+  // Nearby at the card's pace, and only while it's the tab on screen.
+  setInterval(() => nearbyShown() && refreshNearby({ timed: true }), REFRESH_MS);
+  document.addEventListener('visibilitychange', () => nearbyShown() && refreshNearby());
   // Back online: every open page at once, so only the ones on screen.
   window.addEventListener('online', () => {
     if (nowShown()) refresh();
+    if (nearbyShown()) refreshNearby();
     // A tab whose code failed to load, on screen: try it again.
     if (tab.get() === 'map' && mapModule.get()?.failed) loadTab(mapModule, '/app/map.js');
     if (tab.get() === 'buses' && busesModule.get()?.failed) loadTab(busesModule, '/app/buses.js');

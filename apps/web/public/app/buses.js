@@ -3,8 +3,8 @@
 //
 // Its home is the stops you've pinned, one at a time as Nearby's sign
 // (/api/me/stops), picked by name or swiped, then every service with how
-// many of its buses are out (/api/lines). The stops around you are Nearby's
-// job, on Now. A service tapped on a board opens its line (/api/line), and a
+// many of its buses are out (/api/lines). The stops around you are the Nearby
+// tab's job. A service tapped on a board opens its line (/api/line), and a
 // stop on the line opens its board.
 // Where you are in the tab is in the address (#buses, #buses/stop/YIH,
 // #buses/line/D1/YIH), so Back and a reload keep it. In a wide window the
@@ -884,7 +884,7 @@ const HomeSky = () => html`
 
 /**
  * The home: your pinned stops, one at a time as Nearby shows them, then
- * every service, which opens its line. The stops around you are on Now (Nearby).
+ * every service, which opens its line. The stops around you are the Nearby tab's.
  */
 function Home() {
   const p = useStore(profile);

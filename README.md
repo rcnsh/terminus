@@ -60,7 +60,7 @@ On Android, the web and the Mac (in a window of its own): every bus route in its
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
-It updates through the day and goes quiet in the evening. The app has four tabs: **Now** (the card and your places), **Stops** (your pinned stops, any stop's buses live, and each service's line), **Map** and **Settings**.
+It updates through the day and goes quiet in the evening. The app has five tabs: **Now** (the card and your places), **Nearby** (every bus at the stops around you), **Stops** (your pinned stops, any stop's buses live, and each service's line), **Map** and **Settings**.
 
 <details>
 <summary><b>Installing outside the app stores</b></summary>
