@@ -1,6 +1,6 @@
 // A stop as its sign, as Nearby shows it: the name plate with the walk there
 // and the star, then a row per service read like a stop's board. Shared by
-// Nearby on Now (app.js) and the Stops tab's pinned stops (buses.js), so a
+// the Nearby tab (app.js) and the Stops tab's pinned stops (buses.js), so a
 // stop reads the same in both.
 
 import { Bar, Icon, Skeleton, html, store, useStore, widthOf } from '/assets/ui.js';

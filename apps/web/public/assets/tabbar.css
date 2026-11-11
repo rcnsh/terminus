@@ -1,4 +1,4 @@
-/* The web app's bar along the bottom: Now · Buses · Map · Settings; a rail
+/* The web app's bar along the bottom: Now · Nearby · Stops · Map · Settings; a rail
    down the left edge in a wide window (docs/agents/window-sizes.md). */
 
 /* In rem, so the bar grows with the text in it, and what sits above it (app.css) moves with it.
@@ -34,7 +34,7 @@ body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); 
 .tabbar a:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
 
 
-/* Wide: the same four tabs as a rail on the left edge, icons over labels.
+/* Wide: the same five tabs as a rail on the left edge, icons over labels.
    Nothing sits above a bar any more (--tabbar-h), and the page starts after the rail. */
 @media (min-width: 800px) {
   :root { --tabbar-h: 0px; --rail-w: calc(88px + env(safe-area-inset-left)); }
