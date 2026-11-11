@@ -101,6 +101,9 @@ class MainActivity : ComponentActivity() {
     // Android 12 has no per-app language: the chosen one is applied here (Lang).
     override fun attachBaseContext(base: Context) = super.attachBaseContext(Lang.wrap(base))
 
+    /** The tab a link just asked for ([Tab.ofLink]), until the tabs have gone to it. */
+    private var linkTab by mutableStateOf<Tab?>(null)
+
     /** The dark mode and language the screen was last drawn in, to tell which one changed. */
     private var shown: Configuration? = null
 
@@ -113,7 +116,7 @@ class MainActivity : ComponentActivity() {
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
-        setContent { TerminusTheme { ProvideWindowWidth { App(vm, account, map, buses) } } }
+        setContent { TerminusTheme { ProvideWindowWidth { App(vm, account, map, buses, linkTab) { linkTab = null } } } }
     }
 
     /** A phone stays upright ([Widths.upright]); a tablet or an open foldable turns freely. */
@@ -157,7 +160,7 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
-    /** App shortcuts and notifications open the app on the plan, a place or nearby departures. */
+    /** App shortcuts and notifications open the app on the plan or a place, on Now, or on the Nearby tab. */
     private fun handle(intent: Intent?) {
         // Share in NUSMods, then terminus: the timetable link, to import.
         if (intent?.action == Intent.ACTION_SEND) {
@@ -184,18 +187,22 @@ class MainActivity : ComponentActivity() {
                 }
             id?.let { androidx.core.content.pm.ShortcutManagerCompat.reportShortcutUsed(this, it) }
         }
-        when (data.host) {
-            "plan" -> vm.select(Target.Plan)
-            "place" -> data.lastPathSegment?.let { vm.select(Target.SavedPlace(it)) }
-            "nearby" -> vm.showNearby()
-            // A stop or place looked up, from the widget showing it.
-            // Only from this app's own widgets: another app could otherwise add
-            // places with names of its choosing (the activity is exported).
-            "to" ->
-                if (intent.getStringExtra(EXTRA_KEY) == Store(this).intentKey) {
-                    data.lastPathSegment?.let { vm.select(Target.Code(it, (data.getQueryParameter("label") ?: it).take(MAX_LABEL))) }
-                }
-        }
+        val target =
+            when (data.host) {
+                "plan" -> Target.Plan
+                "place" -> data.lastPathSegment?.let { Target.SavedPlace(it) }
+                // A stop or place looked up, from the widget showing it.
+                // Only from this app's own widgets: another app could otherwise add
+                // places with names of its choosing (the activity is exported).
+                "to" ->
+                    data.lastPathSegment
+                        ?.takeIf { intent.getStringExtra(EXTRA_KEY) == Store(this).intentKey }
+                        ?.let { Target.Code(it, (data.getQueryParameter("label") ?: it).take(MAX_LABEL)) }
+                else -> null
+            }
+        target?.let(vm::select)
+        // Nearby is a tab, which asks for its stops as it opens; a card's link shows it on Now, whichever tab was up.
+        if (target != null || data.host == "nearby") linkTab = Tab.ofLink(data.host)
     }
 
     companion object {
@@ -297,22 +304,29 @@ private enum class Screen {
     Pair,
 }
 
-/** The bottom bar's tabs, once set up. */
-private enum class Tab {
-    Now,
-    Buses,
-    Map,
-    Settings,
-}
-
+/** [linkTab]: the tab a link asked for, gone to here and then [onLinkTab] says so. */
 @Composable
-private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel, buses: BusesViewModel) {
+private fun App(
+    vm: MainViewModel,
+    account: AccountViewModel,
+    map: MapViewModel,
+    buses: BusesViewModel,
+    linkTab: Tab?,
+    onLinkTab: () -> Unit,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val acct by account.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val store = remember { Store(ctx) }
     var screen by rememberSaveable { mutableStateOf(Screen.Main) }
-    var tab by rememberSaveable { mutableStateOf(Tab.Now) }
+    // Opened by a link: on its tab from the first frame, so Now doesn't ask for a card nobody sees.
+    var tab by rememberSaveable { mutableStateOf(linkTab ?: Tab.Now) }
+    LaunchedEffect(linkTab) {
+        if (linkTab != null) {
+            tab = linkTab
+            onLinkTab()
+        }
+    }
     var setup by rememberSaveable { mutableStateOf(store.needsSetup) }
     val signedIn = {
         setup = store.needsSetup
@@ -348,7 +362,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
             account.setupShown()
         }
     }
-    // Signed in and set up: Now · Stops · Map · Settings along the bottom.
+    // Signed in and set up: Now · Nearby · Stops · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(
             tab,
@@ -464,8 +478,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel,
 }
 
 /**
- * Now · Stops · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its pills below
- * it. Stops and Settings are edge to edge too, keeping the insets inside.
+ * Now · Nearby · Stops · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its
+ * pills below it. Nearby, Stops and Settings are edge to edge too, keeping the insets inside.
  */
 @Composable
 private fun Tabs(
@@ -484,7 +498,7 @@ private fun Tabs(
     val scope = rememberCoroutineScope()
     // Settings tapped while already on it: back to its list of all settings.
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
-    // The pinned stops are the profile's, starred on the Stops tab or in Nearby.
+    // The pinned stops are the profile's, starred on the Stops tab or on Nearby.
     val pins = acct.profile?.pinnedStops.orEmpty()
     // Until the profile has come, nothing is known to be pinned: no stars to tap, no "nothing pinned".
     val pinsKnown = acct.profile != null
@@ -503,6 +517,7 @@ private fun Tabs(
     val tabs =
         listOf(
             Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
+            Triple(Tab.Nearby, R.string.chip_nearby, R.drawable.ic_tab_nearby),
             Triple(Tab.Buses, R.string.tab_buses, R.drawable.ic_tab_buses),
             Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
             Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
@@ -516,7 +531,7 @@ private fun Tabs(
         if (t == Tab.Map && tab == Tab.Map) map.home()
         onTab(t)
     }
-    // From 600 wide the same four tabs are a rail on the leading edge, as Material has it on a large screen.
+    // From 600 wide the same five tabs are a rail on the leading edge, as Material has it on a large screen.
     val rail = windowWidth().rail
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
@@ -571,7 +586,7 @@ private fun Tabs(
                         else Modifier
                     )
             ) {
-                // Back from Stops, Map or Settings goes to Now, as from any other tab bar.
+                // Back from Nearby, Stops, Map or Settings goes to Now, as from any other tab bar.
                 BackHandler(enabled = tab != Tab.Now) {
                     onTab(Tab.Now)
                     vm.load(restart = true)
@@ -680,16 +695,21 @@ private fun Tabs(
                             // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                             Tab.Now ->
                                 Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                                    // The account's own settings (its clock, language and email), asked for as the app opens.
+                                    LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                                    MainScreen(state, vm, insets = inner, email = acct.email, onAddEmail = onAddEmail)
+                                }
+                            // Edge to edge, as Stops is: its band of the sky reaches the top.
+                            Tab.Nearby ->
+                                Box(Modifier.fillMaxSize().consumeWindowInsets(inner)) {
                                     // The stars need the profile's pins.
                                     LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                                    // A stop or a row tapped in Nearby: its board or its line, on the Stops tab.
-                                    MainScreen(
+                                    // A stop or a row tapped: its board or its line, on the Stops tab.
+                                    NearbyScreen(
                                         state,
                                         vm,
                                         insets = inner,
-                                        email = acct.email,
-                                        onAddEmail = onAddEmail,
-                                        nearby =
+                                        act =
                                             NearbyActions(
                                                 pins,
                                                 pinsKnown,
