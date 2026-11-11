@@ -217,7 +217,8 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
 @Test func widgetLinksOpenTheRightPlace() {
     let key = "k1"
     #expect(Links.route(URL(string: "terminus://plan")!, key: key) == .plan)
-    #expect(Links.route(URL(string: "terminus://nearby")!, key: key) == .nearby)
+    // Nearby is a tab of its own (ADR 0017).
+    #expect(Links.route(URL(string: "terminus://nearby")!, key: key) == .tab(.nearby))
     #expect(Links.route(URL(string: "terminus://place/home")!, key: key) == .place("home"))
     #expect(Links.route(URL(string: "terminus://to/COM3?label=COM3&k=k1")!, key: key) == .to("COM3", "COM3"))
     #expect(Links.route(URL(string: "terminus://buses")!, key: key) == .tab(.buses))
@@ -233,7 +234,7 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
 @Test func theWidgetsOwnLinksRoundTrip() {
     let mode = WidgetMode.to(id: "stop:COM3", label: "COM 3")
     #expect(Links.route(mode.link, key: WidgetStore.linkKey) == .to("COM3", "COM 3"))
-    #expect(Links.route(WidgetMode.nearby.link, key: WidgetStore.linkKey) == .nearby)
+    #expect(Links.route(WidgetMode.nearby.link, key: WidgetStore.linkKey) == .tab(.nearby))
 }
 
 // MARK: push

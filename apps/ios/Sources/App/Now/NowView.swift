@@ -133,7 +133,7 @@ struct NowView: View {
                                 goLater
                                 notices(under: true)
                             }
-                            if !app.showNearby && app.target == .plan, let day = app.day {
+                            if app.target == .plan, let day = app.day {
                                 DayTimeline(day: day)
                             }
                             if noticesAt != .underCard { goLater }
@@ -152,7 +152,7 @@ struct NowView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            // Pulled down at the top, what's shown (the card or Nearby) is asked
+            // Pulled down at the top, the card is asked
             // for again: the sky stretches, and your bus drives to your stop on its horizon.
             // Short, the horizon is the bands' hills, and the pull's sign grows out of them as on a band.
             .skyPull(
@@ -174,8 +174,6 @@ struct NowView: View {
                     .accessibilityHidden(true)
             }
         }
-        // Nearby's stars: the pins full, or a pin that didn't save.
-        .overlay(alignment: .top) { PinNote() }
         .task(id: onScreen && scenePhase == .active) {
             // Fresh while it's on screen and the app's in front: every 30 s.
             guard onScreen && scenePhase == .active else { return }
@@ -183,12 +181,16 @@ struct NowView: View {
         }
         // Said when the card changes (a new bus, the trip's next phase), and
         // only then: nothing in it ticks.
-        .onChange(of: app.showNearby ? nil : Spoken.announcement(app.answer)) { old, said in
+        .onChange(of: Spoken.announcement(app.answer)) { old, said in
             if old != nil { announce(said) }
         }
         // On the view itself, not the location notice: allowing location
         // removes the notice in the same update, and its onChange with it.
-        .onChange(of: locator.status) { _, _ in Task { await app.load(restart: true) } }
+        // Only while Now is on screen: answered on another tab (Nearby asks as
+        // it opens), the card is asked for when Now next shows, as it always is.
+        .onChange(of: locator.status) { _, _ in
+            if onScreen { Task { await app.load(restart: true) } }
+        }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
         .sheet(
@@ -204,7 +206,7 @@ struct NowView: View {
     /// Between the card's half and Today's.
     private static let halvesGap: CGFloat = 32
 
-    /// The card's steps and buttons (or Nearby), under the horizon.
+    /// The card's steps and buttons, under the horizon.
     private var card: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             NowGround(shows: NowShows.of(app, now: ServerClock.now), now: ServerClock.now)
@@ -213,7 +215,7 @@ struct NowView: View {
 
     /// A favourite or a place chosen: going there later instead of now.
     @ViewBuilder private var goLater: some View {
-        if !app.showNearby && app.target != .plan && app.paired {
+        if app.target != .plan && app.paired {
             Button(L("Go later today at…")) { goingLater = true }
                 .buttonStyle(ChipButtonStyle())
                 .padding(.top, 14)
@@ -267,7 +269,7 @@ struct NowView: View {
         }
     }
 
-    /// Next and Nearby first, as on the widget, then favourites and the
+    /// Next first, then favourites and the
     /// places added from "Go somewhere else" (each with an ×); the row
     /// scrolls, its end fading while there's more. Then the search: kept in
     /// view after the row, or at the largest text sizes, where the two
@@ -281,15 +283,14 @@ struct NowView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if short { NowWordmark().padding(.trailing, 8) }
-                        NowChip(label: L("Next"), selected: !app.showNearby && app.target == .plan, id: "chip.next") { app.select(.plan) }
-                        NowChip(label: L("Nearby"), selected: app.showNearby, id: "chip.nearby") { app.selectNearby() }
+                        NowChip(label: L("Next"), selected: app.target == .plan, id: "chip.next") { app.select(.plan) }
                         ForEach(app.places, id: \.key) { place in
-                            NowChip(label: place.label, selected: !app.showNearby && app.target == .place(key: place.key)) {
+                            NowChip(label: place.label, selected: app.target == .place(key: place.key)) {
                                 app.select(.place(key: place.key))
                             }
                         }
                         ForEach(app.added) { a in
-                            NowChip(label: a.label, selected: !app.showNearby && isTarget(a), remove: { app.removeAdded(a) }) {
+                            NowChip(label: a.label, selected: isTarget(a), remove: { app.removeAdded(a) }) {
                                 app.select(.code(a.code, label: a.label))
                             }
                             .id(a.code)
@@ -355,7 +356,7 @@ struct NowView: View {
             Text(parts.joined(separator: " · "))
                 .foregroundStyle(app.error != nil ? Color.bad : Color.muted)
                 .announced(app.error)
-            if !app.showNearby && app.answer != nil {
+            if app.answer != nil {
                 if !parts.isEmpty { Text(verbatim: " · ").foregroundStyle(Color.muted) }
                 Button {
                     app.reportOpened()
@@ -380,11 +381,6 @@ struct NowView: View {
 /// The phone's settings page for this app, where a refused permission can be allowed.
 @MainActor func openAppSettings() {
     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-}
-
-/// The Stops tab's note, read here alone so a new one redraws only it.
-private struct PinNote: View {
-    var body: some View { NoteView(text: BusesModel.shared.note) }
 }
 
 /// The wordmark in the sky's ink, the accent the sky's.

@@ -3,7 +3,7 @@ import SwiftUI
 extension NowShows {
     @MainActor static func of(_ app: AppModel, now: Date) -> NowShows {
         of(
-            nearby: app.showNearby, answer: app.answer, onPlan: app.target == .plan, paired: app.paired, error: app.error,
+            nearby: false, answer: app.answer, onPlan: app.target == .plan, paired: app.paired, error: app.error,
             loading: app.loading, day: app.day, now: now)
     }
 }
@@ -323,11 +323,9 @@ struct NowGround: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             switch shows {
-            case .nearby:
-                NearbyList()
             case .checking:
                 NowSkeletonGround()
-            case .waiting, .offline:
+            case .nearby, .waiting, .offline:
                 EmptyView()
             case .dayDone(let a):
                 DayDoneGround(answer: a)

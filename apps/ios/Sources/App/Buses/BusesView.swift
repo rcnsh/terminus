@@ -4,8 +4,8 @@ import UIKit
 /// The Stops tab, called Stops: a search, then the pinned stops in one card
 /// that swipes from stop to stop, each as Nearby shows it, then every line
 /// with its buses out. A row opens its service's line; a stop on the line,
-/// or found in the search, opens its board. The stops around you are Now's
-/// Nearby. As Android's BusesScreen, in the hour's sky.
+/// or found in the search, opens its board. The stops around you are the
+/// Nearby tab's. As Android's BusesScreen, in the hour's sky.
 struct BusesView: View {
     @State private var model = BusesModel.shared
     @Environment(AppModel.self) private var app
@@ -53,7 +53,7 @@ struct BusesView: View {
             Task { await model.loadProfile() }
             openPicked()
         }
-        // A stop or line picked elsewhere (Now's Nearby, the map): its page, over the tab's home.
+        // A stop or line picked elsewhere (Nearby, the map): its page, over the tab's home.
         .onChange(of: app.openBuses) { openPicked() }
     }
 
@@ -77,7 +77,7 @@ struct BusesView: View {
     }
 
     #if DEBUG
-        /// TERMINUS_OPEN_STOP=<code>: a stop picked as Now would pick it, at
+        /// TERMINUS_OPEN_STOP=<code>: a stop picked as Nearby would pick it, at
         /// launch, before the tab has shown, for the UI tests.
         init() {
             guard let code = ProcessInfo.processInfo.environment["TERMINUS_OPEN_STOP"], !BusesView.debugOpened else { return }
@@ -90,7 +90,7 @@ struct BusesView: View {
 }
 
 /// A short note at the top, where the pull was: how it went, or the pins
-/// full. On Now too, for Nearby's stars.
+/// full. On Nearby too, for its stars.
 struct NoteView: View {
     let text: String?
 
@@ -166,7 +166,7 @@ struct BusesHome: View {
                             .pullLead()
                         if !searching {
                             PullRoom(above: 8, below: 8)
-                            HomeTitle().padding(.top, 8)
+                            BandTitle(text: L("Stops")).padding(.top, 8)
                         }
                     }
                     .column()
@@ -221,12 +221,13 @@ struct BusesHome: View {
     }
 }
 
-/// The tab's name, large in the sky.
-private struct HomeTitle: View {
+/// A tab's name, large in its band of sky: Stops, Nearby.
+struct BandTitle: View {
+    let text: String
     @Environment(\.inks) private var inks
 
     var body: some View {
-        Text(L("Stops"))
+        Text(text)
             .font(.title.weight(.heavy))
             .foregroundStyle(inks.ink)
             .accessibilityAddTraits(.isHeader)

@@ -163,7 +163,7 @@ apps/ios/
   project.yml         XcodeGen: the app, widgets, notification service, the watch app, tests; version, bundle ids, app group
   Sources/Shared/     Shared by the app and its extensions: Api.swift, Answer.swift (types), Account.swift,
                       JourneyText.swift, Spoken.swift (VoiceOver's sentences), OfflineDay.swift, SkyDraw.swift
-  Sources/App/        Now/, Buses/, Map/, Settings/, Onboarding/, Model/ (AppModel), UI/ (Sky, theme),
+  Sources/App/        Now/, Nearby/, Buses/, Map/, Settings/, Onboarding/, Model/ (AppModel), UI/ (Sky, theme),
                       System/ (Push.swift: APNs and Live Activities, TripSync.swift, Links.swift: terminus://)
   Sources/Widgets/    WidgetKit widgets and the Live Activity
   Sources/NotificationService/  Rewords a push before it's shown

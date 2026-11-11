@@ -435,7 +435,7 @@ private struct MapButton: View {
 
 #if DEBUG
     /// For the UI tests and screenshots, in debug builds only: TERMINUS_MAP_SVC
-    /// turns a pill on, TERMINUS_MAP_STOP opens a stop (as Nearby on Now does),
+    /// turns a pill on, TERMINUS_MAP_STOP opens a stop (as Nearby does),
     /// TERMINUS_MAP_BUS=1 opens the first bus once there are some.
     @MainActor enum DevMap {
         private static var done = false

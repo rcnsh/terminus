@@ -38,12 +38,10 @@ final class AppModel {
     // MARK: Now
 
     var target: Target = .plan
-    var showNearby = false
     /// The last answer per view, so switching views never blanks the screen.
     private(set) var answers: [Target: NextAnswer] = [:]
     var answer: NextAnswer? { answers[target] }
     var plan: NextAnswer? { answers[.plan] }
-    private(set) var nearby: [NearbyStop]?
     private(set) var loading = false
     private(set) var error: String?
     private(set) var fetchedAt: Date? {
@@ -86,7 +84,7 @@ final class AppModel {
         var failed = false
     }
 
-    /// The pages to put the Stops tab on, picked elsewhere (Now's Nearby,
+    /// The pages to put the Stops tab on, picked elsewhere (Nearby,
     /// the map's "Show as list"): a stop's board or a service's line over its
     /// home, or [] for the home itself. Buses shows them and sets this back to nil.
     var openBuses: [BusRoute]?
@@ -157,10 +155,9 @@ final class AppModel {
         signedOutReason = nil
         answers = [:]
         day = nil
-        nearby = nil
+        NearbyTabModel.shared.reset()
         error = nil
         target = .plan
-        showNearby = false
         TripSync.signedIn()
         if addedEmail { WatchLink.shared.accountChanged(token: token) }
         Task { await load(restart: true) }
@@ -201,7 +198,7 @@ final class AppModel {
         needsSetup = false
         setupUnknown = false
         answers = [:]
-        nearby = nil
+        NearbyTabModel.shared.reset()
         day = nil
         removed = nil
         tab = .now
@@ -251,7 +248,6 @@ final class AppModel {
             setAdded(Array(([Added(code: code, label: label)] + added).prefix(Added.max)))
         }
         target = t
-        showNearby = false
         error = nil
         Task { await load(restart: true) }
     }
@@ -262,17 +258,11 @@ final class AppModel {
         NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
     }
 
-    func selectNearby() {
-        showNearby = true
-        error = nil
-        Task { await load(restart: true) }
-    }
-
     /// The X on an added place's tab: gone; showing it, back to Next.
     func removeAdded(_ a: Added) {
         setAdded(added.filter { $0.code != a.code })
         if case .code(let code, _) = target, code == a.code {
-            if showNearby { target = .plan } else { select(.plan) }
+            select(.plan)
         }
     }
 
@@ -285,7 +275,7 @@ final class AppModel {
     private var loadTask: Task<Void, Never>?
     private var loadID = 0
 
-    /// Fetches whatever is on screen. Only one runs; `restart` drops one in
+    /// Fetches the answer for the chip chosen. Only one runs; `restart` drops one in
     /// flight, so a newly chosen view loads now rather than after the old one.
     func load(restart: Bool = false) async {
         guard let token else { return }
@@ -322,36 +312,25 @@ final class AppModel {
             }
         }
         let api = Api(token: token)
-        let nearbyView = showNearby
         let t = target
         do {
-            if nearbyView {
-                // With the services not running now too, as the widgets that share it want (NearbyShared).
-                let (stops, data) = try await api.nearby(
-                    lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc, stopped: true)
-                guard gen == session, !Task.isCancelled else { return }
-                TripSync.nearbyFetched(data, token: token)
-                nearby = stops
-                answeredAt["nearby"] = Date()
-            } else {
-                let a = try await api.next(t, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
-                guard gen == session, !Task.isCancelled else { return }
-                if t == .plan {
-                    let before = answers[.plan]
-                    Shared.lastAnswer = a.raw
-                    TripSync.answered(a)
-                    // The timeline moves when the answer's trip does, when it's over two
-                    // minutes old, and when it's in the other language.
-                    if day == nil || (dayFetched.map { -$0.timeIntervalSinceNow > 120 } ?? true) || dayLang != Lang.header
-                        || before?.dest?.label != a.dest?.label || before?.phase != a.phase
-                    {
-                        Task { await loadDay() }
-                    }
+            let a = try await api.next(t, lat: loc?.coordinate.latitude, lon: loc?.coordinate.longitude, acc: loc?.acc)
+            guard gen == session, !Task.isCancelled else { return }
+            if t == .plan {
+                let before = answers[.plan]
+                Shared.lastAnswer = a.raw
+                TripSync.answered(a)
+                // The timeline moves when the answer's trip does, when it's over two
+                // minutes old, and when it's in the other language.
+                if day == nil || (dayFetched.map { -$0.timeIntervalSinceNow > 120 } ?? true) || dayLang != Lang.header
+                    || before?.dest?.label != a.dest?.label || before?.phase != a.phase
+                {
+                    Task { await loadDay() }
                 }
-                answers[t] = a
-                places = a.places
-                answeredAt[key(t)] = Date()
             }
+            answers[t] = a
+            places = a.places
+            answeredAt[key(t)] = Date()
             fetchedAt = Date()
             error = nil
             updateRequired = false
@@ -381,10 +360,10 @@ final class AppModel {
         }
     }
 
-    /// Pulled down: what's on screen asked for again, unless it came back
+    /// Pulled down: the card asked for again, unless it came back
     /// within `Pull.freshS` (the server would send the same). Says how it went.
     func pull() async -> PullOutcome {
-        let k = showNearby ? "nearby" : key(target)
+        let k = key(target)
         let start = Date()
         if !Pull.shouldFetch(lastOK: answeredAt[k], now: start) { return .upToDate(nextInS: nil) }
         await load()
@@ -570,6 +549,7 @@ final class AppModel {
     func languageChanged() {
         TripSync.restyled()
         BusesModel.shared.languageChanged()
+        NearbyTabModel.shared.languageChanged()
         guard paired else { return }
         Task {
             await load(restart: true)

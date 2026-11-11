@@ -1,7 +1,7 @@
 import XCTest
 
 /// The terminus:// links widgets, notifications and the Live Activity open,
-/// each landing where it says: a tab, the plan, Nearby or a favourite on Now.
+/// each landing where it says: a tab (Nearby is one), the plan or a favourite on Now.
 @MainActor
 final class LinksUITests: XCTestCase {
     nonisolated override func setUp() {
@@ -28,12 +28,15 @@ final class LinksUITests: XCTestCase {
         XCTAssertTrue(selected(app.buttons["chip.KR MRT"]))
         XCTAssertTrue(tabs["Now"].isSelected)
         shot("link-place", app)
-        // Nearby, then back to the plan.
+        // Nearby's tab, then back to the plan on Now.
         app.open(URL(string: "terminus://nearby")!)
+        XCTAssertTrue(selected(tabs["Nearby"]), "terminus://nearby didn't open Nearby")
+        allowLocationIfAsked()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
         shot("link-nearby", app)
         app.open(URL(string: "terminus://plan")!)
         XCTAssertTrue(selected(app.buttons["chip.next"]))
+        XCTAssertTrue(tabs["Now"].isSelected)
         // A stop link without this phone's widget key is refused: nothing changes.
         app.open(URL(string: "terminus://to/COM3?label=Somewhere")!)
         sleep(2)
