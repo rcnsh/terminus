@@ -18,7 +18,7 @@
 // (~/Library/Caches/ms-playwright), else Google Chrome. The Chinese uses the
 // system's PingFang SC, so run it on a Mac.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -71,7 +71,7 @@ const SLIDES = [
 // The skies of apps/web/public/assets/sky.css (light), and night's from the
 // dark one: top to horizon, the far hills, the trees, the city, the ground
 // and the road; `dark` puts the words in light ink.
-const SKIES = {
+export const SKIES = {
   dawn: {
     s: ['#8fc1e8', '#b7d6ee', '#f1d6c2', '#f7c9a4'],
     far: '#b3b0c3',
@@ -288,7 +288,7 @@ function homeScreen(shot) {
 }
 
 /** "Know when to|{leave for class}": two lines, the braces' part in the accent colour. */
-function head(text) {
+export function head(text) {
   return text
     .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
     .replace(/\{(.+?)\}/, '<em>$1</em>')
@@ -342,7 +342,7 @@ function page(index, lang) {
   </body></html>`;
 }
 
-function chrome() {
+export function chrome() {
   if (process.env.CHROME) return process.env.CHROME;
   const cache = join(homedir(), 'Library/Caches/ms-playwright');
   if (existsSync(cache)) {
@@ -359,36 +359,39 @@ function chrome() {
   throw new Error('no Chromium: set CHROME to one');
 }
 
-const only = process.argv[2];
-const bin = chrome();
-const tmp = mkdtempSync(join(tmpdir(), 'terminus-frames-'));
-try {
-  SLIDES.forEach((slide, index) => {
-    if (only && slide.file !== only) return;
-    for (const lang of ['en', 'zh']) {
-      const outDir = join(here, 'screenshots', lang === 'en' ? '' : 'zh');
-      mkdirSync(outDir, { recursive: true });
-      const html = join(tmp, `${lang}-${slide.file}.html`);
-      writeFileSync(html, page(index, lang));
-      const out = join(outDir, `${slide.file}.png`);
-      execFileSync(
-        bin,
-        [
-          '--headless',
-          '--disable-gpu',
-          '--hide-scrollbars',
-          '--force-device-scale-factor=1',
-          '--allow-file-access-from-files',
-          '--virtual-time-budget=3000',
-          `--window-size=${W},${H}`,
-          `--screenshot=${out}`,
-          pathToFileURL(html).href,
-        ],
-        { stdio: 'ignore' },
-      );
-      console.log(`wrote ${out}`);
-    }
-  });
-} finally {
-  rmSync(tmp, { recursive: true, force: true });
+// Run as a script, not when frame-large.mjs borrows the skies and the headline.
+if (realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const only = process.argv[2];
+  const bin = chrome();
+  const tmp = mkdtempSync(join(tmpdir(), 'terminus-frames-'));
+  try {
+    SLIDES.forEach((slide, index) => {
+      if (only && slide.file !== only) return;
+      for (const lang of ['en', 'zh']) {
+        const outDir = join(here, 'screenshots', lang === 'en' ? '' : 'zh');
+        mkdirSync(outDir, { recursive: true });
+        const html = join(tmp, `${lang}-${slide.file}.html`);
+        writeFileSync(html, page(index, lang));
+        const out = join(outDir, `${slide.file}.png`);
+        execFileSync(
+          bin,
+          [
+            '--headless',
+            '--disable-gpu',
+            '--hide-scrollbars',
+            '--force-device-scale-factor=1',
+            '--allow-file-access-from-files',
+            '--virtual-time-budget=3000',
+            `--window-size=${W},${H}`,
+            `--screenshot=${out}`,
+            pathToFileURL(html).href,
+          ],
+          { stdio: 'ignore' },
+        );
+        console.log(`wrote ${out}`);
+      }
+    });
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
