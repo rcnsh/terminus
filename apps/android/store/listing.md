@@ -150,6 +150,20 @@ How the captures were taken (8 November 2026, from 3.10.0): the dev stub started
 - **On the bus** is only assumed where the phone is: step the clock through the bus's departure a few minutes at a time, with the phone at the stop until it leaves, then along its route (PGP, then Opp HSSML and Opp NUSS for the R2). A bigger jump, or a phone left at home, gives "If you missed it" instead.
 - The stub remembers the day's trip, so restart it (and sign in again) before going back to an earlier time.
 
+## Tablet screenshots
+
+Store presence → Main store listing → Tablet assets, and the same in the zh-CN translation. Four slides in each slot, in this order, framed by `node apps/android/store/frame-large.mjs` (`tablet` or `fold` for one set) from the captures in `captures/tablet/` and `captures/fold/`, in the phone set's style: the device under a headline, the four one picture going from dawn to night.
+
+- **10-inch:** `screenshots/tablet/` (and `zh/`), 2560×1440. Pixel Tablet emulator, landscape, its own 2560×1600 screen.
+- **7-inch:** `screenshots/fold/` (and `zh/`), 1440×2560. Pixel 10 Pro Fold emulator, open, its own 2076×2152 inner screen.
+
+1. `1-leave-by.png` "Know when to leave for class": Now in two panes, the trip beside Today.
+2. `2-map.png` "Every bus, live on the map": A1 picked. On the tablet, LT 27's sheet floats in the corner with the A1 row marked.
+3. `3-stops.png` "What's coming at your stop": Stops with COM 3 and PGP pinned, PGP open in the detail pane.
+4. `4-line.png` "Every bus along its line": A1's line in the detail pane, its buses between the stops.
+
+The captures (12 November 2026, a debug build of `main` after 3.12.0-beta.1) were taken as the phone's were: the stub at 9:26 with the class at 10:00, frozen, the device's clock and test location providers set to match, demo mode on and the safety notification snoozed, in English and then with `set-app-locales zh-CN`. The stub sends the account's saved language, which beats the app's locale: for the Chinese set also pick 中文 in Settings, under Language and time, then clear the stub's cache with `/__stub/at`. With the stub on a port other than 8787, `adb reverse` that port too, or the map stays grey. A second device signs in to the stub's test account only after the stub is restarted (it sends one code per email), so take one device's set fully, then restart the stub for the other. On the fold, the map hides stop names at the zoom that fits campus.
+
 ## Category and contact
 
 - Category: Maps & Navigation. Tags: public transport, commute.
