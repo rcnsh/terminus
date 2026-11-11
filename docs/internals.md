@@ -1341,7 +1341,9 @@ map; and Settings. It uses the same routes as the account page, with the session
   `Report`, a modal `<dialog>`): the answer it's about, the reasons as
   chips, a note, and who the reply goes to. It sends to `/api/me/feedback`
   and then says so in the sheet, which is the only confirmation; Android's
-  sheet is the same.
+  sheet is the same. When the card has `fromNus` (a shuttle's live NUS
+  time, decided in card.ts), picking "Bus never came" or "Times were off"
+  adds a note that those times are NUS's, and Send reads "Send anyway".
 - **Nearby** (app/app.js `NearbyArea`, ADR 0017). A tab of its own: the
   stops around you as their signs (`/api/me/nearby`), asked for when the
   tab opens and every 30 s while it's on screen, never otherwise. A stop's

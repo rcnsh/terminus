@@ -405,6 +405,7 @@ internal fun MainScreen(
                                 if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
                                 var reporting by remember { mutableStateOf<String?>(null) }
                                 var reportingLine by remember { mutableStateOf("") }
+                                var reportingFromNus by remember { mutableStateOf(false) }
                                 var opened by remember { mutableStateOf(false) }
                                 Text(
                                     stringResource(R.string.is_this_wrong),
@@ -414,6 +415,7 @@ internal fun MainScreen(
                                         Modifier.clickable(role = Role.Button) {
                                                 reporting = state.rawAnswers[state.target]
                                                 reportingLine = state.answer?.card?.line ?: state.answer?.label ?: ""
+                                                reportingFromNus = state.answer?.card?.fromNus == true
                                                 opened = true
                                                 vm.reportOpened()
                                             }
@@ -425,6 +427,7 @@ internal fun MainScreen(
                                 if (opened) {
                                     ReportSheet(
                                         line = reportingLine,
+                                        fromNus = reportingFromNus,
                                         email = email,
                                         sending = state.reportSending,
                                         sent = state.reportSent,
@@ -565,6 +568,9 @@ private val REPORT_REASONS =
         "wrong-class" to R.string.report_wrong_class,
     )
 
+/** Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent. */
+private val NUS_REASONS = setOf("never-came", "times-off")
+
 /**
  * "Is this wrong?", as the web's sheet: the answer it's about (`line`), the reasons as chips, a note, and who the reply goes to. A reason
  * or a note sends it; once `sent`, the sheet says so, which is the only confirmation. Without an email the server takes no reports, so it
@@ -574,6 +580,7 @@ private val REPORT_REASONS =
 @Composable
 private fun ReportSheet(
     line: String,
+    fromNus: Boolean,
     email: String?,
     sending: Boolean,
     sent: Boolean,
@@ -584,6 +591,7 @@ private fun ReportSheet(
 ) {
     var reason by rememberSaveable { mutableStateOf<String?>(null) }
     var note by rememberSaveable { mutableStateOf("") }
+    val aboutNus = fromNus && reason in NUS_REASONS
     val colors = MaterialTheme.colorScheme
     val wide = Modifier.fillMaxWidth().heightIn(min = 52.dp)
     ModalBottomSheet(
@@ -675,6 +683,31 @@ private fun ReportSheet(
                             )
                         }
                     }
+                    // The live region stays in place and the note comes and goes inside it, so TalkBack reads it when it appears.
+                    Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                        if (aboutNus) {
+                            Column(
+                                Modifier.padding(top = 12.dp)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.primaryContainer)
+                                    .padding(12.dp)
+                                    .semantics(mergeDescendants = true) {}
+                            ) {
+                                Text(
+                                    stringResource(R.string.report_nus_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = colors.onSurface,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    stringResource(R.string.report_nus_body),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     val noteLabel = stringResource(R.string.report_note)
                     TextField(
@@ -723,7 +756,15 @@ private fun ReportSheet(
                         enabled = !sending && (reason != null || note.isNotBlank()),
                         modifier = wide,
                     ) {
-                        Text(stringResource(if (sending) R.string.sending else R.string.send))
+                        Text(
+                            stringResource(
+                                when {
+                                    sending -> R.string.sending
+                                    aboutNus -> R.string.send_anyway
+                                    else -> R.string.send
+                                }
+                            )
+                        )
                     }
                 }
             }

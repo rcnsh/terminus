@@ -511,6 +511,9 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .report-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .report-chip[aria-pressed="true"]::before { content: "✓ "; font-weight: 700; }
 @media (forced-colors: active) { .report-chip[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; } }
+.report-nus { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 0.9rem; }
+.report-nus strong { display: block; font-weight: 600; }
+.report-nus p { margin: 4px 0 0; color: var(--muted); }
 .report-note { margin-top: 14px; width: 100%; min-height: 5.5em; resize: vertical; font: inherit; padding: 12px 14px; border: 1px solid transparent; border-radius: 12px; background: var(--surface-2); color: var(--ink); }
 .report-note:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 .report-who { margin: 12px 0 0; font-size: 0.85rem; }

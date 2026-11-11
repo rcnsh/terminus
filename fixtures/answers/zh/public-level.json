@@ -170,6 +170,7 @@
       "backupText": "或在 IT 搭 09:07 的 95 ($)",
       "summary": "在 IT 搭 09:06 的 A2"
     },
+    "fromNus": true,
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT-OPP",
