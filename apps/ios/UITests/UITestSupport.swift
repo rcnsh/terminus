@@ -29,6 +29,19 @@ extension XCUIApplication {
     }
 }
 
+/// Says yes to the system's location question when it's up: the Nearby tab
+/// asks it as it opens, on a simulator that hasn't been asked. Nothing when it isn't.
+@MainActor func allowLocationIfAsked() {
+    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    for label in ["Allow While Using App", "使用 App 时允许"] {
+        let b = springboard.buttons[label]
+        if b.waitForExistence(timeout: 2) {
+            b.tap()
+            return
+        }
+    }
+}
+
 /// The stub's answer to `req`, waited for (empty if it didn't answer).
 func stubFetch(_ req: URLRequest) -> Data {
     final class Box: @unchecked Sendable { var data = Data() }

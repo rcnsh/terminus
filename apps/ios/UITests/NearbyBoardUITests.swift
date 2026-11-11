@@ -1,7 +1,7 @@
 import CoreLocation
 import XCTest
 
-/// Nearby as a departure board, against the dev stub, for the design
+/// The Nearby tab as a departure board, against the dev stub, for the design
 /// review's checklist: each state in light and dark, its screenshots named
 /// by the item ("nearby-1-minutes-light"). Between COM 3 and CLB, with COM 3
 /// pinned and CLB not, the clock held still so both themes show one moment.
@@ -38,7 +38,7 @@ final class NearbyBoardUITests: XCTestCase {
         stubPost("/__stub/freeze")
     }
 
-    /// The app on Nearby.
+    /// The app on the Nearby tab.
     private func nearby(lang: String = "en", theme: String, textSize: String? = nil, waitFor row: String = "nearbyRow.COM3.D1")
         -> XCUIApplication
     {
@@ -48,9 +48,9 @@ final class NearbyBoardUITests: XCTestCase {
         app.resetAuthorizationStatus(for: .location)
         app.launch()
         allowLocation(app, lang: lang)
-        let chip = app.buttons["chip.nearby"]
-        XCTAssertTrue(chip.waitForExistence(timeout: 15), "no Nearby chip")
-        chip.tap()
+        let tab = app.tabBars.buttons[lang == "zh" ? "附近" : "Nearby"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 15), "no Nearby tab")
+        tab.tap()
         let first = app.buttons[row]
         let came = first.waitForExistence(timeout: 15)
         if !came { shot("failed-nearby-\(name)", app) }
@@ -240,12 +240,13 @@ final class NearbyBoardUITests: XCTestCase {
         return rows.map(\.id)
     }
 
-    /// Asks for Nearby again (its chip, tapped again, fetches afresh) and waits
-    /// for the answer: the rows' identifiers after it.
+    /// Asks for Nearby again (its tab, opened again once the answer is over
+    /// 15 s old, fetches afresh) and waits for the answer: the rows'
+    /// identifiers after it.
     private func refreshed(_ app: XCUIApplication) -> [String] {
-        let chip = app.buttons["chip.nearby"]
-        for _ in 0..<6 where !chip.isHittable { app.swipeDown() }
-        chip.tap()
+        app.tabBars.buttons["Now"].tap()
+        sleep(16)
+        app.tabBars.buttons["Nearby"].tap()
         XCTAssertTrue(app.buttons["nearbyRow.COM3.D1"].waitForExistence(timeout: 15), "no rows after the refresh")
         sleep(1)
         return app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.'")).allElementsBoundByIndex

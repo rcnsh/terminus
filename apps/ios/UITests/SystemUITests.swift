@@ -66,8 +66,8 @@ final class SystemUITests: XCTestCase {
         shot("widget-places-large-\(tag)", springboard)
     }
 
-    /// Buses near you at each size, from the board the app fetched for Now's
-    /// Nearby (shared with the widgets): small and medium, then large; the
+    /// Buses near you at each size, from the board the app fetched for its
+    /// Nearby tab (shared with the widgets): small and medium, then large; the
     /// large Next bus widget's next buses under the trip, and the Nearby chip
     /// on the favourites widget; then with New to NUS, which heads each side
     /// with where its buses go.
@@ -116,9 +116,10 @@ final class SystemUITests: XCTestCase {
         clearAfter()
     }
 
-    /// Now's Nearby opened, as a widget's tap does: the app fetches the board the widgets share.
+    /// The Nearby tab opened, as a widget's tap does: the app fetches the board the widgets share.
     func fetchNearby(_ app: XCUIApplication) {
         app.open(URL(string: "terminus://nearby")!)
+        allowLocationIfAsked()
         sleep(4)
         XCUIDevice.shared.press(.home)
         sleep(1)

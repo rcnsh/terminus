@@ -4,6 +4,7 @@ import Foundation
 /// phone its top goes up in the sky and the rest on the ground under the
 /// horizon; the watch shows the same cases in the same order.
 enum NowShows {
+    /// The watch's Nearby page. On the phone Nearby is a tab of its own (ADR 0017), never this.
     case nearby
     /// No answer yet and one on its way: the card's shape in bars.
     case checking

@@ -254,7 +254,7 @@ final class MapModel {
         }
     }
 
-    /// A stop from another tab (Nearby on Now) or from a bus's sheet (`from`,
+    /// A stop from another tab (Nearby) or from a bus's sheet (`from`,
     /// which back returns to): its sheet, and the map moved onto it. Unknown codes are ignored.
     func showStop(_ code: String, from: Sheet.Bus? = nil) {
         if let campus, campus.stop(code) == nil { return }

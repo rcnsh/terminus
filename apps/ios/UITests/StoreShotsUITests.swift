@@ -48,11 +48,11 @@ final class StoreShotsUITests: XCTestCase {
         return app
     }
 
-    /// Tab `i` (Now, Stops, Map, Settings): in the tab bar, or in the rail
+    /// Tab `i` (Now, Nearby, Stops, Map, Settings): in the tab bar, or in the rail
     /// beside the page on a wide window (the open Duo), which isn't a tab bar.
     func tab(_ app: XCUIApplication, _ i: Int) -> XCUIElement {
         if app.tabBars.buttons.count > i { return app.tabBars.buttons.element(boundBy: i) }
-        let names = lang == "zh" ? ["现在", "车站", "地图", "设置"] : ["Now", "Stops", "Map", "Settings"]
+        let names = lang == "zh" ? ["现在", "附近", "车站", "地图", "设置"] : ["Now", "Nearby", "Stops", "Map", "Settings"]
         return app.buttons[names[i]].firstMatch
     }
 
@@ -88,6 +88,7 @@ final class StoreShotsUITests: XCTestCase {
         sleep(3)
         // Nearby opened, as a widget's tap does, so Buses near you has its board.
         app.open(URL(string: "terminus://nearby")!)
+        allowLocationIfAsked()
         sleep(4)
         XCUIDevice.shared.press(.home)
         sleep(1)
@@ -106,19 +107,20 @@ final class StoreShotsUITests: XCTestCase {
     }
 
     /// The big screens' second scene in place of the home screen's widgets:
-    /// Now's Nearby, the buses at the stops around you, as the widget shows.
+    /// the Nearby tab, the buses at the stops around you, as the widget shows.
     func test2Nearby() {
         let app = launch(sky: "day")
-        let chip = app.buttons["chip.nearby"]
-        XCTAssertTrue(chip.waitForExistence(timeout: 15))
-        chip.tap()
+        tab(app, 1).tap()
+        allowLocationIfAsked()
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(5)
         save("2-nearby", app)
     }
 
     func test3Map() {
         let app = launch(sky: "golden", extra: ["TERMINUS_MAP_SVC": "A1"])
-        tab(app, 2).tap()
+        tab(app, 3).tap()
         XCTAssertTrue(app.buttons["map.pill.A1"].waitForExistence(timeout: 20))
         let downloading = app.staticTexts.containing(NSPredicate(format: "label CONTAINS '4 MB'")).firstMatch
         for _ in 0..<30 where downloading.exists { sleep(1) }
@@ -131,7 +133,7 @@ final class StoreShotsUITests: XCTestCase {
         setProfile { $0["pinnedStops"] = ["COM3", "UTOWN"] }
         defer { resetProfile() }
         let app = launch(sky: "day")
-        tab(app, 1).tap()
+        tab(app, 2).tap()
         XCTAssertTrue(
             app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearbyRow.COM3.'")).firstMatch.waitForExistence(timeout: 15))
         // Two panes (capture.sh's PANES=1): COM 3 open beside the list, not an empty pane.

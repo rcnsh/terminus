@@ -97,5 +97,6 @@
 "Update terminus to keep using it." = "请更新 terminus 以继续使用。";
 "Updating…" = "正在更新…";
 "walk" = "步行";
+"Without your location, these are the stops by your last class or your home." = "没有你的位置时，这里显示的是你上一节课或家附近的车站。";
 "~%@" = "约 %@";
 "~%@ min" = "约 %@ 分钟";

@@ -33,13 +33,13 @@ struct RootView: View {
     }
 }
 
-/// The four tabs, as on Android and the web app.
+/// The five tabs, as on Android and the web app (ADR 0017).
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
     @Environment(\.colorScheme) private var scheme
     private let sky = SkyClock.shared
 
-    enum Tab: Hashable { case now, buses, map, settings }
+    enum Tab: Hashable { case now, nearby, buses, map, settings }
 
     /// A keyboard is up (keyboardRoom()).
     @State private var keyboard = false
@@ -59,6 +59,10 @@ struct MainTabs: View {
                 .keyboardRoom()
                 .tabItem { Label(L("Now"), systemImage: "clock") }
                 .tag(Tab.now)
+            // Nearby: the arrow a map points where you are with, as the Mac app's.
+            NearbyView()
+                .tabItem { Label(L("Nearby"), systemImage: "location") }
+                .tag(Tab.nearby)
             // Stops: a stop sign on its pole, drawn (Support/Assets.xcassets), as SF Symbols has none.
             BusesView()
                 .keyboardRoom()
@@ -90,13 +94,13 @@ struct MainTabs: View {
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { n in
             if let t = n.object as? Tab { app.tab = t }
         }
-        // Now, Stops and Settings start in the hour's sky: light icons over a
+        // Now, Nearby, Stops and Settings start in the hour's sky: light icons over a
         // dark one. The map is the theme's.
         .statusBar(light: app.tab == .map ? nil : SkyPalette.of(sky.phase, dark: scheme == .dark).lightInk)
     }
 }
 
 extension Notification.Name {
-    /// Opens a tab from elsewhere (a widget's link, a stop picked on Now): `object` is a MainTabs.Tab.
+    /// Opens a tab from elsewhere (a widget's link, a stop picked on Nearby): `object` is a MainTabs.Tab.
     static let openTab = Notification.Name("terminus.openTab")
 }

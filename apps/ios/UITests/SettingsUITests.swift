@@ -34,7 +34,7 @@ final class SettingsUITests: XCTestCase {
     private func open(lang: String = "en", theme: String = "light", extra: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication.terminus(signedIn: true, lang: lang, theme: theme, extra: extra)
         app.launch()
-        let tab = app.tabBars.buttons.element(boundBy: 3)
+        let tab = app.tabBars.buttons.element(boundBy: 4)
         XCTAssertTrue(tab.waitForExistence(timeout: 15))
         tab.tap()
         XCTAssertTrue(app.buttons["settings.account"].waitForExistence(timeout: 10))
@@ -95,7 +95,7 @@ final class SettingsUITests: XCTestCase {
         let app = XCUIApplication.terminus(signedIn: true)
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
         app.launch()
-        let tab = app.tabBars.buttons.element(boundBy: 3)
+        let tab = app.tabBars.buttons.element(boundBy: 4)
         XCTAssertTrue(tab.waitForExistence(timeout: 15))
         tab.tap()
         XCTAssertTrue(app.buttons["settings.account"].waitForExistence(timeout: 10))
@@ -324,7 +324,7 @@ final class SettingsUITests: XCTestCase {
         let token = anonToken()
         let app = XCUIApplication.terminus(signedIn: false, extra: ["TERMINUS_TOKEN": token])
         app.launch()
-        let tab = app.tabBars.buttons.element(boundBy: 3)
+        let tab = app.tabBars.buttons.element(boundBy: 4)
         XCTAssertTrue(tab.waitForExistence(timeout: 15))
         tab.tap()
         XCTAssertTrue(app.buttons["settings.account"].waitForExistence(timeout: 10))

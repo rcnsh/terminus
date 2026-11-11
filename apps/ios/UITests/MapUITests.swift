@@ -14,7 +14,7 @@ final class MapUITests: XCTestCase {
     private func openMap(lang: String = "en", theme: String = "light", extra: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication.terminus(signedIn: true, lang: lang, theme: theme, extra: extra)
         app.launch()
-        let tab = app.tabBars.buttons.element(boundBy: 2)
+        let tab = app.tabBars.buttons.element(boundBy: 3)
         XCTAssertTrue(tab.waitForExistence(timeout: 15))
         tab.tap()
         if !app.buttons["map.pill.A1"].waitForExistence(timeout: 20) {

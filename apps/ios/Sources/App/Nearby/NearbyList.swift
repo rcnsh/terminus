@@ -6,12 +6,14 @@ import SwiftUI
 /// large. Every sign has the same columns, each as wide as its widest value
 /// on any of them, so the figures line up down the page. The plate opens the
 /// stop's board on the Stops tab, a row its service's line from there; under
-/// the signs, what a "~" means, while one is showing. As Android's NearbyList and the web app (NearbyCells has the words).
+/// the signs, what a "~" means, while one is showing. The Nearby tab's
+/// (NearbyView). As Android's NearbyList and the web app (NearbyCells has the words).
 struct NearbyList: View {
     @Environment(AppModel.self) private var app
+    private let model = NearbyTabModel.shared
 
     var body: some View {
-        if let stops = app.nearby {
+        if let stops = model.stops {
             if stops.isEmpty {
                 Text(L("Nothing yet")).foregroundStyle(Color.muted)
             }
@@ -40,8 +42,8 @@ struct NearbyList: View {
                 BusesModel.shared.sync()
                 await BusesModel.shared.loadProfile()
             }
-        } else if app.loading {
-            // The signs' shape while the stops near you are on their way.
+        } else if model.loading || model.error == nil {
+            // The signs' shape while the stops near you are on their way, or about to be asked for.
             VStack(spacing: 12) {
                 ForEach(0..<2, id: \.self) { i in StopSignSkeleton(seed: i) }
             }

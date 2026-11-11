@@ -2,8 +2,8 @@ import Foundation
 
 /// Links that open the app: a widget's tap, a notification's, the Live
 /// Activity's. The same terminus:// links as Android's widgets and shortcuts:
-/// terminus://plan, terminus://nearby, terminus://place/<key>,
-/// terminus://to/<code>?label=…, and the tabs terminus://buses, map and settings.
+/// terminus://plan, terminus://place/<key>, terminus://to/<code>?label=…,
+/// and the tabs terminus://nearby, buses, map and settings.
 @MainActor enum Links {
     /// Longest label a link may put on a tab.
     nonisolated static let maxLabel = 40
@@ -16,7 +16,6 @@ import Foundation
             NotificationCenter.default.post(name: .openTab, object: tab)
             return
         case .plan: if app.paired { app.select(.plan) }
-        case .nearby: if app.paired { app.selectNearby() }
         case .place(let key): if app.paired { app.select(.place(key: key)) }
         case .to(let code, let label): if app.paired { app.select(.code(code, label: label)) }
         }
@@ -24,7 +23,7 @@ import Foundation
     }
 
     enum Route: Equatable {
-        case plan, nearby
+        case plan
         case place(String)
         case to(String, String)
         case tab(MainTabs.Tab)
@@ -38,7 +37,7 @@ import Foundation
         let last = url.pathComponents.dropFirst().first
         switch url.host {
         case "plan", "next": return .plan
-        case "nearby": return .nearby
+        case "nearby": return .tab(.nearby)
         case "place": return last.map { .place($0) }
         case "to":
             guard let code = last, c?.queryItems?.first(where: { $0.name == "k" })?.value == key else { return nil }

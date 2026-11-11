@@ -52,6 +52,18 @@ final class PullTests: XCTestCase {
         XCTAssertTrue(Pull.shouldFetch(lastOK: now.addingTimeInterval(60), now: now))
     }
 
+    /// The Nearby tab, opened: asked at once, unless its answer is under 15 s
+    /// old; then at that answer's next refresh, as if the tab had stayed open.
+    @MainActor func testNearbyOpenedAgainAsksNoSoonerThanStayingWould() {
+        let now = Date()
+        XCTAssertEqual(NearbyTabModel.waitOnOpening(lastOK: nil, now: now), 0)
+        XCTAssertEqual(NearbyTabModel.waitOnOpening(lastOK: now.addingTimeInterval(-4), now: now), AppModel.pollS - 4, accuracy: 0.001)
+        XCTAssertEqual(NearbyTabModel.waitOnOpening(lastOK: now.addingTimeInterval(-15), now: now), 0)
+        XCTAssertEqual(NearbyTabModel.waitOnOpening(lastOK: now.addingTimeInterval(-600), now: now), 0)
+        // A clock set back since: asked now.
+        XCTAssertEqual(NearbyTabModel.waitOnOpening(lastOK: now.addingTimeInterval(60), now: now), 0)
+    }
+
     func testThePillSaysWhatHappened() {
         Lang.pref = "en"
         XCTAssertEqual(PullHint.pull.words, "Pull to refresh")

@@ -3,7 +3,7 @@ import Foundation
 /// The board of buses near you that every widget showing it shares: the
 /// Buses near you widget, the Nearby chip on the others and the large Next
 /// bus widget's next buses. Kept in the app group as it came (/me/nearby with
-/// `stopped=1`, Shared.lastNearby), whoever fetched it: Now's Nearby, a
+/// `stopped=1`, Shared.lastNearby), whoever fetched it: the Nearby tab, a
 /// widget's ↻ or a widget's reload, at most once a minute
 /// between them, with the phone's last place. As Android's NearbyShared.
 enum NearbyShared {

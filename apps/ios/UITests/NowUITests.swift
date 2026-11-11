@@ -1,7 +1,7 @@
 import CoreLocation
 import XCTest
 
-/// Now against the dev stub: the trip, its card styles, Nearby, the search,
+/// Now against the dev stub: the trip, its card styles, the Nearby tab beside it, the search,
 /// a place's tab, Go later, Today's remove and undo, and "Is this wrong?".
 /// Screenshots in light and dark, English and Chinese.
 @MainActor
@@ -70,7 +70,9 @@ final class NowUITests: XCTestCase {
         shot("now-zh", app)
         app.swipeUp()
         shot("now-zh-down", app)
-        app.buttons["chip.nearby"].tap()
+        XCTAssertFalse(app.buttons["chip.nearby"].exists, "Nearby is a tab, not a chip")
+        app.tabBars.buttons["附近"].tap()
+        allowLocationIfAsked()
         XCTAssertTrue(
             app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(
                 timeout: 15))
@@ -81,7 +83,8 @@ final class NowUITests: XCTestCase {
         resetProfile()
         defer { resetProfile() }
         let app = launch(sky: "night")
-        app.buttons["chip.nearby"].tap()
+        app.tabBars.buttons["Nearby"].tap()
+        allowLocationIfAsked()
         let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch
         XCTAssertTrue(stop.waitForExistence(timeout: 15))
         let code = String(stop.identifier.dropFirst("nearby.".count))
@@ -107,7 +110,7 @@ final class NowUITests: XCTestCase {
         // Pinned from Nearby, it's on the home.
         XCTAssertTrue(app.buttons["pinned-\(code)"].waitForExistence(timeout: 10))
         // A row: its line from that stop.
-        app.tabBars.buttons["Now"].tap()
+        app.tabBars.buttons["Nearby"].tap()
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "nearbyRow.\(code).")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.tap()
@@ -121,7 +124,8 @@ final class NowUITests: XCTestCase {
         setProfile { $0["pinnedStops"] = ["PGP"] }
         defer { resetProfile() }
         let app = launch(theme: "dark", sky: "night")
-        app.buttons["chip.nearby"].tap()
+        app.tabBars.buttons["Nearby"].tap()
+        allowLocationIfAsked()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'nearby.'")).firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("now-nearby-dark", app)
