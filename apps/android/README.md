@@ -10,9 +10,10 @@ Android 12 or later.
   out once per fetch, with a countdown the phone ticks for a bus in the next
   hour, so the widget only redraws when a bus is due or the times turn old.
   They refresh themselves through the day.
-- **App:** Now · Buses · Map · Settings along the bottom. Now has the same
-  answer, nearby stops and search; Buses has what's coming at a stop and
-  where a service's buses are along its line. Optional heads-up notifications before you need
+- **App:** Now · Nearby · Stops · Map · Settings along the bottom. Now has
+  the same answer and the search; Nearby has the stops around you as their
+  signs; Stops has what's coming at a stop and where a service's buses are
+  along its line. Optional heads-up notifications before you need
   to leave, and a live notification.
 - **Map:** the campus with every route in its colour (maplibre-compose), live
   buses for the service picked, and a sheet for each stop. The street map

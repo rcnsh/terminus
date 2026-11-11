@@ -55,12 +55,15 @@ import sh.rcn.terminus.widget.redrawWidgets
 data class UiState(
     val paired: Boolean = false,
     val target: Target = Target.Plan,
-    val showNearby: Boolean = false,
     /** Last answer per view, so switching views never blanks the screen. */
     val answers: Map<Target, NextAnswer> = emptyMap(),
     /** Each answer as the server sent it, for an "Is this wrong?" report. */
     val rawAnswers: Map<Target, String> = emptyMap(),
+    /** The Nearby tab: the stops around you as last answered, and how its own asking is going, apart from the card's. */
     val nearby: List<NearbyStop>? = null,
+    val nearbyLoading: Boolean = false,
+    val nearbyError: String? = null,
+    val nearbyFetchedAt: Long? = null,
     val places: List<Place> = emptyList(),
     /** Places added from "Go somewhere else", a tab each until removed (Destinations). */
     val added: List<Destinations.Dest> = emptyList(),
@@ -107,6 +110,8 @@ data class UiState(
             answers = emptyMap(),
             rawAnswers = emptyMap(),
             nearby = null,
+            nearbyError = null,
+            nearbyFetchedAt = null,
             places = emptyList(),
             day = null,
             removed = null,
@@ -177,18 +182,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
 
+    /** The Nearby tab's ask, apart from the card's: each tab asks only while it's the one on screen. */
+    private var nearbyJob: Job? = null
+
     /** The fresh fix on its way, shared by every load meanwhile so none asks for a second; and the last one that came. */
     private var freshFix: Deferred<Location?>? = null
     private var lastFresh: Location? = null
 
     /** After an answer asked for before the fresh fix came: waits for it, to ask again if it puts you somewhere else. */
     private var refixJob: Job? = null
+    private var nearbyRefixJob: Job? = null
 
-    /** When each view's answer last came back ([viewOf]), for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
-    private val answeredAt = mutableMapOf<Any, Long>()
+    /** When each target's answer last came back, for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
+    private val answeredAt = mutableMapOf<Target, Long>()
 
-    /** Which view [s] shows: Nearby, or the answer for its target. */
-    private fun viewOf(s: UiState): Any = if (s.showNearby) NEARBY else s.target
+    /** The same for Nearby's stops; null before the first. */
+    private var nearbyAnsweredAt: Long? = null
 
     fun pair(code: String) {
         // Once at a time: the sixth character pairs, and Done straight after mustn't send the code again.
@@ -353,7 +362,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun endAccount() {
         account.cancelChildren()
         // A request cancelled says nothing: what it had under way would otherwise stay so, its buttons off.
-        _state.update { it.copy(loading = false, signalling = false, reportSending = false) }
+        _state.update { it.copy(loading = false, nearbyLoading = false, signalling = false, reportSending = false) }
     }
 
     /**
@@ -641,7 +650,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 setAdded(Destinations.add(store.addedPlaces, Destinations.Dest(Destinations.stopId(target.code), target.label), places))
             Target.Plan -> {}
         }
-        _state.update { it.copy(target = target, showNearby = false, error = null) }
+        _state.update { it.copy(target = target, error = null) }
         load(restart = true)
     }
 
@@ -649,8 +658,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun removeAdded(dest: Destinations.Dest) {
         setAdded(store.addedPlaces.filter { it.id != dest.id })
         val showing = (_state.value.target as? Target.Code)?.let { Destinations.stopId(it.code) == dest.id } == true
-        if (!showing) return
-        if (_state.value.showNearby) _state.update { it.copy(target = Target.Plan) } else select(Target.Plan)
+        if (showing) select(Target.Plan)
     }
 
     private fun setAdded(added: List<Destinations.Dest>) {
@@ -674,11 +682,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun showNearby() {
-        _state.update { it.copy(showNearby = true, error = null) }
-        load(restart = true)
-    }
-
     /**
      * Where to ask from: a fix from the last minute at once; else a fresh one, waited for [FirstFix.FIX_GRACE_MS], then the best from the
      * last ten minutes or none. Also the fresh fix still on its way when it didn't come in time: it isn't cancelled (capped at 6 s by
@@ -695,22 +698,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return loc to (if (got == null) fresh else null)
     }
 
-    /** Once [fresh] comes, what's on screen asked for again if [sent] wasn't where it puts you. That ask doesn't wait for another. */
-    private fun refixLater(fresh: Deferred<Location?>, sent: Location?) {
+    /** Once [fresh] comes, [again] asks once more if [sent] wasn't where it puts you. That ask doesn't wait for another. */
+    private fun refixLater(fresh: Deferred<Location?>, sent: Location?, again: () -> Unit): Job {
         val sentAccM = Locator.accOf(sent)
-        refixJob =
-            viewModelScope.launch(account) {
-                val got = fresh.await()
-                if (FirstFix.reload(sent?.latitude, sent?.longitude, got?.latitude, got?.longitude, sentAccM, Locator.accOf(got))) {
-                    load(restart = true, refix = false)
-                }
-            }
+        return viewModelScope.launch(account) {
+            val got = fresh.await()
+            if (FirstFix.reload(sent?.latitude, sent?.longitude, got?.latitude, got?.longitude, sentAccM, Locator.accOf(got))) again()
+        }
     }
 
     /**
-     * Fetch whatever is on screen. Safe to call repeatedly; only one runs. `restart` drops a fetch in flight, so a newly chosen view loads
-     * now rather than after the one it replaced. `refix` false: this is the ask again after a fresh fix ([refixLater]), which doesn't set
-     * up another.
+     * Fetch the card for the chip chosen on Now. Safe to call repeatedly; only one runs. `restart` drops a fetch in flight, so a newly
+     * chosen view loads now rather than after the one it replaced. `refix` false: this is the ask again after a fresh fix ([refixLater]),
+     * which doesn't set up another.
      */
     fun load(restart: Boolean = false, refix: Boolean = true) {
         val token = store.token
@@ -731,56 +731,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(loading = true, liveUpdates = store.liveUpdates) }
                 val ctx = getApplication<Application>()
                 val (loc, fresh) = locate(ctx)
-                if (fresh != null && refix) refixLater(fresh, loc)
+                if (fresh != null && refix) refixJob = refixLater(fresh, loc) { load(restart = true, refix = false) }
                 val api = Api(token, hour12 = hour12(ctx))
                 val s = _state.value
                 try {
-                    if (s.showNearby) {
-                        val stops = api.nearby(loc?.latitude, loc?.longitude, Locator.accOf(loc))
-                        val now = System.currentTimeMillis()
-                        answeredAt[NEARBY] = now
-                        _state.update { it.copy(nearby = stops, loading = false, error = null, fetchedAt = now, updateRequired = false) }
-                    } else {
-                        val json = api.nextJson(s.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
-                        val now = System.currentTimeMillis()
-                        // The planned answer is read as it's kept (only once read); another, only read.
-                        // Signed out meanwhile: the screen has moved on, and the answer was the old account's.
-                        val answer =
-                            (if (s.target == Target.Plan) store.saveAnswer(json, now, sentWith = token) else NextAnswer.parse(json))
-                                ?: return@launch _state.update { it.copy(loading = false) }
-                        // The planned answer is exactly what the widget shows, so
-                        // keep the widget in step while the app is open.
-                        if (s.target == Target.Plan) {
-                            // The timeline moves when the answer's trip does.
-                            val before = _state.value.answers[Target.Plan]
-                            // And when the kept one is over two minutes old, as on the Mac: the
-                            // copy from disk counts as loaded, so Today's leave-by times could
-                            // be hours old beside a fresh card. And when it's in the other language.
-                            val dayAge = now - store.dayFetchedAt
-                            if (
-                                _state.value.day == null ||
-                                    dayAge > DAY_MAX_AGE_MS ||
-                                    store.dayLang != L.header() ||
-                                    before?.destLabel != answer.destLabel ||
-                                    before?.card?.phase != answer.card?.phase
-                            )
-                                loadDay()
-                            Refresher.scheduleNext(ctx, answer, now)
-                            store.lastError = null
-                            redrawWidgets(ctx)
-                        }
-                        answeredAt[s.target] = now
-                        _state.update {
-                            it.copy(
-                                answers = it.answers + (s.target to answer),
-                                rawAnswers = it.rawAnswers + (s.target to json.toString()),
-                                places = answer.places,
-                                loading = false,
-                                error = null,
-                                fetchedAt = now,
-                                updateRequired = false,
-                            )
-                        }
+                    val json = api.nextJson(s.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                    val now = System.currentTimeMillis()
+                    // The planned answer is read as it's kept (only once read); another, only read.
+                    // Signed out meanwhile: the screen has moved on, and the answer was the old account's.
+                    val answer =
+                        (if (s.target == Target.Plan) store.saveAnswer(json, now, sentWith = token) else NextAnswer.parse(json))
+                            ?: return@launch _state.update { it.copy(loading = false) }
+                    // The planned answer is exactly what the widget shows, so
+                    // keep the widget in step while the app is open.
+                    if (s.target == Target.Plan) {
+                        // The timeline moves when the answer's trip does.
+                        val before = _state.value.answers[Target.Plan]
+                        // And when the kept one is over two minutes old, as on the Mac: the
+                        // copy from disk counts as loaded, so Today's leave-by times could
+                        // be hours old beside a fresh card. And when it's in the other language.
+                        val dayAge = now - store.dayFetchedAt
+                        if (
+                            _state.value.day == null ||
+                                dayAge > DAY_MAX_AGE_MS ||
+                                store.dayLang != L.header() ||
+                                before?.destLabel != answer.destLabel ||
+                                before?.card?.phase != answer.card?.phase
+                        )
+                            loadDay()
+                        Refresher.scheduleNext(ctx, answer, now)
+                        store.lastError = null
+                        redrawWidgets(ctx)
+                    }
+                    answeredAt[s.target] = now
+                    _state.update {
+                        it.copy(
+                            answers = it.answers + (s.target to answer),
+                            rawAnswers = it.rawAnswers + (s.target to json.toString()),
+                            places = answer.places,
+                            loading = false,
+                            error = null,
+                            fetchedAt = now,
+                            updateRequired = false,
+                        )
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -809,20 +802,77 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Pulled down: what's on screen asked for again, exactly as the 30 s refresh asks ([load]), or the one already on its way waited for.
-     * Not asked within [Pull.FRESH_MS] of the last answer: the server would send the same. Says how it went, for the chip.
+     * The stops around you, for the Nearby tab, which asks when it opens and then at the card's pace ([POLL_MS]) while it's the tab on
+     * screen. As [load]: only one runs, `restart` drops the one in flight, and `refix` false is the ask again after a fresh fix. A failed
+     * ask leaves the last stops up, under the time they came and what went wrong.
+     */
+    fun loadNearby(restart: Boolean = false, refix: Boolean = true) {
+        // Signed out meanwhile: Now's load says so and leaves the tabs.
+        val token = store.token ?: return load()
+        if (nearbyJob?.isActive == true) {
+            if (!restart) return
+            nearbyJob?.cancel()
+        }
+        nearbyRefixJob?.cancel()
+        nearbyJob =
+            viewModelScope.launch(account) {
+                _state.update { it.copy(nearbyLoading = true) }
+                val ctx = getApplication<Application>()
+                val (loc, fresh) = locate(ctx)
+                if (fresh != null && refix) nearbyRefixJob = refixLater(fresh, loc) { loadNearby(restart = true, refix = false) }
+                val failed = { why: String? -> _state.update { it.copy(nearbyLoading = false, nearbyError = why) } }
+                try {
+                    val stops = Api(token, hour12 = hour12(ctx)).nearby(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                    val now = System.currentTimeMillis()
+                    nearbyAnsweredAt = now
+                    _state.update {
+                        it.copy(nearby = stops, nearbyLoading = false, nearbyError = null, nearbyFetchedAt = now, updateRequired = false)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: UpdateRequired) {
+                    // Now's banner has the way to update; here, why there's nothing new.
+                    _state.update { it.copy(nearbyLoading = false, nearbyError = L.s(R.string.update_to_continue), updateRequired = true) }
+                } catch (e: ApiError) {
+                    // As for the card: a 401 for a token replaced meanwhile says nothing about the new one.
+                    failed(if (rejected(e, token) || e.status == 401) null else e.message)
+                } catch (e: ParseError) {
+                    failed(if (_state.value.update != null) L.s(R.string.update_to_continue) else L.s(R.string.unexpected_answer))
+                } catch (e: Exception) {
+                    failed(L.s(R.string.offline))
+                }
+            }
+    }
+
+    /**
+     * Now pulled down: its card asked for again, exactly as the 30 s refresh asks ([load]), or the one already on its way waited for. Not
+     * asked within [Pull.FRESH_MS] of the last answer: the server would send the same. Says how it went, for the chip.
      */
     suspend fun pull(): PullOutcome {
         val start = System.currentTimeMillis()
-        if (loadJob?.isActive != true && !Pull.shouldFetch(answeredAt[viewOf(_state.value)], start)) return PullOutcome.UpToDate
+        if (loadJob?.isActive != true && !Pull.shouldFetch(answeredAt[_state.value.target], start)) return PullOutcome.UpToDate
         load()
-        // A view switched meanwhile drops the load for the new one's: that's the one to wait for.
+        // A chip chosen meanwhile drops the load for the new one's: that's the one to wait for.
         while (true) {
             val job = loadJob ?: break
             job.join()
             if (loadJob === job) break
         }
-        return Pull.outcome(fetched = true, ok = (answeredAt[viewOf(_state.value)] ?: 0) >= start)
+        return Pull.outcome(fetched = true, ok = (answeredAt[_state.value.target] ?: 0) >= start)
+    }
+
+    /** Nearby pulled down, as Now is ([pull]). */
+    suspend fun pullNearby(): PullOutcome {
+        val start = System.currentTimeMillis()
+        if (nearbyJob?.isActive != true && !Pull.shouldFetch(nearbyAnsweredAt, start)) return PullOutcome.UpToDate
+        loadNearby()
+        // An ask again after a fresh fix drops this one for its own: that's the one to wait for.
+        while (true) {
+            val job = nearbyJob ?: break
+            job.join()
+            if (nearbyJob === job) break
+        }
+        return Pull.outcome(fetched = true, ok = (nearbyAnsweredAt ?: 0) >= start)
     }
 
     private var destinationsJob: Job? = null
@@ -843,15 +893,12 @@ internal fun installedFromPlay(ctx: android.content.Context): Boolean = runCatch
     .getOrDefault(false)
 
 /**
- * The answer on Now is fetched again this often while it's on screen: the API caches 15 s, so sooner shows nothing new. Not sooner at the
- * server's own moments (the card's `nextChangeAt`, the plan's `refreshAt`) either: a leave time that keeps sliding (a late bus) moves them
- * a few seconds on with every answer, so following them would poll every 5 s. The countdown ticks on the phone in between; the Mac and the
- * server's trip engine wait 30 s too.
+ * The answer on Now, and Nearby's stops, are fetched again this often while their tab is on screen: the API caches 15 s, so sooner shows
+ * nothing new. Not sooner at the server's own moments (the card's `nextChangeAt`, the plan's `refreshAt`) either: a leave time that keeps
+ * sliding (a late bus) moves them a few seconds on with every answer, so following them would poll every 5 s. The countdown ticks on the
+ * phone in between; the Mac and the server's trip engine wait 30 s too.
  */
 internal const val POLL_MS = 30_000L
-
-/** Nearby's place in the views pulled ([MainViewModel.pull]), beside the targets. */
-private const val NEARBY = "nearby"
 
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L

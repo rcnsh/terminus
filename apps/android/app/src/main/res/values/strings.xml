@@ -687,6 +687,8 @@
     <string name="nearby_to">to %1$s</string>
     <!-- Under Nearby's boards, only while a "~" time is showing. -->
     <string name="nearby_guess">~ is a guess from the timetable, not a live time.</string>
+    <!-- The Nearby tab, without the location. -->
+    <string name="nearby_location_ask">Allow location to see the buses around you. Without it, Nearby starts from your home stop.</string>
     <!-- Pull to refresh (Now and Stops): the words over the road, and how it went. -->
     <string name="pull_to_refresh">Pull to refresh</string>
     <string name="pull_let_go">Let go to refresh</string>

@@ -134,7 +134,7 @@ import sh.rcn.terminus.searchBuses
 
 /**
  * The Stops tab: a search, then the pinned stops in one card, a stop at a time as Nearby shows it, then every service. A row opens its
- * service's line; a stop's name, a stop on a line, or one found in the search, opens its board. Stops near you are Nearby's, on Now.
+ * service's line; a stop's name, a stop on a line, or one found in the search, opens its board. Stops near you are the Nearby tab's.
  *
  * Only the times the API gives are shown: the next bus and its `later` buses. A timetabled time says so; no time is guessed.
  */
@@ -386,8 +386,8 @@ private fun LinesPolling(vm: BusesViewModel) {
     }
 }
 
-/** The scene for a pull on the Stops tab's low horizon, [width] dp across: the sign on the near hill, the bus in from the left. */
-private fun hillScene(width: Float) = PullScene(width, Pull.hillSign(width))
+/** The scene for a pull on a band's low horizon (Stops, Nearby), [width] dp across: the sign on the near hill, the bus in from the left. */
+internal fun hillScene(width: Float) = PullScene(width, Pull.hillSign(width))
 
 /** The pull's bus for the page of stop [code]: the first service on the board it shows, in its colour; null before there's one. */
 private fun boardLivery(state: BusesUi, code: String): Long? {
