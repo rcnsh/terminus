@@ -8,8 +8,8 @@ import androidx.core.graphics.drawable.IconCompat
 import sh.rcn.terminus.ui.MainActivity
 
 /**
- * Long-press on the app icon: Next, each favourite, and Nearby, opening the app on that answer through the same terminus:// links the
- * widget's chips use. Rebuilt only when the places change.
+ * Long-press on the app icon: Next, each favourite, and Nearby, opening the app on that answer, or on the Nearby tab, through the same
+ * terminus:// links the widget's chips use. Rebuilt only when the places change.
  */
 object Shortcuts {
     fun update(ctx: Context, places: List<Place>) {

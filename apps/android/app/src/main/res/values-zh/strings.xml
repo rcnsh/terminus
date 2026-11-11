@@ -685,6 +685,8 @@
     <string name="nearby_after_bus">再之后</string>
     <string name="nearby_to">开往 %1$s</string>
     <string name="nearby_guess">~ 是按时刻表估计的，不是实时时间。</string>
+    <!-- The Nearby tab, without the location. -->
+    <string name="nearby_location_ask">允许定位，查看你周围的巴士。否则，“附近”会从你家附近的车站开始。</string>
     <!-- Pull to refresh (Now and Stops): the words over the road, and how it went. -->
     <string name="pull_to_refresh">下拉刷新</string>
     <string name="pull_let_go">松开刷新</string>

@@ -100,7 +100,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
-import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullScene
 import sh.rcn.terminus.R
@@ -131,28 +130,16 @@ internal fun MainScreen(
     insets: PaddingValues,
     email: String?,
     onAddEmail: () -> Unit,
-    nearby: NearbyActions,
 ) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
-    // After two refusals Android stops showing the dialog, and the button
-    // would do nothing. Then the only way is the app's settings page.
-    var blocked by rememberSaveable { mutableStateOf(false) }
-    val askLocation =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            hasLocation = Locator.hasForeground(ctx)
-            val activity = ctx as? android.app.Activity
-            blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
-            vm.load()
-        }
-    val openSettings = { ctx.openAppSettings() }
+    val location = rememberLocationAsk { vm.load() }
 
     // Keep the answer fresh while the app is on screen: every 30 s (POLL_MS).
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             // Location may have been allowed in system settings meanwhile.
-            hasLocation = Locator.hasForeground(ctx)
+            location.recheck()
             while (true) {
                 vm.load()
                 // Never sooner than a 429's or a 503's Retry-After.
@@ -206,33 +193,11 @@ internal fun MainScreen(
                 }
             }
 
-        if (!hasLocation) {
-            Card(Modifier.fillMaxWidth().then(place)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(stringResource(R.string.location_ask))
-                    if (blocked) {
-                        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings_location)) }
-                    } else {
-                        TextButton(
-                            onClick = {
-                                askLocation.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    )
-                                )
-                            }
-                        ) {
-                            Text(stringResource(R.string.allow_location))
-                        }
-                    }
-                }
-            }
-        }
+        if (!location.allowed) LocationCard(stringResource(R.string.location_ask), location, place)
     }
     CompositionLocalProvider(LocalSky provides sky) {
         Box(Modifier.fillMaxSize()) {
-            // Pulled down at the top, what's shown (the card or Nearby) is asked for
+            // Pulled down at the top, the card is asked for
             // again: the sky stretches, and your bus drives to your stop on its horizon.
             BusPull(
                 sky.road.bus?.takeIf { sky.road.stop }?.color,
@@ -255,7 +220,7 @@ internal fun MainScreen(
 
                             if (notices == Notices.AboveChips) noticeCards(Modifier.padding(bottom = 12.dp))
 
-                            // Next and Nearby first, as on the widget, then favourites and the
+                            // Next first, then favourites and the
                             // places added from "Go somewhere else" (each with an X); the row
                             // scrolls, and the edge fades while there's more.
                             val chips = rememberScrollState()
@@ -290,20 +255,14 @@ internal fun MainScreen(
                                             Wordmark(MaterialTheme.typography.titleLarge)
                                         }
                                     FilterChip(
-                                        selected = !state.showNearby && state.target == Target.Plan,
+                                        selected = state.target == Target.Plan,
                                         onClick = { vm.select(Target.Plan) },
                                         label = { Text(stringResource(R.string.chip_next)) },
                                         colors = chosenChip(),
                                     )
-                                    FilterChip(
-                                        selected = state.showNearby,
-                                        onClick = vm::showNearby,
-                                        label = { Text(stringResource(R.string.chip_nearby)) },
-                                        colors = chosenChip(),
-                                    )
                                     for (p in state.places) {
                                         FilterChip(
-                                            selected = !state.showNearby && state.target == Target.SavedPlace(p.key),
+                                            selected = state.target == Target.SavedPlace(p.key),
                                             onClick = { vm.select(Target.SavedPlace(p.key)) },
                                             label = { Text(p.label) },
                                             colors = chosenChip(),
@@ -313,7 +272,7 @@ internal fun MainScreen(
                                         val code = d.id.removePrefix("stop:")
                                         AddedChip(
                                             label = d.label,
-                                            selected = !state.showNearby && (state.target as? Target.Code)?.code == code,
+                                            selected = (state.target as? Target.Code)?.code == code,
                                             onClick = { vm.select(Target.Code(code, d.label)) },
                                             onRemove = { vm.removeAdded(d) },
                                         )
@@ -330,37 +289,29 @@ internal fun MainScreen(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    // Under the chips: what's shown (the card or Nearby), "go later", Today, and the footer. Wide, the card is
+                    // Under the chips: the card, "go later", Today, and the footer. Wide, the card is
                     // in the left half and Today beside it, from the horizon down, with the footer under it.
                     val card: @Composable () -> Unit = {
                         // A minimum height keeps the chips and search from jumping as views
                         // switch or data arrives.
                         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-                            if (state.showNearby)
-                                Column {
-                                    SkyHead(26.dp) {}
-                                    SkyGround()
-                                    NearbyList(state.nearby, state.loading, nearby)
-                                }
-                            else {
-                                // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
-                                val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
-                                OfflinePlanOr(offline, state.answer, state.day) {
-                                    // Undo once: on Today's row while it's there for this trip, not on the card as well.
-                                    AnswerCard(
-                                        withoutLocalUndo(state.answer, state.removed?.takeIf { !it.failed }?.item?.key),
-                                        state.loading,
-                                        vm::signal,
-                                        state.signalling,
-                                        vm::choose,
-                                        onPlace = { vm.select(Target.SavedPlace(it)) },
-                                        onStep = vm::step,
-                                    )
-                                }
+                            // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
+                            val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
+                            OfflinePlanOr(offline, state.answer, state.day) {
+                                // Undo once: on Today's row while it's there for this trip, not on the card as well.
+                                AnswerCard(
+                                    withoutLocalUndo(state.answer, state.removed?.takeIf { !it.failed }?.item?.key),
+                                    state.loading,
+                                    vm::signal,
+                                    state.signalling,
+                                    vm::choose,
+                                    onPlace = { vm.select(Target.SavedPlace(it)) },
+                                    onStep = vm::step,
+                                )
                             }
                         }
                         // Somewhere else: going there later today, planned like a class.
-                        if (!state.showNearby && state.target != Target.Plan && state.paired) {
+                        if (state.target != Target.Plan && state.paired) {
                             TimeButton(
                                 stringResource(R.string.go_later),
                                 null,
@@ -401,7 +352,7 @@ internal fun MainScreen(
                                 color = muted,
                                 modifier = Modifier.weight(1f, fill = false).semantics { if (failed) liveRegion = LiveRegionMode.Polite },
                             )
-                            if (!state.showNearby && state.answer != null) {
+                            if (state.answer != null) {
                                 if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
                                 var reporting by remember { mutableStateOf<String?>(null) }
                                 var reportingLine by remember { mutableStateOf("") }
@@ -450,7 +401,7 @@ internal fun MainScreen(
                         !wide -> {
                             card()
                             // The rest of today under the planned answer.
-                            if (!state.showNearby && state.target == Target.Plan) today()
+                            if (state.target == Target.Plan) today()
                             footerRow()
                         }
                         // Today shows whichever chip is chosen: it's your day either way.

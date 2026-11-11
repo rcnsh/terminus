@@ -67,7 +67,7 @@ data class MapUi(
     val busAnswers: Int = 0,
     val busStatus: BusStatus? = null,
     val sheet: MapSheet? = null,
-    /** A stop opened from elsewhere (Nearby on Now), for the map to move to once. */
+    /** A stop opened from elsewhere (the Nearby tab), for the map to move to once. */
     val focus: String? = null,
     /** A bus come back to from one of its stops, for the map to move back to once. */
     val focusBus: String? = null,
