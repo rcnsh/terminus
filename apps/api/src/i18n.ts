@@ -197,8 +197,10 @@ const en = {
   arrive: ((t: string, slack: string) => `Arrive ${t} · ${slack}`) as Fn<[string, string]>,
   arriveLower: ((t: string, slack: string) => `arrive ${t} · ${slack}`) as Fn<[string, string]>,
   catchLine: ((c: string, t: string, slack: string) => `${c} · arrive ${t}, ${slack}`) as Fn<[string, string, string]>,
-  goNow: ((svc: string, t: string, reach: string | null) => `Or go now: ${svc} at ${t}${reach ? ` · arrive ${reach}` : ''}`) as Fn<
-    [string, string, string | null]
+  /** The class card's sooner bus: "Or go now: A2 at 09:03, off at Ventus · arrive 09:18". */
+  goNow: ((svc: string, t: string, off: string | null, reach: string | null) =>
+    `Or go now: ${svc} at ${t}${off ? `, off at ${off}` : ''}${reach ? ` · arrive ${reach}` : ''}`) as Fn<
+    [string, string, string | null, string | null]
   >,
   phaseDue: 'Time to get going',
   phaseHeading: 'On your way',
@@ -259,7 +261,8 @@ const en = {
   byTime: ((t: string) => `by ${t}`) as Fn<[string]>,
   arriveCap: ((t: string) => `Arrive ${t}`) as Fn<[string]>,
   /** A class's sooner bus: "Or go now: R2 at 09:06 from PGP". */
-  orGoNowFrom: ((svc: string, t: string, stop: string) => `Or go now: ${svc} at ${t} from ${stop}`) as Fn<[string, string, string]>,
+  orGoNowFrom: ((svc: string, t: string, stop: string, off: string | null) =>
+    `Or go now: ${svc} at ${t} from ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string, string, string, string | null]>,
   /** A trip's other bus: "Or A1 at 09:09 from PGP". */
   orBusFrom: ((svc: string, t: string, stop: string) => `Or ${svc} at ${t} from ${stop}`) as Fn<[string, string, string]>,
   rideFor: ((t: string) => `${t} ride`) as Fn<[string]>,
@@ -559,7 +562,7 @@ const zh: Msgs = {
   arrive: (t, slack) => zs`${t}到达 · ${slack}`,
   arriveLower: (t, slack) => zs`${t}到达 · ${slack}`,
   catchLine: (c, t, slack) => zs`${c} · ${t}到达，${slack}`,
-  goNow: (svc, t, reach) => zs`或现在走：${t}的${svc}${reach ? zs` · ${reach}到达` : ''}`,
+  goNow: (svc, t, off, reach) => zs`或现在走：${t}的${svc}${off ? zs`，在${off}下车` : ''}${reach ? zs` · ${reach}到达` : ''}`,
   phaseDue: '该出发了',
   phaseHeading: '在路上',
   phaseWaiting: '在车站',
@@ -607,7 +610,7 @@ const zh: Msgs = {
   thereBy: (t) => zs`${t}前到`,
   byTime: (t) => zs`${t}前出发`,
   arriveCap: (t) => zs`${t}到达`,
-  orGoNowFrom: (svc, t, stop) => zs`或现在走：在${stop}搭${t}的${svc}`,
+  orGoNowFrom: (svc, t, stop, off) => zs`或现在走：在${stop}搭${t}的${svc}${off ? zs`，在${off}下车` : ''}`,
   orBusFrom: (svc, t, stop) => zs`或在${stop}搭${t}的${svc}`,
   rideFor: (t) => zs`乘车${t}`,
   walkFrom: (t, stop) => zs`从${stop}步行${t}`,

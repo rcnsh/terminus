@@ -243,3 +243,33 @@ test('outside a trip the glance is a clock time, never a minute count that a men
   for (const name of ['class-bus', 'place', 'landmark', 'room', 'scheduled', 'evening-home'])
     assert.ok(cardFor(await load(name), true).glance.length <= 12, name);
 });
+
+test('the class card’s sooner bus says where to get off, when that isn’t the class’s own stop', async () => {
+  const cls = await load('class-bus');
+  const plain = cardFor(cls);
+  assert.equal(plain.goNow, 'Or go now: R2 at 09:06 · arrive 09:15');
+  assert.equal(plain.journey.backupText, 'Or go now: R2 at 09:06 from PGP');
+  // The headline bus stops near the class's stop, not at it: both lines name where to get off.
+  const off = { ...cls, bus: { ...cls.bus, off: 'Ventus', toStop: 'Ventus' } };
+  const card = cardFor(off);
+  assert.equal(card.goNow, 'Or go now: R2 at 09:06, off at Ventus · arrive 09:15');
+  assert.equal(card.journey.backupText, 'Or go now: R2 at 09:06 from PGP, off at Ventus');
+  const z = zh(() => cardFor(off));
+  assert.equal(z.goNow, '或现在走：09:06 的 R2，在 Ventus 下车 · 09:15 到达');
+  assert.equal(z.journey.backupText, '或现在走：在 PGP 搭 09:06 的 R2，在 Ventus 下车');
+  // With a change of bus, `off` is where the second bus drops you: not said of the first.
+  const change = {
+    svc: 'D2',
+    from: 'Kent Vale',
+    fromCode: 'KV',
+    stop: 'Kent Vale',
+    stopCode: 'KV',
+    board: null,
+    reach: null,
+    rideS: 300,
+    estimated: false,
+  };
+  const twoBuses = cardFor({ ...off, bus: { ...off.bus, change } });
+  assert.equal(twoBuses.goNow, 'Or go now: R2 at 09:06 · arrive 09:15');
+  assert.equal(twoBuses.journey.backupText, 'Or go now: R2 at 09:06 from PGP');
+});

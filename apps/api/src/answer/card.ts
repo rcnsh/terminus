@@ -569,6 +569,9 @@ type Steps = Omit<
   | 'change'
 > & { change: ChangeSteps | null };
 
+/** Where to get off the class card's sooner bus: not with a change of bus, where `off` is the second bus's. */
+const goNowOff = (a: MeAnswer): string | null => (a.bus?.change ? null : (a.bus?.off ?? null));
+
 /** The service in running text: "95 ($)" for a public bus, so the fare shows where no badge does. */
 const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
 
@@ -583,7 +586,10 @@ function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Step
   const backupText = !j.bus
     ? j.why
     : j.backup
-      ? (isClass ? m().orGoNowFrom : m().orBusFrom)(busName(j.backup), j.backup.board, j.backup.stop)
+      ? isClass
+        ? // A class's sooner bus is the headline one: where to get off when it isn't the class's own stop.
+          m().orGoNowFrom(busName(j.backup), j.backup.board, j.backup.stop, goNowOff(a))
+        : m().orBusFrom(busName(j.backup), j.backup.board, j.backup.stop)
       : null;
   const c = j.change;
   const offText = j.off ? m().offAt(j.off) : null;
@@ -748,6 +754,7 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
     card.goNow = m().goNow(
       a.bus?.paid ? named({ svc, paid: true }) : svc,
       approx(roughly(a), at(a.departsAt!)),
+      goNowOff(a),
       a.timing.reachAt ? approx(roughly(a), at(a.timing.reachAt)) : null,
     );
   }

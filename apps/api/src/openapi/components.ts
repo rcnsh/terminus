@@ -1189,7 +1189,8 @@ export function components(): Record<string, unknown> {
                   goNow: {
                     type: ['string', 'null'],
                     example: 'Or go now: R2 at 09:06 · arrive 09:15',
-                    description: 'Class only: the headline bus, when it is not the one to wait for.',
+                    description:
+                      'Class only: the headline bus, when it is not the one to wait for, and where to get off when that is not the destination stop.',
                   },
                   note: { type: ['string', 'null'], description: 'Class only: why the leave-by is earlier than it could be.' },
                   estimate: {
@@ -1478,7 +1479,7 @@ export function components(): Record<string, unknown> {
                         type: ['string', 'null'],
                         example: 'Or go now: R2 at 09:06 from PGP',
                         description:
-                          'The other way: for a class the sooner bus to go now on ("Or go now: R2 at 09:06 from PGP"), for a trip the other bus ("Or A1 at 09:09 from PGP"), on foot `why`. A public bus is "95 ($)". Null with none.',
+                          'The other way: for a class the sooner bus to go now on ("Or go now: R2 at 09:06 from PGP", with ", off at Ventus" when it gets you off at a stop other than the class’s own, on one bus), for a trip the other bus ("Or A1 at 09:09 from PGP"), on foot `why`. A public bus is "95 ($)". Null with none.',
                       },
                       summary: {
                         type: 'string',
