@@ -514,7 +514,7 @@ const zh: Msgs = {
   liveUnavailable: '暂无实时时间',
   orAlt: (name, eta, plain) => (plain ? zs`或${name}，${eta}` : zs`或${name}，${eta}后`),
 
-  noBuses: '没有巴士运行',
+  noBuses: '没有巴士在运行',
   walkLabel: (t) => `步行 · ${t}`,
   noBusWalk: (t) => zs`无巴士 · 步行${t}`,
   servicesEnded: '今晚已停运',
@@ -674,15 +674,15 @@ const zh: Msgs = {
   suggestEarlier: (label, n) => zs`这个月你有${n} 次没赶上去${label}的巴士。以后提早一班出发吗？`,
   leaveEarlier: '提早出发',
   noThanks: '不用了',
-  oneEarlierNote: '按你为这节课的选择，提早一班',
+  oneEarlierNote: '按你对这节课的设置，提早一班',
   oftenBusy: (svc, stop) => zs`那个时间${stop}的${svc}经常很挤`,
   mayBeFull: (busy) => `${busy}，可能会满`,
   soOneEarlier: (busy) => `${busy}，所以提早一班`,
 
-  nusmodsNoAnswer: (mods) => zs`NUSMods 没有回应${mods}。没有做任何改动，请一分钟后再试。`,
+  nusmodsNoAnswer: (mods) => zs`查询${mods}时 NUSMods 没有响应。没有做任何改动，请一分钟后再试。`,
   modsNoClasses: (mods, _many, term) => zs`${mods}在${term}没有课`,
-  linkNoClasses: (term) => zs`这个链接里没有在${term}上的课`,
-  nothingImported: (why) => `没有导入：${why}。你的课表没有改动。`,
+  linkNoClasses: (term) => zs`这个链接里没有在${term}期间开设的课`,
+  nothingImported: (why) => `没有导入任何课：${why}。你的课表没有改动。`,
   tooManyModules: (n, max) => `这个链接有 ${n} 个模块，最多 ${max} 个`,
   notAModule: (code) => `“${code}”不是模块代码`,
   noteTooLong: (n) => `说明请少于 ${n} 个字符`,
@@ -731,7 +731,7 @@ const zh: Msgs = {
   approveNumber: (device) => zs`${device}上显示的数字`,
   approveRule: '请输入设备上显示的数字，输错会取消这个请求。',
   approveButton: '批准',
-  notYou: '没有请求过？',
+  notYou: '不是你发起的？',
   notMe: '不是我',
   notMeHint: '这会取消请求，并在几小时内不让应用用你的邮箱登录。',
   pageApproved: '已批准',
@@ -870,7 +870,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'too many passkeys; remove one first': '通行密钥太多，请先删除一个',
   'walkPace must be slow, normal or fast': 'walkPace 必须是 slow、normal 或 fast',
   'your settings were changed on another device; try again': '你的设置刚在另一台设备上改过，请再试一次',
-  "terminus can't reach your account right now; try again in a minute": 'terminus 现在无法读取你的账户，请一分钟后再试',
+  "terminus can't reach your account right now; try again in a minute": 'terminus 现在无法访问你的账户，请一分钟后再试',
 };
 
 /** An error message in the current language. Unknown ones stay English. */

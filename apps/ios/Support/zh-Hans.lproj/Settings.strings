@@ -30,7 +30,7 @@
 "400 m in about 5 min. An average pace." = "400 米约 5 分钟。一般步速。";
 "400 m in about 6 min. A relaxed pace, or if you often carry a bag." = "400 米约 6 分钟。步伐从容，或经常背着包。";
 "A class no longer in your timetable" = "已不在你课表里的课";
-"A class was changed on another device. Check it and try again." = "这节课已在另一台设备上更改。请检查后再试一次。";
+"A class was changed on another device. Check it and try again." = "有一节课在另一台设备上改过了。请检查后再试一次。";
 "A device" = "一台设备";
 "A reminder 5 minutes before you need to leave" = "在需要出发前 5 分钟提醒你";
 "A wrong answer?" = "答案不对？";
@@ -49,7 +49,7 @@
 "Aim one bus earlier when yours is often packed." = "你要搭的巴士经常很挤时，提早一班。";
 "All off" = "全部关闭";
 "Allowed" = "已允许";
-"Already a favourite: %@" = "已在收藏中：%@";
+"Already a favourite: %@" = "已经收藏了：%@";
 "Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs." = "也用于你的 Mac、网页和邮件。地点和巴士名称保持英文，与站牌一致。";
 "and" = "到";
 "API docs" = "API 文档";
@@ -209,7 +209,7 @@
 "Server" = "服务器";
 "Set up your watch" = "设置你的手表";
 "Show buses between" = "在这段时间显示巴士";
-"Show buses from" = "从这个时间开始显示巴士";
+"Show buses from" = "从这个时间起显示巴士";
 "Show buses until" = "显示巴士到这个时间";
 "Sign out" = "退出登录";
 "Sign out of this iPad?" = "在这台 iPad 上退出登录？";
