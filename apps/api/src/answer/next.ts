@@ -26,7 +26,7 @@ import {
   upcomingClass,
 } from '../timetable/profile.ts';
 import { type TimetableClass, venueAt, venueStops, venueToStop } from '../timetable/nusmods.ts';
-import { indexGraph } from './resolve.ts';
+import { indexGraph, nearStopWalks } from './resolve.ts';
 import { serviceEndsAt } from './hours.ts';
 import { feedFor } from './departures.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
@@ -296,20 +296,22 @@ function endWalks(dest: Dest, speed: number) {
   // whichever the bus gets you off at.
   const lm = venueM ? null : landmark(dest.to);
   const several = room && room.also.length && endWalkS ? room.walkM : lm && Object.keys(lm.stops).length > 1 ? lm.stops : null;
+  // A stop itself, not home: a stop near it will do, with the walk on from there.
+  const homeTrip = dest.why === 'home' || dest.why === 'gap-home';
+  const near = !room && !lm && !homeTrip ? nearStopWalks(GRAPH, dest.to, speed) : undefined;
   const endWalkByStopS = several
     ? acrossTheRoad(Object.fromEntries(Object.entries(several).map(([code, m]) => [code, Math.round(m / speed)])))
-    : undefined;
-  return { room, venueM, venueWalkS, endWalkS, endWalkByStopS };
+    : near;
+  // The walk on by the stop you get off at, where that's what decides it: a
+  // room several stops serve, or a stop near the destination (a food court's
+  // stops count from its nearest one).
+  const walkByStopS = lm ? undefined : endWalkByStopS;
+  return { room, venueM, venueWalkS, endWalkS, endWalkByStopS, walkByStopS };
 }
 
-/** A room several stops serve: the walk from the one the bus gets you off at. */
-function offWalk(
-  room: ReturnType<typeof venueStops>,
-  endWalkByStopS: Record<string, number> | undefined,
-  offCode: string | undefined,
-): number | null {
-  return (room?.also.length && endWalkByStopS?.[offCode ?? '']) || null;
-}
+/** The walk on from the stop the bus gets you off at, when it's by that stop (endWalks `walkByStopS`). */
+const offWalk = (walks: { walkByStopS?: Record<string, number> }, offCode: string | undefined): number | null =>
+  walks.walkByStopS?.[offCode ?? ''] || null;
 
 /** How to get to `dest` now: the bus, the leave-by and, for a class, whether you'll make it. */
 export async function tripAnswer(
@@ -339,7 +341,8 @@ export async function tripAnswer(
     };
   }
   const venue = dest.trip?.venue || dest.venue;
-  const { room, venueM, venueWalkS, endWalkS, endWalkByStopS } = endWalks(dest, speed);
+  const walks = endWalks(dest, speed);
+  const { room, venueM, venueWalkS, endWalkS, endWalkByStopS } = walks;
   // A place served by several stops arrives at whichever is quicker. Home is
   // every home stop: an A1 to PGP gets you home as well as a D2 to PGP Foyer.
   const target = room && venueM ? { to: room.to, also: room.also } : targetStops(dest.to);
@@ -362,7 +365,7 @@ export async function tripAnswer(
         ? {
             atMs: classStartMs(dest.trip, nowMs),
             venueWalkS,
-            ...(room?.also.length && endWalkByStopS ? { walkByStopS: endWalkByStopS } : {}),
+            ...(walks.walkByStopS ? { walkByStopS: walks.walkByStopS } : {}),
             fullBusMargin: profile.fullBusMargin,
             ...(oneEarlier ? { oneEarlier } : {}),
           }
@@ -377,7 +380,7 @@ export async function tripAnswer(
   // For a class, say whether you'll make it: stop arrival plus the walk
   // from the stop to the venue, against the start time. A room several stops
   // serve: from the one the bus gets you to.
-  const offWalkS = offWalk(room, endWalkByStopS, answer.leave?.toCode);
+  const offWalkS = offWalk(walks, answer.leave?.toCode);
   const timing = dest.trip
     ? timingFor(answer.arriveAt, dest.trip, offWalkS ?? venueWalkS, nowMs, h12, answer.leave?.estimated === true)
     : null;
@@ -489,8 +492,8 @@ function classTiming(
   if (!dest.trip || !end) return { timing: null, words: null };
   // The same walk as before you boarded (tripAnswer), so the spare time
   // doesn't jump once you're on the bus.
-  const { room, venueWalkS, endWalkByStopS } = endWalks(dest, paceSpeed(profile.walkPace));
-  const timing = timingFor(end, dest.trip, offWalk(room, endWalkByStopS, offCode) ?? venueWalkS, nowMs, h12, !live);
+  const walks = endWalks(dest, paceSpeed(profile.walkPace));
+  const timing = timingFor(end, dest.trip, offWalk(walks, offCode) ?? walks.venueWalkS, nowMs, h12, !live);
   // Late: "~3 min late"; otherwise only the spare time, as the arrival is already said.
   const words = timing
     ? timing.status === 'late'

@@ -1522,6 +1522,23 @@ another service, or the same one from another stop only when it gets you
 there within `WALK.mentionWithinS` of the best: across the road it's usually
 the same bus the wrong way round the loop.
 
+**Where to get off.** At the destination stop, or across the road from it
+(`off`, with the walk back across in the ride). Going to a stop itself, also
+at any stop within `WALK.nearStopM` (400 m) of it by the routed walk
+(`nearStopWalks`): a bus that passes close by but doesn't call there gets you
+there too. The A2 from Opp KR MRT passes Ventus, 292 m from CLB, and reaches
+IT, across from CLB, only on its next run from Kent Ridge Bus Terminal. The
+callers pass those stops as `endWalkByStopS`, the walk on from each, as a food
+court's several stops are: the ride ends at the stop (`off` names it), the walk
+on is the trip's end walk (the card's `walkEnd`), and the ranking counts it as
+walking. Choosing where to get off weighs it too (`Target.costS`), and a bus
+to a stop with a walk on no shorter than from where you stand isn't one. Home,
+a room and a place have their own stops and get none nearby. A stop nearby is
+somewhere to get off, never somewhere you already are: standing at Ventus, a
+bus to CLB is still one to catch. A stop with a bus to the destination itself
+takes a candidate's slot (`WALK.maxCandidates`) before one whose buses only
+go near it.
+
 **Changing buses.** Where no single bus goes there, even from a stop a
 short walk away, the answer is a trip on two shuttles
 ([`transfer.ts`](../apps/api/src/answer/transfer.ts)): the first to a stop the second
@@ -1637,7 +1654,7 @@ stop. A place with several stops is walked to by whichever makes it shortest
 choice that trades walking for waiting or riding, each second on foot counts
 `WALK.sunWeight` (1.5) times: walking the whole way against the bus
 (`walkVerdict`, whose walks are the whole walk and the bus's walks to its stop,
-across the road at a change and on to the place), one stop against another
+across the road at a change and on to the place or from a stop nearby), one stop against another
 (`scoreOptions`, `confidence`) and, for a class, which bus to leave for
 (`leaveBy`). Most people would rather wait five minutes in a shelter than walk
 in the sun and arrive a little sooner. Only the choice is weighted: every time

@@ -51,8 +51,8 @@
     }
   ],
   "label": "D2 · 5 分钟",
-  "detail": "Opp KR MRT · 过马路 · 约 10 分钟到 COM 3",
-  "alt": null,
+  "detail": "Opp KR MRT · 过马路 · 约 10 分钟到 COM 3 · 或 A2，8 分钟后",
+  "alt": "A2 · 8 分钟 · Opp KR MRT",
   "departsAt": "2026-08-27T01:05:00Z",
   "arriveAt": "2026-08-27T01:09:45Z",
   "bus": {
@@ -66,7 +66,19 @@
     "estimated": false,
     "toStop": "COM 3"
   },
-  "altBus": null,
+  "altBus": {
+    "svc": "A2",
+    "stop": "Opp KR MRT",
+    "stopCode": "KR-MRT-OPP",
+    "walkS": 23,
+    "rideS": 190,
+    "board": "2026-08-27T01:08:00Z",
+    "arrive": "2026-08-27T01:11:10Z",
+    "estimated": false,
+    "off": "TCOMS",
+    "toStop": "TCOMS",
+    "endWalkS": 241
+  },
   "leave": {
     "at": "2026-08-27T01:04:17Z",
     "estimated": false,
@@ -85,9 +97,9 @@
     "trip": "to:COM3",
     "earlier": null,
     "later": {
-      "svc": "D2",
+      "svc": "A2",
       "stop": "KR-MRT-OPP",
-      "board": "2026-08-27T01:15:00Z"
+      "board": "2026-08-27T01:08:00Z"
     },
     "moved": false
   },
@@ -160,7 +172,12 @@
       "arriveStop": "09:09",
       "slack": null,
       "live": true,
-      "backup": null,
+      "backup": {
+        "svc": "A2",
+        "color": "#d9a000",
+        "stop": "Opp KR MRT",
+        "board": "09:08"
+      },
       "why": null,
       "change": null,
       "title": "去 COM 3",
@@ -171,7 +188,7 @@
       "walkEndText": null,
       "arriveText": "09:09 到达",
       "arriveWhere": "在 COM 3",
-      "backupText": null,
+      "backupText": "或在 Opp KR MRT 搭 09:08 的 A2",
       "summary": "在 Opp KR MRT 搭 09:05 的 D2"
     },
     "fromNus": true,
@@ -180,9 +197,9 @@
       "trip": "to:COM3",
       "earlier": null,
       "later": {
-        "svc": "D2",
+        "svc": "A2",
         "stop": "KR-MRT-OPP",
-        "board": "2026-08-27T01:15:00Z"
+        "board": "2026-08-27T01:08:00Z"
       },
       "moved": false,
       "earlierLabel": "早一班",

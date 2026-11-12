@@ -67,13 +67,16 @@ const halfWay = (graph: Graph, svc: string) => headwayFor(graph, svc) / 2;
 export function transferRoutes(graph: Graph, origin: Stop, targets: Target[]): Route[] {
   let byKey = memo.get(graph);
   if (!byKey) memo.set(graph, (byKey = new Map()));
-  const key = `${origin.code}|${targets.map((t) => `${t.code}:${t.crossS}`).join(',')}`;
+  const key = `${origin.code}|${targets.map((t) => `${t.code}:${t.crossS}:${t.costS ?? 0}`).join(',')}`;
   const hit = byKey.get(key);
   if (hit) return hit;
 
   const idx = indexGraph(graph);
-  const targetCodes = new Set(targets.map((t) => t.code));
+  // Already there; a stop near it is still somewhere to change.
+  const targetCodes = new Set(targets.filter((t) => !t.near).map((t) => t.code));
   const shuttle = (svc: string) => !isPublic(graph, svc);
+  // A leg to a stop near the destination, with the walk on from it as it counts in choosing.
+  const legCost = (leg: Leg) => legRideS(leg) + (targets.find((t) => t.near && t.code === leg.to?.code)?.costS ?? 0);
   const best = new Map<string, { route: Route; s: number }>();
   for (const svc1 of (idx.servingStop.get(origin.code) ?? []).filter(shuttle)) {
     const stay = bestLeg(graph, idx, svc1, origin.code, targets);
@@ -94,13 +97,13 @@ export function transferRoutes(graph: Graph, origin: Stop, targets: Target[]): R
           if (svc2 === svc1) continue;
           const leg2 = bestLeg(graph, idx, svc2, board.code, targets);
           if (!leg2) continue;
-          const onS = legRideS(leg1) + crossM / WALK.speedMs + TRANSFER.changeBufferS + halfWay(graph, svc2) + legRideS(leg2);
+          const onS = legRideS(leg1) + crossM / WALK.speedMs + TRANSFER.changeBufferS + halfWay(graph, svc2) + legCost(leg2);
           // Staying on the first bus gets there as soon.
-          if (stay && legRideS(stay) <= onS) continue;
+          if (stay && legCost(stay) <= onS) continue;
           const s = halfWay(graph, svc1) + onS;
           // The second bus from the start does too.
           const direct2 = bestLeg(graph, idx, svc2, origin.code, targets);
-          if (direct2 && halfWay(graph, svc2) + legRideS(direct2) <= s) continue;
+          if (direct2 && halfWay(graph, svc2) + legCost(direct2) <= s) continue;
           const k = `${svc1}|${svc2}|${board.code}`;
           const was = best.get(k);
           if (!was || s < was.s) best.set(k, { route: { leg1, at, board, crossM, leg2 }, s });
@@ -134,10 +137,13 @@ const ROUTES_MAX = 8;
  */
 export function planTransfers(graph: Graph, input: ResolveInput, cands: Candidate[]): TransferPlan {
   if (!input.to || TRANSFER.mode === 'off') return NONE;
-  const direct = cands.some((c) => c.legs.length > 0);
-  if (direct && TRANSFER.mode !== 'beats') return NONE;
   const idx: GraphIndex = indexGraph(graph);
   const targets = targetsFor(idx, input);
+  // A single bus there: to the destination itself, whichever stop its leg
+  // gets off at (a stop near it can be the better one), not only near it.
+  const own = targets.filter((t) => !t.near);
+  const direct = cands.some((c) => c.legs.some((l) => bestLeg(graph, idx, l.svc, c.stop.code, own)));
+  if (direct && TRANSFER.mode !== 'beats') return NONE;
   const speed = input.walkSpeedMs ?? WALK.speedMs;
   const endS = (leg: Leg) => input.endWalkByStopS?.[leg.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
 
@@ -147,9 +153,9 @@ export function planTransfers(graph: Graph, input: ResolveInput, cands: Candidat
     .filter((c) => !c.stop.public)
     .sort((a, b) => a.walkS - b.walkS)
     .slice(0, WALK.maxCandidates);
-  const beat = direct
-    ? Math.min(...cands.flatMap((c) => c.legs.map((l) => c.walkS + halfWay(graph, l.svc) + legRideS(l) + endS(l))))
-    : Infinity;
+  // What a change must beat: a single bus there, or failing that one near it and the walk on.
+  const legs = cands.flatMap((c) => c.legs.map((l) => c.walkS + halfWay(graph, l.svc) + legRideS(l) + endS(l)));
+  const beat = legs.length ? Math.min(...legs) : Infinity;
 
   const all: TransferRoute[] = origins.flatMap((o) =>
     transferRoutes(graph, o.stop, targets).map((r) => {

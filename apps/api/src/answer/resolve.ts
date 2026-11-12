@@ -184,6 +184,31 @@ function homeWalk(input: ResolveInput): HomeWalk | null {
 export interface Target {
   code: string;
   crossS: number;
+  /** A stop near the destination (`nearStopWalks`): somewhere to get off and walk on, not to be. */
+  near?: true;
+  /** Near: the walk on from it, in seconds, and what that walk counts for in choosing (weighted). */
+  walkS?: number;
+  costS?: number;
+}
+
+/**
+ * Going to a stop itself, the other stops within WALK.nearStopM of it on
+ * foot (the routed walk), with the walk from each in seconds: a bus that
+ * passes close by gets you there too. Callers pass it as `endWalkByStopS`
+ * for a stop, never for home or a room, which have their own stops.
+ */
+export function nearStopWalks(graph: Graph, code: string, speed: number = WALK.speedMs): Record<string, number> | undefined {
+  const idx = indexGraph(graph);
+  const dest = idx.byCode.get(code);
+  if (!dest) return undefined;
+  const out: Record<string, number> = {};
+  for (const s of graph.stops) {
+    if (s.code === dest.code || s.code === dest.opposite || s.public) continue;
+    if (haversineM(s.lat, s.lon, dest.lat, dest.lon) > WALK.nearStopM) continue;
+    const m = stopFootM(s, dest);
+    if (m <= WALK.nearStopM) out[s.code] = Math.round(m / speed);
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /**
@@ -192,16 +217,27 @@ export interface Target {
  * a route that only serves the far side never counts, and the answer takes
  * a longer bus to the exact stop. Getting off on the far side costs the walk
  * back across, which is part of the journey.
+ *
+ * Any other stop with a walk on from it (`endWalkByStopS`: a stop near the
+ * destination, from nearStopWalks) is one too, its walk weighted as walking
+ * is in choosing where to get off.
  */
 export function targetsFor(idx: GraphIndex, input: ResolveInput): Target[] {
   if (!input.to) return [];
   const speed = input.walkSpeedMs ?? WALK.speedMs;
-  return [input.to, ...(input.toAlso ?? [])].flatMap((code) => {
+  const out: Target[] = [input.to, ...(input.toAlso ?? [])].flatMap((code) => {
     const s = idx.byCode.get(code);
     if (!s) return [];
     const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
     return [{ code, crossS: 0 }, ...(opp ? [{ code: opp.code, crossS: Math.round(stopFootM(opp, s) / speed) }] : [])];
   });
+  const weight = input.walkWeight ?? WALK.sunWeight;
+  for (const [code, walkS] of Object.entries(input.endWalkByStopS ?? {})) {
+    if (idx.byCode.has(code) && !out.some((t) => t.code === code)) {
+      out.push({ code, crossS: 0, near: true, walkS, costS: Math.round(walkS * weight) });
+    }
+  }
+  return out;
 }
 
 /**
@@ -209,12 +245,16 @@ export function targetsFor(idx: GraphIndex, input: ResolveInput): Target[] {
  * walk across the road included; null when it goes to none of them.
  */
 export function bestLeg(graph: Graph, idx: GraphIndex, svc: string, fromCode: string, targets: Target[]): Leg | null {
-  let best: { hops: number; crossS: number; code: string; rideS?: number } | null = null;
+  let best: { hops: number; crossS: number; code: string; rideS?: number; near?: true; costS?: number } | null = null;
   // A public bus rides by the metres along its route (public.ts): its
   // campus stops can be a long way round the island apart.
   const pub = isPublic(graph, svc);
-  const cost = (b: { hops: number; crossS: number; rideS?: number }) => (b.rideS ?? b.hops * RIDE.secondsPerHop) + b.crossS;
+  const cost = (b: { hops: number; crossS: number; rideS?: number; costS?: number }) =>
+    (b.rideS ?? b.hops * RIDE.secondsPerHop) + b.crossS + (b.costS ?? 0);
+  // Already near: a bus is worth it only to a stop with a shorter walk on.
+  const from = targets.find((t) => t.near && t.code === fromCode);
   for (const t of targets) {
+    if (t.near && (t.code === fromCode || (from && t.walkS! >= from.walkS!))) continue;
     const r = reach(idx, svc, fromCode, t.code);
     if (!r) continue;
     const m = pub ? rideMetres(idx, svc, fromCode, t.code) : null;
@@ -222,7 +262,13 @@ export function bestLeg(graph: Graph, idx: GraphIndex, svc: string, fromCode: st
     let rideS = m !== null ? publicRideS(m) : stops ? shuttleRideS(idx, stops, RIDE.secondsPerHop) : r.hops * RIDE.secondsPerHop;
     // Past the terminal it's the next run: about a headway's wait there.
     if (r.through) rideS += headwayFor(graph, svc);
-    const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== r.hops * RIDE.secondsPerHop ? { rideS } : {}) };
+    const cand = {
+      hops: r.hops,
+      crossS: t.crossS,
+      code: t.code,
+      ...(rideS !== r.hops * RIDE.secondsPerHop ? { rideS } : {}),
+      ...(t.near ? { near: t.near, costS: t.costS } : {}),
+    };
     if (!best || cost(cand) < cost(best)) best = cand;
   }
   if (!best) return null;
@@ -231,6 +277,8 @@ export function bestLeg(graph: Graph, idx: GraphIndex, svc: string, fromCode: st
     hops: best.hops,
     ...(best.rideS !== undefined ? { rideS: best.rideS } : {}),
     ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}),
+    // A stop near the destination is where to get off too; the walk on is the trip's end walk.
+    ...(best.near ? { off: idx.byCode.get(best.code)! } : {}),
     to: idx.byCode.get(best.code)!,
   };
 }
@@ -261,12 +309,24 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
 
   const speed = input.walkSpeedMs ?? WALK.speedMs;
   const targets = targetsFor(idx, input);
-  const targetCodes = new Set(targets.map((t) => t.code));
-  // A stop worth a fetch: some bus from it goes there (any stop, with no destination).
-  const reaches = (stop: Stop) =>
-    !to ||
-    (!targetCodes.has(stop.code) &&
-      (opts.any || (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code)))));
+  // Where you'd be there already: a stop near it is still somewhere to get on.
+  const targetCodes = new Set(targets.filter((t) => !t.near).map((t) => t.code));
+  // A stop worth a fetch: some bus from it goes there (any stop, with no
+  // destination), or failing that to a stop near it.
+  // From a stop near it, only to a stop with a shorter walk on (as bestLeg).
+  const busTo = (stop: Stop, near: boolean) => {
+    const own = targets.find((t) => t.near && t.code === stop.code);
+    return (idx.servingStop.get(stop.code) ?? []).some((svc) =>
+      targets.some(
+        (t) =>
+          Boolean(t.near) === near &&
+          t.code !== stop.code &&
+          !(own && t.near && t.walkS! >= own.walkS!) &&
+          reach(idx, svc, stop.code, t.code),
+      ),
+    );
+  };
+  const reaches = (stop: Stop) => !to || (!targetCodes.has(stop.code) && (opts.any || busTo(stop, false) || busTo(stop, true)));
 
   // `startS`: without coordinates, the walk to where `footM` starts from.
   let base: Array<{ stop: Stop; distM: number; footM: number; startS?: number }>;
@@ -292,7 +352,13 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
     // stop no bus to the destination calls at would only take a fetch and
     // push out one that does.
     const shuttle = (inside ?? inRange).filter((c) => !c.stop.public);
-    const near = shuttle.filter((c) => reaches(c.stop)).slice(0, WALK.maxCandidates);
+    // Stops with a bus to the place itself first: one whose buses only go
+    // near it takes a slot only when there's one spare, and one at most,
+    // so a stop as the destination asks the feed for little more.
+    const byBus = shuttle.filter((c) => reaches(c.stop));
+    const there = byBus.filter((c) => !to || opts.any || busTo(c.stop, false)).slice(0, WALK.maxCandidates);
+    const fill = byBus.filter((c) => !there.includes(c)).slice(0, Math.min(1, WALK.maxCandidates - there.length));
+    const near = byBus.filter((c) => there.includes(c) || fill.includes(c));
     const publicOnly = inRange.find((c) => c.stop.public && reaches(c.stop));
     if (publicOnly) near.push(publicOnly);
     // A user's usual stops (near home) join the set when in range, so a dense

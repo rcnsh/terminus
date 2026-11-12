@@ -11,7 +11,7 @@ import { appVersion, authConfigured, getSession } from './feeds/auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './feeds/appversion.ts';
 import { fmsConfigured, getBuses } from './feeds/fms.ts';
 import { shortStop } from './answer/format.ts';
-import { boardAsOf, boardAt, displayName, indexGraph } from './answer/resolve.ts';
+import { boardAsOf, boardAt, displayName, indexGraph, nearStopWalks } from './answer/resolve.ts';
 import { serviceEndsAt, serviceResumesAt, stoppedReason } from './answer/hours.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './map/campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './map/buses.ts';
@@ -76,7 +76,9 @@ function resolveDestination(url: URL) {
 
   const stop = idx.byCode.get(raw);
   // Abbreviated like every other stop name ("Information Technology" -> "IT").
-  if (stop) return { to: stop.code, also: [] as string[], from, label: shortStop(stop.name, 14), at: null };
+  // A stop nearby will do too, with the walk on from it.
+  if (stop)
+    return { to: stop.code, also: [] as string[], from, label: shortStop(stop.name, 14), at: null, near: nearStopWalks(GRAPH, stop.code) };
   const lm = landmark(raw);
   if (lm) {
     const t = targetStops(raw);
@@ -112,6 +114,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
     toAlso: dest?.also,
     originCode,
     destAt: dest?.at ?? null,
+    ...(dest?.near ? { endWalkByStopS: dest.near } : {}),
     ...(url.searchParams.get('public') === '1' ? { publicBuses: true } : {}),
   };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
@@ -128,7 +131,15 @@ async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
     await answerFor(
       env,
       ctx,
-      { lat, lon, to: dest.to, toAlso: dest.also, originCode: lat === null ? dest.from : null, destAt: dest.at },
+      {
+        lat,
+        lon,
+        to: dest.to,
+        toAlso: dest.also,
+        originCode: lat === null ? dest.from : null,
+        destAt: dest.at,
+        ...(dest.near ? { endWalkByStopS: dest.near } : {}),
+      },
       dest.label,
       nowMs,
     ),
