@@ -642,7 +642,7 @@
     <string name="buses_next_stop">下一站 %1$s</string>
     <string name="buses_live_updated">实时 · %1$s</string>
     <string name="buses_scheduled">估计</string>
-    <string name="buses_last_known">最后已知</string>
+    <string name="buses_last_known">最后已知时间</string>
     <string name="buses_seats">有座位</string>
     <string name="buses_busy">有点挤</string>
     <string name="buses_packed">很挤</string>
@@ -660,7 +660,7 @@
     <string name="buses_n_running">%1$d 辆巴士在运行</string>
     <string name="buses_none_running">没有巴士在运行</string>
     <string name="buses_your_stop">你的车站</string>
-    <string name="buses_at_stop">在站</string>
+    <string name="buses_at_stop">在车站</string>
     <string name="buses_on_the_way">在路上</string>
     <string name="buses_show_on_map">在地图上显示</string>
     <string name="buses_times_here_only">只显示你的车站的时间。</string>
