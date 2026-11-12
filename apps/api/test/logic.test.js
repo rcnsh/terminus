@@ -19,6 +19,7 @@ import {
   scoreOptions,
   nearestStop,
   walkAllTheWayS,
+  nearStopWalks,
 } from '../src/answer/resolve.ts';
 import { hhmmToMin, mergeServiceHours, inService } from '../src/answer/hours.ts';
 import { resolveBerths } from '../src/answer/departures.ts';
@@ -1501,4 +1502,54 @@ test("a window that crosses midnight still runs after it, by yesterday's hours",
   assert.equal(serviceEndsAt(graph, 'X', sgt(28, 23, 30)), sgt(29, 1, 0), 'closes tomorrow');
   assert.equal(inService(graph, 'X', sgt(31, 0, 30)), false, 'Mon 00:30: Sunday did not run');
   assert.equal(inService(graph, 'X', sgt(31, 7, 30)), true, 'Mon 07:30');
+});
+
+test('going to a stop, a bus that passes near it drops you there to walk: A2 off at Ventus for CLB, not round the terminal', () => {
+  // The A2 from Opp KR MRT calls at Ventus, 292 m from CLB, and reaches IT,
+  // across from CLB, only on its next run from Kent Ridge Bus Terminal.
+  const near = nearStopWalks(BUNDLED_GRAPH, 'CLB');
+  assert.equal(near['LT13-OPP'], Math.round(292 / WALK.speedMs));
+  assert.ok(!('IT' in near) && !('CLB' in near), 'the stop and the one across the road are its own');
+  const input = { lat: null, lon: null, to: 'CLB', originCode: 'KR-MRT-OPP', endWalkByStopS: near };
+  const cands = candidateStops(BUNDLED_GRAPH, input);
+  const a2 = cands.find((c) => c.stop.code === 'KR-MRT-OPP').legs.find((l) => l.svc === 'A2');
+  assert.equal(a2.to.code, 'LT13-OPP');
+  assert.equal(a2.off.code, 'LT13-OPP');
+  // The ride is the ride: the walk on is the trip's end walk, not part of it.
+  assert.ok(!a2.crossS);
+  // With the A2 due long before the A1 across the road, it's the bus.
+  const options = scoreOptions(
+    BUNDLED_GRAPH,
+    cands,
+    arrivalsFor(
+      Object.fromEntries([
+        sa('KR-MRT-OPP', [{ svc: 'A2', etaS: 180, crowd: null, plate: null }]),
+        sa('KR-MRT', [{ svc: 'A1', etaS: 1500, crowd: null, plate: null }]),
+      ]),
+    ),
+    NOW,
+    (o) => near[o.to?.code] ?? 0,
+  );
+  assert.equal(options[0].svc, 'A2');
+  assert.equal(options[0].to.code, 'LT13-OPP');
+  assert.ok(options[0].totalS + near['LT13-OPP'] < 15 * 60, `${options[0].totalS} s`);
+  // Standing at Ventus, a bus to CLB is still one to catch: near isn't there.
+  const fromVentus = candidateStops(BUNDLED_GRAPH, { ...input, originCode: 'LT13-OPP' });
+  assert.ok(fromVentus.some((c) => c.stop.code === 'LT13-OPP' && c.legs.length > 0));
+  // And no bus from it to a stop with a longer walk on.
+  for (const c of fromVentus)
+    for (const l of c.legs) assert.ok(!near[l.to.code] || near[l.to.code] < near['LT13-OPP'], `${l.svc} to ${l.to.code}`);
+});
+
+test("a stop near the destination takes a candidate's slot only when there aren't enough with a bus to it", () => {
+  // Beside AS 5, going to SDE3-OPP: CLB has the K straight there.
+  const near = nearStopWalks(BUNDLED_GRAPH, 'SDE3-OPP');
+  const as5 = BUNDLED_GRAPH.stops.find((s) => s.code === 'AS5');
+  const codes = candidateStops(BUNDLED_GRAPH, { lat: as5.lat, lon: as5.lon, to: 'SDE3-OPP', originCode: null, endWalkByStopS: near }).map(
+    (c) => c.stop.code,
+  );
+  const without = candidateStops(BUNDLED_GRAPH, { lat: as5.lat, lon: as5.lon, to: 'SDE3-OPP', originCode: null }).map((c) => c.stop.code);
+  for (const code of without) assert.ok(codes.includes(code), `${code} kept: ${codes.join()}`);
+  // And one more stop at most, whose buses only go near it.
+  assert.ok(codes.length <= without.length + 1, codes.join());
 });

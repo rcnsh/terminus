@@ -189,7 +189,7 @@ export interface BusLeg {
   arrive: string | null;
   /** Not a live time: a guess from the headway, a public bus's timetabled time, or an old reading from a stale feed. */
   estimated: boolean;
-  /** Where to get off, when the bus only stops across the road from the destination. */
+  /** Where to get off, when the bus stops across the road from the destination, or at a stop near it. */
   off?: string;
   /** Where you get off (short name): the destination stop this bus calls at, or `off`. */
   toStop?: string;
@@ -299,11 +299,12 @@ export interface Leave {
   arrive: string | null;
   /** A reason the time is earlier than it could be ("D2 is often busy…"). Display verbatim. */
   note?: string | null;
-  /** Where to get off, when the bus only stops across the road from the
-   *  destination. Absent otherwise. Short stop name. */
+  /** Where to get off, when the bus stops across the road from the
+   *  destination or at a stop near it. Absent otherwise. Short stop name. */
   off?: string;
   /** Stop codes: where to board, and where to get off when that's across the
-   *  road (otherwise the destination's own stop). For matching a bus in the feed. */
+   *  road or a stop near the destination (otherwise the destination's own
+   *  stop). For matching a bus in the feed. */
   stopCode?: string;
   offCode?: string;
   /** Seconds on foot to the stop and on the bus, and the stop you get off
@@ -443,9 +444,9 @@ export interface Leg {
   /** Seconds to walk across from where the bus stops to the destination's
    *  side of the road, when it only calls at the opposite stop. Absent when it's 0. */
   crossS?: number;
-  /** Where to get off, when that's the opposite stop rather than the destination. */
+  /** Where to get off, when that's the opposite stop or a stop near the destination (Target.near) rather than the destination. */
   off?: Stop;
-  /** Where you get off: the destination stop this bus calls at, or its opposite stop. */
+  /** Where you get off: the destination stop this bus calls at, its opposite stop, or a stop near it. */
   to?: Stop;
 }
 
@@ -517,9 +518,9 @@ export interface ScoredOption {
    * route sequence carries berth codes, this can only be declared, not fixed.
    */
   ambiguousBerth: boolean;
-  /** Where to get off, when the bus only stops across the road from the destination. */
+  /** Where to get off, when the bus stops across the road from the destination, or at a stop near it. */
   off?: Stop;
-  /** Where you get off: the destination stop this bus calls at, or its opposite stop. */
+  /** Where you get off: the destination stop this bus calls at, its opposite stop, or a stop near it. */
   to?: Stop;
   /** A public bus, with a fare (public.ts). */
   paid?: true;
@@ -592,7 +593,8 @@ export interface ResolveInput {
    *  (a room, a building, a food court), for "LT3 in ~12 min". 0 for a stop. */
   endWalkS?: number;
   /** A place with several stops (a food court): the walk from each, by stop
-   *  code, as the bus you take may not stop at the closest. */
+   *  code, as the bus you take may not stop at the closest. Going to a stop,
+   *  the stops near it (nearStopWalks), each a place to get off too. */
   endWalkByStopS?: Record<string, number>;
   /** Where the room or building itself is, when known: within WALK.atVenueM of it you're there. */
   destAt?: { lat: number; lon: number } | null;

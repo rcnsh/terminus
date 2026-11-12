@@ -168,10 +168,10 @@ export function components(): Record<string, unknown> {
           off: {
             type: 'string',
             description:
-              'Where to get off, when the bus only stops across the road from the destination (e.g. `Opp NUSS` for AS 5). `arrive` includes the walk back across. Absent otherwise.',
+              'Where to get off, when the bus does not stop at the destination itself: across the road from it (e.g. `Opp NUSS` for AS 5), or, going to a stop, a stop nearby (e.g. `Ventus` for CLB). `arrive` includes the walk back across the road, but not the walk on from a stop nearby (`endWalkS`). Absent otherwise.',
           },
           stopCode: { type: 'string', description: 'Stop code of `stop`. Absent when walking.' },
-          offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
+          offCode: { type: 'string', description: 'Stop code of `off`. Absent without `off`.' },
           toStop: {
             type: 'string',
             example: 'UTown',
@@ -200,7 +200,7 @@ export function components(): Record<string, unknown> {
           endWalkS: {
             type: 'integer',
             description:
-              'Without a class to aim at: seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. A class’s `arrive` is already at its room. Absent for a stop.',
+              'Without a class to aim at: seconds on foot from where you get off to the place itself (a room, a building, a food court) or, going to a stop, from a stop nearby to it, which `arrive` does not count. A class’s `arrive` is already at its room. Absent otherwise.',
           },
           change: {
             $ref: '#/components/schemas/BusChange',
@@ -273,13 +273,14 @@ export function components(): Record<string, unknown> {
           },
           off: {
             type: 'string',
-            description: 'Where to get off, when the bus only stops across the road from the destination. Absent otherwise.',
+            description:
+              'Where to get off, when the bus does not stop at the destination itself: across the road from it, or, going to a stop, a stop nearby. Absent otherwise.',
           },
           toStop: { type: 'string', description: 'Where you get off, short name: the destination stop this bus calls at, or `off`.' },
           endWalkS: {
             type: 'integer',
             description:
-              'Seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. Absent for a stop.',
+              'Seconds on foot from where you get off to the place itself (a room, a building, a food court) or, going to a stop, from a stop nearby to it, which `arrive` does not count. Absent otherwise.',
           },
           paid: {
             type: 'boolean',
@@ -1353,7 +1354,8 @@ export function components(): Record<string, unknown> {
                       ride: { type: ['string', 'null'], description: 'Time on the bus ("3 min"). Null on foot.' },
                       off: {
                         type: ['string', 'null'],
-                        description: 'Where to get off, when that is across the road from the destination.',
+                        description:
+                          'Where to get off, when that is across the road from the destination or, going to a stop, a stop nearby.',
                       },
                       to: { type: 'string', description: 'Where you are going ("GEA1000 @ UTown").' },
                       toStop: { type: 'string', description: 'The stop you get off at ("UTown"), short enough for the end of a line.' },
@@ -1427,7 +1429,7 @@ export function components(): Record<string, unknown> {
                           rideText: {
                             type: 'string',
                             example: '14 min ride',
-                            description: 'The second bus’s step, with where to get off when that is across the road.',
+                            description: 'The second bus’s step, with where to get off when that is across the road or a stop nearby.',
                           },
                         },
                       },
@@ -1455,7 +1457,7 @@ export function components(): Record<string, unknown> {
                       rideText: {
                         type: ['string', 'null'],
                         example: '10 min ride · off at Opp NUSS',
-                        description: '`ride` as a step, with where to get off when that is across the road. Null on foot.',
+                        description: '`ride` as a step, with where to get off when that is across the road or a stop nearby. Null on foot.',
                       },
                       walkEndText: {
                         type: ['string', 'null'],

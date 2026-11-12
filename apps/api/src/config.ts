@@ -52,6 +52,12 @@ export const WALK = {
   maxRadiusM: 450,
   /** At most this many stops get an upstream fetch per request. */
   maxCandidates: 3,
+  /**
+   * Going to a stop, a bus may drop you at another stop up to this far on
+   * foot from it (by the routed walk): the A2 passes Ventus, 292 m from CLB,
+   * but only reaches CLB's side of the road on its next run.
+   */
+  nearStopM: 400,
   /** Do not claim you can catch a bus arriving this soon after you get there. */
   boardBufferS: 20,
   /** Located this close to a stop, you are at it: no walk, and no buffer. */
