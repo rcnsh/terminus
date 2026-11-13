@@ -136,10 +136,12 @@ test('in a building, a stop only public buses call at does not switch off the wa
     candidateStops(graph, { lat, lon, to: 'UTOWN', walkSpeedMs: 1.25, publicBuses })
       .filter((c) => !c.stop.public)
       .map((c) => [c.stop.code, Math.round(c.walkS)]);
+  // The stops likeliest to get you there soonest, nearest first: IT has the
+  // same buses as LT13-OPP a stop on. The D1 from CLB or LT13 goes round
+  // through its terminal, and is one you'd be at LT13-OPP for.
   const along = [
     ['LT13-OPP', 161],
-    ['CLB', 210],
-    ['LT13', 232],
+    ['IT', 244],
   ];
   assert.deepEqual(walks(GRAPH, false), along);
   assert.deepEqual(walks(GRAPH_PUBLIC, true), along);

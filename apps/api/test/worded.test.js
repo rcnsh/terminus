@@ -166,8 +166,8 @@ test('the journey comes worded: its title, the lines under each step, the backup
   const foot = cardFor(await load('class-walk')).journey;
   assert.equal(foot.rideText, null);
   assert.equal(foot.walkText, '3 min walk');
-  assert.equal(foot.backupText, 'D1 would be 16 min');
-  assert.equal(foot.summary, 'arrive 09:57 · 3 min walk · D1 would be 16 min');
+  assert.equal(foot.backupText, 'D1 would be 13 min');
+  assert.equal(foot.summary, 'arrive 09:57 · 3 min walk · D1 would be 13 min');
 });
 
 test('a bus off across the road says so under the ride', async () => {

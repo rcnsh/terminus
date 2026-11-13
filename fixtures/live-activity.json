@@ -132,6 +132,25 @@
     "late": true,
     "staleAt": 1787792700
   },
+  "evening-home": {
+    "phase": "due",
+    "phaseText": "Time to get going",
+    "headline": "A1 · 09:09",
+    "line": "Leave by 09:03 · A1 from AS 5",
+    "glance": "Leave 09:03",
+    "to": "Home",
+    "svc": "A1",
+    "color": "#d32f2f",
+    "stop": "AS 5",
+    "off": "PGP",
+    "leaveAt": 1787792624,
+    "departAt": 1787792940,
+    "arriveAt": 1787793225,
+    "estimated": false,
+    "gone": false,
+    "late": false,
+    "staleAt": 1787792970
+  },
   "last-bus-warning": {
     "phase": "waiting",
     "phaseText": "At the stop",

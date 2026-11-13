@@ -82,7 +82,7 @@ class WidgetFaceTest {
         TestStrings.install()
         val f = face(load("class-walk.json"))
         assertNull(f.pill)
-        assertEquals("D1 would be 16 min", f.leg?.text)
+        assertEquals("D1 would be 13 min", f.leg?.text)
         assertNull(f.leg?.svc)
     }
 
