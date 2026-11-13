@@ -192,6 +192,13 @@
       "summary": "D2 09:05 at Opp KR MRT"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:COM3",

@@ -787,3 +787,12 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(try golden("public-wins").card?.fromNus == nil, "a public bus's times are LTA's")
     #expect(try golden("scheduled").card?.fromNus == nil, "an estimate is ours")
 }
+
+/// "Is this wrong?" offers only the reasons that fit the answer, which the server decides: no bus to come on a day that's done.
+@MainActor @Test func theReportSheetOffersTheReasonsThatFit() throws {
+    let ids = { (name: String) in ReportForm.offered(try golden(name).card?.reasons).map(\.id) }
+    #expect(try ids("class-bus") == ["never-came", "times-off", "wrong-stop", "walk-longer", "wrong-class"])
+    #expect(try ids("riding") == ["times-off", "wrong-stop", "walk-longer", "wrong-class"], "on the bus, it did come")
+    #expect(try ids("rest") == ["wrong-class"], "a day that's done has no bus, stop or walk")
+    #expect(ReportForm.offered(nil).count == 5, "a server that doesn't say offers them all")
+}

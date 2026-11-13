@@ -178,6 +178,11 @@
       "backupText": "D1 would be 13 min",
       "summary": "arrive 09:57 · 3 min walk · D1 would be 13 min"
     },
+    "reasons": [
+      "times-off",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "Walk · 3 min",

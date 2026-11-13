@@ -159,6 +159,13 @@
       "backupText": "Or P at ~09:11 from Opp UHC",
       "summary": "151 ($) ~09:04 at IT"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:CG",

@@ -186,6 +186,13 @@
       "backupText": "Or D2 at ~09:11 from PGP",
       "summary": "Walk to PGP · A1 ~09:06"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "place:mrt",

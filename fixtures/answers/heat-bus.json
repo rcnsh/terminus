@@ -162,6 +162,13 @@
       "summary": "Walk to PGP · D2 09:14"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT",

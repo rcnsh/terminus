@@ -68,6 +68,9 @@
     "notice": null,
     "h12": false,
     "journey": null,
+    "reasons": [
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "Add a home stop",

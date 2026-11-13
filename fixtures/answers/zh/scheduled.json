@@ -146,6 +146,13 @@
       "backupText": "或在 PGP 搭约 09:11 的 D2",
       "summary": "步行到 PGP · 约 09:11 的 A1"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "place:mrt",

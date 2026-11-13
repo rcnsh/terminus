@@ -178,6 +178,11 @@
       "backupText": "搭 D1 要 13 分钟",
       "summary": "09:57 到达 · 步行 3 分钟 · 搭 D1 要 13 分钟"
     },
+    "reasons": [
+      "times-off",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "步行 · 3 分钟",

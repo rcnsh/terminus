@@ -157,6 +157,13 @@
       "backupText": "Or go now: D2 at ~07:21 from PGP",
       "summary": "arrive ~07:57 · D2 ~07:35 at PGP"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "4:480:UTOWN",
