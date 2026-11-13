@@ -153,10 +153,8 @@ struct ReportSheet: View {
                     Button {
                         reason = on ? nil : key
                     } label: {
-                        HStack(spacing: 6) {
-                            if on { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
-                            Text(label)
-                        }
+                        // The fill alone marks it: a tick would widen the chip and push the row onto the next line.
+                        Text(label)
                     }
                     .buttonStyle(ChipButtonStyle(filled: on))
                     .accessibilityAddTraits(on ? .isSelected : [])
