@@ -618,18 +618,7 @@ private fun ReportSheet(
                                 selected = on,
                                 onClick = { reason = if (on) null else key },
                                 label = { Text(stringResource(label)) },
-                                leadingIcon =
-                                    if (on) {
-                                        {
-                                            Icon(
-                                                painterResource(R.drawable.ic_check),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    },
+                                // The fill alone marks it: a tick would widen the chip and push the row onto the next line.
                                 colors = chosenChip(),
                             )
                         }
