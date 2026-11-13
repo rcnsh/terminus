@@ -231,7 +231,7 @@ private fun SettingsPagePane(page: SettingsPage, top: Dp, bottom: Dp, back: (() 
         Box(Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
                 if (back != null) SkyBand(phase, top) { BackHeader(stringResource(page.title), back) }
-                else TitleBand(stringResource(page.title), phase, top)
+                else TitleBand(stringResource(page.title), phase, top, page = true)
                 Column(Modifier.column().padding(horizontal = 16.dp)) {
                     content()
                     Spacer(Modifier.height(32.dp))

@@ -22,7 +22,7 @@ the screen's size and the orientation never decide a layout.
 ## The top of a tab
 
 Nearby, Stops and Settings each start with the same slim band of sky: the
-tab's name in Settings' title size, the moon beside it at night, ending on
+tab's name as a large, heavy title, the moon beside it at night, ending on
 the low hills, the same height on all three, so switching tabs leaves the
 top where it was. Now's wordmark sits at the same height. Stops' search
 is just under the hills, on the page's own colours, above Pinned; in two

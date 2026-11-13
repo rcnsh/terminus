@@ -162,15 +162,23 @@ internal fun BackHeader(title: String, onBack: () -> Unit) {
 
 /**
  * The top of Nearby, Stops and Settings, and of a settings page beside the list: [title] in a [TabHeader] in the slim band of the sky
- * ([SkyBand]), the moon beside it at night, so the band is one height on each and the title in one place. In a pull ([BusPull]), the room
- * for its pill opens over the title and the title comes down with it.
+ * ([SkyBand]), the moon beside it at night, so the band is one height on each and the title in one place. A tab's title is large and extra
+ * bold; a page's ([page]) is a page's size, as [BackHeader]. In a pull ([BusPull]), the room for its pill opens over the title and the
+ * title comes down with it.
  */
 @Composable
-internal fun TitleBand(title: String, phase: Phase, top: Dp) {
+internal fun TitleBand(title: String, phase: Phase, top: Dp, page: Boolean = false) {
     SkyBand(phase, top) {
         Column(Modifier.pullLead(LocalPull.current)) {
             PullRoom(above = 8.dp, below = 8.dp)
-            TabHeader { Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() }) }
+            TabHeader {
+                Text(
+                    title,
+                    style = if (page) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    fontWeight = if (page) null else FontWeight.ExtraBold,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
         }
     }
 }

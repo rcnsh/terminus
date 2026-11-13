@@ -643,6 +643,8 @@ html { overflow-x: clip; }
 .settings-tab .settings { overflow-x: visible; }
 body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
 .tab-title, .settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
+/* A tab's title (Nearby, Stops, Settings) is large, in the display face; a page's stays a page's size. */
+.tab-title, .settings-tab .settings-title { font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }
 
 /* Now's sky (sky.js): from the top of the page down to the horizon at the
