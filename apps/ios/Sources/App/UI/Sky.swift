@@ -185,7 +185,7 @@ struct TabBand: View {
             VStack(alignment: .leading, spacing: 0) {
                 PullRoom(below: 10)
                 Text(title)
-                    .font(.largeTitle.weight(.bold))
+                    .font(.title.weight(.heavy))
                     .accessibilityAddTraits(.isHeader)
                     .padding(.top, 10)
             }
