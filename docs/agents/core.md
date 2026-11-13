@@ -21,7 +21,9 @@ depth. Read the bullet for the part you're changing.
   Worker, so a data change needs a deploy. The calendar is the exception:
   the cron also fetches it weekly into KV (`src/timetable/calendarsync.ts`), so it
   doesn't run out when nobody deploys.
-- **Answering.** `resolve.ts` picks candidate stops near the user, pairs each
+- **Answering.** `resolve.ts` picks the candidate stops near the user likeliest
+  to get them there soonest (worked out from the route data, not the
+  nearest: `likelyTripS`), pairs each
   stop with its opposite stop across the road, checks the bus goes downstream to the
   destination, and scores the options by arrival time. Rides are
   `RIDE.secondsPerHop` a stop, no faster than `RIDE.longHopMs` over a long

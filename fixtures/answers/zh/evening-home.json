@@ -1,8 +1,8 @@
 {
   "stop": {
-    "code": "CLB",
-    "name": "CLB",
-    "confidence": 0.5
+    "code": "AS5",
+    "name": "AS 5",
+    "confidence": 0.86
   },
   "quality": "live",
   "asOf": "2026-08-27T01:00:00.000Z",
@@ -64,17 +64,57 @@
       "berth": null
     }
   ],
-  "label": "步行 · 15 分钟",
-  "detail": "步行回家 · 搭 A1 要 31 分钟 · 从 CLB 出发",
-  "alt": "A1 · 9 分钟 · CLB",
-  "departsAt": null,
-  "arriveAt": "2026-08-27T01:15:05Z",
-  "foot": {
-    "s": 905,
-    "why": "搭 A1 要 31 分钟"
+  "label": "A1 · 9 分钟",
+  "detail": "AS 5 · 步行 5 分钟 · 约 14 分钟到家 · 步行要 15 分钟 · 拥挤程度：高 · 或 D2，14 分钟后",
+  "alt": "D2 · 14 分钟 · COM 3",
+  "departsAt": "2026-08-27T01:09:00Z",
+  "arriveAt": "2026-08-27T01:13:45Z",
+  "bus": {
+    "svc": "A1",
+    "stop": "AS 5",
+    "stopCode": "AS5",
+    "walkS": 296,
+    "rideS": 285,
+    "board": "2026-08-27T01:09:00Z",
+    "arrive": "2026-08-27T01:13:45Z",
+    "estimated": false,
+    "toStop": "PGP"
   },
-  "leave": null,
-  "steps": null,
+  "altBus": {
+    "svc": "D2",
+    "stop": "COM 3",
+    "stopCode": "COM3",
+    "walkS": 318,
+    "rideS": 190,
+    "board": "2026-08-27T01:14:00Z",
+    "arrive": "2026-08-27T01:17:10Z",
+    "estimated": false,
+    "toStop": "PGP"
+  },
+  "leave": {
+    "at": "2026-08-27T01:03:44Z",
+    "estimated": false,
+    "svc": "A1",
+    "stop": "AS 5",
+    "stopCode": "AS5",
+    "board": "2026-08-27T01:09:00Z",
+    "arrive": "2026-08-27T01:13:45Z",
+    "note": null,
+    "walkS": 296,
+    "rideS": 285,
+    "toStop": "PGP",
+    "toCode": "PGP"
+  },
+  "steps": {
+    "trip": "home:evening",
+    "earlier": null,
+    "later": {
+      "svc": "D2",
+      "stop": "COM3",
+      "board": "2026-08-27T01:14:00Z"
+    },
+    "moved": false
+  },
   "mode": "trip",
   "dest": {
     "to": "PGP",
@@ -97,11 +137,11 @@
   "walkSpeedMs": 1.3,
   "card": {
     "kind": "trip",
-    "staleAt": "2026-08-27T01:15:00Z",
-    "crowd": null,
+    "staleAt": "2026-08-27T01:09:30Z",
+    "crowd": "拥挤程度：高",
     "quality": null,
-    "leaveBy": null,
-    "leaveVia": null,
+    "leaveBy": "09:03 前出发",
+    "leaveVia": "在 AS 5 搭 09:09 的 A1",
     "catch": null,
     "arrive": null,
     "catchLine": null,
@@ -109,51 +149,78 @@
     "goNow": null,
     "note": null,
     "estimate": null,
-    "phase": "idle",
-    "phaseText": null,
-    "glance": "步行 15 分钟",
-    "line": "步行 · 15 分钟 · 步行回家",
+    "phase": "due",
+    "phaseText": "该出发了",
+    "glance": "09:03 出发",
+    "line": "09:03 前出发 · 在 AS 5 搭 A1",
     "actions": [],
     "warning": null,
-    "nextChangeAt": "2026-08-27T01:15:00Z",
+    "nextChangeAt": "2026-08-27T01:03:44Z",
     "remind": true,
     "suggestion": null,
     "ride": null,
     "gone": false,
-    "walkTo": null,
+    "walkTo": {
+      "name": "AS 5",
+      "lat": 1.293619,
+      "lon": 103.771475
+    },
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": null,
-      "walk": "15 分钟",
-      "bus": null,
-      "boardAt": null,
-      "ride": null,
+      "leave": "09:03",
+      "walk": "5 分钟",
+      "bus": {
+        "svc": "A1",
+        "color": "#d32f2f",
+        "stop": "AS 5",
+        "board": "09:09"
+      },
+      "boardAt": "2026-08-27T01:09:00Z",
+      "ride": "5 分钟",
       "off": null,
       "to": "家",
       "toStop": "PGP",
-      "arrive": "09:15",
+      "arrive": "09:13",
       "walkEnd": null,
-      "arriveStop": "09:15",
+      "arriveStop": "09:13",
       "slack": null,
-      "live": false,
-      "backup": null,
-      "why": "搭 A1 要 31 分钟",
+      "live": true,
+      "backup": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "COM 3",
+        "board": "09:14"
+      },
+      "why": null,
       "change": null,
       "title": "回家",
       "place": "家",
-      "byText": null,
-      "walkText": "步行 15 分钟",
-      "rideText": null,
+      "byText": "09:03 前出发",
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 5 分钟",
       "walkEndText": null,
-      "arriveText": "09:15 到达",
+      "arriveText": "09:13 到达",
       "arriveWhere": "在 PGP",
-      "backupText": "搭 A1 要 31 分钟",
-      "summary": "步行 15 分钟 · 搭 A1 要 31 分钟"
+      "backupText": "或在 COM 3 搭 09:14 的 D2",
+      "summary": "步行到 AS 5 · 09:09 的 A1"
     },
+    "fromNus": true,
     "upcoming": null,
-    "step": null,
-    "title": "步行 · 15 分钟",
+    "step": {
+      "trip": "home:evening",
+      "earlier": null,
+      "later": {
+        "svc": "D2",
+        "stop": "COM3",
+        "board": "2026-08-27T01:14:00Z"
+      },
+      "moved": false,
+      "earlierLabel": "早一班",
+      "laterLabel": "晚一班",
+      "bestLabel": "最佳班次"
+    },
+    "title": "A1 · 09:09",
     "heading": "回家",
     "remindAt": null
   }

@@ -34,9 +34,10 @@ import { buildingStops, footM, stopFootM } from './walk.ts';
 import { footS, mins } from './format.ts';
 import { listOf, m } from '../i18n.ts';
 import { viaFrom } from './via.ts';
-import { type Departure, type ServiceBoard, nextDeparture, serviceBoard } from './departures.ts';
-import { type StoppedReason, headwayFor, inService, serviceEndsAt, serviceResumesAt, stoppedReason } from './hours.ts';
+import { type Departure, FIRST_BUS_LEAD_S, type ServiceBoard, nextDeparture, serviceBoard } from './departures.ts';
+import { type StoppedReason, headwayFor, inService, serviceClosedAt, serviceEndsAt, serviceResumesAt, stoppedReason } from './hours.ts';
 import { type HomeWalk, atHome, residenceStops } from './residences.ts';
+import { ON_TIME_SLACK_S } from '../timetable/profile.ts';
 
 export { haversineM };
 
@@ -296,14 +297,67 @@ function atStop(input: ResolveInput, idx: GraphIndex, stop: Stop): boolean {
 }
 
 /**
+ * How many times its usual ride a bus may take, where a stop is ruled out
+ * on it: RIDE.secondsPerHop is a guess, and a bus waits at a stop.
+ */
+const SLOW_RIDE = 2;
+
+/** The walk on from the stop a bus drops you at (`code`; the destination's own, without one) to the place itself, s. */
+export function endWalkFromS(input: ResolveInput, code?: string): number {
+  return input.endWalkByStopS?.[code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
+}
+
+/**
+ * Whether `svc` has buses at `atMs`, by its hours: 'yes' when it's running;
+ * 'maybe' just outside them, when the feed can still list one (and a time
+ * from the feed is a bus, scoreLeg): about to start, as beforeOpening
+ * believes its first buses, or stopped so lately that its last bus may
+ * still be out on a slow run; else 'no'. Only for the order stops are asked
+ * about in: whether a bus comes is the feed's to say.
+ */
+export function runsAt(graph: Graph, svc: string, atMs: number): 'yes' | 'maybe' | 'no' {
+  if (inService(graph, svc, atMs)) return 'yes';
+  const opens = serviceResumesAt(graph, svc, atMs);
+  if (opens !== null && opens - atMs <= FIRST_BUS_LEAD_S * 1000) return 'maybe';
+  const closed = serviceClosedAt(graph, svc, atMs);
+  const idx = indexGraph(graph);
+  const runS = shuttleRideS(idx, idx.routes.get(svc)?.seq ?? [], RIDE.secondsPerHop);
+  return closed !== null && atMs - closed <= SLOW_RIDE * runS * 1000 ? 'maybe' : 'no';
+}
+
+/**
+ * How long the trip from a stop is likely to take, s, before anything is
+ * fetched: the walk to it (`walkS`), half a headway's wait, the ride, and the
+ * walk on from where the bus drops you, each second on foot weighted and a
+ * fare counted as the ranking does (rankCostS). The best of `legs`, each by
+ * its headway at `atMs` (its usual one, without); Infinity with none.
+ */
+export function likelyTripS(graph: Graph, input: ResolveInput, walkS: number, legs: Leg[], atMs?: number): number {
+  const weight = input.walkWeight ?? WALK.sunWeight;
+  let best = Infinity;
+  for (const leg of legs) {
+    const onFootS = (walkS + endWalkFromS(input, leg.to?.code)) * weight;
+    const fareS = isPublic(graph, leg.svc) ? PUBLIC.fareWorthS : 0;
+    best = Math.min(best, onFootS + headwayFor(graph, leg.svc, atMs) / 2 + legRideS(leg) + fareS);
+  }
+  return best;
+}
+
+/**
  * Stops worth fetching arrivals for. Bounded by WALK.maxCandidates so one
  * request never fans out into a dozen upstream calls.
+ *
+ * With a location and a destination, those are the stops in range
+ * (WALK.tripRadiusM) likeliest to get you there soonest, worked out from the
+ * route data alone (likelyTripS), not the nearest: a stop a minute further
+ * on, or across the road, often has the bus that goes straight there.
+ * `nowMs` puts the stops whose shuttles are running first.
  *
  * `any`: the stops near you whether or not a bus from them goes there, with
  * the legs that do (often none). Where no single bus does, these are where a
  * trip with a change of bus can start (transfer.ts).
  */
-export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: boolean } = {}): Candidate[] {
+export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: boolean; nowMs?: number } = {}): Candidate[] {
   const idx = indexGraph(graph);
   const { to } = input;
 
@@ -311,22 +365,20 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
   const targets = targetsFor(idx, input);
   // Where you'd be there already: a stop near it is still somewhere to get on.
   const targetCodes = new Set(targets.filter((t) => !t.near).map((t) => t.code));
-  // A stop worth a fetch: some bus from it goes there (any stop, with no
-  // destination), or failing that to a stop near it.
-  // From a stop near it, only to a stop with a shorter walk on (as bestLeg).
-  const busTo = (stop: Stop, near: boolean) => {
-    const own = targets.find((t) => t.near && t.code === stop.code);
-    return (idx.servingStop.get(stop.code) ?? []).some((svc) =>
-      targets.some(
-        (t) =>
-          Boolean(t.near) === near &&
-          t.code !== stop.code &&
-          !(own && t.near && t.walkS! >= own.walkS!) &&
-          reach(idx, svc, stop.code, t.code),
-      ),
-    );
+  // Each stop's buses there, worked out once: where to get off is the stop
+  // that gets you there soonest, crossing included (bestLeg).
+  const legMemo = new Map<string, Leg[]>();
+  const legsFrom = (stop: Stop): Leg[] => {
+    let legs = legMemo.get(stop.code);
+    if (!legs) {
+      legs = (idx.servingStop.get(stop.code) ?? []).flatMap((svc) => bestLeg(graph, idx, svc, stop.code, targets) ?? []);
+      legMemo.set(stop.code, legs);
+    }
+    return legs;
   };
-  const reaches = (stop: Stop) => !to || (!targetCodes.has(stop.code) && (opts.any || busTo(stop, false) || busTo(stop, true)));
+  // A stop worth a fetch: some bus from it goes there, or to a stop near it
+  // (any stop, with no destination).
+  const reaches = (stop: Stop) => !to || (!targetCodes.has(stop.code) && (opts.any || legsFrom(stop).length > 0));
 
   // `startS`: without coordinates, the walk to where `footM` starts from.
   let base: Array<{ stop: Stop; distM: number; footM: number; startS?: number }>;
@@ -334,6 +386,101 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
   const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, hw) : null;
   // In the residence you live in, the walk to your stop is the one you set.
   const yours = Boolean(hw && atHome(input.lat, input.lon, hw.stops));
+
+  // Of the stops in range with a bus there, the few to ask the feed about:
+  // the likeliest to get you there soonest (likelyTripS), not the nearest.
+  const likeliest = <C extends { stop: Stop; footM: number }>(stops: C[]): C[] => {
+    const { nowMs } = opts;
+    const walks = new Map(stops.map((c) => [c, atStop(input, idx, c.stop) ? 0 : c.footM / speed]));
+    const walkTo = (c: C) => walks.get(c)!;
+    const frees = new Map(stops.map((c) => [c, legsFrom(c.stop).filter((l) => !isPublic(graph, l.svc))]));
+    const free = (c: C) => frees.get(c)!;
+    // Not a stop where you'd only catch shuttles you can catch at another, a
+    // shorter walk away: every one from `b` calls at `a` too, and any of
+    // them you'd be at `b` for you'd be at `a` for. Up the line from `a`,
+    // that's whenever `b` is the longer walk. Down the line, when walking to
+    // `b` takes at least the walk to `a` and SLOW_RIDE times the bus's usual
+    // ride on from it (less, and you might just make at `b` a bus missed at
+    // `a`), and never past the terminal: a run starts there whatever has
+    // pulled in.
+    const through = (svc: string, from: Stop, off: string) => Boolean(reach(idx, svc, from.code, off)?.through);
+    const sameBuses = (b: C, a: C) =>
+      a !== b &&
+      free(b).every((leg) => {
+        const off = leg.to?.code ?? '';
+        if (!free(a).some((l) => l.svc === leg.svc && l.to?.code === off)) return false;
+        if (rideStops(idx, leg.svc, b.stop.code, off)?.includes(a.stop.code)) return walkTo(b) >= walkTo(a);
+        if (through(leg.svc, a.stop, off) !== through(leg.svc, b.stop, off)) return false;
+        const on = rideStops(idx, leg.svc, a.stop.code, off)?.includes(b.stop.code)
+          ? rideStops(idx, leg.svc, a.stop.code, b.stop.code)
+          : null;
+        return on !== null && walkTo(b) >= walkTo(a) + SLOW_RIDE * shuttleRideS(idx, on, RIDE.secondsPerHop);
+      });
+    // How sure a shuttle leg's bus is, with the time known: 0 running when
+    // you'd ride it (now, or by a class's latest board, as its leave-by
+    // counts it: leave.ts), 1 running now though not for the class (the one
+    // to go by now), 2 just outside its hours at either time, when the feed
+    // may still list one. NOT_RUNNING otherwise: the hours are a table kept
+    // by hand, so the feed is still asked where a place is spare.
+    const [PUBLIC_ONLY, NOT_RUNNING] = [3, 4];
+    const by = input.arriveBy;
+    const ran = new Map<string, ReturnType<typeof runsAt>>();
+    const runs = (svc: string, atMs: number) => {
+      const key = `${svc}|${atMs}`;
+      if (!ran.has(key)) ran.set(key, runsAt(graph, svc, atMs));
+      return ran.get(key)!;
+    };
+    const sure = (leg: Leg): number => {
+      if (nowMs === undefined) return 0;
+      const onS = by ? (by.walkByStopS?.[leg.to?.code ?? ''] ?? by.venueWalkS) : 0;
+      const boardMs = by ? Math.max(nowMs, by.atMs - (ON_TIME_SLACK_S + onS + legRideS(leg)) * 1000) : nowMs;
+      const [then, now] = [runs(leg.svc, boardMs), runs(leg.svc, nowMs)];
+      return then === 'yes' ? 0 : now === 'yes' ? 1 : then === 'maybe' || now === 'maybe' ? 2 : NOT_RUNNING;
+    };
+    // Where a stop comes among the rest: by its surest shuttles first, then
+    // by how long the trip on one of those is likely to take. A stop with
+    // only a public bus there, or only shuttles another stop has, comes
+    // after every stop with a shuttle that has buses: public buses add to
+    // the answer and never push a free bus out of it.
+    const place = (c: C): { tier: number; s: number } | null => {
+      const paid = legsFrom(c.stop).filter((l) => isPublic(graph, l.svc));
+      const publicOnly = paid.length ? { tier: PUBLIC_ONLY, s: likelyTripS(graph, input, walkTo(c), paid, nowMs) } : null;
+      const legs = c.stop.code !== input.step?.target?.stop && stops.some((a) => sameBuses(c, a)) ? [] : free(c);
+      if (!legs.length) return publicOnly;
+      const tiers = legs.map(sure);
+      const tier = Math.min(...tiers);
+      if (tier === NOT_RUNNING && publicOnly) return publicOnly;
+      const surest = legs.filter((_, i) => tiers[i] === tier);
+      const atMs = tier === 0 ? (by?.atMs ?? nowMs) : tier === NOT_RUNNING ? undefined : nowMs;
+      return { tier, s: likelyTripS(graph, input, walkTo(c), surest, atMs) };
+    };
+    const placed = new Map<C, { tier: number; s: number }>();
+    for (const c of stops) {
+      const p = place(c);
+      if (p) placed.set(c, p);
+    }
+    const byLikely = [...placed.keys()].sort((a, b) => placed.get(a)!.tier - placed.get(b)!.tier || placed.get(a)!.s - placed.get(b)!.s);
+    // First, whatever the others look like: the stop of a bus you chose
+    // (step.ts), and the stop you're standing at or else the nearest. Its
+    // bus may be the one pulling in, and it's the one you're most likely
+    // walking to, which mustn't drop out of the answer on the way. Then the
+    // likeliest, and of those the ones none of whose shuttles call at the
+    // destination itself take one place between them, so a stop with a bus
+    // there has one whenever there is such a stop.
+    const shuttle = byLikely.filter((c) => placed.get(c)!.tier !== PUBLIC_ONLY);
+    const nearest = shuttle.reduce<C | undefined>((n, c) => (n && walkTo(n) <= walkTo(c) ? n : c), undefined);
+    const first = (c: C) => c.stop.code === input.step?.target?.stop || c === nearest;
+    const own = targets.filter((t) => !t.near);
+    const there = (c: C) =>
+      placed.get(c)!.tier === PUBLIC_ONLY ||
+      (idx.servingStop.get(c.stop.code) ?? []).some(
+        (svc) => !isPublic(graph, svc) && own.some((t) => reach(idx, svc, c.stop.code, t.code)),
+      );
+    let nearOnly = 0;
+    return [...byLikely.filter(first), ...byLikely.filter((c) => !first(c))]
+      .filter((c) => first(c) || there(c) || nearOnly++ < 1)
+      .slice(0, WALK.maxCandidates);
+  };
   if (home) {
     base = home;
   } else if (input.lat != null && input.lon != null) {
@@ -343,22 +490,20 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
       .sort((a, b) => a.distM - b.distM)
       .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
     const inRange = all.filter((c) => c.distM <= WALK.maxRadiusM);
+    // Picked by their likely trip, from further off: only there can a longer walk be shown to pay.
+    const byLikelyTrip = Boolean(to) && !opts.any;
+    const inTrip = byLikelyTrip ? all.filter((c) => c.distM <= WALK.tripRadiusM) : inRange;
     // In a building, its shuttle stops by the paths from it: the straight
     // line can cross a hill or a road nobody crosses (buildingStops).
     const inside = buildingStops(input.lat, input.lon, idx.byCode);
-    // The nearest few shuttle stops that go there, and the nearest stop only
-    // public buses call at as one more: turning public buses on adds
-    // options and never crowds a shuttle stop out of the answer. A closer
-    // stop no bus to the destination calls at would only take a fetch and
-    // push out one that does.
-    const shuttle = (inside ?? inRange).filter((c) => !c.stop.public);
-    // Stops with a bus to the place itself first: one whose buses only go
-    // near it takes a slot only when there's one spare, and one at most,
-    // so a stop as the destination asks the feed for little more.
+    // A few shuttle stops that go there, and the nearest stop only public
+    // buses call at as one more: turning public buses on adds options and
+    // never crowds a shuttle stop out of the answer. A stop no bus to the
+    // destination calls at would only take a fetch and push out one that does.
+    const shuttle = (inside ?? inTrip).filter((c) => !c.stop.public);
     const byBus = shuttle.filter((c) => reaches(c.stop));
-    const there = byBus.filter((c) => !to || opts.any || busTo(c.stop, false)).slice(0, WALK.maxCandidates);
-    const fill = byBus.filter((c) => !there.includes(c)).slice(0, Math.min(1, WALK.maxCandidates - there.length));
-    const near = byBus.filter((c) => there.includes(c) || fill.includes(c));
+    const picked = new Set(byLikelyTrip ? likeliest(byBus) : byBus.slice(0, WALK.maxCandidates));
+    const near = byBus.filter((c) => picked.has(c));
     const publicOnly = inRange.find((c) => c.stop.public && reaches(c.stop));
     if (publicOnly) near.push(publicOnly);
     // A user's usual stops (near home) join the set when in range, so a dense
@@ -398,19 +543,13 @@ export function candidateStops(graph: Graph, input: ResolveInput, opts: { any?: 
   }
 
   const out: Candidate[] = base.map(({ stop, distM, footM: foot, startS }) => {
-    const legs = [];
     // Standing at the destination is not a boarding option. reach() returns
     // 0 hops for from === to, which would otherwise rank first every time.
-    const services = to && targetCodes.has(stop.code) ? [] : (idx.servingStop.get(stop.code) ?? []);
-    for (const svc of services) {
-      if (!to) {
-        legs.push({ svc, hops: 0 });
-        continue;
-      }
-      // Where to get off: the stop that gets you there soonest, crossing included.
-      const leg = bestLeg(graph, idx, svc, stop.code, targets);
-      if (leg) legs.push(leg);
-    }
+    const legs: Leg[] = !to
+      ? (idx.servingStop.get(stop.code) ?? []).map((svc) => ({ svc, hops: 0 }))
+      : targetCodes.has(stop.code)
+        ? []
+        : legsFrom(stop);
     // Starting from home or a room without coordinates: that walk comes
     // first, and a crossing to the far side's stop after it.
     // Standing at the stop by where the phone is, there's no walk to it:
@@ -1117,7 +1256,7 @@ export function walkAllTheWayS(
  */
 export function wholeWalk(graph: Graph, input: ResolveInput, fallbackFrom: Stop | null): { s: number; endS: number } | null {
   if (!input.to) return null;
-  const endOf = (code: string) => input.endWalkByStopS?.[code] ?? input.endWalkS ?? 0;
+  const endOf = (code: string) => endWalkFromS(input, code);
   let best: { s: number; endS: number } | null = null;
   for (const code of [input.to, ...(input.toAlso ?? [])]) {
     const s = walkAllTheWayS(graph, input, fallbackFrom, code);

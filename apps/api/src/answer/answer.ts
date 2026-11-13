@@ -10,7 +10,17 @@ import { getArrivals } from '../feeds/fms.ts';
 import { getPublicArrivals } from '../feeds/lta.ts';
 import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
-import { candidateStops, confidence, haversineM, indexGraph, nearestStop, pickAlt, scoreOptions, wholeWalk } from './resolve.ts';
+import {
+  candidateStops,
+  confidence,
+  endWalkFromS,
+  haversineM,
+  indexGraph,
+  nearestStop,
+  pickAlt,
+  scoreOptions,
+  wholeWalk,
+} from './resolve.ts';
 import { logAnswer, logBoard } from '../ops/analytics.ts';
 import { type LeaveInput, departureOf, departures, leaveBy, publicLeave } from './leave.ts';
 import { stepFrom } from './step.ts';
@@ -100,7 +110,7 @@ export async function answerFor(
   // With public buses on, the graph that has them: more services at the same stops.
   const graph = input.publicBuses ? GRAPH_PUBLIC : GRAPH;
   const idx = indexGraph(graph);
-  const cands = candidateStops(graph, input);
+  const cands = candidateStops(graph, input, { nowMs });
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;
 
@@ -154,7 +164,7 @@ export async function answerFor(
 
   // On from where a bus gets you off to the place itself, from that stop: a
   // food court's other stop can be further from it than its first.
-  const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
+  const endWalk = (o: ScoredOption) => endWalkFromS(input, o.to?.code);
   // For a class, a service that starts before it is a way there, not "ended".
   const walkWeight = input.walkWeight ?? WALK.sunWeight;
   const options = scoreOptions(graph, cands, byStop, nowMs, endWalk, {
@@ -172,7 +182,7 @@ export async function answerFor(
   // Without coordinates the walk starts where the trip does, whichever stop the bus would go from.
   const walk = wholeWalk(graph, input, originStop ?? fallbackStop);
   const walkAllS = walk?.s ?? null;
-  const walkEndS = walk?.endS ?? input.endWalkByStopS?.[input.to ?? ''] ?? input.endWalkS ?? 0;
+  const walkEndS = walk?.endS ?? endWalkFromS(input);
   const answer = buildAnswer({
     options,
     alt,
