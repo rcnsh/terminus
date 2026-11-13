@@ -22,7 +22,7 @@ are thin:
 | Website + web app | `apps/web/public` | Preact + htm (vendored), CSS, **no build step**, served by the Worker |
 | Android app + widgets | `apps/android` | Kotlin, Jetpack Compose, Glance, maplibre-compose |
 | Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates, MapLibre Native (map window) |
-| iPhone app + widgets | `apps/ios` | SwiftUI (iOS 17+), WidgetKit, ActivityKit, MapLibre Native; XcodeGen. Not released yet |
+| iPhone app + widgets | `apps/ios` | SwiftUI (iOS 17+), WidgetKit, ActivityKit, MapLibre Native; XcodeGen. Approved by App Review, not released publicly; the final build is resubmitted for review before release |
 
 ## Read first, when it applies
 
