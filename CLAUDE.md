@@ -251,7 +251,7 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   `type(scope): summary`, the whole line under 100 characters.
   - Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`,
     `ci`, `chore`, `revert`.
-  - Scopes: `api`, `web`, `android`, `mac`, `widget`, `map`, `calendar`,
+  - Scopes: `api`, `web`, `android`, `mac`, `ios`, `widget`, `map`, `calendar`,
     `i18n`, `data`, `scripts`, `release`, `deps`. Leave it out when a
     change spans several.
   - The summary is short plain English, lower case after the colon, saying

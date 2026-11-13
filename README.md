@@ -85,10 +85,10 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | Path | What |
 | --- | --- |
 | [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.run/docs). |
-| [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Stops, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
-| [`apps/android`](apps/android) | Home-screen widgets (compact, with places, and buses near you) and the app: Now, Stops, the campus map, Settings. |
+| [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Nearby, Stops, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
+| [`apps/android`](apps/android) | Home-screen widgets (compact, with places, and buses near you) and the app: Now, Nearby, Stops, the campus map, Settings. |
 | [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |
-| [`apps/ios`](apps/ios) | iPhone app and widgets: Now, Stops, the campus map, Settings, a Live Activity. In development, not released yet. |
+| [`apps/ios`](apps/ios) | iPhone app and widgets: Now, Nearby, Stops, the campus map, Settings, a Live Activity, and an Apple Watch app. In development, not released yet. |
 
 More in [docs/architecture.md](docs/architecture.md), and in depth in
 [docs/internals.md](docs/internals.md).
