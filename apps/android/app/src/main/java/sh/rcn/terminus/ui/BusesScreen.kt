@@ -300,8 +300,8 @@ private fun Home(
     val phase = skyPhase()
     // Pulled down, the pinned stop showing asks again, as its 15 s refresh does; not while searching.
     // The sky stretches over the title, and the stop's first service drives to a sign on the hill.
-    // The band, then the card or the search's results, scroll as one, so the
-    // sky goes up with the page rather than staying over it.
+    // The band, the search, then the card or the search's results, scroll as
+    // one, so the sky goes up with the page rather than staying over it.
     val scroll = rememberPaneScroll()
     BusPull(
         showing?.let { pinLivery(state, it) },
@@ -309,25 +309,12 @@ private fun Home(
         enabled = query.isBlank(),
         onRefresh = { vm.pullPinned(showing, around) },
         nextUpdateAt = { showing?.let(vm::pinNextAt) },
-    ) { pull ->
+    ) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                // The title is short, so the moon has room on its right.
-                // Searching, just the field over the hills, so the results start right under it.
-                SkyBand(phase, top, moonLow = true, moonLine = false, padded = false, moon = query.isBlank()) {
-                    Column {
-                        SearchBox(query, onQuery, Modifier.pullLead(pull).padding(horizontal = 16.dp, vertical = 8.dp))
-                        if (query.isBlank()) {
-                            PullRoom(above = 8.dp, below = 8.dp)
-                            Text(
-                                stringResource(R.string.tab_buses),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 4.dp).semantics { heading() },
-                            )
-                        }
-                    }
-                }
+                TitleBand(stringResource(R.string.tab_buses), phase, top)
+                // Under the horizon, at the top of what it searches, in the page's colours.
+                SearchBox(query, onQuery, Modifier.column().padding(horizontal = 16.dp).padding(top = 12.dp))
                 if (query.isNotBlank()) {
                     SearchResults(state, query) { hit ->
                         clear()
@@ -749,7 +736,6 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
             TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
-                // The sky's glass, so the hour shows through it.
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),

@@ -38,7 +38,7 @@ import {
   theme,
 } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
-import { Celestial, Horizon } from './sky.js';
+import { Band } from './sky.js';
 
 /** The pages in the list, in groups (what your trips use, this device, then feedback), with their icons. */
 const GROUPS = [['trips', 'timetable', 'favourites', 'notifications'], ['language', 'appearance', 'devices'], ['feedback']];
@@ -376,7 +376,7 @@ export function Settings({
         ${!rail && side}
         ${
           skyHere
-            ? html`<div class="page-band"><div class="sky-head"><${Celestial} band /><h1 class="settings-title">${t('Settings')}</h1></div><${Horizon} on=${null} low /></div>`
+            ? html`<${Band}><h1 class="settings-title">${t('Settings')}</h1><//>`
             : html`<h1 class="settings-title">${t('Settings')}</h1>`
         }
         <nav class="settings-groups" aria-label=${t('Settings')}>

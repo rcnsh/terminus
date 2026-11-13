@@ -32,7 +32,7 @@ import {
 import { clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { campus, loadCampus, profile, reloadProfile, togglePin } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
-import { Celestial, Horizon } from '/account/sky.js';
+import { Band, Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex, groupKey, groupOf, grouped, results } from '/account/search.js';
 import {
   NEXT,
@@ -875,12 +875,8 @@ function Lines({ routes }) {
   `;
 }
 
-/** The home's title in its sky. */
-const HomeSky = () => html`
-  <${Sky}>
-    <div class="bt-top"><div class="bt-title"><h2 class="bt-head" tabindex="-1">${t('Stops')}</h2></div></div>
-  <//>
-`;
+/** The home's title in its band of sky, as Nearby's and Settings'. */
+const HomeSky = () => html`<${Band}><h2 class="tab-title bt-head" tabindex="-1">${t('Stops')}</h2><//>`;
 
 /**
  * The home: your pinned stops, one at a time as Nearby shows them, then
@@ -897,7 +893,6 @@ function Home() {
   else pins = html`<${PinnedStops} pinned=${pinned} />`;
   return html`
     <div class="bt-home">
-      <${HomeSky} />
       <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
       ${pins}
       <div class="bt-section"><h3 class="eyebrow">${t('Services')}</h3><span>${t('Tap one to see its whole line.')}</span></div>
@@ -1020,7 +1015,6 @@ function Results() {
   };
   return html`
     <div class="bt-home" id="bt-results">
-      <${HomeSky} />
       <p class="sr-only" role="status">${found.length === 0 ? '' : found.length === 1 ? t('1 result') : t('{0} results', found.length)}</p>
       ${
         groups.length
@@ -1342,10 +1336,10 @@ export function BusesTab({ visible, locate: where = null }) {
   const status = html`<${TabStatus} r=${r} />`;
   const page =
     r.kind === 'line' ? html`<${LinePage} svc=${r.svc} stop=${r.stop} />` : r.kind === 'stop' ? html`<${StopPage} code=${r.code} />` : null;
-  // The search at the top of the sky, the home's own sky running on from it.
-  if (!wide) return html`${status}${page ?? html`<div class="bt-sky-top"><${Find} /></div><${Home} />`}`;
+  // The title in its band, then the search just under the hills, at the top of what it searches.
+  if (!wide) return html`${status}${page ?? html`<${HomeSky} /><div class="bt-find"><${Find} /></div><${Home} />`}`;
   // Side by side, what the search finds takes the home's place under it.
-  const homePane = html`<div class="bt-sky-top"><${FindWide} /></div>${typed.trim() ? html`<${Results} />` : html`<${Home} />`}`;
+  const homePane = html`<${HomeSky} /><div class="bt-find"><${FindWide} /></div>${typed.trim() ? html`<${Results} />` : html`<${Home} />`}`;
   // Side by side: the home, and the page opened from it or what to do with nothing open, under a sky of its own.
   return html`
     ${status}

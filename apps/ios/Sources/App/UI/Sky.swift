@@ -4,8 +4,8 @@ import UIKit
 /*
  * The sky: behind the top of Now, from the status bar down to a horizon of
  * the campus's hills, in the hour's colours (dawn, day, the golden hour,
- * dusk, night), by the clock; and a slim band of it at the top of Buses,
- * Settings and their pages ([SkyBand]). Its colours and drawing are in
+ * dusk, night), by the clock; and a slim band of it at the top of Nearby,
+ * Stops, Settings and their pages ([SkyBand], a tab's own [TabBand]). Its colours and drawing are in
  * Shared/SkyDraw.swift, for the widgets too; here, what only the app needs.
  */
 
@@ -68,7 +68,7 @@ final class SkyClock {
 // MARK: the band
 
 /// A slim band of the sky at the top of a tab or a page, in the hour's
-/// colours: `content` (the title, a search field) in the sky's ink, with the
+/// colours: `content` (a title, a stop's name and star) in the sky's ink, with the
 /// moon on the right at night, ending on the low horizon (just the hills, no
 /// road). It belongs at the top of the page's scroll, under the status bar,
 /// and scrolls away with it; give the scroll view `.skyStatusBar()` so the
@@ -101,6 +101,8 @@ struct SkyBand<Content: View>: View {
     private static var moonLine: CGFloat { 24 }
     /// Short, under the words in place of the hills.
     private static var shortEnd: CGFloat { 12 }
+    /// How far the sky reaches up past the band's top: under the status bar, and a pull.
+    private static var reach: CGFloat { 600 }
 
     var body: some View {
         let phase = clock.phase
@@ -123,51 +125,71 @@ struct SkyBand<Content: View>: View {
         .modifier(MatchedBand(bands: bands, id: bandID, pulling: pulling))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(alignment: .top) {
-            GeometryReader { geo in
-                Canvas { g, size in
-                    let end = size.height
-                    g.fill(
-                        Path(CGRect(origin: .zero, size: size)),
-                        with: .linearGradient(
-                            Gradient(stops: [
-                                .init(color: p.sky[0], location: 0), .init(color: p.sky[1], location: 0.5),
-                                .init(color: p.sky[2], location: 0.86), .init(color: p.sky[3], location: 1),
-                            ]), startPoint: .zero, endPoint: CGPoint(x: 0, y: end)))
-                    let top = geo.safeAreaInsets.top
-                    if phase == .night && moon {
-                        let ground = short ? end - Self.shortEnd : end - Self.low
-                        let row: ClosedRange<CGFloat> = moonLow ? (end - Self.low - Self.moonLine)...(end - Self.low) : top...ground
-                        let pts: [(CGFloat, CGFloat, Double)] =
-                            moonLow
-                            ? [(0.69, 0.3, 0.6), (0.74, 0.75, 0.45), (0.79, 0.2, 0.7), (0.83, 0.65, 0.4), (0.98, 0.55, 0.45)]
-                            : [
-                                (0.56, 0.2, 0.6), (0.63, 0.7, 0.45), (0.7, 0.35, 0.7), (0.78, 0.8, 0.4), (0.66, 0.05, 0.5),
-                                (0.95, 0.85, 0.45),
-                            ]
-                        for (x, y, a) in pts {
-                            let c = CGPoint(x: size.width * x, y: row.lowerBound + (row.upperBound - row.lowerBound) * y)
-                            g.fill(
-                                Path(ellipseIn: CGRect(x: c.x - 1.1, y: c.y - 1.1, width: 2.2, height: 2.2)),
-                                with: .color(.white.opacity(a)))
-                        }
-                        SkyDraw.crescent(&g, centre: CGPoint(x: size.width - 22 - 11, y: (row.lowerBound + row.upperBound) / 2), r: 12)
+            Canvas { g, size in
+                let end = size.height
+                g.fill(
+                    Path(CGRect(origin: .zero, size: size)),
+                    with: .linearGradient(
+                        Gradient(stops: [
+                            .init(color: p.sky[0], location: 0), .init(color: p.sky[1], location: 0.5),
+                            .init(color: p.sky[2], location: 0.86), .init(color: p.sky[3], location: 1),
+                        ]), startPoint: .zero, endPoint: CGPoint(x: 0, y: end)))
+                if phase == .night && moon {
+                    // Beside the words: from the band's own top, `reach` down the canvas, to the ground.
+                    let ground = short ? end - Self.shortEnd : end - Self.low
+                    let row: ClosedRange<CGFloat> = moonLow ? (end - Self.low - Self.moonLine)...(end - Self.low) : Self.reach...ground
+                    let pts: [(CGFloat, CGFloat, Double)] =
+                        moonLow
+                        ? [(0.69, 0.3, 0.6), (0.74, 0.75, 0.45), (0.79, 0.2, 0.7), (0.83, 0.65, 0.4), (0.98, 0.55, 0.45)]
+                        : [
+                            (0.56, 0.2, 0.6), (0.63, 0.7, 0.45), (0.7, 0.35, 0.7), (0.78, 0.8, 0.4), (0.66, 0.05, 0.5),
+                            (0.95, 0.85, 0.45),
+                        ]
+                    for (x, y, a) in pts {
+                        let c = CGPoint(x: size.width * x, y: row.lowerBound + (row.upperBound - row.lowerBound) * y)
+                        g.fill(
+                            Path(ellipseIn: CGRect(x: c.x - 1.1, y: c.y - 1.1, width: 2.2, height: 2.2)),
+                            with: .color(.white.opacity(a)))
                     }
-                    if short { return }
-                    var hills = g
-                    hills.clip(to: Path(CGRect(x: 0, y: end - Self.low, width: size.width, height: Self.low)))
-                    SkyDraw.horizon(
-                        &hills, size: size, top: end - 58, page: .page, p: p, phase: phase, road: Road(shuttle: false), withSun: false)
-                    // Pulled down: a sign grows out of the near hill and a bus drives to it.
-                    if pulling, let m, let paint {
-                        PullDraw.hill(&hills, m, paint: paint, p: p, top: end - 58, d: 1, width: size.width, lights: phase.lights)
-                    }
+                    SkyDraw.crescent(&g, centre: CGPoint(x: size.width - 22 - 11, y: (row.lowerBound + row.upperBound) / 2), r: 12)
+                }
+                if short { return }
+                var hills = g
+                hills.clip(to: Path(CGRect(x: 0, y: end - Self.low, width: size.width, height: Self.low)))
+                SkyDraw.horizon(
+                    &hills, size: size, top: end - 58, page: .page, p: p, phase: phase, road: Road(shuttle: false), withSun: false)
+                // Pulled down: a sign grows out of the near hill and a bus drives to it.
+                if pulling, let m, let paint {
+                    PullDraw.hill(&hills, m, paint: paint, p: p, top: end - 58, d: 1, width: size.width, lights: phase.lights)
                 }
             }
             // Up under the status bar, and on up past the top for a pull; out to
             // the screen's edges on a phone on its side.
-            .padding(.top, -600)
+            .padding(.top, -Self.reach)
             .ignoresSafeArea(edges: .horizontal)
             .accessibilityHidden(true)
+        }
+    }
+}
+
+/// The top of a tab (Nearby, Stops, Settings) and of the first page in a
+/// wide detail pane: the tab's name, large, in a band of the sky, the moon
+/// beside it at night, ending on the hills. One height on every tab, so
+/// moving between them the title stays put. On a tab with a pull, the room
+/// for the pull's pill opens above the name.
+struct TabBand: View {
+    let title: String
+
+    var body: some View {
+        SkyBand {
+            VStack(alignment: .leading, spacing: 0) {
+                PullRoom(below: 10)
+                Text(title)
+                    .font(.largeTitle.weight(.bold))
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.top, 10)
+            }
+            .column()
         }
     }
 }

@@ -40,7 +40,7 @@ import {
   withoutPlace,
 } from './profile.js';
 import { SearchBox } from './search-box.js';
-import { Celestial, Horizon } from './sky.js';
+import { Band } from './sky.js';
 import { pickedStop } from './search.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
@@ -86,7 +86,7 @@ export function Page({ id, title, children, nodes, onBack, shown, leaving, sky =
       hidden=${!shown && !leaving}
       ref=${(n) => (nodes[id] = n)}
     >
-      ${sky ? html`<div class="page-band"><div class="sky-head"><${Celestial} band />${head}</div><${Horizon} on=${null} low /></div>` : head}
+      ${sky ? html`<${Band}>${head}<//>` : head}
       ${children}
     </section>
   `;
