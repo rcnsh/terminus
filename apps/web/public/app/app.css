@@ -197,17 +197,15 @@ button.nearby-row:hover { background: color-mix(in srgb, var(--ink) 4%, transpar
 body.on-buses > .nav, body.on-nearby > .nav { display: none; }
 .buses-tab, .nearby-tab { max-width: 560px; padding-bottom: 32px; }
 
-/* The sky (buses.js Sky), as Settings' band: the search at its top, then
-   each page's own sky from the same colour down to its low hills, so the
-   two meet without a seam. The home's title, a stop's name, a line's
-   title and Back sit in it, in the sky's ink (.sky-head). */
+/* A stop's or line's sky (buses.js Sky), as Settings' band but taller: a
+   stop's name, a line's title and Back sit in it, in the sky's ink
+   (.sky-head). The home has the slim band (.page-band) Nearby and Settings
+   have, its search just under the hills. */
 /* Above the page under it, so its search's list comes down over it. */
-.bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 calc(50% - var(--half)); padding: max(12px, env(safe-area-inset-top)) calc(var(--half) - 50%) 0; background: var(--s0); }
-/* Overscrolled at the top: still the sky up there. */
-.bt-sky-top::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
+.bt-find { position: relative; z-index: 5; margin-top: 12px; }
 .bt-sky { margin: 0 calc(50% - var(--half)); padding: 0 calc(var(--half) - 50%); background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
 /* A page of its own starts the sky itself. */
-.bt-page.alone > .bt-sky, .buses-tab > .bt-sky, .nearby-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
+.bt-page.alone > .bt-sky, .buses-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
 .bt-sky .sky-head { --room: 0px; --moon: 22px; padding-bottom: 2px; }
 /* Stars across the whole sky; the moon low on the right, clear of a long name. */
 .bt-sky .celestial { height: 100%; }
@@ -219,16 +217,8 @@ body.sky .buses-tab > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-t
 .bt-sky + .bt-sides { margin-top: 4px; }
 .bt-sky .bt-nav { height: 48px; }
 .bt-sky .bt-kicker-icon { fill: var(--k-accent-small); }
-/* The search box takes the sky's colours; its list comes down over the
-   page, so it keeps the page's own. */
-body.sky .bt-sky-top :is(input, .bt-search-icon) {
-  --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --accent: var(--k-accent);
-  color-scheme: var(--k-scheme); color: var(--ink);
-}
-body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; }
-/* The search's shape while the tab's code loads (app.js StopsSkeleton), in the sky's ink. */
+/* The search's shape while the tab's code loads (app.js StopsSkeleton). */
 .bt-search .sk-field { display: block; height: 46px; border-radius: 14px; }
-body.sky .bt-sky-top { --sk: color-mix(in srgb, var(--k-ink) 13%, transparent); --sk-hi: color-mix(in srgb, var(--k-ink) 26%, transparent); }
 .bt-search { position: relative; }
 .bt-search input { height: 46px; padding-left: 42px; border-radius: 14px; border-color: var(--line-strong); background: var(--surface-2); }
 .bt-search input:focus-visible { outline-offset: 0; }
@@ -240,7 +230,6 @@ body.sky .bt-sky-top { --sk: color-mix(in srgb, var(--k-ink) 13%, transparent); 
 
 /* The home (buses.js Home): its title in the sky, then your pinned stops,
    one at a time as Nearby's sign, then every service. */
-.bt-home .bt-top, .nearby-tab .bt-top { padding-bottom: 6px; }
 .bt-section { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 6px 8px; }
 .bt-section > span { font-size: 0.75rem; color: var(--muted); text-align: right; }
 .bt-star.small { width: 36px; height: 36px; background: none; }
@@ -653,7 +642,7 @@ body.app { overflow-x: clip; }
 html { overflow-x: clip; }
 .settings-tab .settings { overflow-x: visible; }
 body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
-.settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
+.tab-title, .settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }
 
 /* Now's sky (sky.js): from the top of the page down to the horizon at the
@@ -822,7 +811,9 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 html { overscroll-behavior-y: none; }
 body.pulled .sky-head { padding-top: calc(var(--room) + var(--stretch, 0px)); }
 body.pulled .celestial { height: calc(var(--room) + var(--stretch, 0px)); }
-body.pulled > .nav, body.pulled .app-chips:not(.map-pills), body.pulled .bt-sky-top > * { translate: 0 var(--lead, 0px); }
+/* A band's words sit in its room rather than under it: only the stretch goes above them. */
+body.pulled .page-band .sky-head { padding-top: var(--stretch, 0px); }
+body.pulled > .nav, body.pulled .app-chips:not(.map-pills) { translate: 0 var(--lead, 0px); }
 /* While a pull's bus drives, the horizon's own buses step aside. The pull's
    comes back to the horizon's own place and hands over at once; the ones
    driving past fade back in. */
@@ -933,8 +924,10 @@ body.app > .nav { max-width: 560px; }
   .bt-detail { container-type: inline-size; min-width: 0; padding-bottom: 32px; }
   .bt-detail > :not(.bt-sky) { max-width: 528px; margin-inline: max(16px, calc(50% - 264px)); }
   .bt-detail .bt-page.alone { padding: 0; }
-  .bt-list :is(.bt-sky-top, .bt-sky) { margin-inline: -16px; padding-inline: 16px; }
-  .bt-list .bt-sky .horizon.low { margin-inline: -16px; }
+  .bt-list .page-band { margin-inline: -16px; padding-inline: 16px; }
+  .bt-list .page-band .horizon.low { width: auto; margin-inline: -16px; }
+  /* The title at the top, as on every tab; the band runs on to the detail's hills. */
+  .bt-list .page-band .sky-head { min-height: calc(126px + env(safe-area-inset-top)); }
   .bt-detail .bt-page.alone > .bt-sky, .bt-detail > .bt-sky { margin-inline: calc(50% - 50cqw); padding: env(safe-area-inset-top) max(16px, calc(50cqw - 264px)) 0; }
   .bt-detail .bt-sky .sky-head { display: flex; flex-direction: column; justify-content: flex-end; min-height: 126px; }
   .bt-detail .bt-sky .horizon.low { margin-inline: calc(-1 * max(16px, calc(50cqw - 264px))); }
@@ -962,7 +955,6 @@ body.app > .nav { max-width: 560px; }
   .bt-list .bt-search input::-webkit-search-cancel-button { display: none; }
   .bt-search-clear { position: absolute; top: 7px; right: 7px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
   .bt-search-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-  body.sky .bt-sky-top .bt-search-clear { color: var(--k-muted); }
 }
 
 @media (min-width: 800px) {

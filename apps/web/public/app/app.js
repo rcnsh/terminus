@@ -33,7 +33,7 @@ import {
 } from '/assets/ui.js';
 import { ADDED_PLACES_KEY, api, clock, hour12, send, serverNow, signedOut, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
-import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
+import { Band, Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import {
   Toast,
   campus,
@@ -1100,7 +1100,7 @@ function NearbySigns({ stops }) {
 }
 
 /**
- * The Nearby tab (ADR 0017): its title in a band of sky, as Stops has, then
+ * The Nearby tab (ADR 0017): its title in a band of sky, as Stops and Settings have, then
  * the stops around you as their signs, shapes until the first come, or a
  * line saying why there are none; under them, when they came.
  */
@@ -1112,10 +1112,7 @@ function NearbyArea() {
   else if (n.loading) body = html`<${Skeleton} said=${t('Checking…')} inner="nearby"><${SignSkeleton} /><${SignSkeleton} /><//>`;
   else body = html`<p class="hint nb-none" role="status">${n.text}</p>`;
   return html`
-    <div class="bt-sky">
-      <div class="sky-head"><${Celestial} band /><div class="bt-top"><div class="bt-title"><h2 class="bt-head">${t('Nearby')}</h2></div></div></div>
-      <${Horizon} on=${null} low />
-    </div>
+    <${Band}><h2 class="tab-title">${t('Nearby')}</h2><//>
     <div class="nb-tab">${body}${when && html`<p class="hint nb-updated">${when}</p>`}</div>
   `;
 }
@@ -1448,19 +1445,16 @@ function Banner() {
 }
 
 /**
- * The Stops tab's home before its code arrives (buses.js Home): the search
- * and the title in the sky, the headings, and the pinned stop and the
+ * The Stops tab's home before its code arrives (buses.js Home): the title
+ * in its band, the search, the headings, and the pinned stop and the
  * services as shapes. Its stop's board or a line opened from elsewhere
  * draws its own shapes once the code is here.
  */
 const StopsSkeleton = () => html`
   <${Skeleton} said=${t('Loading…')}>
-    <div class="bt-sky-top"><div class="bt-search"><span class="sk sk-field"></span></div></div>
+    <${Band}><h2 class="tab-title">${t('Stops')}</h2><//>
+    <div class="bt-find"><div class="bt-search"><span class="sk sk-field"></span></div></div>
     <div class="bt-home">
-    <div class="bt-sky">
-      <div class="sky-head"><${Celestial} band /><div class="bt-top"><div class="bt-title"><h2 class="bt-head">${t('Stops')}</h2></div></div></div>
-      <${Horizon} on=${null} low />
-    </div>
     <h3 class="bt-section eyebrow">${t('Pinned')}</h3>
     <${PinnedSkeleton} />
     <div class="bt-section"><h3 class="eyebrow">${t('Services')}</h3><span>${t('Tap one to see its whole line.')}</span></div>
@@ -1503,12 +1497,10 @@ function SettingsSkeleton() {
     document.body.classList.add('set-sky');
     return () => document.body.classList.remove('set-sky');
   }, []);
-  const band = (head) =>
-    html`<div class="page-band"><div class="sky-head"><${Celestial} band />${head}</div><${Horizon} on=${null} low /></div>`;
   return html`
     <div class="settings skeleton" aria-busy="true">
       <div class="settings-side">
-        ${band(html`<h1 class="settings-title">${t('Settings')}</h1>`)}
+        <${Band}><h1 class="settings-title">${t('Settings')}</h1><//>
         <div class="settings-groups" aria-hidden="true">
           <div class="settings-row set-account"><span class="avatar skel"></span><span class="row-text"><span class="row-title skel-line"></span><span class="row-sum skel-line short"></span></span></div>
           <${SkeletonRows} n=${4} />
@@ -1520,7 +1512,7 @@ function SettingsSkeleton() {
         wide &&
         html`<div class="settings-pages" aria-hidden="true">
         <div class="settings-page">
-          ${band(html`<div class="page-head"><h2 class="skel-line title"></h2></div>`)}
+          <${Band}><div class="page-head"><h2 class="skel-line title"></h2></div><//>
           <div class="skel-block" style="height: 132px"></div>
           <div class="skel-block" style="height: 180px"></div>
         </div>

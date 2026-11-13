@@ -51,6 +51,14 @@ export const Celestial = ({ band = false }) => html`
 `;
 
 /**
+ * The slim band of sky at the top of Settings, Nearby and Stops (and of
+ * Settings' pages): `children` (the title) with the moon beside it at night,
+ * ending on the low hills, the same height on every tab.
+ */
+export const Band = ({ children }) =>
+  html`<div class="page-band"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
+
+/**
  * The hills along the horizon, more or less Kent Ridge: how far down the
  * strip (92 px) each is, `x` px across. Fixed waves in pixels, so a wider
  * page shows more hills rather than stretched ones.

@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The Stops tab, called Stops: a search, then the pinned stops in one card
+/// The Stops tab: its title in the sky, a search, then the pinned stops in one card
 /// that swipes from stop to stop, each as Nearby shows it, then every line
 /// with its buses out. A row opens its service's line; a stop on the line,
 /// or found in the search, opens its board. The stops around you are the
@@ -159,19 +159,11 @@ struct BusesHome: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                SkyBand(moonLow: true, moon: !searching) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        BusSearchField(query: $query, focused: $focused)
-                            .padding(.top, 8)
-                            .pullLead()
-                        if !searching {
-                            PullRoom(above: 8, below: 8)
-                            BandTitle(text: L("Stops")).padding(.top, 8)
-                        }
-                    }
+                TabBand(title: L("Stops")).busBandEnd()
+                // Under the sky, at the top of what it searches.
+                BusSearchField(query: $query, focused: $focused)
                     .column()
-                }
-                .busBandEnd()
+                    .padding(.top, 16)
                 if searching {
                     BusSearchResults(query: query) { hit in
                         query = ""
@@ -218,21 +210,6 @@ struct BusesHome: View {
                 await model.refreshLines()
             }
         }
-    }
-}
-
-/// A tab's name, large in its band of sky: Stops, Nearby.
-struct BandTitle: View {
-    let text: String
-    @Environment(\.inks) private var inks
-
-    var body: some View {
-        Text(text)
-            .font(.title.weight(.heavy))
-            .foregroundStyle(inks.ink)
-            .accessibilityAddTraits(.isHeader)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 8)
     }
 }
 
@@ -671,21 +648,20 @@ struct BusStar: View {
     }
 }
 
-/// The search over every stop and service, as glass in the sky.
+/// The search over every stop and service, in the page's colours under the sky.
 private struct BusSearchField: View {
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
-    @Environment(\.inks) private var inks
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(inks.muted).accessibilityHidden(true)
-            TextField("", text: $query, prompt: Text(L("Search a stop or service")).foregroundStyle(inks.muted))
+            Image(systemName: "magnifyingglass").foregroundStyle(Color.muted).accessibilityHidden(true)
+            TextField("", text: $query, prompt: Text(L("Search a stop or service")).foregroundStyle(Color.muted))
                 .focused(focused)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .foregroundStyle(inks.ink)
+                .foregroundStyle(Color.ink)
                 .accessibilityLabel(L("Search a stop or service"))
                 .accessibilityIdentifier("buses-search")
             if !query.isEmpty || focused.wrappedValue {
@@ -693,7 +669,7 @@ private struct BusSearchField: View {
                     query = ""
                     focused.wrappedValue = false
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(inks.muted)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color.muted)
                 }
                 .accessibilityLabel(L("Close"))
                 .accessibilityIdentifier("buses-search-close")
@@ -701,8 +677,8 @@ private struct BusSearchField: View {
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 48)
-        .background(inks.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(inks.line))
+        .background(Color.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.line))
     }
 }
 

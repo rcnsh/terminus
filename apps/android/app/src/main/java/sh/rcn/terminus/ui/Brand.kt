@@ -1,6 +1,7 @@
 package sh.rcn.terminus.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.R
@@ -139,8 +141,8 @@ fun BrandMark(modifier: Modifier = Modifier) {
 }
 
 /**
- * The row at the top of Now and Settings: one height and place on every tab, so switching tabs doesn't move the title. Now has the
- * wordmark, Settings its title, a settings page a back arrow and its title.
+ * The row at the top of every tab: one height and place on each, so switching tabs doesn't move the title. Now has the wordmark, Nearby,
+ * Stops and Settings their titles ([TitleBand]), a page a back arrow and its title.
  */
 @Composable
 fun TabHeader(content: @Composable RowScope.() -> Unit) {
@@ -155,6 +157,21 @@ internal fun BackHeader(title: String, onBack: () -> Unit) {
             Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
         }
         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp).semantics { heading() })
+    }
+}
+
+/**
+ * The top of Nearby, Stops and Settings, and of a settings page beside the list: [title] in a [TabHeader] in the slim band of the sky
+ * ([SkyBand]), the moon beside it at night, so the band is one height on each and the title in one place. In a pull ([BusPull]), the room
+ * for its pill opens over the title and the title comes down with it.
+ */
+@Composable
+internal fun TitleBand(title: String, phase: Phase, top: Dp) {
+    SkyBand(phase, top) {
+        Column(Modifier.pullLead(LocalPull.current)) {
+            PullRoom(above = 8.dp, below = 8.dp)
+            TabHeader { Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() }) }
+        }
     }
 }
 

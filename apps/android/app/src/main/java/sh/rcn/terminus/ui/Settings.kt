@@ -67,7 +67,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -231,17 +230,8 @@ private fun SettingsPagePane(page: SettingsPage, top: Dp, bottom: Dp, back: (() 
         val scroll = rememberPaneScroll()
         Box(Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                SkyBand(phase, top) {
-                    if (back != null) BackHeader(stringResource(page.title), back)
-                    else
-                        TabHeader {
-                            Text(
-                                stringResource(page.title),
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.semantics { heading() },
-                            )
-                        }
-                }
+                if (back != null) SkyBand(phase, top) { BackHeader(stringResource(page.title), back) }
+                else TitleBand(stringResource(page.title), phase, top)
                 Column(Modifier.column().padding(horizontal = 16.dp)) {
                     content()
                     Spacer(Modifier.height(32.dp))
@@ -273,9 +263,7 @@ private fun SettingsList(
     val scroll = rememberPaneScroll()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = bottom)) {
-            SkyBand(phase, top) {
-                TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
-            }
+            TitleBand(stringResource(R.string.settings), phase, top)
             Column(Modifier.column().padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(12.dp))
                 AccountTile(state, ui, chosen == SettingsPage.Account, onOpen)

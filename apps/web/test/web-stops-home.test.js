@@ -68,3 +68,15 @@ test('a stop unpinned with the home on screen: the stop that took its place show
   assert.equal(shown(), 'YIH');
   await away();
 });
+
+test('the home opens with its title in the band Nearby and Settings have, its search just under the hills', async () => {
+  B.route.set({ kind: 'home' });
+  P.profile.set({ pinnedStops: [] });
+  await draw();
+  const band = root.querySelector('.page-band');
+  const find = root.querySelector('.bt-find');
+  assert.equal(band?.querySelector('.tab-title').textContent, 'Stops');
+  assert.ok(find?.querySelector('input'), 'a search box');
+  assert.equal(band.nextElementSibling, find, 'the search straight under the band');
+  await away();
+});

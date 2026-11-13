@@ -19,6 +19,16 @@ the screen's size and the orientation never decide a layout.
 | 600 to 799 | medium | The phone layout in a centred column at most 560 wide (gutters included), the sky still edge to edge. |
 | 800 and over | wide | Two panes on Now, Stops and Settings, as below. |
 
+## The top of a tab
+
+Nearby, Stops and Settings each start with the same slim band of sky: the
+tab's name in Settings' title size, the moon beside it at night, ending on
+the low hills, the same height on all three, so switching tabs leaves the
+top where it was. Now's wordmark sits at the same height. Stops' search
+is just under the hills, on the page's own colours, above Pinned; in two
+panes the list's band runs on below its title to end level with the
+detail's. A stop's or a line's own page keeps its taller sky.
+
 ## Short windows
 
 Separately, a window under 500 tall (read live, like the width) is
@@ -36,10 +46,11 @@ top of the page compact, so the answer is on screen without scrolling:
   the like) move from above the chips to straight under the card, after
   "Go later" when it shows. In two panes, that's the foot of the card's
   column.
-- **The bands** on Stops, Settings and their pages end just under their
-  words, without the hills. Side by side, they still end level. A band
-  that keeps its moon on a line of its own over the hills (Stops and its
-  pages) shows no moon; one with the moon beside its words keeps it.
+- **The bands** on Nearby, Stops, Settings and their pages end just
+  under their words, without the hills. Side by side, they still end
+  level. A band that keeps its moon on a line of its own over the hills
+  (a stop's or a line's page) shows no moon; one with the moon beside its
+  words keeps it.
 
 Content scrolls as it does upright, and text and controls keep their
 sizes.

@@ -28,10 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -43,9 +41,9 @@ import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.widget.clock
 
 /**
- * The Nearby tab (ADR 0017): its title in a band of sky, as Stops has, then the stops around you as their signs ([NearbyList]), in the
- * page's column at every width; under them, when they came. Opening it asks for the location once, and it asks for its stops when it opens
- * and then at the card's pace, only while it's the tab on screen.
+ * The Nearby tab (ADR 0017): its title in the band of sky every tab but Now starts with ([TitleBand]), then the stops around you as their
+ * signs ([NearbyList]), in the page's column at every width; under them, when they came. Opening it asks for the location once, and it asks
+ * for its stops when it opens and then at the card's pace, only while it's the tab on screen.
  */
 @Composable
 internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, act: NearbyActions) {
@@ -80,22 +78,11 @@ internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValu
         ::hillScene,
         onRefresh = vm::pullNearby,
         modifier = Modifier.padding(bottom = insets.calculateBottomPadding()),
-    ) { pull ->
+    ) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                // The title is short, so the moon has room on its right.
-                SkyBand(phase, top, moonLow = true, moonLine = false, padded = false) {
-                    Column(Modifier.pullLead(pull)) {
-                        PullRoom(base = 8.dp, above = 8.dp, below = 8.dp)
-                        Text(
-                            stringResource(R.string.chip_nearby),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 4.dp).semantics { heading() },
-                        )
-                    }
-                }
-                Column(Modifier.column().padding(horizontal = 16.dp).padding(top = 20.dp, bottom = 24.dp)) {
+                TitleBand(stringResource(R.string.chip_nearby), phase, top)
+                Column(Modifier.column().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 24.dp)) {
                     if (!location.allowed)
                         LocationCard(stringResource(R.string.nearby_location_ask), location, Modifier.padding(bottom = 12.dp))
                     if (state.nearby?.isEmpty() == true)

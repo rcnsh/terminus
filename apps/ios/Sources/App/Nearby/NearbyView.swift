@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The Nearby tab (ADR 0017): its title in a band of the hour's sky, as
-/// Stops has, then the stops around you as their signs (NearbyList) and
+/// Stops and Settings have, then the stops around you as their signs (NearbyList) and
 /// when they came. Every chip on Now is somewhere to go; this is where you
 /// are. A stop's name or a row opens the Stops tab on it, so at every width
 /// this is one centred column with no second pane. As the web app's
@@ -17,18 +17,11 @@ struct NearbyView: View {
     private var shown: Bool { app.tab == .nearby && scenePhase == .active }
 
     var body: some View {
-        // In a stack of its own, as Stops' home is, so the two bands start at the same height.
+        // In a stack of its own, as Stops' home and Settings are, so the bands start at the same height.
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    SkyBand(moonLow: true) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            PullRoom(above: 8, below: 8)
-                            BandTitle(text: L("Nearby"))
-                        }
-                        .column()
-                    }
-                    .busBandEnd()
+                    TabBand(title: L("Nearby")).busBandEnd()
                     VStack(alignment: .leading, spacing: 0) {
                         notice
                         NearbyList()

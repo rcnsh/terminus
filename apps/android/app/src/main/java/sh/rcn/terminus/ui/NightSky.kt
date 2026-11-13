@@ -879,19 +879,14 @@ private val LOW_STARS =
  * low horizon (just the hills, no road). The page's controls stay on the plain page under it. It's the top of the page's scroll, not pinned
  * over it, so the page is one piece that scrolls away under a [StatusStrip], as Now's sky does. As the web's (.page-band).
  *
- * A taller band (the Stops tab's search and title, a stop's page) puts the moon low on the right, just over the hills, with the stars
- * beside it, clear of a button at the top right ([moonLow]), on a line of its own unless the content's last one has room on the right
- * ([moonLine]). Unpadded, [content] runs edge to edge and keeps its own margins. Without [moon], no moon or stars: a band with only a field
- * in it.
+ * A taller band (a stop's or a line's page) puts the moon low on the right, just over the hills, with the stars beside it, on a line of its
+ * own, clear of a button at the top right ([moonLow]).
  */
 @Composable
 internal fun SkyBand(
     phase: Phase,
     top: Dp,
     moonLow: Boolean = false,
-    moonLine: Boolean = moonLow,
-    padded: Boolean = true,
-    moon: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val page = MaterialTheme.colorScheme.background
@@ -906,7 +901,7 @@ internal fun SkyBand(
     val band = remember { Any() }
     if (pane != null) DisposableEffect(pane) { onDispose { pane.skies.gone(band) } }
     // Short, a low moon has no line of its own to keep clear of a button on, so it shows only beside the words, as on the iPhone.
-    val shown = moon && pane?.leading != true && !(short && moonLow)
+    val shown = pane?.leading != true && !(short && moonLow)
     var natural by remember { mutableIntStateOf(0) }
     val grow = with(LocalDensity.current) { ((pane?.skies?.tallest ?: 0) - natural).coerceAtLeast(0).toDp() }
     Column(
@@ -915,8 +910,7 @@ internal fun SkyBand(
             val end = size.height
             drawRect(skyBrush(p, end))
             // Beside the title, on the right: its row is between the status bar and the hills.
-            // Low, the moon and stars keep to the last line over the hills, which
-            // has nothing in it on the right, so none lands on a word however long.
+            // Low, the moon and stars keep to a line of their own over the hills, so none lands on a word however long.
             val floor = end - hills.toPx() - if (short) SHORT_FOOT.toPx() else 0f
             val row = if (moonLow) (floor - MOON_LINE.toPx())..floor else top.toPx()..floor
             val mid = (row.start + row.endInclusive) / 2
@@ -943,10 +937,9 @@ internal fun SkyBand(
         ) {
             Spacer(Modifier.height(top))
             // In the page's column, as what's under it is; the sky goes on to the edges.
-            SkyInk(true, p.lightInk) { Box(if (padded) Modifier.column().padding(horizontal = 16.dp) else Modifier.column()) { content() } }
-            // The moon's own line, under the content, so it never sits on a button;
-            // without it ([moonLine] false), the content's last line leaves the right clear for it.
-            if (moonLow && moonLine && !short) Spacer(Modifier.height(MOON_LINE))
+            SkyInk(true, p.lightInk) { Box(Modifier.column().padding(horizontal = 16.dp)) { content() } }
+            // The moon's own line, under the content, so it never sits on a button.
+            if (moonLow && !short) Spacer(Modifier.height(MOON_LINE))
         }
         Spacer(Modifier.height(grow + if (short) SHORT_FOOT else LOW))
     }

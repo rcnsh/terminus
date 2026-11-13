@@ -39,7 +39,7 @@ struct SettingsScaffold<Content: View>: View {
         let skyLight = SkyPalette.of(clock.phase, dark: scheme == .dark).lightInk
         ScrollView {
             VStack(spacing: 0) {
-                SkyBand(moonLow: pushed) { header }
+                band
                     .background {
                         GeometryReader { g in
                             let under = g.frame(in: .global).maxY < safeTop + 12
@@ -74,27 +74,32 @@ struct SettingsScaffold<Content: View>: View {
         .background(SwipeBack())
     }
 
-    private var header: some View {
-        HStack(spacing: 6) {
-            if pushed {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.backward")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+    /// Pushed, Back and the page's name; else the tab's own band, as on Nearby and Stops.
+    @ViewBuilder private var band: some View {
+        if pushed {
+            SkyBand(moonLow: true) {
+                HStack(spacing: 6) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(L("Back"))
+                    .accessibilityIdentifier("settings.back")
+                    .padding(.leading, -10)
+                    Text(title)
+                        .font(.title2.weight(.bold))
+                        .accessibilityAddTraits(.isHeader)
                 }
-                .accessibilityLabel(L("Back"))
-                .accessibilityIdentifier("settings.back")
-                .padding(.leading, -10)
+                .column()
+                .padding(.top, 4)
             }
-            Text(title)
-                .font(pushed ? .title2.weight(.bold) : .largeTitle.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
+        } else {
+            TabBand(title: title)
         }
-        .column()
-        .padding(.top, pushed ? 4 : 10)
     }
 }
 
