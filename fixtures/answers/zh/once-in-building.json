@@ -1,8 +1,8 @@
 {
   "stop": {
-    "code": "CLB",
-    "name": "CLB",
-    "confidence": 0.5
+    "code": "AS5",
+    "name": "AS 5",
+    "confidence": 0.76
   },
   "quality": "live",
   "asOf": "2026-08-27T04:46:00.000Z",
@@ -65,13 +65,13 @@
     }
   ],
   "label": "步行 · 3 分钟",
-  "detail": "步行去 COM 3 · 搭 D1 要 13 分钟 · 从 CLB 出发",
-  "alt": "D1 · 7 分钟 · CLB",
+  "detail": "步行去 COM 3 · 搭 D1 要 10 分钟 · 从 AS 5 出发",
+  "alt": "D1 · 7 分钟 · AS 5",
   "departsAt": null,
   "arriveAt": "2026-08-27T04:48:52Z",
   "foot": {
     "s": 172,
-    "why": "搭 D1 要 13 分钟"
+    "why": "搭 D1 要 10 分钟"
   },
   "leave": {
     "at": "2026-08-27T04:46:00Z",
@@ -161,7 +161,7 @@
       "slack": "约迟到 3 分钟",
       "live": false,
       "backup": null,
-      "why": "搭 D1 要 13 分钟",
+      "why": "搭 D1 要 10 分钟",
       "change": null,
       "title": "去 COM 3 · 12:46 前到",
       "place": "COM 3",
@@ -171,8 +171,8 @@
       "walkEndText": null,
       "arriveText": "12:48 到达 · 约迟到 3 分钟",
       "arriveWhere": "在 COM 3",
-      "backupText": "搭 D1 要 13 分钟",
-      "summary": "12:48 到达 · 步行 3 分钟 · 搭 D1 要 13 分钟"
+      "backupText": "搭 D1 要 10 分钟",
+      "summary": "12:48 到达 · 步行 3 分钟 · 搭 D1 要 10 分钟"
     },
     "upcoming": null,
     "step": null,

@@ -587,7 +587,8 @@ test('an unknown option never puts a fabricated minute count on screen', () => {
 });
 
 test('a measurement always outranks a guess, however good the guess looks', () => {
-  const cands = candidateStops(GRAPH, { lat: KR.lat, lon: KR.lon, to: 'UTOWN', originCode: null });
+  // The D2 from here goes round most of its loop to COM 3; from across the road it's three stops.
+  const cands = candidateStops(GRAPH, { lat: KR.lat, lon: KR.lon, to: 'COM3', originCode: null });
   assert.ok(cands.length > 1, 'precondition: more than one candidate stop');
 
   // The measured option is deliberately the slower one.
@@ -1541,15 +1542,15 @@ test('going to a stop, a bus that passes near it drops you there to walk: A2 off
     for (const l of c.legs) assert.ok(!near[l.to.code] || near[l.to.code] < near['LT13-OPP'], `${l.svc} to ${l.to.code}`);
 });
 
-test("a stop near the destination takes a candidate's slot only when there aren't enough with a bus to it", () => {
-  // Beside AS 5, going to SDE3-OPP: CLB has the K straight there.
+test('of the stops asked about, one whose buses only go near the destination takes one place at most', () => {
+  // Beside AS 5, going to SDE3-OPP: CLB has the K straight there; AS 5 and
+  // Opp NUSS, across the road, only have buses to Ventus, a walk from it.
   const near = nearStopWalks(BUNDLED_GRAPH, 'SDE3-OPP');
   const as5 = BUNDLED_GRAPH.stops.find((s) => s.code === 'AS5');
-  const codes = candidateStops(BUNDLED_GRAPH, { lat: as5.lat, lon: as5.lon, to: 'SDE3-OPP', originCode: null, endWalkByStopS: near }).map(
-    (c) => c.stop.code,
-  );
-  const without = candidateStops(BUNDLED_GRAPH, { lat: as5.lat, lon: as5.lon, to: 'SDE3-OPP', originCode: null }).map((c) => c.stop.code);
-  for (const code of without) assert.ok(codes.includes(code), `${code} kept: ${codes.join()}`);
-  // And one more stop at most, whose buses only go near it.
-  assert.ok(codes.length <= without.length + 1, codes.join());
+  const input = { lat: as5.lat, lon: as5.lon, to: 'SDE3-OPP', originCode: null, endWalkByStopS: near };
+  const cands = candidateStops(BUNDLED_GRAPH, input);
+  assert.ok(cands.some((c) => c.stop.code === 'CLB'));
+  // Where you stand keeps its place; of the rest, one.
+  const nearOnly = cands.filter((c) => !c.here && c.legs.every((l) => l.to.code in near));
+  assert.equal(nearOnly.length, 1, cands.map((c) => c.stop.code).join());
 });

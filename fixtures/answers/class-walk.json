@@ -1,20 +1,77 @@
 {
   "stop": {
-    "code": "LT13-OPP",
-    "name": "Ventus",
-    "confidence": 0.8
+    "code": "AS5",
+    "name": "AS 5",
+    "confidence": 0.73
   },
-  "quality": "scheduled",
+  "quality": "live",
   "asOf": "2026-08-27T01:00:00.000Z",
-  "arrivals": [],
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
   "label": "Walk · 3 min",
-  "detail": "On foot to CS2030 @ COM1 · D1 would be 16 min · from Ventus",
-  "alt": "D1 · ~10 min · Ventus",
+  "detail": "On foot to CS2030 @ COM1 · D1 would be 13 min · from AS 5",
+  "alt": "D1 · 7 min · AS 5",
   "departsAt": null,
   "arriveAt": "2026-08-27T01:03:28Z",
   "foot": {
     "s": 208,
-    "why": "D1 would be 16 min"
+    "why": "D1 would be 13 min"
   },
   "leave": {
     "at": "2026-08-27T01:53:32Z",
@@ -54,7 +111,7 @@
     "kind": "class",
     "staleAt": "2026-08-27T01:15:00Z",
     "crowd": null,
-    "quality": "Estimated time",
+    "quality": null,
     "leaveBy": "Leave by 09:53",
     "leaveVia": null,
     "catch": "Walk there",
@@ -108,7 +165,7 @@
       "slack": "3 min early",
       "live": false,
       "backup": null,
-      "why": "D1 would be 16 min",
+      "why": "D1 would be 13 min",
       "change": null,
       "title": "To CS2030 @ COM1 · starts 10:00",
       "place": "CS2030",
@@ -118,8 +175,8 @@
       "walkEndText": null,
       "arriveText": "Arrive 09:57 · 3 min early",
       "arriveWhere": "at COM 3",
-      "backupText": "D1 would be 16 min",
-      "summary": "arrive 09:57 · 3 min walk · D1 would be 16 min"
+      "backupText": "D1 would be 13 min",
+      "summary": "arrive 09:57 · 3 min walk · D1 would be 13 min"
     },
     "upcoming": null,
     "step": null,

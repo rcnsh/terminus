@@ -523,14 +523,14 @@ class AnswerTest {
         assertEquals("CS2030", j.place)
         assertNull(JourneyText.busIn(j, 0))
         // Where the backup bus goes, why not a bus.
-        assertEquals("D1 would be 16 min", JourneyText.backup(c, j))
+        assertEquals("D1 would be 13 min", JourneyText.backup(c, j))
         // Anything else leaves now.
-        val h = golden("evening-home")
+        val h = golden("heat-walk")
         val home = h.card!!.journey!!
         assertNull(home.leave)
-        assertEquals("15 min", home.walk)
+        assertEquals("13 min", home.walk)
         assertEquals("Leave now", JourneyText.leaveIn(h, home, ms("2026-08-27T01:00:00Z")))
-        assertEquals("A1 would be 31 min", JourneyText.backup(h, home))
+        assertEquals("D2 would be 16 min", JourneyText.backup(h, home))
     }
 
     @Test

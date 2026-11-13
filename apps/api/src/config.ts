@@ -48,8 +48,20 @@ export const TTL = {
 
 export const WALK = {
   speedMs: 1.3,
-  /** Stops further than this are not considered, unless nothing is closer. */
+  /**
+   * With no destination, stops further than this are not considered, unless
+   * nothing is closer. Nor, going somewhere, are the stops not picked by
+   * their likely trip: where a change of bus can start, a stop only public
+   * buses call at, a usual stop.
+   */
   maxRadiusM: 450,
+  /**
+   * Going somewhere, a stop up to this far (a 7-minute walk) may be the one
+   * to walk to. Which stops the feed is asked about is settled by how long
+   * the trip from each is likely to take (likelyTripS), so a further one
+   * takes a place only when its bus is likely to make up the walk.
+   */
+  tripRadiusM: 550,
   /** At most this many stops get an upstream fetch per request. */
   maxCandidates: 3,
   /**

@@ -1511,9 +1511,63 @@ and riding in the same unit (seconds) so the trade-off is legible. On a loop
 route both sides technically reach the destination; the wrong side loses on hop
 count rather than on a special case.
 
-**Which stops are tried.** With a location, the nearest few stops that have a
-bus to the destination (`WALK.maxCandidates`), so a closer stop nothing there
-calls at can't push out one that does. Without one, the stop the trip starts
+**Which stops are tried.** With a location, a few stops in range
+(`WALK.tripRadiusM`, a 7-minute walk) that have a bus to the destination, at
+most `WALK.maxCandidates`: the likeliest to get you there soonest, not the
+nearest. A stop a minute further on, or across the road, often has the bus
+that goes straight there, where the nearest has one going the long way round
+its loop. Which is settled from the route data alone, before any fetch
+(`likelyTripS`): the walk to the stop, half a headway's wait, the ride and
+the walk on, with walking weighted. The places go in this order (`likeliest`
+in `candidateStops`):
+
+- The stop of a bus you chose ("Earlier bus", "Later bus") keeps its place,
+  and so does the stop you're standing at, or else the nearest, however
+  likely the others look: its bus may be the one pulling in, and it's the one
+  you're most likely walking to, which mustn't drop out of the answer on the
+  way.
+- Then the stops by how sure their shuttles are, with the time known
+  (`runsAt`): one running when you'd ride it (now, or by a class's latest
+  board) before one running now but not for the class (the one to go by now),
+  before one just outside its hours, when the feed may still list a bus:
+  about to start, or stopped so lately that its last bus may still be out.
+- Then a stop with only a public bus there: turning public buses on adds to
+  the answer and never takes a shuttle that has buses out of it.
+- Last, a stop whose shuttles aren't running. It's never left out for that:
+  the hours are a table kept by hand, and where a place is spare the feed is
+  still asked.
+- Among stops as sure as each other, the one with the shortest likely trip.
+
+Two more rules keep a place from going to waste:
+
+- A stop where you'd only catch shuttles you can catch at another, a shorter
+  walk away, isn't one. That's a further stop up the line, and the next stop
+  down the line when the walk on to it takes twice the bus's usual ride or
+  more, so that no bus missed at the nearer stop could be caught there. Never
+  past the terminal down the line: a run starts there whatever has pulled in.
+- Apart from the nearest, the stops none of whose shuttles call at the
+  destination itself (they pass a stop near it, see "Where to get off") take
+  one place between them, so a stop with a bus there has a place whenever
+  there is one.
+
+The likely trip only orders the stops for the places: none is ruled out for
+looking slow, since a bus's gap can be twice its headway and a stop's feed can
+be down. Over a grid of start points 80 m apart outside the residences, every
+stop as the destination and four sets of bus timings (38,000 trips on a
+weekday morning), against the best trip from any stop within 800 m: the
+nearest three stops within 450 m miss a trip over a minute quicker on 12.7%,
+these rules on 7.1% (6.4% against 12.6% on a Sunday), asking about as many
+stops an answer (2.12 either way). What's left is a stop
+past the range, or a bus that happened to come first at a stop that looked
+less likely. Walking to the stop the answer names, that stop stays in the
+answer all the way on all but 1 walk in 100; with the nearest three it was all
+but 1 in 500.
+
+With no destination (the next buses where you are), where a change of bus can
+start, and for a usual stop, it's the stops within `WALK.maxRadiusM`: those
+aren't picked by their likely trip. In a residence it's the residence's own stops
+(`residenceStops`).
+Without a location, the stop the trip starts
 from, the stop across the road from it (a crossing further), and, from home,
 every home stop. Going home, any home stop is home: a bus to PGP gets you
 there as well as one to PGP Foyer, and the leave-by's `toCode` says which
@@ -1535,9 +1589,8 @@ walking. Choosing where to get off weighs it too (`Target.costS`), and a bus
 to a stop with a walk on no shorter than from where you stand isn't one. Home,
 a room and a place have their own stops and get none nearby. A stop nearby is
 somewhere to get off, never somewhere you already are: standing at Ventus, a
-bus to CLB is still one to catch. A stop with a bus to the destination itself
-takes a candidate's slot (`WALK.maxCandidates`) before one whose buses only
-go near it.
+bus to CLB is still one to catch. Which of these stops are asked about is in
+"Which stops are tried".
 
 **Changing buses.** Where no single bus goes there, even from a stop a
 short walk away, the answer is a trip on two shuttles

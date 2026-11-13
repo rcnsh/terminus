@@ -58,22 +58,22 @@ test('on foot to a class, the journey is the walk alone: when to leave, how long
   assert.equal(j.arrive, '09:57');
   assert.equal(j.slack, '3 min early');
   assert.equal(j.to, 'CS2030 @ COM1');
-  assert.equal(j.why, 'D1 would be 16 min');
+  assert.equal(j.why, 'D1 would be 13 min');
   assert.equal(j.live, false);
   assert.equal(j.backup, null);
 });
 
 test('on foot with no class, the journey leaves now and arrives after the whole walk', async () => {
-  const answer = await load('evening-home');
+  const answer = await load('heat-walk');
   const j = cardFor(answer).journey;
   assert.equal(j.bus, null);
   assert.equal(j.leave, null);
-  assert.equal(j.walk, '15 min');
-  assert.equal(j.arrive, '09:15');
+  assert.equal(j.walk, '13 min');
+  assert.equal(j.arrive, '09:12');
   assert.equal(j.slack, null);
-  assert.equal(j.why, 'A1 would be 31 min');
+  assert.equal(j.why, 'D2 would be 16 min');
   // 12-hour, as the account asks.
-  assert.match(cardFor(answer, true).journey.arrive, /^9:15\sAM$/);
+  assert.match(cardFor(answer, true).journey.arrive, /^9:12\sAM$/);
 });
 
 test('a kept plan with a bus to catch keeps its bus, though walking now looks faster', async () => {

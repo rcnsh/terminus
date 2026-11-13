@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker from '../src/index.ts';
-import { MIN_POLL_MS, TIMELAPSE, TTL } from '../src/config.ts';
+import { MIN_POLL_MS, TIMELAPSE, TTL, WALK } from '../src/config.ts';
 import { fetchArrivals, getArrivals } from '../src/feeds/fms.ts';
 import { getPublicArrivals } from '../src/feeds/lta.ts';
 import { GRAPH_PUBLIC } from '../src/answer/graph.ts';
@@ -58,6 +58,8 @@ test('no limit on the feeds is below what docs/agents/feeds.md and internals.md 
   assert.ok(TTL.staleMaxS >= 300, `staleMaxS ${TTL.staleMaxS}`);
   assert.ok(TIMELAPSE.pollMs >= 30_000, `TIMELAPSE.pollMs ${TIMELAPSE.pollMs}`);
   assert.ok(MIN_POLL_MS >= 15_000, `MIN_POLL_MS ${MIN_POLL_MS}`);
+  // An answer asks about this many stops at most (candidates.test.js holds candidateStops to it).
+  assert.ok(WALK.maxCandidates <= 3, `maxCandidates ${WALK.maxCandidates}`);
   assert.ok(TIMELAPSE.maxPollsPerDay <= 17_280, `maxPollsPerDay ${TIMELAPSE.maxPollsPerDay}`);
   assert.deepEqual(TIMELAPSE.hours, { start: '06:30', end: '00:30' });
 });

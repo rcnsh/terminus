@@ -524,8 +524,9 @@ test('polls between the leave time and the departure keep the trip about the bus
 });
 
 test('the widget, planning without a location, says the bus the phone planned from where you are', async () => {
-  const { phone, next, clock } = await setup();
-  const AT_STOP = '?lat=1.2966&lon=103.7764'; // next to the stop the plan boards at
+  // A board at the stop the plan boards at too: a live time there, as the real feed has.
+  const { phone, next, clock } = await setup(PROFILE, { feed: { ...FEED, 'UHC-OPP': FEED.PGP } });
+  const AT_STOP = '?lat=1.2966&lon=103.7764'; // a short walk from that stop
   const first = await next(phone, AT_STOP);
   clock(Date.parse(first.leave.at) - 60_000);
   const due = await next(phone, AT_STOP);

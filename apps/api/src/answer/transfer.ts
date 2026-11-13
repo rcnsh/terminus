@@ -17,7 +17,7 @@
 
 import type { Candidate, Graph, GraphIndex, Leg, ResolveInput, Stop } from '../types.ts';
 import { TRANSFER, WALK } from '../config.ts';
-import { type Target, bestLeg, candidateStops, indexGraph, legRideS, reach, targetsFor } from './resolve.ts';
+import { type Target, bestLeg, candidateStops, endWalkFromS, indexGraph, legRideS, reach, targetsFor } from './resolve.ts';
 import { headwayFor } from './hours.ts';
 import { isPublic } from './public.ts';
 import { stopFootM } from './walk.ts';
@@ -145,7 +145,7 @@ export function planTransfers(graph: Graph, input: ResolveInput, cands: Candidat
   const direct = cands.some((c) => c.legs.some((l) => bestLeg(graph, idx, l.svc, c.stop.code, own)));
   if (direct && TRANSFER.mode !== 'beats') return NONE;
   const speed = input.walkSpeedMs ?? WALK.speedMs;
-  const endS = (leg: Leg) => input.endWalkByStopS?.[leg.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
+  const endS = (leg: Leg) => endWalkFromS(input, leg.to?.code);
 
   // The stops near you, whether or not a bus from them goes there: a change
   // can start where no single bus does (K from CLB, to change to P).
@@ -154,6 +154,7 @@ export function planTransfers(graph: Graph, input: ResolveInput, cands: Candidat
     .sort((a, b) => a.walkS - b.walkS)
     .slice(0, WALK.maxCandidates);
   // What a change must beat: a single bus there, or failing that one near it and the walk on.
+  // In real seconds, as a change's own cost is below (not likelyTripS's, which weights the walking).
   const legs = cands.flatMap((c) => c.legs.map((l) => c.walkS + halfWay(graph, l.svc) + legRideS(l) + endS(l)));
   const beat = legs.length ? Math.min(...legs) : Infinity;
 

@@ -1,8 +1,8 @@
 {
   "stop": {
-    "code": "CLB",
-    "name": "CLB",
-    "confidence": 0.5
+    "code": "AS5",
+    "name": "AS 5",
+    "confidence": 0.76
   },
   "quality": "live",
   "asOf": "2026-08-27T04:46:00.000Z",
@@ -65,13 +65,13 @@
     }
   ],
   "label": "Walk · 3 min",
-  "detail": "On foot to COM 3 · D1 would be 13 min · from CLB",
-  "alt": "D1 · 7 min · CLB",
+  "detail": "On foot to COM 3 · D1 would be 10 min · from AS 5",
+  "alt": "D1 · 7 min · AS 5",
   "departsAt": null,
   "arriveAt": "2026-08-27T04:48:52Z",
   "foot": {
     "s": 172,
-    "why": "D1 would be 13 min"
+    "why": "D1 would be 10 min"
   },
   "leave": {
     "at": "2026-08-27T04:46:00Z",
@@ -161,7 +161,7 @@
       "slack": "~3 min late",
       "live": false,
       "backup": null,
-      "why": "D1 would be 13 min",
+      "why": "D1 would be 10 min",
       "change": null,
       "title": "To COM 3 · arrive by 12:46",
       "place": "COM 3",
@@ -171,8 +171,8 @@
       "walkEndText": null,
       "arriveText": "Arrive 12:48 · ~3 min late",
       "arriveWhere": "at COM 3",
-      "backupText": "D1 would be 13 min",
-      "summary": "arrive 12:48 · 3 min walk · D1 would be 13 min"
+      "backupText": "D1 would be 10 min",
+      "summary": "arrive 12:48 · 3 min walk · D1 would be 10 min"
     },
     "upcoming": null,
     "step": null,
