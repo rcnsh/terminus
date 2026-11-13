@@ -48,7 +48,7 @@ the analytics schema in [docs/analytics.md](../../docs/analytics.md).
 
 | | |
 | --- | --- |
-| `src/` | The Worker. `index.ts` routes, `me.ts` has the account routes, `resolve.ts` picks the stop and bus |
+| `src/` | The Worker. `index.ts` routes, `src/accounts/me.ts` has the account routes, `src/answer/resolve.ts` picks the stop and bus |
 | `test/` | Node's test runner. `golden.test.js` pins whole answers to the repo's [`fixtures/answers`](../../fixtures/answers) |
 | `data/` | Stops, routes, venues and walking paths, bundled into the Worker |
 | `migrations/` | D1 schema |
