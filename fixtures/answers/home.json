@@ -59,6 +59,9 @@
     "notice": null,
     "h12": false,
     "journey": null,
+    "reasons": [
+      "wrong-class"
+    ],
     "upcoming": {
       "when": "Thu 3 Sep",
       "title": "CS2030 at 07:00",

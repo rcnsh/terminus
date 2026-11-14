@@ -114,6 +114,12 @@
     "notice": null,
     "h12": false,
     "journey": null,
+    "reasons": [
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "On the R2",

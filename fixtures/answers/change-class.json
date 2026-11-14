@@ -276,6 +276,13 @@
       "summary": "arrive 09:55 · K 09:23 at PGP · change at Kent Vale to P"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "4:600:CG",

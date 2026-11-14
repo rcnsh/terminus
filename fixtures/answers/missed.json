@@ -211,6 +211,13 @@
       "summary": "arrive 10:00 · R2 09:51 at PGP"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "R2 · 09:51",

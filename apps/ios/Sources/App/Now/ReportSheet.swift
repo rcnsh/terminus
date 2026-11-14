@@ -15,6 +15,8 @@ struct ReportSheet: View {
     @State private var raw: Data?
     @State private var line = ""
     @State private var fromNus = false
+    /// The reasons the card says fit it; nil: all of them.
+    @State private var fits: [String]?
     @FocusState private var noteFocused: Bool
     @Environment(\.windowWidth) private var width
     @ScaledMetric(relativeTo: .body) private var threeLines: CGFloat = 66
@@ -26,14 +28,29 @@ struct ReportSheet: View {
         _raw = State(initialValue: a?.raw)
         _line = State(initialValue: a?.card?.line ?? a?.label ?? "")
         _fromNus = State(initialValue: a?.card?.fromNus ?? false)
+        _fits = State(initialValue: a?.card?.reasons)
     }
 
-    /// The reasons, as /me/feedback takes them (REASONS in the API's feedback.ts).
-    private var reasons: [(String, String)] {
-        [
-            ("never-came", L("Bus never came")), ("times-off", L("Times were off")), ("wrong-stop", L("Wrong stop")),
-            ("walk-longer", L("Walk is longer")), ("wrong-class", L("Wrong class")),
-        ]
+    /// Every reason, as /me/feedback takes them (REASONS in the API's feedback.ts), in the sheet's order.
+    nonisolated static let allReasons = ["never-came", "times-off", "wrong-stop", "walk-longer", "wrong-class"]
+
+    /// The chips: only the reasons that fit the card (the server's `reasons`), so the sheet
+    /// never offers "Bus never came" with no bus; every one from a server that doesn't say.
+    nonisolated static func reasons(fitting fits: [String]?) -> [String] {
+        guard let fits else { return allReasons }
+        return allReasons.filter(fits.contains)
+    }
+
+    private var reasons: [(String, String)] { Self.reasons(fitting: fits).map { ($0, Self.label($0)) } }
+
+    private static func label(_ reason: String) -> String {
+        switch reason {
+        case "never-came": L("Bus never came")
+        case "times-off": L("Times were off")
+        case "wrong-stop": L("Wrong stop")
+        case "walk-longer": L("Walk is longer")
+        default: L("Wrong class")
+        }
     }
 
     /// Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent.

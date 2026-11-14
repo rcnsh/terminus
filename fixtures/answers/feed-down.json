@@ -157,6 +157,13 @@
       "backupText": null,
       "summary": "Walk to PGP · D2 ~09:35"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "4:600:UTOWN",

@@ -10,6 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import sh.rcn.terminus.ui.reportReasons
 import sh.rcn.terminus.ui.withoutLocalUndo
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.isOld
@@ -684,5 +685,26 @@ class AnswerTest {
         assertTrue(golden("class-late").card!!.fromNus)
         assertFalse("a public bus's times are LTA's", golden("public-wins").card!!.fromNus)
         assertFalse("an estimate is ours", golden("scheduled").card!!.fromNus)
+    }
+
+    private fun offered(card: Card?) = reportReasons(card?.reasons).map { it.first }
+
+    @Test
+    fun `the report sheet offers the reasons that fit the card`() {
+        val all = listOf("never-came", "times-off", "wrong-stop", "walk-longer", "wrong-class")
+        assertEquals(all, offered(golden("class-bus").card))
+        // On the bus, it can't have never come.
+        assertEquals(all - "never-came", offered(golden("riding").card))
+        // No trip: only the class can be wrong.
+        assertEquals(listOf("wrong-class"), offered(golden("rest").card))
+    }
+
+    @Test
+    fun `a card from a server without reasons offers them all`() {
+        val json = goldenJson("class-bus")
+        json.getJSONObject("card").remove("reasons")
+        val card = NextAnswer.parse(json).card
+        assertNull(card?.reasons)
+        assertEquals(5, offered(card).size)
     }
 }

@@ -207,13 +207,15 @@ struct Card: Decodable, Sendable {
     let step: Step?
     /// The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's.
     let fromNus: Bool
+    /// The "Is this wrong?" reasons that fit this card, in the sheet's order; nil from a server that doesn't say (all of them).
+    let reasons: [String]?
 
     static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
 
     enum CodingKeys: String, CodingKey {
         case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, catchLine, late, goNow, note, estimate, phase, phaseText,
             glance, line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
-        case title, heading, remindAt, journey, ride, gone, walkTo, step, fromNus
+        case title, heading, remindAt, journey, ride, gone, walkTo, step, fromNus, reasons
     }
 
     init(from d: Decoder) throws {
@@ -232,6 +234,7 @@ struct Card: Decodable, Sendable {
         note = c.string(.note)
         estimate = c.string(.estimate)
         fromNus = c.bool(.fromNus) ?? false
+        reasons = c.lenientList(String.self, forKey: .reasons)
         phase = c.string(.phase) ?? "idle"
         phaseText = c.string(.phaseText)
         glance = c.string(.glance)

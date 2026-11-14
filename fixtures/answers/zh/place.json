@@ -204,6 +204,13 @@
       "summary": "步行到 PGP · 09:09 的 A1"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "place:mrt",

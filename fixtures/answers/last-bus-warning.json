@@ -159,6 +159,13 @@
       "summary": "D2 22:44 at PGP"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "D2 · 22:44",
