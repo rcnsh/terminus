@@ -17,7 +17,7 @@ release.
     applies the beta D1's migrations the same way, then runs
     `scripts/deploy/smoke.mjs https://beta.terminus.run --account`: a
     throwaway account asks for a trip and steps to the later bus. After a
-    production deploy, run `node scripts/deploy/smoke.mjs https://terminus.run`
+    production deploy, run `node scripts/deploy/smoke.mjs https://terminus.run` from `apps/api`
     (no `--account`: pages and health only, no account made).
   - Each deploy is labelled with its commit (`--message`), so which commit
     is live is the newest message in
