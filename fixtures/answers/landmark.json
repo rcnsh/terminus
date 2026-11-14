@@ -189,6 +189,13 @@
       "summary": "Walk to PGP · R2 09:06"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "place:deck",

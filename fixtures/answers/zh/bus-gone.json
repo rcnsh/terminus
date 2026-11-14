@@ -172,6 +172,13 @@
       "summary": "09:25 到达 · 在 PGP 搭 09:16 的 D2"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "D2 · 09:16",

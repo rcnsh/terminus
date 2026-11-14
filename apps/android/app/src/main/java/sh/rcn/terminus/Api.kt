@@ -224,6 +224,8 @@ data class Card(
     val step: Step? = null,
     /** The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's. */
     val fromNus: Boolean = false,
+    /** The "Is this wrong?" reasons that fit this card, in the sheet's order; null from an older server, which offers them all. */
+    val reasons: List<String>? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) =
@@ -242,6 +244,7 @@ data class Card(
                 note = o.optStringOrNull("note"),
                 estimate = o.optStringOrNull("estimate"),
                 fromNus = o.optBoolean("fromNus", false),
+                reasons = o.optJSONArray("reasons")?.let { a -> (0 until a.length()).mapNotNull { a.optString(it).ifEmpty { null } } },
                 phase = o.optString("phase", "idle"),
                 phaseText = o.optStringOrNull("phaseText"),
                 glance = o.optStringOrNull("glance"),

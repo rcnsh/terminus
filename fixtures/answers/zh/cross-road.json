@@ -192,6 +192,13 @@
       "summary": "在 Opp KR MRT 搭 09:05 的 D2"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:COM3",

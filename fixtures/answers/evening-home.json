@@ -206,6 +206,13 @@
       "summary": "Walk to AS 5 · A1 09:09"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "home:evening",

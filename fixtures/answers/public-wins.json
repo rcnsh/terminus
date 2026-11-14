@@ -171,6 +171,13 @@
       "backupText": "Or A2 at 09:15 from IT",
       "summary": "95 ($) 09:02 at IT"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT-OPP",

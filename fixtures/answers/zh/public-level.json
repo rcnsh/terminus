@@ -171,6 +171,13 @@
       "summary": "在 IT 搭 09:06 的 A2"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT-OPP",

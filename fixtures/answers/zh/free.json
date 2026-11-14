@@ -53,6 +53,9 @@
     "notice": null,
     "h12": false,
     "journey": null,
+    "reasons": [
+      "wrong-class"
+    ],
     "upcoming": {
       "when": "明天 · 周五",
       "title": "CS2030，10:00 开始",

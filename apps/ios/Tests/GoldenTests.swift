@@ -148,6 +148,29 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(starts.hasPrefix("To GEA1000 @ UTown · starts "), "\(starts)")
 }
 
+/// "Is this wrong?" offers only the reasons that fit the card, as the server lists them: no
+/// "Bus never came" with no bus to catch; every reason from a server that doesn't say.
+@Test func theReportSheetOffersTheReasonsThatFit() throws {
+    let offered = { (name: String) in
+        ReportSheet.reasons(fitting: try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("\(name).json"))).card?.reasons)
+    }
+    let all = ["never-came", "times-off", "wrong-stop", "walk-longer", "wrong-class"]
+    #expect(try offered("class-bus") == all)
+    #expect(try offered("riding") == ["times-off", "wrong-stop", "walk-longer", "wrong-class"], "on the bus there's none to come")
+    #expect(try offered("rest") == ["wrong-class"], "a day that's done has no bus or walk")
+
+    // An older server sends no reasons: the card says nil, and the sheet offers them all.
+    var json = try #require(
+        try JSONSerialization.jsonObject(with: Data(contentsOf: answers.appendingPathComponent("rest.json"))) as? [String: Any])
+    var card = try #require(json["card"] as? [String: Any])
+    card.removeValue(forKey: "reasons")
+    json["card"] = card
+    let older = try NextAnswer.decode(JSONSerialization.data(withJSONObject: json))
+    #expect(older.card != nil)
+    #expect(older.card?.reasons == nil)
+    #expect(ReportSheet.reasons(fitting: older.card?.reasons) == all)
+}
+
 /// "Is this wrong?" says a missed or late bus is NUS's only for a shuttle's live time, which the server decides.
 @Test func theReportSheetKnowsWhenTimesAreNUSs() throws {
     let card = { (name: String) in try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("\(name).json"))).card }

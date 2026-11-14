@@ -116,6 +116,11 @@
       "backupText": "今晚已停运",
       "summary": "00:34 到达 · 步行 15 分钟 · 今晚已停运"
     },
+    "reasons": [
+      "times-off",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "无巴士 · 步行 15 分钟",

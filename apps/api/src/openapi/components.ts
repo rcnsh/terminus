@@ -1203,6 +1203,13 @@ export function components(): Record<string, unknown> {
                     description:
                       'The headline bus is a shuttle and its time is NUS’s live one, with a leave-by that is not an estimate. The “Is this wrong?” sheet then says that a bus that never came or times that were off are NUS’s. Absent otherwise: a public bus, an estimate, an old reading, no live times or a walk.',
                   },
+                  reasons: {
+                    type: 'array',
+                    items: { type: 'string', enum: ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'] },
+                    example: ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'],
+                    description:
+                      'The reasons the “Is this wrong?” sheet offers for this card, in its order, as `POST /api/me/feedback` takes them. One only fits what the card has: `never-came` a bus to catch; `wrong-stop` that or the bus you’re on; `times-off` and `walk-longer` any trip; `wrong-class` always. A card with no trip offers only `wrong-class`.',
+                  },
                   phase: {
                     type: 'string',
                     enum: ['idle', 'due', 'heading', 'waiting', 'riding', 'missed', 'arrived'],

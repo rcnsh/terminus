@@ -111,6 +111,13 @@
       "backupText": null,
       "summary": "约 09:55 到达 · 在 Kent Vale 搭约 09:42 的 P"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "P · 约 09:42",

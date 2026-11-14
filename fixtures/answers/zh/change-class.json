@@ -276,6 +276,13 @@
       "summary": "09:55 到达 · 在 PGP 搭 09:23 的 K · 在 Kent Vale 换乘 P"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "4:600:CG",

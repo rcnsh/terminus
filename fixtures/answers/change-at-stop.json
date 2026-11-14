@@ -111,6 +111,13 @@
       "backupText": null,
       "summary": "arrive ~09:55 · P ~09:42 at Kent Vale"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "P · ~09:42",

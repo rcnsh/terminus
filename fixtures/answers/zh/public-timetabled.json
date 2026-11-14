@@ -159,6 +159,13 @@
       "backupText": "或在 Opp UHC 搭约 09:11 的 P",
       "summary": "在 IT 搭约 09:04 的 151 ($)"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:CG",

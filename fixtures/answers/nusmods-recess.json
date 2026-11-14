@@ -53,6 +53,9 @@
     "notice": null,
     "h12": false,
     "journey": null,
+    "reasons": [
+      "wrong-class"
+    ],
     "upcoming": {
       "when": "Tue 29 Sep",
       "title": "GEA1000 at 10:00",

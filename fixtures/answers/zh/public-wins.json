@@ -171,6 +171,13 @@
       "backupText": "或在 IT 搭 09:15 的 A2",
       "summary": "在 IT 搭 09:02 的 95 ($)"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT-OPP",

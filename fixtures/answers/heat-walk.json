@@ -107,6 +107,11 @@
       "backupText": "D2 would be 16 min",
       "summary": "13 min walk · D2 would be 16 min"
     },
+    "reasons": [
+      "times-off",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "Walk · 13 min",

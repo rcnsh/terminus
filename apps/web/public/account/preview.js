@@ -432,6 +432,10 @@ export const REPORT_REASONS = [
 /** Reasons about the bus itself: on an answer with NUS's live times (`card.fromNus`), picking one says they're NUS's before it's sent. */
 const NUS_REASONS = new Set(['never-came', 'times-off']);
 
+/** The chips for `card`: the reasons the server says fit it (card.reasons), or all of them from a server that doesn't say. */
+export const reasonsFor = (card) =>
+  Array.isArray(card?.reasons) ? REPORT_REASONS.filter(([key]) => card.reasons.includes(key)) : REPORT_REASONS;
+
 /**
  * "Is this wrong?": a link that opens a bottom sheet (a modal dialog) about
  * the answer on screen (`answer`, as it was when the sheet opened: the card
@@ -443,7 +447,7 @@ const NUS_REASONS = new Set(['never-came', 'times-off']);
  */
 export function Report({ answer, anonymous = false, email = null, onAddEmail = () => location.assign('/account/?add=1&next=/app/') }) {
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState(null);
+  const [picked, setReason] = useState(null);
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
@@ -451,6 +455,10 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
   const [reported, setReported] = useState(null);
   const dialog = useRef(null);
   const opener = useRef(null);
+  // A pick kept from an earlier opening counts only while this answer still offers it: a card that has
+  // moved on (now on the bus, say) mustn't send a reason no longer on screen.
+  const offered = reasonsFor(reported?.card);
+  const reason = offered.some(([key]) => key === picked) ? picked : null;
   useEffect(() => {
     const d = dialog.current;
     if (!d) return;
@@ -497,7 +505,7 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
           ${line && html`<div class="report-quote"><span class="report-quote-line">${line}</span></div>`}
           <p class="hint report-pick" id="report-pick">${t('Pick one, or say what happened')}</p>
           <div class="report-chips" role="group" aria-labelledby="report-pick">
-            ${REPORT_REASONS.map(
+            ${offered.map(
               ([key, label]) => html`<button
                 type="button"
                 key=${key}

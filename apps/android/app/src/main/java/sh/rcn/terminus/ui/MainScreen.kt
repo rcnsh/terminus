@@ -357,6 +357,7 @@ internal fun MainScreen(
                                 var reporting by remember { mutableStateOf<String?>(null) }
                                 var reportingLine by remember { mutableStateOf("") }
                                 var reportingFromNus by remember { mutableStateOf(false) }
+                                var reportingReasons by remember { mutableStateOf<List<String>?>(null) }
                                 var opened by remember { mutableStateOf(false) }
                                 Text(
                                     stringResource(R.string.is_this_wrong),
@@ -367,6 +368,7 @@ internal fun MainScreen(
                                                 reporting = state.rawAnswers[state.target]
                                                 reportingLine = state.answer?.card?.line ?: state.answer?.label ?: ""
                                                 reportingFromNus = state.answer?.card?.fromNus == true
+                                                reportingReasons = state.answer?.card?.reasons
                                                 opened = true
                                                 vm.reportOpened()
                                             }
@@ -379,6 +381,7 @@ internal fun MainScreen(
                                     ReportSheet(
                                         line = reportingLine,
                                         fromNus = reportingFromNus,
+                                        reasons = reportReasons(reportingReasons),
                                         email = email,
                                         sending = state.reportSending,
                                         sent = state.reportSent,
@@ -519,19 +522,26 @@ private val REPORT_REASONS =
         "wrong-class" to R.string.report_wrong_class,
     )
 
+/**
+ * The chips for a card whose fitting reasons are [fits] (`card.reasons`), in the sheet's order; all of them when an older server sent none.
+ */
+internal fun reportReasons(fits: List<String>?): List<Pair<String, Int>> =
+    if (fits == null) REPORT_REASONS else REPORT_REASONS.filter { it.first in fits }
+
 /** Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent. */
 private val NUS_REASONS = setOf("never-came", "times-off")
 
 /**
- * "Is this wrong?", as the web's sheet: the answer it's about (`line`), the reasons as chips, a note, and who the reply goes to. A reason
- * or a note sends it; once `sent`, the sheet says so, which is the only confirmation. Without an email the server takes no reports, so it
- * asks for one instead.
+ * "Is this wrong?", as the web's sheet: the answer it's about (`line`), the reasons that fit it as chips, a note, and who the reply goes
+ * to. A reason or a note sends it; once `sent`, the sheet says so, which is the only confirmation. Without an email the server takes no
+ * reports, so it asks for one instead.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ReportSheet(
     line: String,
     fromNus: Boolean,
+    reasons: List<Pair<String, Int>>,
     email: String?,
     sending: Boolean,
     sent: Boolean,
@@ -612,7 +622,7 @@ private fun ReportSheet(
                     Spacer(Modifier.height(16.dp))
                     Text(stringResource(R.string.report_pick), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        REPORT_REASONS.forEach { (key, label) ->
+                        reasons.forEach { (key, label) ->
                             val on = reason == key
                             FilterChip(
                                 selected = on,

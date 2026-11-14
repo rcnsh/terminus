@@ -157,6 +157,13 @@
       "backupText": "或现在走：在 PGP 搭约 09:06 的 D2",
       "summary": "约 09:57 到达 · 在 PGP 搭约 09:35 的 D2"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "1:600:UTOWN",

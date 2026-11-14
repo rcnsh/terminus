@@ -94,6 +94,11 @@
       "backupText": "Services ended for the night",
       "summary": "27 min walk · Services ended for the night"
     },
+    "reasons": [
+      "times-off",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": null,
     "title": "No bus · walk 27 min",

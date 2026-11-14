@@ -155,6 +155,13 @@
       "summary": "在 PGP 搭 09:21 的 D2"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:UTOWN",

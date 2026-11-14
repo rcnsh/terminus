@@ -1339,9 +1339,13 @@ map; and Settings. It uses the same routes as the account page, with the session
   destinations); a pick shows its card under a chip of its own. "Is this
   wrong?" under the card opens a bottom sheet (account/preview.js
   `Report`, a modal `<dialog>`): the answer it's about, the reasons as
-  chips, a note, and who the reply goes to. It sends to `/api/me/feedback`
-  and then says so in the sheet, which is the only confirmation; Android's
-  sheet is the same. When the card has `fromNus` (a shuttle's live NUS
+  chips, a note, and who the reply goes to. The chips are the card's
+  `reasons` (`reasonsOf` in card.ts), only those that fit what the card
+  has: "Bus never came" a bus to catch, "Wrong stop" that or the bus
+  you're on, "Times were off" and "Walk is longer" any trip (a walk is
+  weighed against a bus), "Wrong class" always; a card without `reasons` (from an older server) offers them all. It sends to
+  `/api/me/feedback` and then says so in the sheet, which is the only
+  confirmation; Android's sheet is the same. When the card has `fromNus` (a shuttle's live NUS
   time, decided in card.ts), picking "Bus never came" or "Times were off"
   adds a note that those times are NUS's, and Send reads "Send anyway".
 - **Nearby** (app/app.js `NearbyArea`, ADR 0017). A tab of its own: the

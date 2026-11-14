@@ -213,6 +213,12 @@ struct ReportForm: View {
         ]
     }
 
+    /// The chips for a card: the reasons the server says fit it (`card.reasons`), or all of them from a server that doesn't say.
+    static func offered(_ fitting: [String]?) -> [(id: String, label: String)] {
+        guard let fitting else { return reasons }
+        return reasons.filter { fitting.contains($0.id) }
+    }
+
     /// Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent.
     private static let nusReasons: Set<String> = ["never-came", "times-off"]
     private var aboutNus: Bool { model.reportFromNus && (model.reportReason.map(Self.nusReasons.contains) ?? false) }
@@ -251,7 +257,7 @@ struct ReportForm: View {
             Text(L("Pick one, or say what happened")).font(.caption).foregroundStyle(.secondary)
             // One reason at most; picking it again lets it go.
             Flow(spacing: 6) {
-                ForEach(Self.reasons, id: \.id) { r in
+                ForEach(Self.offered(model.reportReasons), id: \.id) { r in
                     let on = model.reportReason == r.id
                     Button(r.label) { model.reportReason = on ? nil : r.id }
                         .buttonStyle(.bordered)

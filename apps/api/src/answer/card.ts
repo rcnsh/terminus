@@ -262,6 +262,9 @@ export interface Card {
    *  feed: the report sheet says so. Absent for a public bus (LTA), an
    *  estimate, a kept plan or old reading, no live times or a walk. */
   fromNus?: true;
+  /** The "Is this wrong?" reasons that fit this card, in the order the sheet
+   *  offers them (reasonsOf). */
+  reasons: ReportReason[];
 
   /* By where the trip is: every surface picks what fits. */
   /** Where the trip is. 'idle' when there is no trip in progress. */
@@ -363,7 +366,7 @@ type PhaseKeys =
   | 'ride'
   | 'gone'
   | 'walkTo';
-type BaseCard = Omit<Card, PhaseKeys | 'notice' | 'h12' | 'journey' | 'upcoming' | 'step' | 'title' | 'heading' | 'remindAt'>;
+type BaseCard = Omit<Card, PhaseKeys | 'notice' | 'h12' | 'journey' | 'reasons' | 'upcoming' | 'step' | 'title' | 'heading' | 'remindAt'>;
 
 /**
  * `feedDownSince`: when the monitor confirmed NUS's feed down, or null while
@@ -393,12 +396,43 @@ export function cardFor(
     h12,
     journey,
     ...(journey?.live && journey.bus && !journey.bus.paid && !journey.change?.bus.paid ? { fromNus: true as const } : {}),
+    reasons: reasonsOf(a, card.kind, journey, trip.phase),
     upcoming: a.upcoming ?? null,
     step: stepOf(a, card.kind, trip),
     title: titleOf(a, h12),
     heading: headingOf(a),
     remindAt: remindAtOf(a, card.kind, trip, nowMs),
   };
+}
+
+/**
+ * What can be wrong with an answer, as the report sheet's chips offer them
+ * and /api/me/feedback takes them (REASONS in ops/feedback.ts, the same keys
+ * in the same order).
+ */
+export const REPORT_REASONS = ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/**
+ * The reasons that fit a card, so the sheet never offers one about something
+ * the card doesn't have. "Never came" needs a bus to catch (Nearby's, or the
+ * trip's); "wrong stop" also fits the bus you're on, which has a stop to get
+ * off at; "times were off" and "the walk is longer" fit any trip, since one on
+ * foot weighs the walk against a bus's time ("D1 would be 13 min"). "Wrong
+ * class" always fits: a day said to be done can be the mistake.
+ */
+export function reasonsOf(a: MeAnswer, kind: CardKind, journey: Journey | null, phase: Phase): ReportReason[] {
+  const toCatch = kind === 'nearby' || Boolean(a.leave?.svc) || Boolean(journey?.bus);
+  const bus = toCatch || phase === 'riding';
+  const trip = kind === 'class' || kind === 'trip';
+  const fits: Record<ReportReason, boolean> = {
+    'never-came': toCatch,
+    'times-off': bus || trip,
+    'wrong-stop': bus,
+    'walk-longer': trip,
+    'wrong-class': true,
+  };
+  return REPORT_REASONS.filter((r) => fits[r]);
 }
 
 /**

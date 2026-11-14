@@ -171,6 +171,13 @@
       "summary": "A2 09:06 at IT"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "to:KR-MRT-OPP",

@@ -157,6 +157,13 @@
       "backupText": null,
       "summary": "步行到 PGP · 约 09:35 的 D2"
     },
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "4:600:UTOWN",

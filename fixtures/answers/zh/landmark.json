@@ -189,6 +189,13 @@
       "summary": "步行到 PGP · 09:06 的 R2"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "place:deck",

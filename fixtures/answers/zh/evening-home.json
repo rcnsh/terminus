@@ -206,6 +206,13 @@
       "summary": "步行到 AS 5 · 09:09 的 A1"
     },
     "fromNus": true,
+    "reasons": [
+      "never-came",
+      "times-off",
+      "wrong-stop",
+      "walk-longer",
+      "wrong-class"
+    ],
     "upcoming": null,
     "step": {
       "trip": "home:evening",

@@ -123,6 +123,8 @@ final class AppModel {
     var reportReason: String?
     /// The reported answer's times are NUS's live ones (`card.fromNus`).
     var reportFromNus = false
+    /// The reasons that fit the reported answer (`card.reasons`); nil offers them all.
+    var reportReasons: [String]?
     var reportNote = ""
     var reportSending = false
     var reportResult: String?
@@ -845,6 +847,7 @@ final class AppModel {
     func startReport() {
         reported = showNearby ? nil : shown?.raw
         reportFromNus = !showNearby && shown?.card?.fromNus == true
+        reportReasons = showNearby ? nil : shown?.card?.reasons
         reportSentLine = shown?.card?.line
         reportReason = nil
         reportNote = ""
