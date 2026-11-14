@@ -18,7 +18,7 @@
 //
 //   node apps/ios/store/frame.mjs            # all of them
 //   node apps/ios/store/frame.mjs 3-map      # one, both languages
-//   node apps/ios/store/frame.mjs header     # the product page's header
+//   node apps/ios/store/frame.mjs header     # the product page's header and search results picture
 //   node apps/ios/store/frame.mjs --device ipad   # the iPad 13" set
 //   node apps/ios/store/frame.mjs --device duo    # the open iPhone Duo set
 //   node apps/ios/store/frame.mjs --device watch  # the Apple Watch set
@@ -495,10 +495,12 @@ function watchStyle(zh) {
 // thin line at this shape, so it shows the strip from just past the
 // morning's shuttle, larger, with golden hour at its left edge, dusk in the
 // middle and night at its right edge: with no phone to cover a join, each
-// hour turns into the next over half the picture.
-const HEADER = { w: 3840, h: 1646, from: 2.15 };
+// hour turns into the next over half the picture. The search results'
+// picture (3:2) is the same strip at the same scale with more sky above.
+const HEADER = { w: 3840, h: 1646, from: 2.15, file: 'header.png' };
+const SEARCH = { ...HEADER, h: 2560, file: 'search-results.png' };
 
-function headerPage() {
+function headerPage(HEADER) {
   const dw = HEADER.w / (SLIDES.length - HEADER.from);
   const scale = dw / 1080;
   const left = HEADER.from * 1080;
@@ -554,9 +556,11 @@ function shoot(html, out, w, h) {
 }
 try {
   if ((!only || only === 'header') && DEVICE === 'iphone') {
-    const html = join(tmp, 'header.html');
-    writeFileSync(html, headerPage());
-    shoot(html, join(here, 'header.png'), HEADER.w, HEADER.h);
+    for (const pic of [HEADER, SEARCH]) {
+      const html = join(tmp, pic.file.replace('.png', '.html'));
+      writeFileSync(html, headerPage(pic));
+      shoot(html, join(here, pic.file), pic.w, pic.h);
+    }
   }
   if (only && only !== 'header' && !SLIDES.some((s) => s.file === only)) {
     throw new Error(`no slide ${only} for ${DEVICE}: ${SLIDES.map((s) => s.file).join(', ')}`);
