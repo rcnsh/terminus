@@ -41,6 +41,7 @@ ONE ANSWER, ON YOUR HOME SCREEN
 • A heads-up five minutes before you need to set off.
 • If you're late, it says so and offers the quickest way there.
 • If the bus you'd catch is often busy at that stop and time, it aims for one bus earlier.
+• If a bus passes close to where you're going, it drops you there to walk the rest. If a further stop's bus gets you there sooner, it sends you to that stop.
 
 IT FOLLOWS YOUR TRIP
 • Once your bus leaves, terminus takes it you're on it and shows the next stop and when you'll get there.
@@ -51,7 +52,7 @@ ANYWHERE ON CAMPUS
 • Search any building, stop or room.
 • Favourites: pick a stop, building or room and it's saved. The stops your classes use come first.
 • Nearby: every bus at the stops around you, live. Wrong side of the road? One tap shows the stop across it.
-• Buses: what's coming at any stop, and where a service's buses are along its line.
+• Stops: what's coming at any stop, and where a service's buses are along its line.
 • The map: every route in its colour on a street map of campus. Pick a service to see its buses moving live; tap a stop for what's coming.
 
 IT LEARNS, AND ASKS FIRST
@@ -61,6 +62,7 @@ Nothing changes unless you say yes, and every choice can be undone.
 
 ALSO
 • Today: your classes, when to leave for each, and the trip home.
+• On Apple Watch: when to leave for your next class, the buses near you, and complications for your watch face.
 • In English and Simplified Chinese (简体中文).
 • Works with the terminus menu bar app for Mac and the website. Add an email and they all show the same trip.
 
@@ -110,6 +112,7 @@ terminus 告诉你什么时候该出发去上 NUS 的下一节课，以及该搭
 • 需要出发前五分钟提醒你。
 • 要迟到时，它会告诉你，并给出最快的走法。
 • 如果你要搭的那班车在那个站、那个时间经常很挤，它会建议早一班。
+• 如果有巴士经过你要去的地方附近，它会让你在那里下车，步行过去。如果更远的车站能让你更早到，它会带你去那个车站。
 
 它会跟着你的行程
 • 巴士开走后，terminus 会当作你已经上车，并显示下一站和你什么时候到。
@@ -120,7 +123,7 @@ terminus 告诉你什么时候该出发去上 NUS 的下一节课，以及该搭
 • 搜索任何建筑、车站或教室。
 • 收藏：选一个车站、建筑或教室就能保存。你上课用到的车站排在最前面。
 • 附近：你周围各个车站的所有巴士，实时显示。站错马路了？点一下就能看对面的车站。
-• 巴士：任何车站即将到站的车，以及一条路线的巴士现在开到哪里。
+• 车站：任何车站即将到站的车，以及一条路线的巴士现在开到哪里。
 • 地图：校园街道地图上，每条路线用自己的颜色显示。选一条路线就能看它的巴士实时移动；点车站看即将到站的车。
 
 它会学习，但先问你
@@ -130,6 +133,7 @@ terminus 告诉你什么时候该出发去上 NUS 的下一节课，以及该搭
 
 还有
 • 今天：你的课、每节课什么时候出发，以及回家的行程。
+• Apple Watch 上：下一节课什么时候出发、附近的巴士，以及表盘上的复杂功能。
 • 支持英文和简体中文。
 • 可以配合 terminus 的 Mac 菜单栏应用和网站使用。添加邮箱后，它们都显示同一段行程。
 
