@@ -194,6 +194,14 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(Links.route(URL(string: "terminus://elsewhere")!, key: key) == nil)
 }
 
+@Test func chipsAreMeasuredInTheirOwnFont() {
+    let labels = ["Timetable", "Nearby", "Home", "COM3"]
+    #expect(WidgetMode.fitting(labels, width: 290) == 3)
+    #expect(WidgetMode.fitting(labels, width: 310) == 4)
+    #expect(WidgetMode.fitting(["时刻表", "附近", "宿舍"], width: 200) == 3)
+    #expect(WidgetMode.fitting(["WWWW MMMM", "Nearby"], width: 120) == 0)
+}
+
 @Test func theWidgetsOwnLinksRoundTrip() {
     let mode = WidgetMode.to(id: "stop:COM3", label: "COM 3")
     #expect(Links.route(mode.link, key: WidgetStore.linkKey) == .to("COM3", "COM 3"))
