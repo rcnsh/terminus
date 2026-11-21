@@ -3,9 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// How the app takes the server's refusals and replies it only partly
-/// understands: waits as long as it's asked, and keeps what it can read.
-
 @Test func retryAfterIsReadInEitherForm() {
     let now = Date(timeIntervalSince1970: 1_791_000_000)
     #expect(retryAfterS("120", now: now) == 120)
@@ -18,13 +15,11 @@ import Testing
     #expect(retryAfterS("Wed, 07 Oct 2026 01:16:02 GMT", now: later.addingTimeInterval(10)) == nil)
 }
 
-/// A mistyped sign-in code doesn't silence the menu bar, nor the other way round.
 @Test func signingInAndTheAnswersWaitApart() {
     #expect(Quiet.scope("/api/auth/app/code") == .signIn)
     #expect(Quiet.scope("/api/auth/anon") == .signIn)
     #expect(Quiet.scope("/api/pair") == .signIn)
     #expect(Quiet.scope("/api/me/next") == .app)
-    // A pairing code is part of pairing, as on Android: its 429 doesn't stop the menu bar.
     #expect(Quiet.scope("/api/me/pair-code") == .signIn)
     #expect(Quiet.scope("/api/me/pair") == .app)
 
@@ -32,16 +27,12 @@ import Testing
     Quiet.after("120", scope: .signIn)
     #expect(Quiet.until(.signIn) > Date().addingTimeInterval(100))
     #expect(Quiet.until(.app) == appBefore)
-    // At most 5 minutes, whatever the header says.
     Quiet.after("86400", scope: .signIn)
     #expect(Quiet.until(.signIn) <= Date().addingTimeInterval(300))
-    // Over again, so no other test meets it.
     Quiet.after("1", scope: .signIn, now: .distantPast)
     #expect(Quiet.until(.signIn) < Date())
 }
 
-/// A 503's Retry-After isn't a gate, only a wait for the polling loops, held
-/// to the same 5 minutes as a 429's. None at all leaves the loops as they were.
 @Test func a503sRetryAfterIsWaitedOutByThePolls() {
     let at = Date().addingTimeInterval(86_400)
     #expect(Quiet.wait(now: at) == 0)
@@ -52,12 +43,10 @@ import Testing
     #expect(Quiet.until(.app) < at)
     Quiet.later("3600", now: at)
     #expect(Quiet.wait(now: at) == Quiet.maxS)
-    // Over again, so no other test meets it.
     Quiet.later("1", now: .distantPast)
     #expect(Quiet.wait(now: at) == 0)
 }
 
-/// As the server: signing in or out and leaving still go to an outdated app.
 @Test func anOutdatedAppCanStillSignOutAndLeave() {
     #expect(Outdated.gated("GET", "/api/me/next"))
     #expect(Outdated.gated("GET", "/api/me"))
@@ -81,7 +70,6 @@ import Testing
     #expect(ApiError(status: 426, message: "").updateRequired)
 }
 
-/// One odd row or a fractional number loses that row, never the whole reply.
 @Test func nearbyStopsKeepWhatTheyCanRead() throws {
     struct R: Decodable { let stops: [NearbyStop] }
     let json = """

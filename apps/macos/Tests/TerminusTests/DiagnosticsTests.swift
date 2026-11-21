@@ -3,11 +3,8 @@ import Testing
 
 @testable import Terminus
 
-/// The developer menu's diagnostics: the same cases as the phone's DiagnosticsTest.
-
 private let now = Date(timeIntervalSince1970: 1_792_300_000)
 
-/// One log for the whole app: these two run one after the other.
 @Suite(.serialized) struct RequestLogTests {
     @Test func theLogKeepsThePathNeverTheQuery() {
         RequestLog.clear()
@@ -42,7 +39,6 @@ private let now = Date(timeIntervalSince1970: 1_792_300_000)
     }
 }
 
-/// Answers the map's poll for A1's buses with an empty list.
 private final class MapAnswers: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { request.url?.query == "svc=A1" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -70,7 +66,6 @@ private final class MapAnswers: URLProtocol {
     #expect(Diagnostics.ago(now.addingTimeInterval(-200), now: now) == "3 min ago")
     #expect(Diagnostics.ago(now.addingTimeInterval(-5 * 3600), now: now) == "5 h ago")
     #expect(Diagnostics.ago(now.addingTimeInterval(-3 * 86_400), now: now) == "3 d ago")
-    // Singapore's time, whatever the Mac's zone.
     #expect(Diagnostics.stamp(now) == "2026-10-18 13:06:40")
 }
 

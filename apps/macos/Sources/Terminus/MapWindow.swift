@@ -3,18 +3,9 @@ import CoreLocation
 import MapLibre
 import SwiftUI
 
-// MARK: - The map's state
-
-/// What the map window shows: the campus, the style, the chosen service and
-/// its live buses, and the card for a clicked stop or bus. The same as the
-/// phone's Map tab (MapViewModel), polled the same: buses every 5 s, a stop's
-/// times every 15 s, your dot every 20 s, and only while the window is open.
 @MainActor @Observable
 final class MapModel {
-    /// The card over the map: a stop, or a bus. A stop opened from a bus's
-    /// card remembers that bus (`from`), which Esc goes back to.
     enum Sheet: Equatable {
-        /// A bus's card as it was: its stops ahead open (`stops`), and every one of them (`all`).
         struct Bus: Equatable {
             let id: String
             var stops = false
@@ -38,13 +29,8 @@ final class MapModel {
     var failed = false
     var selected: String?
     var buses: [LiveBus] = []
-    /// Bumped by every answer from `/api/buses`, the same or not: each one plans
-    /// the slides again, so a bus that hasn't moved still counts as heard from.
     var busAnswers = 0
-    /// The feed is down, or the last answer is old, and these are its last
-    /// places: drawn faded.
     var busesStale = false
-    /// When `/api/buses` last answered (this Mac's clock).
     private var heardAt: Date?
     var busStatus: BusStatus?
     var sheet: Sheet?
@@ -53,27 +39,16 @@ final class MapModel {
     var me: Spot?
     var downloading = false
     var downloadFailed = false
-    /// Bumped by "Back to campus"; the map watches it.
     var recentre = 0
-    /// Zoom steps asked for by the buttons (and ⌘+, ⌘−), in total: the map
-    /// zooms by the difference since it last looked.
     var zoomSteps = 0
-    /// A stop chosen from the list, or the bus Esc goes back to, which the
-    /// map moves to; `focusCount` is
-    /// bumped each time, so choosing it again moves there again.
     var focus: Spot?
     var focusCount = 0
 
-    /// Why the API refused the map: signed out (401) or this version too
-    /// old (426). It asks nothing more until that changes: a new token, or
-    /// the 426's hold over.
     enum Refusal: Equatable { case signedOut, outdated }
     var refused: Refusal?
     private var refusedToken: String?
-    /// What the window opened with, for the style again after the map file failed.
     private var look = (dark: false, zh: false)
 
-    /// Whether the map may ask the API now; clears a refusal that no longer holds.
     func mayAsk() -> Bool {
         switch refused {
         case .signedOut where TokenStore.read() != refusedToken, .outdated where !Outdated.active: refused = nil
@@ -82,8 +57,6 @@ final class MapModel {
         return refused == nil
     }
 
-    /// A 401 or 426: stop asking, and have the popover check at once (it
-    /// signs out, or offers the update).
     private func refuse(_ e: ApiError, token: String?, app: AppModel) {
         refused = e.status == 426 ? .outdated : .signedOut
         refusedToken = token
@@ -97,14 +70,10 @@ final class MapModel {
 
     var openStop: String? { if case .stop(let c, _) = sheet { c } else { nil } }
     var openBus: LiveBus? { if case .bus(let b) = sheet { buses.first { $0.id == b.id } } else { nil } }
-    /// How the open bus's card was left, for it to open the same way.
     var openBusSheet: Sheet.Bus? { if case .bus(let b) = sheet { b } else { nil } }
 
-    /// The campus and the style for this theme and language, then the street
-    /// map file in the background (the style again once it's here).
     func open(dark: Bool, zh: Bool, app: AppModel) async {
         look = (dark, zh)
-        // Asked first either way: back after signing in, the refusal goes.
         if mayAsk(), campus == nil {
             let token = TokenStore.read()
             do {
@@ -128,18 +97,12 @@ final class MapModel {
         downloading = false
     }
 
-    /// MapLibre couldn't load a style reading the map file: the file goes
-    /// (the next look downloads it again) and the map is plain meanwhile.
-    /// Only when the file itself fails the check: a load can fail for other
-    /// reasons (its style file replaced meanwhile), and a good file kept is
-    /// one the Mac needn't download again, offline perhaps.
     func tilesFailed(_ shown: URL) async {
         guard MapFiles.readsTiles(shown), let file = MapFiles.current, !MapFiles.looksLikeTiles(file) else { return }
         MapFiles.dropTiles()
         style = await MapFiles.style(dark: look.dark, zh: look.zh)
     }
 
-    /// A pill: that service's line and buses, or off again.
     func choose(_ svc: String?) {
         selected = svc == selected ? nil : svc
         buses = []
@@ -147,24 +110,13 @@ final class MapModel {
         heardAt = nil
         busStatus = selected == nil ? nil : .finding
         if case .bus = sheet { sheet = nil }
-        // That bus is gone with its service: Esc on its stop's card just closes.
         if case .stop(let code, _?) = sheet { sheet = .stop(code) }
     }
 
-    /// How long a polling loop waits before asking again: `base` while the
-    /// API answers, doubling with each failure in a row up to a minute, and
-    /// never sooner than a 429's or a 503's Retry-After (`quiet`, Quiet.wait).
     nonisolated static func pollDelay(base: TimeInterval, failures: Int, quiet: TimeInterval) -> TimeInterval {
         max(min(base * pow(2, Double(min(failures, 6))), max(base, 60)), quiet)
     }
 
-    /// Whether the poll failed (no answer, or one that couldn't be read):
-    /// the loop backs off. Not asking, or refused, isn't a failure here.
-    ///
-    /// A failed poll keeps the buses drawn and says so, as the web map does:
-    /// "need a connection" when this Mac is offline (`online`). Once the last
-    /// answer is 15 s old (three polls) they're faded, so last places don't
-    /// pass for live. Refused (401, 426): it stops, and says why (`refused`).
     @discardableResult
     func refreshBuses(app: AppModel) async -> Bool {
         guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return false }
@@ -198,7 +150,6 @@ final class MapModel {
         return false
     }
 
-    /// A stop's card; `from`, the bus card it was opened from, which Esc returns to.
     func open(stop code: String, from: Sheet.Bus? = nil) {
         guard openStop != code else {
             sheet = .stop(code, from: from)
@@ -211,17 +162,12 @@ final class MapModel {
 
     func open(bus id: String) { sheet = .bus(Sheet.Bus(id: id)) }
 
-    /// A stop from the list (no mouse needed) or from a bus's card (`from`):
-    /// its card, and the map moved onto it.
     func pick(stop: MapStop, from: Sheet.Bus? = nil) {
         open(stop: stop.code, from: from)
         focus = Spot(lat: stop.lat, lon: stop.lon)
         focusCount += 1
     }
 
-    /// Esc: from a stop opened from a bus, back to that bus's card as it was,
-    /// if the bus is still on the map, and the map moved back onto the bus
-    /// as it moved onto the stop; otherwise the card closes.
     func back() {
         if case .stop(_, let from?) = sheet, let bus = buses.first(where: { $0.id == from.id }) {
             sheet = .bus(from)
@@ -234,9 +180,6 @@ final class MapModel {
         boardFailed = false
     }
 
-    /// The open stop's times. A failed refresh drops the last ones, as the
-    /// web map does: minutes from before it would pass for current. Whether
-    /// it failed, for the loop's back-off (as `refreshBuses`).
     @discardableResult
     func refreshBoard(app: AppModel) async -> Bool {
         guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else {
@@ -259,24 +202,16 @@ final class MapModel {
         return b == nil
     }
 
-    /// Your dot, only with location already allowed: the map never asks.
     func locate(_ app: AppModel) async {
         guard !app.needsLocation, !app.locationDenied, let at = await app.whereAmI() else { return }
         me = Spot(lat: at.coordinate.latitude, lon: at.coordinate.longitude)
     }
 }
 
-// MARK: - The window
-
-/// The campus map, in a window of its own: every service's line in its
-/// colour, the stops, a pill per service along the top (one at a time: its
-/// line and live buses), and a card for a clicked stop or bus. The Mac's
-/// copy of the phone's Map tab.
 struct MapWindow: View {
     let app: AppModel
     @State private var map = MapModel()
     @State private var window: NSWindow?
-    /// Bumped when the window comes back into view, so the polls restart at once.
     @State private var shown = 0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -284,7 +219,6 @@ struct MapWindow: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             if Bundle.main.bundleIdentifier == nil {
-                // `swift run` has no app bundle, and MapLibre keeps its cache by the app's id.
                 Text(L("The map needs the built app (./build.sh)."))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -308,8 +242,6 @@ struct MapWindow: View {
                     if let refused = map.refused {
                         StatusChip(text: refused.text).announced(refused.text)
                     } else if let status = map.busStatus {
-                        // Said for a new service, or when its buses go to or from none;
-                        // not at every bus that joins or leaves.
                         StatusChip(text: status.text(map.selected ?? ""))
                             .announced(status.text(map.selected ?? ""), when: [map.selected ?? "", status.heard])
                     }
@@ -339,7 +271,6 @@ struct MapWindow: View {
                                 campus: campus, show: { map.pick(stop: $0, from: $1) }, close: { map.sheet = nil },
                                 open: was?.stops ?? false, all: was?.all ?? false
                             )
-                            // A fresh card for each bus: one bus's stops list open isn't another's.
                             .id(bus.id)
                         }
                     }
@@ -358,16 +289,11 @@ struct MapWindow: View {
         }
         .frame(minWidth: 560, minHeight: 440)
         .background(WindowReader { if window !== $0 { window = $0 } })
-        // Back a step (to the bus a stop was opened from); the × closes outright.
         .onExitCommand { map.back() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { n in
             if let w = n.object as? NSWindow, w === window, visible { shown += 1 }
         }
-        // Again after signing in, so a map refused while signed out loads.
         .task(id: "\(scheme)|\(app.paired)") { await map.open(dark: scheme == .dark, zh: Lang.zh, app: app) }
-        // Live buses every 5 s while a pill is on (the API caches 5 s), not
-        // while the window is hidden behind others or minimised. Failures in
-        // a row back off, and a 429's or 503's Retry-After is waited out.
         .task(id: "\(map.selected ?? "")|\(shown)") {
             guard map.selected != nil else { return }
             var failures = 0
@@ -376,7 +302,6 @@ struct MapWindow: View {
                 try? await Task.sleep(for: .seconds(MapModel.pollDelay(base: 5, failures: failures, quiet: Quiet.wait())))
             }
         }
-        // The open stop's times every 15 s (cached 15 s), backing off the same.
         .task(id: "\(map.openStop ?? "")|\(shown)") {
             guard map.openStop != nil else { return }
             var failures = 0
@@ -406,8 +331,6 @@ extension MapModel.Refusal {
 }
 
 extension MapModel.BusStatus {
-    /// What VoiceOver hears again when it changes: any number of buses
-    /// running is the same, so a count going up or down is not said.
     var heard: String {
         if case .running = self { return "running" }
         return "\(self)"
@@ -426,9 +349,6 @@ extension MapModel.BusStatus {
     }
 }
 
-/// A pill per service, in one bar: one at a time shows its line and live buses.
-/// The bar is as wide as its pills, centred; in a window too narrow for them
-/// it runs the width and scrolls inside itself. As the iPhone's.
 private struct Pills: View {
     let campus: CampusMap
     let selected: String?
@@ -473,8 +393,6 @@ private struct Pills: View {
 }
 
 extension View {
-    /// The look of what floats over the map: Liquid Glass from macOS 26, the
-    /// window's material before.
     @ViewBuilder fileprivate func floatingBar() -> some View {
         if #available(macOS 26, *) {
             glassEffect(.regular, in: Capsule())
@@ -485,9 +403,6 @@ extension View {
     }
 }
 
-/// The map's buttons, in its corner: every stop (and the chosen service's
-/// buses) in a list, so a card opens without a mouse; zoom in and out
-/// (⌘+, ⌘−), which the map's own controls hid; and back to campus.
 private struct MapControls: View {
     let map: MapModel
     let campus: CampusMap
@@ -520,7 +435,6 @@ private struct MapControls: View {
             }
             .keyboardShortcut("+")
             .control(L("Zoom in"))
-            // ⌘= too: on most keyboards "+" is a shifted "=".
             .background {
                 Button("") { map.zoomSteps += 1 }
                     .keyboardShortcut("=")
@@ -535,7 +449,6 @@ private struct MapControls: View {
             }
             .keyboardShortcut("-")
             .control(L("Zoom out"))
-            // Lost after zooming or dragging: one click back to the whole campus.
             Button {
                 map.recentre += 1
             } label: {
@@ -548,7 +461,6 @@ private struct MapControls: View {
 }
 
 extension View {
-    /// A round button over the map, named for VoiceOver and on hover.
     fileprivate func control(_ name: String) -> some View {
         self
             .menuStyle(.borderlessButton)
@@ -563,7 +475,6 @@ extension View {
     }
 }
 
-/// A line of status over the map, centred under the pills' bar.
 struct StatusChip: View {
     let text: String
     var busy = false
@@ -579,7 +490,6 @@ struct StatusChip: View {
     }
 }
 
-/// A service's code on its colour, as on the bus.
 private struct SvcTag: View {
     let svc: String
     let hex: String
@@ -595,14 +505,9 @@ private struct SvcTag: View {
     }
 }
 
-/// The frame a stop's card and a bus's share, so the two read alike: a
-/// `lead` tile beside the title, `sub` and close; a line of `facts`; then
-/// `content` (a `SectionBand` and its rows), edge to edge; then the
-/// `footer`'s buttons under a divider.
 private struct MapCardFrame<Lead: View, Content: View>: View {
     let title: String
     let sub: String?
-    /// Said when it opens, or shows another stop or bus.
     let announce: String
     let close: () -> Void
     var facts: AnyView? = nil
@@ -612,8 +517,6 @@ private struct MapCardFrame<Lead: View, Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Taller than the room it has, the header and rows scroll; the
-            // footer's buttons stay in view under them.
             ViewThatFits(in: .vertical) {
                 scrolled
                 ScrollView(.vertical) { scrolled }
@@ -624,7 +527,6 @@ private struct MapCardFrame<Lead: View, Content: View>: View {
                     .controlSize(.small)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    // The rows give up the room, never the buttons.
                     .layoutPriority(1)
             } else {
                 Spacer().frame(height: 14)
@@ -633,11 +535,9 @@ private struct MapCardFrame<Lead: View, Content: View>: View {
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
-        // It opens away from where the click (or the list) was: say which.
         .announced(announce)
     }
 
-    /// Everything above the footer: the header, `facts` and `content`.
     private var scrolled: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
@@ -656,7 +556,6 @@ private struct MapCardFrame<Lead: View, Content: View>: View {
     }
 }
 
-/// The tile that leads a card's header, the same size for a stop as for a bus.
 private struct CardTile<Content: View>: View {
     let fill: Color
     @ViewBuilder let content: () -> Content
@@ -668,9 +567,6 @@ private struct CardTile<Content: View>: View {
     }
 }
 
-/// A grey band naming what's under it, the same on a stop's card ("Buses
-/// here") as on a bus's ("Stops ahead"). With `toggle`, it opens and closes
-/// what's under it, and a chevron says so.
 private struct SectionBand: View {
     let text: String
     var open = true
@@ -718,39 +614,25 @@ private struct CloseButton: View {
     }
 }
 
-/// A clicked bus: where its line ends and where it is or is going next, its
-/// plate, whether it's moving and how full it is; then, opened, the stops
-/// still ahead on a strip of its line. Every stop is the server's (`at`,
-/// `stretch`, `upcoming`). Its button opens the card of the stop it's at or
-/// coming to, as each stop's row does; Esc comes back here from it.
 struct BusCard: View {
     let bus: LiveBus
     let svc: String
-    /// The service's colour, as on its line.
     let hex: String
-    /// The stop it's at or coming to (`stop(for:svc:in:)`), for "Show …".
     var stop: MapStop? = nil
-    /// For the stops ahead's own cards; without it, the rows open nothing.
     var campus: CampusMap? = nil
-    /// Opens a stop's card, with this card as it is now to come back to.
     var show: (MapStop, MapModel.Sheet.Bus) -> Void = { _, _ in }
     let close: () -> Void
     @State var open = false
-    /// Every stop to where its line ends, not just the first few.
     @State var all = false
 
-    /// Stops shown after the next one before "+N more".
     static let shownAfterNext = 4
 
-    /// The stop a bus is at or coming to.
     static func stop(for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
         bus.at != nil
             ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
             : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
     }
 
-    /// A stop on a bus's line: by its code, else by name, worked out here for an older server:
-    /// the one on its own line nearest the bus (one name can be either side of a road).
     static func stop(code: String?, name: String?, for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
         if let code, let s = campus.stop(code) { return s }
         guard let name else { return nil }
@@ -759,13 +641,11 @@ struct BusCard: View {
         return campus.nearest(codes, lat: bus.lat, lon: bus.lon).flatMap(campus.stop)
     }
 
-    /// This card as it is now, for Esc to come back to from a stop's card.
     private var now: MapModel.Sheet.Bus { MapModel.Sheet.Bus(id: bus.id, stops: open, all: all) }
 
     var body: some View {
         let tint = Color(hex: hex) ?? .gray
         let where_ = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next: %@", $0) }
-        // Where its line ends leads, as a stop's name does; where it is comes under.
         let title = bus.towards.map { L("Towards %@", $0) } ?? where_ ?? L("%@ bus", svc)
         let sub = bus.towards != nil ? where_ : nil
         MapCardFrame(
@@ -776,7 +656,6 @@ struct BusCard: View {
             facts: AnyView(info),
             footer: stop.map { s in
                 AnyView(
-                    // Secondary: "Go there" on a stop's card is the one prominent button.
                     Button(L("Show %@", s.name)) { show(s, now) }
                         .buttonStyle(.bordered)
                 )
@@ -821,7 +700,6 @@ struct BusCard: View {
         }
     }
 
-    /// Plate, moving or stopped, and the crowd meter, one line.
     private var info: some View {
         HStack(spacing: 10) {
             if let plate = bus.plate {
@@ -845,7 +723,6 @@ struct BusCard: View {
                                 .frame(width: 4, height: [6, 10, 14][i])
                         }
                     }
-                    // The word says it; the bars are for the eye.
                     .accessibilityHidden(true)
                     Text(word)
                 }
@@ -865,14 +742,11 @@ struct BusCard: View {
         }
     }
 
-    /// The stops ahead, the next first: the server's list, else just its next stop,
-    /// worked out here for an older server.
     private var stops: [String] {
         if !bus.upcoming.isEmpty { return bus.upcoming }
         return bus.nextStop.map { [$0] } ?? []
     }
 
-    /// Their codes, in step with `stops`; nil where the server didn't say.
     private var stopCodes: [String?] {
         if !bus.upcoming.isEmpty {
             return bus.upcoming.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil }
@@ -881,23 +755,16 @@ struct BusCard: View {
     }
 
     enum Kind { case passed, between, here, next, ahead }
-    /// A row of the strip: a stop (`code` when the server gave it), or the bus on its way.
     struct Row {
         let name: String
         let kind: Kind
         var code: String? = nil
     }
 
-    /// Stops past the first few. Just one is shown rather than hidden behind
-    /// a button, as on the stop's card.
     private var past: Int { max(0, stops.count - (1 + Self.shownAfterNext)) }
 
-    /// Stops ahead not shown: none once all are, or when only one would be.
     var more: Int { all || past <= 1 ? 0 : past }
 
-    /// The strip's rows, top to bottom: the stop it passed and itself on the
-    /// way, or the stop it's at; then the next stop and a few after it (or
-    /// every one, with `all`).
     var rows: [Row] {
         var r: [Row] = []
         if let at = bus.at {
@@ -918,11 +785,8 @@ struct BusCard: View {
         let grey = Color.secondary.opacity(0.4)
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                // Grey down to the bus, its colour on from there; on past the
-                // last row when more stops follow.
                 let above: Color? = i == 0 ? nil : (row.kind == .between || row.kind == .here ? grey : tint)
                 let below: Color? = i == rows.count - 1 && more == 0 ? nil : (row.kind == .passed ? grey : tint)
-                // A stop's row opens its card, and its chevron says so; the bus's own row doesn't.
                 if row.kind != .between, let campus, let s = Self.stop(code: row.code, name: row.name, for: bus, svc: svc, in: campus) {
                     Button {
                         show(s, now)
@@ -936,7 +800,6 @@ struct BusCard: View {
                 }
             }
             if more > 0 {
-                // The line fading out: it goes on, and the button under it shows the rest.
                 LinearGradient(colors: [tint, tint.opacity(0)], startPoint: .top, endPoint: .bottom)
                     .frame(width: 3, height: 14)
                     .frame(width: 16)
@@ -945,8 +808,6 @@ struct BusCard: View {
         }
     }
 
-    /// One row of the strip: its piece of the line with the stop's dot or the
-    /// bus, the name, and a chevron when it opens the stop's card.
     private func line(_ row: Row, _ tint: Color, above: Color?, below: Color?, chevron: Bool) -> some View {
         let bold = row.kind == .next || row.kind == .here
         return HStack(spacing: 10) {
@@ -960,8 +821,6 @@ struct BusCard: View {
             }
             .frame(width: 16)
             .accessibilityHidden(true)
-            // Passed, here and next are drawn on the line (grey, the
-            // bus, bold), not written beside it; VoiceOver hears the word.
             Text(row.name)
                 .font(.system(size: bold ? 13 : 12, weight: bold ? .bold : .regular))
                 .foregroundStyle(row.kind == .passed || row.kind == .between ? .secondary : .primary)
@@ -1007,8 +866,6 @@ struct BusCard: View {
     }
 }
 
-/// A clicked stop: its buses due, each showing its line when clicked; then
-/// going there, walking there, in the footer.
 struct StopCard: View {
     let stop: MapStop
     let map: MapModel
@@ -1024,7 +881,6 @@ struct StopCard: View {
             close: { map.sheet = nil },
             footer: AnyView(footer)
         ) {
-            // A stop's tile, where a bus's has its service: the two headers line up.
             CardTile(fill: Color.secondary.opacity(0.18)) {
                 Image(systemName: "mappin.and.ellipse")
                     .font(.system(size: 20, weight: .medium))
@@ -1046,9 +902,6 @@ struct StopCard: View {
                 ForEach(Array(board.rows.enumerated()), id: \.element.svc) { i, r in
                     if i > 0 { Divider().padding(.leading, 14) }
                     let picked = map.selected == r.svc
-                    // A row picks its line, as the pills do, and again unpicks it
-                    // (`choose` toggles). It opens no page, so it has no chevron;
-                    // the picked line's row is washed in its colour.
                     Button {
                         map.choose(r.svc)
                     } label: {
@@ -1064,7 +917,6 @@ struct StopCard: View {
                     }
                     .buttonStyle(.plain)
                     .help(picked ? L("%@: hide its line", r.svc) : L("%@: show its line and live buses", r.svc))
-                    // "D2: about 6 min", one element a row.
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(spokenTimes(L("%@: %@", r.svc, eta(r))))
                     .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
@@ -1074,7 +926,6 @@ struct StopCard: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 Text(note).foregroundStyle(.secondary)
-                // No times to list them by: the services here, each showing its line.
                 if map.board != nil || map.boardFailed || map.refused != nil {
                     HStack(spacing: 5) {
                         ForEach(stop.services, id: \.self) { svc in
@@ -1103,7 +954,6 @@ struct StopCard: View {
 
     @ViewBuilder private var footer: some View {
         if sent {
-            // The popover can't be opened for you: say where it went.
             Label(L("Added to terminus in the menu bar"), systemImage: "checkmark")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -1116,23 +966,16 @@ struct StopCard: View {
             .tint(.brand)
         }
         Button(L("Walking directions")) {
-            // Apple Maps, the Mac's own, as the web app does on Apple devices.
             let url = "https://maps.apple.com/?daddr=\(stop.lat),\(stop.lon)&dirflg=w"
             if let u = URL(string: url) { NSWorkspace.shared.open(u) }
         }
     }
 
-    /// The server's "4 min" ("now", "~6 min"), worked out here for an older server
-    /// as the popover's Nearby does it, so the two never differ.
     private func eta(_ r: BoardRow) -> String { NearbyBoard.eta(r) }
 }
 
-// MARK: - MapLibre
-
-/// Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you.
 private let nearCampusDeg = 0.027
 
-/// A style-spec expression, as the phone's and the web's map write them.
 private func E(_ json: Any) -> NSExpression { NSExpression(mglJSONObject: json) }
 
 private func zoomed(_ stops: Double...) -> NSExpression {
@@ -1141,21 +984,16 @@ private func zoomed(_ stops: Double...) -> NSExpression {
     return E(j)
 }
 
-/// GeoJSON as a shape for a source.
 private func shape(_ data: Data) -> MLNShape? { try? MLNShape(data: data, encoding: String.Encoding.utf8.rawValue) }
 
-/// Your dot, and the halo round it.
 private let meBlue = NSColor(rgb: 0x2B7BF3)
 
-/// MapLibre's own view, drawn from the model: sources and layers are added
-/// once each time a style loads, then only their data and filters change.
 struct CampusMapView: NSViewRepresentable {
     let map: MapModel
     let campus: CampusMap
     let style: URL
     let dark: Bool
     let still: Bool
-    /// What it draws from the model, so SwiftUI updates it when any of it changes.
     let drawn: Drawn
 
     struct Drawn: Equatable {
@@ -1181,7 +1019,6 @@ struct CampusMapView: NSViewRepresentable {
         view.delegate = context.coordinator
         view.compass.isHidden = true
         view.zoomControls.isHidden = true
-        // The map isn't Mapbox's: only the data's own credit (attributionView) stays.
         view.logoView.isHidden = true
         view.isRotateEnabled = false
         view.isPitchEnabled = false
@@ -1208,8 +1045,6 @@ struct CampusMapView: NSViewRepresentable {
         c.apply()
     }
 
-    /// The window closed: the slide's display link stops with it, and the
-    /// view no longer calls back into a coordinator that's going.
     static func dismantleNSView(_ view: MLNMapView, coordinator: Coordinator) {
         coordinator.stopAnimating()
         view.delegate = nil
@@ -1228,7 +1063,6 @@ struct CampusMapView: NSViewRepresentable {
         private var slidesFor: String?
         private var lastAnswer = 0
         private var link: CADisplayLink?
-        /// What the stretch and your dot were last set to: set again only when they change.
         private var drawnStretch: Data?
         private var drawnMe: Data?
         private var applied: (selected: String?, dark: Bool, stretch: Bool, bus: String?, stale: Bool)?
@@ -1259,16 +1093,11 @@ struct CampusMapView: NSViewRepresentable {
             if let styleURL { MapFiles.styleLoaded(styleURL) }
         }
 
-        /// A map file MapLibre can't read: dropped, and the plain map instead.
         func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: any Error) {
-            // A style already replaced (the look changed) failing is no news.
             guard let failed = mapView.styleURL, failed == styleURL else { return }
             Task { await map.tilesFailed(failed) }
         }
 
-        /// The window stays on the street map (PanLimit): a drag off it is
-        /// refused. A zoom goes ahead, and one out by an edge is brought back
-        /// once it ends (keepOnMap), as is a drag that heads back on.
         func mapView(_ mapView: MLNMapView, shouldChangeFrom oldCamera: MLNMapCamera, to newCamera: MLNMapCamera) -> Bool {
             let zoom = mapView.zoomLevel + log2(oldCamera.altitude / newCamera.altitude)
             if abs(zoom - mapView.zoomLevel) > 0.001 { return true }
@@ -1279,16 +1108,8 @@ struct CampusMapView: NSViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, cameraDidChangeAnimated animated: Bool) { keepOnMap() }
 
-        /// A move back onto the street map is being started. Starting it ends
-        /// any move under way, which MapLibre reports as a camera change inside
-        /// the call: without this, that report would start the move again,
-        /// inside the last, until the stack ran out. Only for the call: a move
-        /// that another one (a second zoom press) cuts short ends in a camera
-        /// change of its own, which brings the window back then.
         private var adjusting = false
 
-        /// Back onto the street map after a zoom out by its edge or a bigger window,
-        /// and no further out than the window full of map.
         func keepOnMap() {
             guard !adjusting, let view, view.bounds.width > 0, view.bounds.height > 0 else { return }
             view.minimumZoomLevel = max(13, PanLimit.minZoom(width: view.bounds.width, height: view.bounds.height))
@@ -1307,12 +1128,9 @@ struct CampusMapView: NSViewRepresentable {
             PanLimit.centre(width: view.bounds.width, height: view.bounds.height, zoom: zoom)
         }
 
-        /// How far (in degrees, the larger way) `c` is outside `box`; 0 inside it.
         private func offBy(_ c: CLLocationCoordinate2D, _ box: [Double]) -> Double {
             max(box[0] - c.longitude, c.longitude - box[2], box[1] - c.latitude, c.latitude - box[3], 0)
         }
-
-        // MARK: layers
 
         private func source(_ id: String, _ data: Data) -> MLNShapeSource {
             MLNShapeSource(identifier: id, shape: shape(data), options: nil)
@@ -1327,7 +1145,6 @@ struct CampusMapView: NSViewRepresentable {
             return l
         }
 
-        /// A bus's icon, turned with the road and drawn at its offset from where it is.
         private func busIcon(_ id: String, image: String, _ src: MLNSource) -> MLNSymbolStyleLayer {
             let l = MLNSymbolStyleLayer(identifier: id, source: src)
             l.iconImageName = NSExpression(forConstantValue: image)
@@ -1340,10 +1157,6 @@ struct CampusMapView: NSViewRepresentable {
         }
 
         private func build(_ style: MLNStyle) {
-            // MapLibre's Metal renderer on the Mac draws the background layer
-            // over the street map's solid fills, hiding them. With the street
-            // map there, its land and water cover everything anyway: the
-            // background goes, its colour behind the map instead.
             if style.source(withIdentifier: "protomaps") != nil,
                 let bg = style.layer(withIdentifier: "background") as? MLNBackgroundStyleLayer
             {
@@ -1360,7 +1173,6 @@ struct CampusMapView: NSViewRepresentable {
 
             style.addLayer(line("route-casing", routes, color: NSExpression(forConstantValue: paper), width: zoomed(13, 3, 16, 7, 18, 11)))
             style.addLayer(line("routes", routes, color: byColor, width: zoomed(13, 1.5, 16, 4, 18, 7)))
-            // The chosen service, drawn again on top.
             let on = line("route-on", routes, color: byColor, width: zoomed(13, 3, 16, 6, 18, 9))
             on.predicate = NSPredicate(format: "svc == %@", "")
             style.addLayer(on)
@@ -1382,16 +1194,12 @@ struct CampusMapView: NSViewRepresentable {
             names.textFontSize = zoomed(15, 11, 18, 14)
             names.textColor = NSExpression(forConstantValue: ink)
             names.textHaloColor = NSExpression(forConstantValue: paper)
-            // Wide enough to part the lines it sits on.
             names.textHaloWidth = NSExpression(forConstantValue: 2.5)
-            // Below the dot, or another side of it when a bus or another stop is there.
             names.textVariableAnchor = NSExpression(forConstantValue: ["top", "bottom", "right", "left"])
             names.textRadialOffset = NSExpression(forConstantValue: 0.9)
             names.textOptional = NSExpression(forConstantValue: true)
             names.maximumTextWidth = NSExpression(forConstantValue: 8)
             style.addLayer(names)
-            // Each dot again, unseen, for the names to keep off: placed before
-            // them (the higher layer goes first), so no name covers another stop.
             style.setImage(NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in true }, forName: "stop-mark")
             let marks = MLNSymbolStyleLayer(identifier: "stop-marks", source: stops)
             marks.minimumZoomLevel = 15
@@ -1413,25 +1221,18 @@ struct CampusMapView: NSViewRepresentable {
             dot.circleStrokeWidth = NSExpression(forConstantValue: 2.5)
             style.addLayer(dot)
 
-            // An icon, not a circle, so a bus at a stop can sit beside the dot
-            // (its offset is per bus, and turns with the road).
-            // The offset is in the bus's own frame, so the ring turns with
-            // the bus too, or it lands beside it.
             let ring = busIcon("bus-on", image: "bus-on", buses)
             ring.iconIgnoresPlacement = NSExpression(forConstantValue: true)
             ring.predicate = NSPredicate(format: "id == %@", "")
             style.addLayer(ring)
             for (id, image) in [("buses", "bus"), ("bus-heading", "heading")] {
                 let l = busIcon(id, image: image, buses)
-                // Stop names keep clear of buses (they move to another side of their dot).
                 l.iconIgnoresPlacement = NSExpression(forConstantValue: id == "bus-heading")
                 style.addLayer(l)
             }
             style.setImage(Self.ringImage(ink), forName: "bus-on")
             style.setImage(Self.headingImage(), forName: "heading")
         }
-
-        // MARK: drawing the model
 
         func apply() {
             guard loaded, let style = view?.style else { return }
@@ -1460,7 +1261,6 @@ struct CampusMapView: NSViewRepresentable {
                 (style.layer(withIdentifier: "stop-names") as? MLNSymbolStyleLayer)?.textOpacity = E(["case", onRoute, 1, 0.4])
                 (style.layer(withIdentifier: "bus-on") as? MLNSymbolStyleLayer)?.predicate = NSPredicate(format: "id == %@", open?.id ?? "")
                 style.setImage(Self.busImage(fill: NSColor(hex: color), ring: paper), forName: "bus")
-                // Last-known places while the feed is down: faded, so they don't pass for live.
                 for id in ["buses", "bus-heading", "bus-on"] {
                     (style.layer(withIdentifier: id) as? MLNSymbolStyleLayer)?.iconOpacity = NSExpression(forConstantValue: stale ? 0.4 : 1)
                 }
@@ -1475,9 +1275,6 @@ struct CampusMapView: NSViewRepresentable {
                 (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
             }
 
-            // Buses slide to each new place along their line (see Slides).
-            // Every answer, even one the same as the last: a bus only jumps
-            // after a while without one (Slides.staleS).
             if slidesFor != selected {
                 slides = Slides()
                 slidesFor = selected
@@ -1492,8 +1289,6 @@ struct CampusMapView: NSViewRepresentable {
             camera()
         }
 
-        /// Features made here, not GeoJSON written and read again: a slide
-        /// sets them every frame.
         private func drawBuses() {
             guard let src = view?.style?.source(withIdentifier: "buses") as? MLNShapeSource else { return }
             let svc = map.selected ?? ""
@@ -1507,8 +1302,6 @@ struct CampusMapView: NSViewRepresentable {
             src.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
-        /// Redraws the buses with the screen while one is on its way, at up
-        /// to 30 frames a second: enough for a bus crossing a few pixels.
         private func animate() {
             guard link == nil, let view, isShown(view) else { return }
             let l = view.displayLink(target: LinkTarget(self), selector: #selector(LinkTarget.tick))
@@ -1522,15 +1315,11 @@ struct CampusMapView: NSViewRepresentable {
             link = nil
         }
 
-        /// Hidden, minimised or covered, there's nothing to draw for: the
-        /// buses are drawn where they are once it's back (the polls start
-        /// again then, and each answer plans the slides again).
         private func isShown(_ view: NSView) -> Bool {
             guard let w = view.window else { return false }
             return w.isVisible && !w.isMiniaturized && w.occlusionState.contains(.visible)
         }
 
-        /// First view: the whole campus, once the view has a size to fit it in.
         func frameCampus() {
             guard !framed, let view, view.bounds.width > 100, view.bounds.height > 100 else { return }
             framed = true
@@ -1539,7 +1328,6 @@ struct CampusMapView: NSViewRepresentable {
                 completionHandler: nil)
         }
 
-        /// [west, south, east, north] as MapLibre's bounds.
         private func bounds(_ b: [Double]) -> MLNCoordinateBounds {
             MLNCoordinateBounds(
                 sw: CLLocationCoordinate2D(latitude: b[1], longitude: b[0]), ne: CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
@@ -1563,21 +1351,18 @@ struct CampusMapView: NSViewRepresentable {
                 zoomedSteps = map.zoomSteps
                 view.setZoomLevel(min(max(to, view.minimumZoomLevel), view.maximumZoomLevel), animated: !still)
             }
-            // A stop chosen from the list (or the bus Esc went back to): onto it, with a street or two round it.
             if map.focusCount != focused, let f = map.focus {
                 focused = map.focusCount
                 let d = 0.0015
                 view.setVisibleCoordinateBounds(
                     bounds([f.lon - d, f.lat - d, f.lon + d, f.lat + d]), edgePadding: pad, animated: !still, completionHandler: nil)
             }
-            // A pill: its whole line in view, when it's chosen.
             if map.selected != framedLine {
                 framedLine = map.selected
                 if let r = map.selected.flatMap({ campus.routes[$0] }) {
                     view.setVisibleCoordinateBounds(bounds(r.bounds), edgePadding: pad, animated: !still, completionHandler: nil)
                 }
             }
-            // First view: your nearest stop when you're on campus, otherwise the whole campus.
             if !framedMe, let me = map.me {
                 framedMe = true
                 if map.selected == nil,
@@ -1592,9 +1377,6 @@ struct CampusMapView: NSViewRepresentable {
             }
         }
 
-        // MARK: clicks
-
-        /// A bus first (it's on top), then the stop nearest the click; else the card closes.
         @objc func clicked(_ g: NSClickGestureRecognizer) {
             guard let view, g.state == .ended else { return }
             let p = g.location(in: view)
@@ -1614,9 +1396,6 @@ struct CampusMapView: NSViewRepresentable {
             }
         }
 
-        // MARK: icons
-
-        /// A bus: a disc of `fill`, ringed in the map's own colour.
         static func busImage(fill: NSColor, ring: NSColor) -> NSImage {
             NSImage(size: NSSize(width: 27, height: 27), flipped: false) { r in
                 ring.setFill()
@@ -1627,7 +1406,6 @@ struct CampusMapView: NSViewRepresentable {
             }
         }
 
-        /// The clicked bus's ring, in the map's ink, a little way out from the bus.
         static func ringImage(_ ink: NSColor) -> NSImage {
             NSImage(size: NSSize(width: 40, height: 40), flipped: false) { _ in
                 ink.setStroke()
@@ -1638,7 +1416,6 @@ struct CampusMapView: NSViewRepresentable {
             }
         }
 
-        /// Which way a bus is going: points north before it's turned.
         static func headingImage() -> NSImage {
             NSImage(size: NSSize(width: 12, height: 12), flipped: true) { _ in
                 let p = NSBezierPath()
@@ -1655,9 +1432,6 @@ struct CampusMapView: NSViewRepresentable {
     }
 }
 
-/// The display link's target. The link holds its target strongly, so this
-/// holds the coordinator weakly: once that's gone, the link stops itself
-/// rather than firing for ever.
 @MainActor private final class LinkTarget: NSObject {
     weak var coordinator: CampusMapView.Coordinator?
 
@@ -1669,18 +1443,15 @@ struct CampusMapView: NSViewRepresentable {
     }
 }
 
-/// MapLibre's view, saying when it's laid out: a camera fitted before then has nothing to fit in.
 private final class SizedMapView: MLNMapView {
     var sized: (() -> Void)?
 
     override func layout() {
         super.layout()
-        // MapLibre takes in its new size during layout; a turn later it can fit a camera.
         DispatchQueue.main.async { [weak self] in self?.sized?() }
     }
 }
 
 extension NSColor {
-    /// "#rrggbb"; grey for anything else.
     fileprivate convenience init(hex: String) { self.init(rgb: hexRGB(hex) ?? 0x8A939C) }
 }

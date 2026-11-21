@@ -57,5 +57,21 @@ signature before opening it. Releases also sign the appcast, so a later
 version can set `SURequireSignedFeed`.
 
 `./build.sh` signs with that certificate too if it's in your keychain, and
-ad-hoc otherwise. An ad-hoc build is a new identity every time, so macOS asks
-before letting it read the device token.
+ad-hoc otherwise (or with `SIGN_IDENTITY`, and `SIGN_KEYCHAIN` for the
+keychain holding it). An ad-hoc build is a new identity every time, so macOS asks
+before letting it read the device token. Ad-hoc signatures carry no Team
+ID, so library validation would refuse the app's own frameworks: a local
+build gets that exception, a release never. Only a release (`PUBLISH=true`,
+from `package-mac.sh`) is timestamped by Apple, which notarisation needs;
+local builds skip it so they work offline. Sparkle's XPC services are
+dropped (they're only for sandboxed apps), and MapLibre's Intel half is
+left out, as the app is arm64 only. The beta (`CHANNEL=beta`) is its own
+app to macOS (`sh.rcn.terminus.beta`: its own permissions, login item and
+notifications) with its own site and appcast, and the same Sparkle key.
+
+`swift Support/make-icon.swift [beta]` draws `Support/AppIcon.icns` (or
+`AppIcon-beta.icns`, with a BETA band) from `apps/web/public/assets/mark.svg`.
+
+`TERMINUS_OPEN=setup` (or `settings`, `map`, and in a debug build
+`popover`) opens that window at launch, for a Mac whose menu bar item is
+hidden behind the notch.

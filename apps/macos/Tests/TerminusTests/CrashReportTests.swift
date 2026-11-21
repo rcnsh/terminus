@@ -3,8 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// Crash reports: what goes to POST /api/errors, cut to size, and nothing else.
-
 @Test func aReportCarriesOnlyTheFieldsTheServerTakes() throws {
     let r = CrashReport.make(
         version: "3.1.0", os: "macOS 26", type: "NSRangeException", message: "index 3 beyond bounds", stack: "a\nb", fatal: true)
@@ -58,7 +56,6 @@ import Testing
     }
     let mac = #"{"binaryName":"Terminus","subFrames":[{"binaryName":"AppKit"},{"binaryName":"dyld"}]}"#
     #expect(CrashReport.isMacCrash(callStackJSON: tree(mac)))
-    // The Simulator's: the iPhone app shares the Mac app's bundle id.
     let simulator = #"{"binaryName":"Terminus.debug.dylib","subFrames":[{"binaryName":"SwiftUI","subFrames":[{"binaryName":"dyld_sim"}]}]}"#
     #expect(!CrashReport.isMacCrash(callStackJSON: tree(simulator)))
     #expect(!CrashReport.isMacCrash(callStackJSON: tree(#"{"binaryName":"Terminus"},{"binaryName":"UIKitCore"}"#)))
@@ -90,7 +87,6 @@ import Testing
 }
 
 @Test func anExceptionsStackReadsLikeMetricKitsAndMarksItsCrash() throws {
-    // The addresses of a real crash (NotificationDelegate, 3.8.0): Terminus loaded at 0x100214000.
     let images: [String: UInt] = ["Terminus": 0x1_0021_4000, "UIKitCore": 0x1_9375_0000]
     let image = { (a: UInt) in images.filter { a >= $0.value }.max { $0.value < $1.value }.map { (name: $0.key, base: $0.value) } }
     let stack = CrashReport.frames(addresses: [0x1_94ca_3468, 0x1_004a_ca94, 0x10], image: { $0 < 0x1_0000_0000 ? nil : image($0) })
@@ -98,7 +94,6 @@ import Testing
     #expect(CrashReport.ownFrame(in: stack, app: "Terminus") == "(0x1004aca94)")
     #expect(CrashReport.ownFrame(in: stack, app: "Other") == nil)
 
-    // The real stack names the binaries it ran through.
     let here = CrashReport.frames(addresses: Thread.callStackReturnAddresses.map(\.uintValue), image: CrashReport.image(of:))
     #expect(!here.isEmpty && !here.contains("???"))
 

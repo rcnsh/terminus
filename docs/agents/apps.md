@@ -16,6 +16,10 @@ iPhone changes reach users only through a release
   a warm Gradle cache: CI's cold runners fetch files it leaves out.
 - Mac (CI, macOS runner): `swift build && swift test`, then
   `swift build -c release --arch arm64` in `apps/macos`.
+  `NearbyAccessibilityTests` reads the app's own accessibility tree, so
+  it runs only where the test runner is trusted for accessibility (System
+  Settings, Privacy & Security, Accessibility) and is skipped in CI.
+  `MapWindowTests` drives a real `MLNMapView` from the vendored MapLibre.
 - iPhone (CI, macOS runner), in `apps/ios`: `python3 -I scripts/strings.py
   --check`, `scripts/fetch-maplibre.sh`, `xcodegen generate`, the unit tests
   (`-only-testing:TerminusTests`) on an iPhone simulator, then an unsigned

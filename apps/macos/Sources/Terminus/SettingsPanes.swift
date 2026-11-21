@@ -1,11 +1,6 @@
 import AppKit
 import SwiftUI
 
-// Settings' fuller pages, as on the web and the phone: the timetable class by
-// class, your classes and trip history, About, Send feedback, and adding an
-// email to an account that has none.
-
-/// "9:00 AM" or "09:00" for minutes after midnight, in the account's clock style.
 func clockMin(_ min: Int) -> String {
     let f = DateFormatter()
     f.locale = Lang.locale
@@ -14,10 +9,8 @@ func clockMin(_ min: Int) -> String {
     return f.string(from: Date(timeIntervalSince1970: TimeInterval(min * 60)))
 }
 
-/// "Mon", in the app's language; `day` is 0 for Sunday, as the profile keeps it.
 func dayShort(_ day: Int) -> String { weekday(day, short: true) }
 
-/// "Monday", as `dayShort`.
 func dayLong(_ day: Int) -> String { weekday(day, short: false) }
 
 private func weekday(_ day: Int, short: Bool) -> String {
@@ -26,10 +19,8 @@ private func weekday(_ day: Int, short: Bool) -> String {
     return (short ? cal.shortWeekdaySymbols : cal.weekdaySymbols)[((day % 7) + 7) % 7]
 }
 
-/// Monday first, as the week reads.
 let dayOrder = [1, 2, 3, 4, 5, 6, 0]
 
-/// A menu of every stop: where a class goes, or a stop for one the import couldn't place.
 struct StopMenu: View {
     let campus: Campus
     let label: String
@@ -40,7 +31,6 @@ struct StopMenu: View {
     var body: some View {
         Picker(label, selection: Binding(get: { selection }, set: { if !$0.isEmpty { onPick($0) } })) {
             if let blank { Text(blank).tag("") }
-            // A food court the class goes to already, kept rather than shown blank.
             if !selection.isEmpty, !campus.stops.contains(where: { $0.code == selection }) { Text(selection).tag(selection) }
             ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
         }
@@ -50,7 +40,6 @@ struct StopMenu: View {
     }
 }
 
-/// Classes from an import whose room couldn't be placed: a stop for each, or Skip.
 struct UnplacedList: View {
     let setup: SetupModel
 
@@ -82,9 +71,6 @@ struct UnplacedList: View {
     }
 }
 
-/// The timetable, as on the web: each class by day with its stop and Remove,
-/// "Add a class or commitment by hand", then the import, folded away once
-/// there are classes unless it's needed.
 struct TimetablePane: View {
     @Bindable var app: AppModel
     let setup: SetupModel
@@ -115,8 +101,6 @@ struct TimetablePane: View {
                 AddClassForm(app: app, setup: setup) { adding = false }.padding(.top, 6)
             }
             .id(Self.addID)
-            // It opens below the list, often past the window's edge: scroll just
-            // far enough to show all of it, once it has opened.
             .onChange(of: adding) { _, open in
                 guard open else { return }
                 Task {
@@ -206,15 +190,11 @@ struct TimetablePane: View {
         }
     }
 
-    /// " · weeks 1–6" for a class that runs only some weeks.
     private func weeksText(_ weeks: [Int]?) -> String {
         weeksLabel(weeks).map { " · " + $0 } ?? ""
     }
 }
 
-/// The weeks a class runs, each run of weeks in a row as one: "weeks 1–6",
-/// "weeks 1, 3, 5, 7, 9, 11" (odd weeks), "weeks 1–3, 8–13". Nil for 13 or
-/// more weeks (every week) or none.
 func weeksLabel(_ weeks: [Int]?) -> String? {
     let w = Array(Set(weeks ?? [])).sorted()
     guard !w.isEmpty, w.count < 13 else { return nil }
@@ -233,7 +213,6 @@ func weeksLabel(_ weeks: [Int]?) -> String? {
     return L("weeks %@", runs.joined(separator: L(", ")))
 }
 
-/// A day, a start and end, a name and where: a class or anything weekly.
 private struct AddClassForm: View {
     @Bindable var app: AppModel
     let setup: SetupModel
@@ -285,8 +264,6 @@ private struct AddClassForm: View {
     }
 }
 
-/// "Where": a stop, building or room, searched for; favourites and where
-/// classes are come first before anything is typed.
 struct WhereField: View {
     @Bindable var app: AppModel
     let setup: SetupModel
@@ -294,8 +271,6 @@ struct WhereField: View {
     @Binding var picked: Destination?
 
     private var suggestions: [Destination] {
-        // A favourite goes to a stop or a landmark (Destination.goesTo): the stop
-        // first, so a building sharing its code doesn't show in its place.
         let favs = setup.places.compactMap { p in
             app.destinations.first { $0.kind == "stop" && $0.code == p.to }
                 ?? app.destinations.first { $0.kind == "landmark" && $0.code == p.to }
@@ -335,7 +310,6 @@ struct WhereField: View {
     }
 }
 
-/// A search result in Settings: its name, and its code under it when that's different.
 struct DestinationLabel: View {
     let destination: Destination
 
@@ -349,7 +323,6 @@ struct DestinationLabel: View {
     }
 }
 
-/// Your classes (a bus earlier, or no reminders) and the trip history, under Your trips.
 struct ChoicesSection: View {
     let setup: SetupModel
     @State private var confirmClear = false
@@ -399,7 +372,6 @@ struct ChoicesSection: View {
     }
 }
 
-/// What terminus is, that it isn't NUS's, where its data comes from, and links.
 struct AboutPane: View {
     let app: AppModel
     private let version = Api.version ?? "dev"
@@ -415,7 +387,6 @@ struct AboutPane: View {
                     "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors."
                 ))
             Hint(L("Use terminus in line with the NUS Acceptable Use Policy for IT Resources."))
-            // Clicked seven times, it shows the developer menu, as Android's build number does.
             Hint(L("Version %@", version))
                 .onTapGesture {
                     guard !developer else { return }
@@ -447,9 +418,6 @@ struct AboutPane: View {
     }
 }
 
-/// Which server terminus talks to, from the ones built in (Servers): only
-/// shown with more than one, so in a debug build with the dev stub. It
-/// starts again on the one chosen.
 private struct ServerSection: View {
     @State private var chosen = Api.base
 
@@ -478,8 +446,6 @@ private struct ServerSection: View {
     }
 }
 
-/// The state the reminders depend on, each in a row, then Copy diagnostics:
-/// what's needed for a bug report, read again every few seconds while open.
 private struct DiagnosticsSection: View {
     let app: AppModel
     @State private var facts: Diagnostics.Facts?
@@ -547,7 +513,6 @@ private struct DiagnosticsSection: View {
     }
 }
 
-/// The last requests to our server, newest first: what was asked, and how it went.
 private struct RequestsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -577,7 +542,6 @@ private struct RequestsSection: View {
     }
 }
 
-/// "3 min ago", in the app's language.
 private func ago(_ at: Date, now: Date) -> String {
     let s = max(0, Int(now.timeIntervalSince(at)))
     if s < 60 { return L("%@ s ago", String(s)) }
@@ -586,10 +550,6 @@ private func ago(_ at: Date, now: Date) -> String {
     return L("%@ d ago", String(s / 86_400))
 }
 
-/// A note to the operator about anything, written like a message: who it's
-/// from, the note, then Send. Only an account with an email can send one, so
-/// there's someone to reply to; without one, the pane asks for an email. A
-/// wrong answer is better sent from under the card.
 struct FeedbackPane: View {
     let app: AppModel
     let setup: SetupModel
@@ -599,11 +559,7 @@ struct FeedbackPane: View {
     @State private var sending = false
 
     private static let limit = 1000
-    /// The note's length as the server counts it (JavaScript's, in UTF-16
-    /// units), so an emoji counts as two here too and the counter never says
-    /// a note fits that the server would refuse.
     static func length(_ s: String) -> Int { s.utf16.count }
-    /// At most `limit` of those, never cutting a character in half.
     static func clipped(_ s: String) -> String {
         var out = ""
         for c in s {
@@ -616,7 +572,6 @@ struct FeedbackPane: View {
     private var canSend: Bool { !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending }
 
     var body: some View {
-        // As the Account pane decides: the flag kept on this Mac, or the account as loaded.
         if app.anonymous || setup.me?.anonymous == true { needsEmail } else { compose }
     }
 
@@ -670,7 +625,6 @@ struct FeedbackPane: View {
         }
     }
 
-    /// "From": the account's email.
     private var from: some View {
         HStack(spacing: 8) {
             Text(L("From")).foregroundStyle(.secondary)
@@ -681,7 +635,6 @@ struct FeedbackPane: View {
         .frame(minHeight: 36)
     }
 
-    /// The note, the card's body, scrolling inside it.
     private var editor: some View {
         TextEditor(text: $note)
             .font(.body)
@@ -726,8 +679,6 @@ struct FeedbackPane: View {
     }
 }
 
-/// Adding an email to an account that has none: the same email sign-in as
-/// the first screen, keeping this Mac's setup (or, when both have one, asking).
 struct AddEmail: View {
     @Bindable var app: AppModel
     @State private var email = ""

@@ -1,25 +1,15 @@
 import AppKit
 import Foundation
 
-/// The Mac app in English or Simplified Chinese.
-///
-/// macOS picks the app's language when it starts: the app's own choice
-/// (`AppleLanguages` in its defaults, which Settings → Language sets, as does
-/// System Settings → General → Language & Region → Applications), else the
-/// Mac's. The translations are Support/zh-Hans.lproj/Localizable.strings,
-/// keyed by the English they replace; `L` looks them up. The server writes
-/// answers and cards in the account's language, or this one ([header]).
 enum Lang {
     private static let key = "AppleLanguages"
 
-    /// auto, en or zh: what this app was set to (auto follows the Mac).
     static var pref: String {
         let mine = UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?[key] as? [String]
         guard let first = mine?.first else { return "auto" }
         return first.hasPrefix("zh") ? "zh" : "en"
     }
 
-    /// Sets the app's language; it shows from the next launch ([relaunch]).
     static func set(_ pref: String) {
         if pref == "auto" {
             UserDefaults.standard.removeObject(forKey: key)
@@ -29,12 +19,9 @@ enum Lang {
     }
 
     #if DEBUG
-        /// The snapshots' Chinese (Snapshots.swift): `swift run` has no
-        /// zh-Hans.lproj beside it, so `L` reads this table when it's set.
         nonisolated(unsafe) static var snapshotTable: [String: String]? = nil
     #endif
 
-    /// Whether the app is showing Chinese.
     static var zh: Bool {
         #if DEBUG
             if snapshotTable != nil { return true }
@@ -42,17 +29,12 @@ enum Lang {
         return Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == true
     }
 
-    /// Accept-Language for the API.
     static var header: String { zh ? "zh-Hans" : "en" }
 
-    /// For times and dates: Chinese in Singapore, or the Mac's own.
     static var locale: Locale { zh ? Locale(identifier: "zh_Hans_SG") : .current }
 
     private static let appliedKey = "langApplied"
 
-    /// The account's language (its profile's lang), when it changed since last
-    /// time: set here for the next launch. A choice made here before the
-    /// account had one is returned, to save to the account.
     static func followAccount(_ accountLang: String?) -> String? {
         let applied = UserDefaults.standard.string(forKey: appliedKey)
         if accountLang == "auto", pref != "auto", applied == nil {
@@ -65,14 +47,11 @@ enum Lang {
         return nil
     }
 
-    /// A choice made here, saved to the account too: not applied back.
     static func noteAccount(_ lang: String) { UserDefaults.standard.set(lang, forKey: appliedKey) }
 
-    /// Starts terminus again, in the language just chosen.
     @MainActor static func relaunch() {
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
-        // Quit only once the new copy has started, or there'd be none.
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { app, _ in
             guard app != nil else { return }
             DispatchQueue.main.async { NSApp.terminate(nil) }
@@ -80,8 +59,6 @@ enum Lang {
     }
 }
 
-/// "Leave by %@" in the app's language, with the blanks filled. Every word the
-/// app writes itself goes through here; the server's come already written.
 func L(_ en: String, _ args: String...) -> String {
     var s = Bundle.main.localizedString(forKey: en, value: en, table: nil)
     #if DEBUG
@@ -90,8 +67,6 @@ func L(_ en: String, _ args: String...) -> String {
     return args.isEmpty ? s : String(format: s, locale: Lang.locale, arguments: args)
 }
 
-/// `s` as VoiceOver should say it: "~09:11", an estimate, as "about
-/// 09:11" ("约 09:11"), since the "~" alone isn't read out.
 func spokenTimes(_ s: String) -> String {
     s.replacingOccurrences(of: "~", with: L("about") + " ")
 }

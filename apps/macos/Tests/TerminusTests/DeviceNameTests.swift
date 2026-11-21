@@ -2,7 +2,6 @@ import Testing
 
 @testable import Terminus
 
-/// An anonymous Mac reports its model, never the name its owner gave it.
 @Test func theDeviceNameIsTheModel() {
     #expect(macModelName(productName: "MacBook Pro (16-inch, M5 Pro)", hwModel: "Mac17,8") == "MacBook Pro (16-inch, M5 Pro)")
     #expect(macModelName(productName: nil, hwModel: "MacBookAir7,2") == "MacBook Air")

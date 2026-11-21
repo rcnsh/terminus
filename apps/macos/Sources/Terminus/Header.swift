@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// The hero: where you're going, the answer, and whether it's live.
 struct Header: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -8,7 +7,6 @@ struct Header: View {
     var body: some View {
         let a = model.showNearby ? model.plan : model.shown
         let resting = !model.showNearby && a?.mode == "rest"
-        // Offline with the plan gone stale: the day plan's next thing (OfflineDay).
         let offline = !model.showNearby && model.target == .plan ? model.offlinePick(at: model.clock) : nil
         HStack(alignment: .center, spacing: 12) {
             IconTile(
@@ -16,12 +14,9 @@ struct Header: View {
                     ? "location.fill" : resting ? "moon.zzz.fill" : a?.arrived == true ? "checkmark.circle.fill" : "bus.fill",
                 tint: .brand
             )
-            // Ticks every second: the countdown and the dimming are
-            // computed from the departure time, never from `label`.
             Ticking(every: 1) { now in
                 let l = lines(a, resting: resting, offline: offline, now: now)
                 if a == nil && !model.showNearby && offline == nil && model.answerError == nil {
-                    // No answer yet, one on its way: the heading, the headline and the status line in bars.
                     VStack(alignment: .leading, spacing: 3) {
                         SkeletonLine(font: .system(size: 12, weight: .medium), points: 120)
                         SkeletonLine(font: .system(size: 20, weight: .bold, design: .rounded), points: 170)
@@ -42,8 +37,6 @@ struct Header: View {
                             .minimumScaleFactor(0.8)
                         if let st = l.status { StatusLine(color: st.color, text: st.text) }
                     }
-                    // One element, read as a sentence. Its words change once a
-                    // minute at most, so VoiceOver isn't fed a new second each tick.
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(spokenTimes([l.head, l.big, l.status?.spoken].compactMap { $0 }.joined(separator: L(", "))))
                     .accessibilityAddTraits([.isHeader, .updatesFrequently])
@@ -55,9 +48,6 @@ struct Header: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .semibold))
-                    // Only the turn repeats: an animation on the whole image
-                    // also repeats any move of it that lands in the same
-                    // update, and the arrow bobs up and down while it spins.
                     .animation(model.loading && !reduceMotion ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default) {
                         $0.rotationEffect(.degrees(model.loading && !reduceMotion ? 360 : 0))
                     }
@@ -71,12 +61,9 @@ struct Header: View {
             .accessibilityLabel(model.loading ? L("Refreshing") : L("Refresh"))
         }
         .card()
-        // The error shows on the status line, away from the focus: say it.
         .onChange(of: model.error) { _, e in announce(e) }
     }
 
-    /// What the header says at `now`: the heading, the headline, and the
-    /// status line with its dot and how it's spoken (to the minute).
     private struct Lines {
         var head: String
         var big: String
@@ -95,21 +82,16 @@ struct Header: View {
             head: head,
             big: model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)),
             dimmed: old)
-        // How sure the time is, worded on the server ("Estimated time"),
-        // beside the countdown: the "~" alone is easy to miss.
         let sure = { (s: String) in [s, model.showNearby ? nil : a?.card?.quality].compactMap { $0 }.joined(separator: " · ") }
         if old {
             let text = L("Updating times…")
             out.status = (.gray, text, text)
         } else if !model.showNearby, let a, a.isClassPlan, let at = a.countdownAt {
-            // Once it's time, the headline says "Leave now" and this line goes, as on the phone and the web.
-            // At the stop the headline is the bus ("D2 at 09:41"): this counts to it, not the leave-by.
             if let left = Self.secondsLeft(to: at, now: now) {
                 let spoken = left >= 60 ? L("in %@ min", "\((left + 30) / 60)") : L("in under a minute")
                 out.status = (a.leaveLate ? .red : .brand, sure(Self.leaveIn(left)), sure(spoken))
             }
         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
-            // A guess counts down in minutes: its seconds would be false precision.
             let guess = a.card?.quality != nil
             out.status = (
                 dotColor(a.quality), sure(Self.countdown(to: at, now: now, minutes: guess)),
@@ -123,37 +105,26 @@ struct Header: View {
         return out
     }
 
-    /// "D2 · 09:42", "A1 · ~09:11", or the label when there's no time: the
-    /// card's title; worked out here for an older server.
     private func big(_ a: NextAnswer?) -> String {
         guard let a else { return L("Checking…") }
         if let title = a.card?.title { return title }
         guard a.hasLiveTime, let at = a.departure else { return a.label }
-        // An estimate is not a live time: mark it, as the widget does.
         return "\(a.service) · \(a.quality == "scheduled" ? L("~%@", campusTime(at)) : campusTime(at))"
     }
 
-    /// "Leaves in 4 min 12 s", then "Left 1 min ago" until the answer is
-    /// replaced or goes stale. To the minute ("Leaves in 4 min") when
-    /// spoken, or for a guess.
     nonisolated static func countdown(to at: Date, now: Date, minutes: Bool = false) -> String {
         guard let left = secondsLeft(to: at, now: now) else {
-            // Gone: a minute ago from the moment it left, never "0 min ago".
             return L("Left %@ min ago", "\(max(1, Int((now.timeIntervalSince(at) / 60).rounded(.up))))")
         }
         if minutes { return left >= 60 ? L("Leaves in %@ min", "\((left + 30) / 60)") : L("Leaves in under a minute") }
         return left >= 60 ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("Leaves in %@ s", "\(left)")
     }
 
-    /// Whole seconds until `at`, at least 1 while it's still ahead (the last
-    /// part of a second is "1 s", not "0 s"); nil once it has come, as the phone does.
     nonisolated static func secondsLeft(to at: Date, now: Date) -> Int? {
         let left = at.timeIntervalSince(now)
         return left > 0 ? max(1, Int(left)) : nil
     }
 
-    /// The class's leave-by, beside the headline: "in 4 min" (rounded) from
-    /// two minutes, then "in 1 min 5 s", then "in 45 s", as the phone counts down.
     nonisolated static func leaveIn(_ left: Int) -> String {
         if left >= 120 { return L("in %@ min", "\((left + 30) / 60)") }
         return left >= 60 ? L("in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("in %@ s", "\(left)")
@@ -161,22 +132,16 @@ struct Header: View {
 
     private var restStatus: String { L("No buses until your day starts") + updatedAt }
 
-    /// " · 09:24", when the last refresh came; nothing before one has.
     private var updatedAt: String { model.updated.map { " · \(campusTime($0))" } ?? "" }
 
-    /// The card's heading ("Next class · GEA1000 @ UTown"), led by the phase
-    /// on a trip under way ("On the bus · GEA1000 @ UTown"). Without one (a
-    /// rest or free day, nowhere to go), what this view is.
     private func heading(_ a: NextAnswer?) -> String {
         if model.showNearby { return L("Nearby") }
         guard let a else { return L("Next bus") }
         if a.mode == "rest" { return L("Off hours") }
         if a.isFree { return L("Today") }
-        // Under way: the phase leads ("On the bus · CS2030").
         if let p = a.card?.phaseText, let d = a.dest { return "\(p) · \(d.label)" }
         if let h = a.card?.heading { return h }
         if a.mode == "nearby" { return L("Nearby") }
-        // A card with no heading has nowhere to go; the rest is worked out here for an older server.
         if a.card != nil { return L("Next bus") }
         guard let d = a.dest else { return L("Next bus") }
         if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(a.startsAt(c))" }
@@ -190,8 +155,6 @@ struct Header: View {
         return "\(why) · \(d.label)"
     }
 
-    /// The error, or how sure the answer is, worded on the server (`card.quality`:
-    /// "Estimated time", none for live times); nil for no line at all.
     private func status(_ a: NextAnswer?) -> String? {
         if a?.isFree == true { return L("Nothing to catch") }
         if a?.arrived == true { return L("You're there") }
@@ -205,8 +168,6 @@ struct Header: View {
         Self.dotColor(q, error: model.error != nil, nearby: model.showNearby)
     }
 
-    /// The status line's dot: green only for live times; a quality this
-    /// version doesn't know is grey, never called live.
     nonisolated static func dotColor(_ q: String?, error: Bool, nearby: Bool) -> Color {
         if error { return .red }
         switch q {
@@ -237,7 +198,6 @@ struct StatusLine: View {
     let text: String
     var body: some View {
         HStack(spacing: 5) {
-            // Colour repeats what the text says; VoiceOver gets the text.
             Circle().fill(color).frame(width: 6, height: 6).accessibilityHidden(true)
             Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
         }
