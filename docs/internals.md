@@ -3001,8 +3001,8 @@ Logging is a no-op without the binding and swallows its own errors. A logging
 failure never fails an answer.
 
 A cron step that fails (the feed check, the calendar, arming trips, ...) is
-logged and also written as an `error` row with the route `cron <step>`, so
-it shows with the errors on the dashboard; it sends no email. The cron's
+logged and also written as an `error` row with the route `cron <step>` and
+why, so it shows with the errors on the dashboard; it sends no email. The cron's
 handler waits for every step, so a long run isn't cut off partway while the
 trigger's history says it succeeded. The monitor never acts on a KV read
 that failed: it changes no state, sends nothing and writes no incident, and

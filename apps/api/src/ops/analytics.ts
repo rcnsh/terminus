@@ -98,8 +98,8 @@ export function logError(env: Env, path: string): void {
   writeRow(env, 'error', { route });
 }
 
-export function logCronError(env: Env, step: string): void {
-  writeRow(env, 'error', { route: `cron ${step}` });
+export function logCronError(env: Env, step: string, reason?: string): void {
+  writeRow(env, 'error', reason ? { route: `cron ${step}`, reason } : { route: `cron ${step}` });
 }
 
 export type PollOutcome = 'upstream' | 'error' | 'hit' | 'stale' | 'failed' | 'skipped' | 'retry';

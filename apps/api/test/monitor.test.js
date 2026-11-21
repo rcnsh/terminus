@@ -400,7 +400,7 @@ test('cron: a KV failure in one step does not stop the others', async () => {
   assert.ok(cleaned, 'housekeeping still ran');
 });
 
-test('cron: a failed step is counted with the errors on the dashboard', async () => {
+test('cron: a failed step is counted with the errors on the dashboard, with why', async () => {
   const rows = [];
   const e = { ...env(), AE: { writeDataPoint: (p) => rows.push(p) } };
   e.KV.put = async () => {
@@ -410,11 +410,10 @@ test('cron: a failed step is counted with the errors on the dashboard', async ()
   console.error = () => {};
   await runCron(e, 1000);
   console.error = orig;
-  const failed = rows
-    .map(named)
-    .filter((r) => r.kind === 'error')
-    .map((r) => r.route);
-  assert.ok(failed.includes('cron upstream'), failed.join());
+  const failed = rows.map(named).filter((r) => r.kind === 'error');
+  const upstream = failed.find((r) => r.route === 'cron upstream');
+  assert.ok(upstream, failed.map((r) => r.route).join());
+  assert.equal(upstream.reason, 'KV write quota');
   assert.ok(rows.every((r) => r.indexes[0] === 'error'));
 });
 

@@ -2,7 +2,7 @@ import { KEEP_DAYS } from '../accounts/outcomes.ts';
 import { FEEDBACK_KEEP_DAYS } from './feedback.ts';
 import type { Env } from '../types.ts';
 import { sgt } from '../config.ts';
-import { fetchArrivals, renewToken } from '../feeds/fms.ts';
+import { failureReason, fetchArrivals, renewToken } from '../feeds/fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from '../feeds/lta.ts';
 import { GRAPH_PUBLIC } from '../answer/graph.ts';
 import { KV_APP_VERSION, UpstreamRejected, appVersion } from '../feeds/auth.ts';
@@ -527,7 +527,7 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       await fn();
     } catch (err) {
       console.error('cron', name, err instanceof Error ? err.message : String(err));
-      logCronError(env, name);
+      logCronError(env, name, failureReason(err));
     }
   };
   let feedUp = false;
