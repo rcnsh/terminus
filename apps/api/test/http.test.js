@@ -26,9 +26,7 @@ test('coordsFrom: a location is rounded to about 11 metres, whoever sends it', (
 test('CORS: another origin may send the headers the API reads, and read the ones it answers with', () => {
   const list = (v) => v.split(',').map((h) => h.trim());
   const allowed = list(CORS['access-control-allow-headers']);
-  // x-api-key: how the docs say to call the API from a page; if-match: PUT /api/me/profile.
   for (const h of ['content-type', 'authorization', 'x-api-key', 'if-match', 'x-terminus-client']) assert.ok(allowed.includes(h), h);
-  // Neither is safelisted, so a page could not read them without this.
   const res = json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
   assert.deepEqual(list(res.headers.get('access-control-expose-headers')), ['etag', 'retry-after']);
 });
@@ -51,7 +49,6 @@ test('security headers: every response; CSP on HTML only; /docs may load unpkg',
   const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/account/');
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.doesNotMatch(page.headers.get('content-security-policy'), /unpkg/);
-  // Cloudflare adds the Web Analytics beacon to every page; it must load and report.
   const csp = Object.fromEntries(
     page.headers
       .get('content-security-policy')
@@ -78,7 +75,6 @@ test('the CSP: blob: workers only on the dashboard, whose Timelapse section’s 
     assert.equal(workers(path), "worker-src 'self'", path);
   }
   assert.equal(workers('/admin/'), "worker-src 'self' blob:");
-  // The rest of the dashboard's policy is the site's.
   const site = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/app/');
   const tl = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/admin/');
   const others = (h) =>
@@ -88,9 +84,6 @@ test('the CSP: blob: workers only on the dashboard, whose Timelapse section’s 
       .filter((d) => !d.startsWith('worker-src '));
   assert.deepEqual(others(tl.headers), others(site.headers));
 
-  // Why: MapLibre starts its worker from its own file when that file is on
-  // the page's origin (a blob: only for another origin), and the map loads
-  // it from /vendor/; Mediabunny makes its workers from blob: URLs.
   const pub = new URL('../../web/public/', import.meta.url);
   const files = await readFile(new URL('app/map-files.js', pub), 'utf8');
   const mlDir = /MAPLIBRE = '\/(vendor\/maplibre-gl%40[0-9.]+\/)'/.exec(files)?.[1];
@@ -115,11 +108,9 @@ test('the CSP allows the CDNs only for the files the site loads from them, not w
     assert.ok(!csp.includes('https://cdnjs.cloudflare.com'), 'not all of cdnjs');
     assert.ok(!csp.includes('https://unpkg.com'), 'not all of unpkg');
   }
-  // The account page's QR library is the one file allowed from cdnjs.
   const settings = await readFile(new URL('../../web/public/account/settings-pages.js', import.meta.url), 'utf8');
   const qr = /s\.src = '(https:\/\/cdnjs\.cloudflare\.com\/[^']+)'/.exec(settings)?.[1];
   assert.ok(qr && sources(page.headers).includes(qr), `the CSP must allow ${qr}`);
-  // /docs loads Elements' files from under the allowed path.
   const { docsPage } = await import('../src/openapi.ts');
   const html = docsPage('day');
   const urls = [...html.matchAll(/(?:src|href)="(https:\/\/unpkg\.com\/[^"]+)"/g)].map((m) => m[1]);
@@ -140,10 +131,7 @@ test('landmarks: every stop that serves one counts; a stop is itself', () => {
   assert.deepEqual(targetStops('COM3'), { to: 'COM3', also: [], walkM: 0 });
 });
 
-test('the frozen test day is an ordinary teaching Thursday in the bundled calendar', () => {
-  // Planner tests run on FROZEN_NOW against data/calendar.json. If a refresh
-  // ever made that day a holiday or a break, they would change for a reason
-  // that has nothing to do with the code: this says so first.
+test('the frozen test day is an ordinary teaching Thursday in the bundled calendar, so a calendar refresh cannot move the planner tests', () => {
   const d = termDay(FROZEN_NOW);
   assert.equal(d.kind, 'instructional');
   assert.equal(d.holiday, null);
@@ -153,7 +141,6 @@ test('the frozen test day is an ordinary teaching Thursday in the bundled calend
 test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails as unreachable, naming what', async () => {
   const real = globalThis.fetch;
   try {
-    // Headers at once, then a body that never ends: only the abort ends it.
     globalThis.fetch = async (_url, init) =>
       new Response(
         new ReadableStream({
@@ -173,8 +160,6 @@ test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails 
       return true;
     });
 
-    // workerd's own errors for a refused connection and a failed DNS lookup
-    // are plain Errors, not TypeErrors as in Node.
     for (const make of [
       () => new Error('Network connection lost.'),
       () => new Error('internal error; reference = abc'),
@@ -189,7 +174,6 @@ test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails 
       );
     }
 
-    // An answer, error statuses included, comes back whole and readable.
     globalThis.fetch = async () => new Response('busy', { status: 503, headers: { 'x-a': '1' } });
     const res = await timedFetch('feed', 'https://x.test/', {}, 50);
     assert.equal(res.status, 503);

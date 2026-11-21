@@ -1,9 +1,3 @@
-/**
- * Web Push: the web app subscribes with POST /api/me/push, and a nudge
- * reaches it signed (VAPID, RFC 8292) and encrypted (aes128gcm, RFC 8291).
- * The browser's side is played here with WebCrypto: the push is decrypted
- * with the subscription's own keys and the JWT checked against the public key.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -22,7 +16,6 @@ async function vapidKey() {
   return JSON.stringify(await crypto.subtle.exportKey('jwk', privateKey));
 }
 
-/** A browser's subscription: its ECDH key pair and auth secret. */
 async function browser() {
   const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
   const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
@@ -35,7 +28,6 @@ async function hkdf(salt, ikm, info, bytes) {
   return new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, bytes * 8));
 }
 
-/** What the browser does with an aes128gcm push (RFC 8291), written independently of webpush.ts. */
 async function decrypt(b, body) {
   const salt = body.slice(0, 16);
   const idlen = body[20];
@@ -114,7 +106,6 @@ test('the web app gets the public key, subscribes, and a nudge arrives signed an
   assert.equal(p.headers.get('ttl'), '600');
   assert.deepEqual(await decrypt(b, p.body), { kind: 'card', phase: 'due', urgent: true });
 
-  // The VAPID JWT: for the push service's origin, signed by the key the browser subscribed with.
   const [, t, k] = p.headers.get('authorization').match(/^vapid t=([^,]+), k=(.+)$/);
   assert.equal(k, key);
   const [h, c, s] = t.split('.');
@@ -128,7 +119,6 @@ test('the web app gets the public key, subscribes, and a nudge arrives signed an
 test('nothing is pushed to the web app when there is nothing to show', async () => {
   const { env, call, cookie, pushes, userId } = await setup();
   await call('/api/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
-  // Nothing sent, and nothing failed: there was nothing to send.
   assert.deepEqual(await nudgeUser(env, userId, { phase: 'idle', urgent: false }, Date.now()), { sent: 0, failed: 0 }, 'an idle card');
   assert.deepEqual(
     await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: false }, Date.now()),
@@ -150,7 +140,6 @@ test('a bad subscription is refused, and without a VAPID key web push says it is
   const { env, call, cookie } = await setup();
   const bad = [{ endpoint: 'http://push.example.test/x', keys: { p256dh: 'AA', auth: 'AA' } }, { endpoint: ENDPOINT }, 'nope'];
   const real = (await browser()).subscription;
-  // Only browsers' push services: the Worker POSTs to whatever is kept here.
   for (const endpoint of [
     'https://evil.example/x',
     'https://web.push.apple.com.evil.example/x',
@@ -159,7 +148,6 @@ test('a bad subscription is refused, and without a VAPID key web push says it is
   ]) {
     bad.push({ ...real, endpoint });
   }
-  // Not a P-256 point: it would fail at every push.
   bad.push({ ...real, keys: { ...real.keys, p256dh: b64url(new Uint8Array(65)) } });
   for (const subscription of bad)
     assert.equal((await call('/api/me/push', { method: 'POST', cookie, body: { subscription } })).status, 400);
@@ -175,8 +163,11 @@ test('a kept subscription is skipped, not failed, once the VAPID key is gone', a
   const { env, call, cookie, pushes, userId, pushToken } = await setup();
   await call('/api/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
   delete env.VAPID_PRIVATE_KEY;
-  // Nobody could be reached, which isn't a failure to try again at every wake; the subscription stays.
-  assert.deepEqual(await nudgeUser(env, userId, { phase: 'due', urgent: true }, Date.now()), { sent: 0, failed: 0 });
+  assert.deepEqual(
+    await nudgeUser(env, userId, { phase: 'due', urgent: true }, Date.now()),
+    { sent: 0, failed: 0 },
+    'nobody could be reached, which is not a failure to retry at every wake',
+  );
   assert.equal(pushes.length, 0);
-  assert.match(await pushToken(), /^web:/);
+  assert.match(await pushToken(), /^web:/, 'the subscription stays');
 });

@@ -1,8 +1,3 @@
-/**
- * "Earlier bus" and "Later bus" (step.ts): stepping from the server's bus
- * to the one before or after it, kept for the trip on every device. On the
- * frozen clock (Thursday 2026-08-27, 09:00 SGT) and a fake feed.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -97,18 +92,15 @@ test('a class card offers both steps, and "Later bus" moves every device to the 
   assert.equal(b.leave.board, a.card.step.later.board);
   assert.ok(ms(b.leave.at) > ms(a.leave.at), 'leave later');
   assert.ok(ms(b.leave.arrive) >= ms(a.leave.arrive), 'never there sooner');
-  // Past the start: the card says so.
-  assert.equal(b.card.late, ms(b.leave.arrive) > CLASS_AT);
+  assert.equal(b.card.late, ms(b.leave.arrive) > CLASS_AT, 'past the start: the card says so');
 
-  // The Mac, with no location, shows the same bus.
   const m = await next(mac);
-  assert.equal(m.leave.board, b.leave.board);
+  assert.equal(m.leave.board, b.leave.board, 'the Mac, with no location, shows the same bus');
   assert.equal(m.card.step.moved, true);
 
-  // "Best bus" puts the server's own back.
   const c = await (await step(phone, FIRST, null)).json();
   assert.equal(c.card.step.moved, false);
-  assert.equal(c.leave.board, a.leave.board);
+  assert.equal(c.leave.board, a.leave.board, '"Best bus" puts the server\'s own back');
 });
 
 test('"Later bus" stops at 20 minutes late for a class, "Earlier bus" at the first bus you can catch', async () => {
@@ -122,28 +114,24 @@ test('"Later bus" stops at 20 minutes late for a class, "Earlier bus" at the fir
   for (let n = 0; a.card.step.earlier && n < 80; n++) a = await (await step(phone, FIRST, a.card.step.earlier)).json();
   assert.equal(a.card.step.earlier, null);
   assert.ok(ms(a.leave.at) >= FROZEN_NOW, 'no bus you have already missed');
-  // The first live D2 or R2 from PGP, four or six minutes away.
-  assert.ok(ms(a.leave.board) <= FROZEN_NOW + 6 * 60_000);
+  assert.ok(ms(a.leave.board) <= FROZEN_NOW + 6 * 60_000, 'the first live D2 or R2 from PGP, four or six minutes away');
 });
 
 test("a chosen bus you didn't set off for lapses, and the steps go once you're on your way", async () => {
   const { phone, next, step, signal, clock } = await setup();
   const a = await next(phone);
   const b = await (await step(phone, FIRST, a.card.step.later)).json();
-  // Past its leave-by with nothing said: no catching it now, and no sliding on to the one after.
   clock(ms(b.leave.at) + 60_000);
   const c = await next(phone);
-  assert.ok(!c.card.step?.moved, 'the best bus again');
+  assert.ok(!c.card.step?.moved, 'past its leave-by with nothing said: the best bus again');
   assert.ok(ms(c.leave.board) < ms(b.leave.board) + 9 * 60_000, 'not the D2 after it');
-  // Set off: the trip follows its plan, with nothing to step.
   const d = await (await signal(phone, { kind: 'left', trip: FIRST })).json();
   assert.equal(d.card.phase, 'heading');
-  assert.equal(d.card.step, null);
+  assert.equal(d.card.step, null, 'set off: the trip follows its plan, with nothing to step');
 });
 
 test('past the leave-by with nothing said, "Later bus" is still there, and every device follows it', async () => {
   const { phone, mac, next, step, clock } = await setup();
-  // The fake feed's times move with the clock: close in, then past the leave-by it gives then.
   clock(ms((await next(phone)).leave.at) - 4 * 60_000);
   clock(ms((await next(phone)).leave.at) + 30_000);
   const b = await next(phone);
@@ -192,7 +180,6 @@ test('with no class today, a favourite or a stop stays on the bus stepped to', a
 
 test('with no class today, the evening trip home stays on the bus stepped to', async () => {
   const { phone, next, step, clock } = await setup({ ...PROFILE, manual: [] });
-  // 21:00 on campus, 150 m from the nearest stop; home at PGP.
   clock(Date.parse('2026-08-27T13:00:00Z'));
   const q = '?lat=1.292&lon=103.772';
   const a = await next(phone, q);
@@ -202,8 +189,6 @@ test('with no class today, the evening trip home stays on the bus stepped to', a
   assert.equal(again.card.step.moved, true, 'still the later bus');
   assert.equal(again.leave.board, a.card.step.later.board);
 });
-
-// The planner's parts, on their own.
 
 const leave = (svc, stop, at, board, arrive) => ({
   at: new Date(at).toISOString(),
@@ -215,7 +200,6 @@ const leave = (svc, stop, at, board, arrive) => ({
   arrive: new Date(arrive).toISOString(),
   note: null,
 });
-/** One of `departures`' leave-bys: with which bus it is (leave.ts `Departing`). */
 const dep = (svc, stop, at, board, arrive) => ({ ...leave(svc, stop, at, board, arrive), bus: `${svc}|${stop}|${board}` });
 const T = Date.parse('2026-08-27T01:00:00Z');
 const MIN = 60_000;
@@ -227,26 +211,26 @@ test('a chosen bus the feed has moved a little is the same bus; one it no longer
   const gone = { svc: 'D2', stop: 'PGP', board: new Date(T + 9 * MIN).toISOString() };
   assert.equal(findTarget(all, gone), all[1]);
   assert.equal(findTarget(all, { ...gone, board: new Date(T + 20 * MIN).toISOString() }), null, 'never an earlier one');
-  // Leaving before any bus you can still catch: you didn't go for it.
-  assert.equal(findTarget(all, { ...gone, board: new Date(T - 10 * MIN).toISOString() }), null);
+  assert.equal(
+    findTarget(all, { ...gone, board: new Date(T - 10 * MIN).toISOString() }),
+    null,
+    'leaving before any bus you can still catch: you did not go for it',
+  );
 });
 
 test('a step never gets you there sooner going later, or later going earlier', () => {
   const own = dep('D2', 'PGP', T + 10 * MIN, T + 14 * MIN, T + 30 * MIN);
   const all = [
     dep('D2', 'PGP', T, T + 4 * MIN, T + 20 * MIN),
-    // Leaves earlier but gets there after: not "earlier".
     dep('A1', 'PGP', T + 5 * MIN, T + 9 * MIN, T + 40 * MIN),
     own,
-    // Leaves later and gets there sooner: not "later" from here either.
     dep('R2', 'PGPR', T + 12 * MIN, T + 15 * MIN, T + 25 * MIN),
     dep('D2', 'PGP', T + 20 * MIN, T + 24 * MIN, T + 40 * MIN),
   ];
   const s = stepFrom({ trip: 'k', own, all, target: null, lastArriveMs: null, nowMs: T - MIN });
-  assert.deepEqual(s.steps.earlier, targetOf(all[0]));
-  assert.deepEqual(s.steps.later, targetOf(all[4]));
+  assert.deepEqual(s.steps.earlier, targetOf(all[0]), 'not the A1, which leaves earlier but gets there after');
+  assert.deepEqual(s.steps.later, targetOf(all[4]), 'not the R2, which leaves later but gets there sooner');
   assert.equal(s.steps.moved, false);
-  // Past the hour after the server's bus, no "Later".
   const far = stepFrom({
     trip: 'k',
     own,
@@ -255,39 +239,32 @@ test('a step never gets you there sooner going later, or later going earlier', (
     lastArriveMs: null,
     nowMs: T,
   });
-  assert.equal(far.steps.later, null);
+  assert.equal(far.steps.later, null, "past the hour after the server's bus, no Later");
 });
 
 test('a step is never to the bus already shown, though a late leave-by is now and its departure a little after', () => {
-  // Late for a class: the leave-by is now, the same R2 among the departures leaves a minute on.
   const own = leave('R2', 'PGP', T, T + 6 * MIN, T + 15 * MIN);
   const all = [dep('R2', 'PGP', T + MIN, T + 6 * MIN, T + 15 * MIN), dep('D2', 'PGP', T + 9 * MIN, T + 14 * MIN, T + 23 * MIN)];
   const s = stepFrom({ trip: 'k', own, all, target: null, lastArriveMs: null, nowMs: T });
-  assert.deepEqual(s.steps.later, targetOf(all[1]));
+  assert.deepEqual(s.steps.later, targetOf(all[1]), 'late for a class: not the same R2 a minute on');
   assert.equal(s.steps.earlier, null);
-  // Another R2 two minutes behind it (bunched) is a different bus: still the later one.
   const bunched = [all[0], dep('R2', 'PGP', T + 3 * MIN, T + 8 * MIN, T + 17 * MIN), all[1]];
   const b = stepFrom({ trip: 'k', own, all: bunched, target: null, lastArriveMs: null, nowMs: T });
-  assert.deepEqual(b.steps.later, targetOf(bunched[1]));
+  assert.deepEqual(b.steps.later, targetOf(bunched[1]), 'another R2 two minutes behind, bunched, is a different bus');
 });
 
 test("a plan kept past its leave-by offers the answer's bus as the later one, until its own is due", () => {
-  // The A2 at 09:06 with its leave-by at 09:00 passed; the answer has moved on to the 09:14.
   const iso = (t) => new Date(t).toISOString();
   const plan = { svc: 'A2', stop: 'PGP', stopCode: 'PGP', board: iso(T + 6 * MIN), leave: iso(T), arrive: iso(T + 15 * MIN) };
   const answer = leave('A2', 'UTown', T + 2 * MIN, T + 14 * MIN, T + 20 * MIN);
   const past = (l, nowMs = T + MIN, moved = false) => stepsPastLeave(plan, l, moved, 'k', nowMs);
   assert.deepEqual(past(answer), { trip: 'k', earlier: null, later: targetOf(answer), moved: false });
-  // A bus you chose: "Best bus" stays.
-  assert.equal(past(answer, T + MIN, true).moved, true);
-  // Before its leave-by, or once its bus is due (you may be on it): none.
-  assert.equal(past(answer, T - MIN), null);
-  assert.equal(past(answer, T + 6 * MIN), null);
-  // Not "later": a bus that boards before the plan's, or gets you there sooner.
-  assert.equal(past(leave('D1', 'KR-MRT', T + MIN, T + 4 * MIN, T + 12 * MIN)), null);
-  assert.equal(past(leave('D1', 'KR-MRT', T + 2 * MIN, T + 8 * MIN, T + 12 * MIN)), null);
-  // A walk: none.
-  assert.equal(past({ ...answer, svc: null }), null);
+  assert.equal(past(answer, T + MIN, true).moved, true, 'a bus you chose: "Best bus" stays');
+  assert.equal(past(answer, T - MIN), null, 'before its leave-by: none');
+  assert.equal(past(answer, T + 6 * MIN), null, 'once its bus is due, you may be on it: none');
+  assert.equal(past(leave('D1', 'KR-MRT', T + MIN, T + 4 * MIN, T + 12 * MIN)), null, "not later: boards before the plan's");
+  assert.equal(past(leave('D1', 'KR-MRT', T + 2 * MIN, T + 8 * MIN, T + 12 * MIN)), null, 'not later: gets you there sooner');
+  assert.equal(past({ ...answer, svc: null }), null, 'a walk: none');
 });
 
 test('with no live times the buses fall a headway apart from the chosen one, however the clock moves', () => {
@@ -326,11 +303,9 @@ test("a step drops the trip's plan, so the bus chosen becomes it on every device
   const day = await updateTrip(env, 'u1', { steps: { [FIRST]: to } }, FROZEN_NOW);
   assert.deepEqual(day.steps, { [FIRST]: to });
   assert.deepEqual(Object.keys(day.plans), ['other']);
-  // Only steps today is still a day to load.
   await updateTrip(env, 'u2', { steps: { [FIRST]: to } }, FROZEN_NOW);
-  assert.deepEqual((await loadDay(env, 'u2', FROZEN_NOW)).steps, { [FIRST]: to });
-  // "Best bus": no step kept.
-  assert.deepEqual((await updateTrip(env, 'u1', { steps: { [FIRST]: null } }, FROZEN_NOW)).steps, {});
+  assert.deepEqual((await loadDay(env, 'u2', FROZEN_NOW)).steps, { [FIRST]: to }, 'only steps today is still a day to load');
+  assert.deepEqual((await updateTrip(env, 'u1', { steps: { [FIRST]: null } }, FROZEN_NOW)).steps, {}, '"Best bus": no step kept');
 });
 
 test("Today's leave-by for the class follows the bus stepped to", async () => {

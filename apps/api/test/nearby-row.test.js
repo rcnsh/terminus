@@ -41,7 +41,6 @@ test('nearbyRow: a bus due in a minute is shown as it comes, whatever the walk t
   assert.equal('tooSoon' in r.later[0], false);
 });
 
-/** Estimated departures every `gapS` after `etaS` from now, as departures.ts gives them. */
 const guesses = (etaS, gapS, n = 3) =>
   Array.from({ length: n }, (_, i) => {
     const t = NOW + (etaS + (i + 1) * gapS) * 1000;

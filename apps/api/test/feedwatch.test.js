@@ -1,8 +1,3 @@
-/**
- * The beta's cron makes no feed call to NUS or LTA (docs/agents/feeds.md), only
- * the token's renewal, ahead of its end (feed-token.test.js): it reads the
- * breaker trips its own traffic noted (src/feeds/feedwatch.ts) as its check.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -40,7 +35,6 @@ function site(beta, ae = []) {
   };
 }
 
-/** Runs `fn` with console.error and console.log collected rather than printed. */
 async function quietly(fn) {
   const logged = [];
   const { error, log } = console;
@@ -129,7 +123,6 @@ test('the beta goes down on trips in two runs in a row, and back up after two wi
     await noteBreakerOpen(env, 'nus', new Error('bus-proxy HTTP 503'), t0 + CHECK_EVERY_MS - 60_000);
     await runCron(env, t0 + CHECK_EVERY_MS);
     assert.equal((await readUpstream(env)).up, false);
-    // A trip older than a run's gap was the last run's news.
     await runCron(env, t0 + 2 * CHECK_EVERY_MS);
     await runCron(env, t0 + 3 * CHECK_EVERY_MS);
   });

@@ -1,7 +1,3 @@
-/**
- * Every rate-limit binding, refusing: each route it guards answers 429 and
- * says when to try again, before doing any of the work it protects.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -11,7 +7,6 @@ import worker from '../src/index.ts';
 
 const BASE = 'https://bus.example.test';
 
-/** A limiter that always says no, and remembers the keys it was asked about. */
 function refusing() {
   const keys = [];
   return { keys, limit: async ({ key }) => (keys.push(key), { success: false }) };
@@ -66,7 +61,6 @@ test('RL_AUTH caps guessed tokens on /auth/logout too: each costs a D1 read, as 
   );
   await assert429(res, '60');
   assert.deepEqual(rl.keys, ['badtoken:unknown']);
-  // No token at all is just "signed out", not a guess.
   const bare = await worker.fetch(new Request(`${BASE}/api/auth/logout`, { method: 'POST' }), env, makeCtx());
   assert.equal(bare.status, 200);
 });

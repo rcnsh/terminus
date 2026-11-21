@@ -1,60 +1,3 @@
-/**
- * Local API with fake live buses, for building and screenshotting the apps.
- *
- *   node scripts/dev/dev-stub.mjs            # http://localhost:8787
- *
- * It answers this machine only (127.0.0.1 and ::1): its admin token is
- * "dev", it prints sign-in codes, and it may hold real keys from .dev.vars.
- * STUB_HOST=0.0.0.0 (or ::) opens it to the network, for a phone on the
- * same Wi-Fi; adb reverse and the emulator don't need it. PORT moves it
- * from 8787.
- *
- * Runs the real Worker code in Node with:
- *   - a stubbed NUS feed: every service arrives every 12 minutes, offset per
- *     service, moving with the real clock (so countdowns and dimming behave)
- *   - every service treated as running at any hour; with STUB_HOURS=real,
- *     the real hours (data/service-hours.json) instead, and no buses or
- *     times for a service outside them (the Buses tab's stopped rows)
- *   - an in-memory database with a test account (you@u.nus.edu),
- *     three favourites, a class later today, and pairing codes TEST67, TEST78, TEST89
- *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
- *   - live buses: three per service, driving round its route line
- *   - the map's files from dev/map/ when it's there (fonts and icons:
- *     scripts/map-tiles.sh --dry-run, then copy build/map to dev/map)
- *   - a fake NUSMods (every module has a lab, an online tutorial and an
- *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
- *
- * POST /__stub/session signs a device in as the test account and answers
- * with its token, for the iPhone app's UI tests (TERMINUS_TOKEN).
- * The dashboard (/admin/, token "dev") shows made-up accounts, answers,
- * crash reports and arrival-time scores (stub-admin.mjs); STUB_ADMIN=empty
- * shows it as a new install would.
- *
- * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
- * light and dark screenshots of the same moment. POST /__stub/skip?min=N
- * moves it ahead, to walk through a trip.
- * STUB_NOW=<ISO time> starts the clock there, and POST /__stub/at?t=<ISO time>
- * moves it there (it runs on from it): STUB_NOW=2026-10-07T13:30:00Z is a
- * Wednesday 21:30 in Singapore, when R1 and R2 have stopped.
- * The test account's class, GEA1000 at UTown, is CLASS_IN_MIN (50) minutes
- * after the clock starts; POST /__stub/class?in=N moves it to N minutes from
- * the stub's now, on its day, so a long test run always has a trip ahead.
- * POST /__stub/hours?real=1 (or 0) switches the real hours on or off, and
- * POST /__stub/reset puts the clock and the hours back as they started.
- *
- * The timelapse recorder runs too, on the fake buses, as it would in its
- * window (the cron that starts it is a timer here). POST
- * /__stub/timelapse?minutes=N records N minutes at once, moving the clock
- * ahead with it (from the window's opening if it's closed now): an hour of
- * buses for the dashboard's Timelapse (/admin/#/timelapse, token "dev") in a few
- * seconds. Past the window's close, the day is written to the fake R2.
- *
- * Point a debug Android build at it:
- *   ./gradlew installStableDebug -PapiBase=http://localhost:8787
- *   adb reverse tcp:8787 tcp:8787
- * and the Mac app: TERMINUS_API_BASE=http://localhost:8787
- */
-
 import http from 'node:http';
 import https from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
@@ -70,20 +13,12 @@ import { makeD1, makeEmail } from '../../test/_d1.mjs';
 import { fakeAeRows, seedAdmin } from './stub-admin.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
-// Anything the stub doesn't fake (Firebase, for push) goes out for real.
 const realFetch = globalThis.fetch;
 const realNow = Date.now.bind(Date);
-// POST /__stub/freeze holds the clock (and so every bus time) still, for
-// screenshots that must match in light and dark; /__stub/thaw lets it run.
 let frozenAt = null;
-// POST /__stub/skip?min=N moves the clock N minutes ahead (and keeps it
-// there), to walk through a trip without waiting for it.
 let skipMs = process.env.STUB_NOW ? Date.parse(process.env.STUB_NOW) - realNow() : 0;
 if (Number.isNaN(skipMs)) throw new Error('STUB_NOW must be an ISO time, such as 2026-10-07T13:30:00Z');
 const stubNow = () => (frozenAt ?? realNow()) + skipMs;
-// STUB_HOURS=real: services keep their real hours, and the fake feed has
-// nothing for one outside them. Set once the Worker's graph is loaded.
-// The dashboard's made-up numbers (stub-admin.mjs); STUB_ADMIN=empty for none.
 const DEMO_ADMIN = process.env.STUB_ADMIN !== 'empty';
 let running = (_svc) => true;
 
@@ -93,8 +28,6 @@ for (const [svc, seq] of Object.entries(graph.routes))
   for (const code of new Set(seq)) servingStop.set(code, [...(servingStop.get(code) ?? []), svc]);
 
 const crowds = ['low', 'medium', 'high'];
-// The public buses (data/public.json): which call at each LTA stop code, and
-// which way a two-way service is going there, for the fake DataMall below.
 const pub = (await import('../../data/public.json', { with: { type: 'json' } })).default;
 const ltaToGraph = new Map([...Object.entries(pub.merged), ...pub.stops.map((s) => [s.code, s.code])]);
 const publicAt = (ltaCode) => {
@@ -105,8 +38,6 @@ const publicAt = (ltaCode) => {
 };
 const shapes = (await import('../../data/shapes.json', { with: { type: 'json' } })).default.routes;
 
-/** Three buses per service, a third of the route apart, at 20 km/h along its
- *  line. Like the real feed, a bus's position only moves every 18 s. */
 function fakeBuses(svc) {
   const shape = shapes[svc];
   if (!shape || !running(svc)) return [];
@@ -142,8 +73,6 @@ async function feed(input, init = {}) {
     const svc = JSON.parse(init.body ?? '{}').route_code;
     return Response.json({ code: '00000', msg: '', data: { ActiveBusCount: 3, TimeStamp: '', activebus: fakeBuses(svc) } });
   }
-  // LTA DataMall: each public bus at the stop every 10 min or so, the third
-  // of them from the timetable (Monitored 0), as the real feed does at night.
   if (url.startsWith('https://datamall2.mytransport.sg/')) {
     const ltaCode = new URL(url).searchParams.get('BusStopCode') ?? '';
     const nowMin = stubNow() / 60_000;
@@ -182,11 +111,7 @@ async function feed(input, init = {}) {
       });
     return Response.json(shuttlePayload(shuttles));
   }
-  // Analytics Engine's SQL API, for the dashboard: made-up rows for its queries, none for any other.
   if (url.includes('/analytics_engine/sql')) return Response.json({ data: fakeAeRows(String(init.body ?? ''), stubNow()) ?? [] });
-  // Fake NUSMods: any module has a Monday lab, a Tuesday online tutorial and
-  // a Wednesday off-campus lecture; XX9999 is not offered, DOWN1000 answers
-  // 502 as NUSMods being down.
   const mod = /api\.nusmods\.com\/v2\/[^/]+\/modules\/([^.]+)\.json/.exec(url);
   if (mod) {
     if (mod[1] === 'XX9999') return new Response('not found', { status: 404 });
@@ -207,9 +132,7 @@ async function feed(input, init = {}) {
     ];
     return Response.json({ semesterData: [1, 2, 3, 4].map((semester) => ({ semester, timetable })) });
   }
-  // Firebase for real, with each send logged (status only; no tokens or keys).
   const res = await realFetch(input, init);
-  // Chrome's Web Push endpoints are on fcm.googleapis.com too, with an encrypted (binary) body.
   if (url.startsWith('https://fcm.googleapis.com/') && typeof init?.body === 'string')
     console.log(`push: FCM ${res.status}`, JSON.parse(init.body).message?.data ?? '');
   else if (init?.headers && new Headers(init.headers).get('content-encoding') === 'aes128gcm')
@@ -218,12 +141,11 @@ async function feed(input, init = {}) {
 }
 
 const edgeCache = installGlobals(feed);
-Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
+Date.now = stubNow;
 
 const { default: worker, GRAPH } = await import('../../src/index.ts');
 const { inService } = await import('../../src/answer/hours.ts');
 const serviceHours = GRAPH.serviceHours;
-// The real hours, or every service "running" whatever the hour (POST /__stub/hours?real=1|0).
 const realHours = (on) => {
   GRAPH.serviceHours = on ? serviceHours : {};
   running = on ? (svc) => inService(GRAPH, svc, stubNow()) : (_svc) => true;
@@ -232,8 +154,6 @@ realHours(process.env.STUB_HOURS === 'real');
 
 const db = makeD1();
 const email = makeEmail();
-// The test class, `inMin` minutes from the stub's clock (STUB_NOW included),
-// in Singapore time: late at night, on the next day.
 const classIn = (inMin) => {
   const at = new Date(stubNow() + 8 * 3_600_000 + inMin * 60_000);
   const min = at.getUTCHours() * 60 + at.getUTCMinutes();
@@ -255,18 +175,14 @@ const profile = {
   term: null,
 };
 db.exec(`INSERT INTO users (id, email, created, last_seen, via) VALUES ('test-user', 'you@u.nus.edu', 0, 0, 'web')`);
-// Version 1, as a saved profile has one: 0 is the version of no profile at all
-// (If-Match "0" saves only if there's none), so a page saving with If-Match could never save over it.
 db._db.prepare('INSERT INTO profiles VALUES (?, ?, 1)').run('test-user', JSON.stringify(profile));
 for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
-// Crowd history, so the full-bus warning shows: every bus at PGP is usually packed.
 for (const svc of servingStop.get('PGP') ?? []) {
   for (const daytype of ['term', 'exam', 'break', 'sat', 'sun']) {
     for (let slot = 0; slot < 48; slot++) db.exec(`INSERT INTO crowd_stats VALUES ('${svc}', 'PGP', '${daytype}', ${slot}, 20, 15)`);
   }
 }
 
-// The website, standing in for the Workers ASSETS binding.
 const WEB = new URL('../../../web/public/', import.meta.url).pathname;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -282,7 +198,6 @@ const ASSETS = {
     try {
       p = decodeURIComponent(new URL(req.url).pathname);
     } catch {
-      // Not a path at all ("/%E0"): as missing as any other.
       return new Response('not found', { status: 404 });
     }
     let file = path.join(WEB, p);
@@ -299,9 +214,6 @@ const ASSETS = {
   },
 };
 
-// The map's files (fonts, icons, the map file if there is one) from dev/map/,
-// standing in for R2, byte ranges and all. latest.json names this version,
-// for the landing page; there are no app files behind it.
 const MAP_DIR = new URL('../../../../dev/map/', import.meta.url).pathname;
 const FILES = makeBucket(async (key) => {
   if (key === 'latest.json') return new TextEncoder().encode(JSON.stringify({ version: API_VERSION }));
@@ -311,28 +223,15 @@ const FILES = makeBucket(async (key) => {
   return readFile(file).catch(() => null);
 });
 
-// Locked like production: the bus answers need a key or a signed-in account.
-// The /admin dashboard opens with the token "dev" here.
-// Push: the real Firebase project, when its service account is in
-// .private/ (gitignored). Pushes then reach a real device or emulator.
 const FCM = await readFile(new URL('../../../../.private/fcm-service-account.json', import.meta.url), 'utf8').catch(() => undefined);
 let env;
-// The trip engine's Durable Object, in-process; its alarms fire on time below.
 const TRIPS = makeDurableObjects(Trip, () => env);
-// The timelapse recorder, in-process too, on the fake feed.
 const TIMELAPSE = makeDurableObjects(TimelapseRecorder, () => env);
 const FEED_GATE = makeDurableObjects(FeedGate);
-/**
- * Forgets every feed answer held: the edge cache's and the feed gates'. Each
- * is fresh until its window has passed since it was fetched, so once the
- * clock goes back before that (/__stub/at) it stays fresh for good, and the
- * card counts from the other date's bus times.
- */
 function forgetFeeds() {
   edgeCache._store.clear();
   FEED_GATE.instances.clear();
 }
-// Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
 env = {
@@ -360,14 +259,11 @@ setInterval(() => {
   if (due) console.log(`trips: ${due} alarm(s) due`);
   TRIPS.fireDue(stubNow()).catch((e) => console.error('trip alarm', e));
 }, 5_000);
-// The recorder's alarms (one service every few seconds), and the cron that
-// starts each day's recorder, every minute here rather than every 15.
 setInterval(() => TIMELAPSE.fireDue(stubNow()).catch((e) => console.error('timelapse alarm', e)), 1_000);
 const startTimelapse = () => ensureRecorder(env, stubNow()).catch((e) => console.error('timelapse start', e));
 setInterval(startTimelapse, 60_000);
 startTimelapse();
 
-/** Records [minutes] of buses at once: the clock jumps from one alarm to the next. */
 async function fastForward(minutes) {
   if (!inWindow(stubNow())) skipMs += nextOpen(stubNow()) - stubNow();
   await ensureRecorder(env, stubNow());
@@ -395,7 +291,6 @@ async function serve(req, res) {
         req.on('end', () => r(Buffer.concat(chunks)));
       });
   if (req.method === 'GET' && req.url === '/__stub/trips') {
-    // Each Trip object's alarm and what it holds, for checking push.
     const out = [...TRIPS.instances.entries()].map(([id, o]) => ({
       id,
       alarm: TRIPS.alarms.has(id) ? new Date(TRIPS.alarms.get(id)).toISOString() : null,
@@ -406,15 +301,12 @@ async function serve(req, res) {
     return;
   }
   if (req.method === 'GET' && req.url === '/__stub/push') {
-    // Which devices take push, token masked: for checking registration.
     const rows = db._db.prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL').all();
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(rows.map((r) => ({ name: r.name, token: `${r.push_token.slice(0, 8)}…` }))));
     return;
   }
   if (req.method === 'POST' && req.url === '/__stub/session') {
-    // A device signed in as the test account, without a sign-in email: for an
-    // app's UI tests, which can't read the code this prints.
     const token = await openSession(db, 'test-user', 'device', 'Stub device', stubNow(), { platform: null, client: null });
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ token, email: 'you@u.nus.edu' }));
@@ -431,8 +323,6 @@ async function serve(req, res) {
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end('ok\n');
   }
-  // Back to how it started, for UI tests that each set their own world:
-  // the real clock, running, and the hours STUB_HOURS gave.
   if (req.method === 'POST' && req.url === '/__stub/reset') {
     skipMs = process.env.STUB_NOW ? Date.parse(process.env.STUB_NOW) - realNow() : 0;
     frozenAt = null;
@@ -475,9 +365,6 @@ async function serve(req, res) {
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end(frozenAt ? `frozen at ${new Date(frozenAt).toISOString()}\n` : 'running\n');
   }
-  // WebKit (iOS Safari, the installed web app) won't keep a Secure or
-  // __Host- cookie over plain http, even on localhost, so over the wire the
-  // session cookie is a plain one here and is renamed back for the Worker.
   const headers = { ...req.headers };
   if (headers.cookie) headers.cookie = headers.cookie.replace(/(^|;\s*)tm_dev=/, `$1${DEV_COOKIE}=`);
   const request = new Request(`http://localhost:${PORT}${req.url}`, { method: req.method, headers, body });
@@ -487,13 +374,10 @@ async function serve(req, res) {
   const outHeaders = Object.fromEntries(out.headers);
   const cookies = out.headers.getSetCookie();
   if (cookies.length) outHeaders['set-cookie'] = cookies.map((c) => c.replace(`${DEV_COOKIE}=`, 'tm_dev=').replace(/; Secure/i, ''));
-  // The apps set their clock by Date, so it's the stub's time: a real one
-  // would make every answer from a moved clock look hours old.
   outHeaders.date = new Date(stubNow()).toUTCString();
   res.writeHead(out.status, outHeaders);
   res.end(Buffer.from(await out.arrayBuffer()));
   if (email.sent.length) {
-    // An app's sign-in mails an approval link instead of a verify link.
     const approve = /\/auth\/approve\?r=[A-Za-z0-9_-]+/.exec(email.sent.at(-1)?.text ?? '')?.[0];
     console.log(
       'sign-in code:',
@@ -505,8 +389,6 @@ async function serve(req, res) {
   }
 }
 
-// Loopback only unless STUB_HOST says otherwise; both families, since
-// "localhost" may be either. A Mac or container without IPv6 has no ::1.
 const HOSTS = process.env.STUB_HOST ? [process.env.STUB_HOST] : ['127.0.0.1', '::1'];
 const listen = (server, port, ready) => {
   let up = 0;
@@ -525,10 +407,6 @@ listen(
   PORT,
   () => console.log(`dev API with fake buses on http://localhost:${PORT}${where} (pairing codes TEST67, TEST78, TEST89)`),
 );
-// STUB_TLS=<dir with localhost.key and localhost.pem>: the same stub over
-// HTTPS on PORT + 1, for browsers that need a real secure origin (Web Push on
-// iOS). Trust the certificate's CA in the device first; a phone also needs
-// STUB_HOST to reach it.
 if (process.env.STUB_TLS) {
   const tls = process.env.STUB_TLS;
   const [key, cert] = await Promise.all([readFile(path.join(tls, 'localhost.key')), readFile(path.join(tls, 'localhost.pem'))]);

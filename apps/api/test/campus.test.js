@@ -27,30 +27,28 @@ test('buildCampusMap projects every core stop inside its own viewBox', () => {
 });
 
 test('buildCampusMap flags the real off-campus outliers, not the dense cluster', () => {
-  // The campus's stops sit within ~1.1 km of its centre; BG-MRT, OTH and CG
-  // at ~5.3 km+ on P's excursion to Botanic Gardens MRT. A wrong
-  // classification here would either shrink the whole map to fit the far
-  // stops, or silently drop real campus stops from the map. A new stop on
-  // campus, or another far one, changes neither.
   const map = buildCampusMap(realGraph);
   const byCode = new Map(map.stops.map((s) => [s.code, s]));
   for (const code of ['BG-MRT', 'OTH', 'CG']) {
-    assert.equal(byCode.get(code)?.core, false, `${code} should be classified as an off-campus outlier`);
+    assert.equal(
+      byCode.get(code)?.core,
+      false,
+      `${code}, ~5 km out on P's excursion to Botanic Gardens MRT, is an off-campus outlier the map does not shrink to fit`,
+    );
   }
   const mid = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   const centre = { lat: mid(realGraph.stops.map((s) => s.lat)), lon: mid(realGraph.stops.map((s) => s.lon)) };
   const near = map.stops.filter((s) => haversineM(centre.lat, centre.lon, s.lat, s.lon) < 2_000);
   assert.ok(near.length >= 20, `only ${near.length} stops within 2 km of ${centre.lat}, ${centre.lon}`);
-  for (const s of near) assert.equal(s.core, true, `${s.code} is on campus`);
+  for (const s of near) assert.equal(s.core, true, `${s.code} is on campus and stays on the map`);
 });
 
 test('buildCampusMap keeps real relative geography: two stops far apart in lat/lon project far apart', () => {
-  // COM3 and PGP are on opposite ends of the D2 loop.
   const map = buildCampusMap(realGraph);
   const byCode = new Map(map.stops.map((s) => [s.code, s]));
   const com3 = byCode.get('COM3');
   const pgp = byCode.get('PGP');
-  assert.ok(com3 && pgp, 'fixture must carry both stops');
+  assert.ok(com3 && pgp, 'COM3 and PGP, at opposite ends of the D2 loop');
   const d = Math.hypot(com3.x - pgp.x, com3.y - pgp.y);
   assert.ok(d > 50, `COM3/PGP projected only ${d}px apart -- projection collapsed`);
 });
@@ -129,9 +127,8 @@ test('the search list has no junk: no internal ids, bare room numbers or unnamed
     assert.ok(!/^\d+$/.test(d.code), `bare number ${d.code}`);
     if (d.kind === 'building') assert.notEqual(d.label, d.code, `${d.code} has no name`);
   }
-  // Junk stays in the import lookup table, just never listed.
-  assert.ok(venuesJson.venues['1770998002592394']);
-  assert.ok(!dest.some((d) => d.code === '1770998002592394'));
+  assert.ok(venuesJson.venues['1770998002592394'], 'junk stays in the import lookup table');
+  assert.ok(!dest.some((d) => d.code === '1770998002592394'), 'but is never listed');
   const lt27 = dest.find((d) => d.code === 'LT27');
   assert.ok(lt27, 'lecture theatres are searchable');
   const room = dest.find((d) => d.kind === 'room' && d.label !== d.code);
@@ -152,8 +149,8 @@ test('nicknames: faculty short names and the obvious ones', () => {
 
 test('boardAt: live etas sort first, an ended service is dropped, an unreachable feed is unknown not silent', () => {
   const idx = indexGraph(GRAPH);
-  const stopCode = 'COM3'; // hosts D1 and D2 in the fixture graph
-  const nowMs = Date.parse('2026-03-02T05:00:00Z'); // 13:00 SGT, well inside service hours
+  const stopCode = 'COM3';
+  const nowMs = Date.parse('2026-03-02T05:00:00Z');
 
   const sa = {
     code: stopCode,
@@ -171,11 +168,9 @@ test('boardAt: live etas sort first, an ended service is dropped, an unreachable
 
   assert.equal(bySvc.get('D2').quality, 'live');
   assert.equal(bySvc.get('D2').etaS, 240);
-  // D1 answered with nothing boardable -- a headway guess, not a live time.
-  assert.equal(bySvc.get('D1').quality, 'scheduled');
+  assert.equal(bySvc.get('D1').quality, 'scheduled', 'D1 answered with nothing boardable: a headway guess, not a live time');
   assert.equal(bySvc.get('D1').etaS, null);
-  // live sorts ahead of scheduled regardless of service name.
-  assert.equal(rows[0].svc, 'D2');
+  assert.equal(rows[0].svc, 'D2', 'live sorts ahead of scheduled, whatever the name');
 });
 
 test('boardAt: the buses after the next one come in later, soonest first, each keeping its own quality', () => {
@@ -186,7 +181,6 @@ test('boardAt: the buses after the next one come in later, soonest first, each k
     arrivals: [
       { svc: 'D2', etaS: 900, crowd: null, plate: 'PA2', berth: 'COM3-D2-S', scheduled: true },
       { svc: 'D2', etaS: 240, crowd: null, plate: 'PA1', berth: 'COM3-D2-S' },
-      // A run ending here is not a bus you can board, now or later.
       { svc: 'D2', etaS: 60, crowd: null, plate: 'PA0', berth: 'COM3-D2-E', ends: true },
       { svc: 'D1', etaS: 120, crowd: null, plate: 'PB1', berth: null },
     ],
@@ -195,7 +189,7 @@ test('boardAt: the buses after the next one come in later, soonest first, each k
     available: true,
   };
   const bySvc = new Map(boardAt(GRAPH, idx, 'COM3', sa, nowMs).map((r) => [r.svc, r]));
-  assert.equal(bySvc.get('D2').etaS, 240);
+  assert.equal(bySvc.get('D2').etaS, 240, 'a run ending here is not a bus you can board, now or later');
   assert.deepEqual(bySvc.get('D2').later, [{ etaS: 900, quality: 'scheduled', eta: '~15 min' }]);
   assert.deepEqual(bySvc.get('D1').later, []);
 });
@@ -203,12 +197,11 @@ test('boardAt: the buses after the next one come in later, soonest first, each k
 test('boardAt: an old answer counts from now, its gone buses dropped, and boardAsOf says how old', () => {
   const idx = indexGraph(GRAPH);
   const nowMs = Date.parse('2026-03-02T05:00:00Z');
-  // Fetched four minutes ago, and stale since.
   const fetchedAt = nowMs - 240_000;
   const sa = {
     code: 'COM3',
     arrivals: [
-      { svc: 'D2', etaS: 120, crowd: null, plate: 'PA0', berth: null }, // left two minutes ago
+      { svc: 'D2', etaS: 120, crowd: null, plate: 'PA0', berth: null },
       { svc: 'D2', etaS: 420, crowd: null, plate: 'PA1', berth: null },
       { svc: 'D2', etaS: 900, crowd: null, plate: 'PA2', berth: null, scheduled: true },
       { svc: 'D1', etaS: 600, crowd: null, plate: 'PB1', berth: null, scheduled: true },
@@ -223,12 +216,14 @@ test('boardAt: an old answer counts from now, its gone buses dropped, and boardA
   assert.equal(d2.quality, 'stale');
   assert.equal(d2.eta, '~3 min');
   assert.deepEqual(d2.later, [{ etaS: 660, quality: 'scheduled', eta: '~11 min' }]);
-  // A timetable time keeps its quality, counted from now too.
-  assert.equal(bySvc.get('D1').etaS, 360);
+  assert.equal(bySvc.get('D1').etaS, 360, 'a timetable time keeps its quality, counted from now too');
   assert.equal(bySvc.get('D1').eta, '~6 min');
-  // The board is as old as its oldest feed; one that never answered doesn't count.
   const down = { code: 'X', arrivals: [], fetchedAt: nowMs, stale: false, available: false };
-  assert.equal(boardAsOf([sa, down, undefined], nowMs), fetchedAt);
+  assert.equal(
+    boardAsOf([sa, down, undefined], nowMs),
+    fetchedAt,
+    "the board is as old as its oldest feed; one that never answered doesn't count",
+  );
   assert.equal(boardAsOf([down], nowMs), nowMs);
 });
 
@@ -242,7 +237,6 @@ test('boardAt: a feed that never answered is unknown, never a fabricated time', 
 
 test('boardAt: each row has its colour, where it goes, how full the first bus is and when the service ends', () => {
   const idx = indexGraph(REAL);
-  // Wednesday 7 October 2026, 13:00 in Singapore.
   const nowMs = Date.parse('2026-10-07T05:00:00Z');
   const sa = {
     code: 'YIH',
@@ -258,7 +252,6 @@ test('boardAt: each row has its colour, where it goes, how full the first bus is
   const bySvc = new Map(boardAt(REAL, idx, 'YIH', sa, nowMs).map((r) => [r.svc, r]));
   const k = bySvc.get('K');
   assert.equal(k.color, '#2b9ad6');
-  // K runs YIH, CLB, ... and ends at PGP Foyer: the next stop, then the end, by their full names.
   assert.deepEqual(k.towards, ['Central Library', "Prince George's Park Foyer"]);
   assert.equal(k.crowd, 'high', 'the first bus’s, not the later one’s');
   assert.equal(k.endsAt, '2026-10-07T15:04:00.000Z', 'K runs until 23:04 on a weekday');
@@ -269,20 +262,17 @@ test('boardAt: each row has its colour, where it goes, how full the first bus is
 
 test('towards: a loop runs on from its last stop to its first; the end of a line goes nowhere', () => {
   const idx = indexGraph(REAL);
-  // D1's last stop before COM3 again: the next stop is the end, so one name.
-  assert.deepEqual(towardsFrom(idx, 'D1', 'BIZ2'), ['COM 3']);
+  assert.deepEqual(towardsFrom(idx, 'D1', 'BIZ2'), ['COM 3'], "from D1's last stop the next stop is the end: one name");
   assert.deepEqual(towardsFrom(idx, 'D1', 'COM3'), ['Opp HSSML', 'COM 3']);
-  // K ends at PGP Foyer and does not loop.
-  assert.deepEqual(towardsFrom(idx, 'K', 'PGPR'), []);
+  assert.deepEqual(towardsFrom(idx, 'K', 'PGPR'), [], 'K ends at PGP Foyer and does not loop');
   assert.deepEqual(towardsFrom(idx, 'K', 'NOPE'), []);
   assert.deepEqual(towardsFrom(idx, 'Z9', 'YIH'), []);
-  // A route calling at a stop twice goes on from its first call there.
   const twice = indexGraph({
     stops: ['A', 'B', 'C'].map((code) => ({ code, name: code })),
     routes: { X: ['A', 'B', 'A', 'C'] },
     loops: { X: false },
   });
-  assert.deepEqual(towardsFrom(twice, 'X', 'A'), ['B', 'C']);
+  assert.deepEqual(towardsFrom(twice, 'X', 'A'), ['B', 'C'], 'a route calling at a stop twice goes on from its first call there');
 });
 
 test('boardAt: a public bus has no colour of its own and still says where it goes', () => {
@@ -302,37 +292,29 @@ test('boardAt: a public bus has no colour of its own and still says where it goe
   }
 });
 
-// Singapore time, as epoch ms: October 2026 has no public holidays on these days.
 const sgtAt = (day, h, m = 0) => Date.UTC(2026, 9, day, h - 8, m);
 const iso = (ms) => new Date(ms).toISOString();
 
 test('stopped services: ended for today, not yet started, or no service today, and when each is back', () => {
-  // Wednesday 7 October, 21:30: R1 finished at 19:30 and is back Thursday at 07:40.
-  assert.equal(stoppedReason(REAL, 'R1', sgtAt(7, 21, 30)), 'ended');
+  assert.equal(stoppedReason(REAL, 'R1', sgtAt(7, 21, 30)), 'ended', 'Wednesday 21:30: R1 finished at 19:30, back Thursday 07:40');
   assert.equal(iso(serviceResumesAt(REAL, 'R1', sgtAt(7, 21, 30))), '2026-10-07T23:40:00.000Z');
-  // Saturday 10 October, 09:00: R1 doesn't run at weekends; back Monday 12th at 07:40.
-  assert.equal(stoppedReason(REAL, 'R1', sgtAt(10, 9)), 'noService');
+  assert.equal(stoppedReason(REAL, 'R1', sgtAt(10, 9)), 'noService', "R1 doesn't run at weekends");
   assert.equal(iso(serviceResumesAt(REAL, 'R1', sgtAt(10, 9))), iso(sgtAt(12, 7, 40)));
-  // A weekday at 06:00: K starts at 07:04.
-  assert.equal(stoppedReason(REAL, 'K', sgtAt(7, 6)), 'notYet');
+  assert.equal(stoppedReason(REAL, 'K', sgtAt(7, 6)), 'notYet', 'K starts at 07:04');
   assert.equal(iso(serviceResumesAt(REAL, 'K', sgtAt(7, 6))), iso(sgtAt(7, 7, 4)));
-  // Running: no reason. Unknown hours count as running, and have no next start.
   assert.equal(stoppedReason(REAL, 'R1', sgtAt(7, 12)), null);
   assert.equal(stoppedReason(REAL, 'Z9', sgtAt(7, 3)), null);
-  assert.equal(serviceResumesAt(REAL, 'Z9', sgtAt(7, 3)), null);
-  // Christmas Day 2026 is a Friday and a public holiday: Sunday hours, so R1 is
-  // off from the Thursday evening until Monday 28th.
-  assert.equal(stoppedReason(REAL, 'R1', Date.UTC(2026, 11, 25, 2)), 'noService');
+  assert.equal(serviceResumesAt(REAL, 'Z9', sgtAt(7, 3)), null, 'unknown hours count as running, with no next start');
+  assert.equal(stoppedReason(REAL, 'R1', Date.UTC(2026, 11, 25, 2)), 'noService', 'Christmas Day is a public holiday: Sunday hours');
   assert.equal(iso(serviceResumesAt(REAL, 'R1', Date.UTC(2026, 11, 24, 13))), iso(Date.UTC(2026, 11, 27, 23, 40)));
-  // Never runs: nothing found.
   const never = { ...REAL, serviceHours: { X: { weekday: null, saturday: null, sunday: null } } };
-  assert.equal(stoppedReason(never, 'X', sgtAt(7, 12)), 'noService');
+  assert.equal(stoppedReason(never, 'X', sgtAt(7, 12)), 'noService', 'never runs');
   assert.equal(serviceResumesAt(never, 'X', sgtAt(7, 12)), null);
 });
 
 test('boardAt with stopped: services outside their hours come last, greyed, unless the feed still has a bus', () => {
   const idx = indexGraph(REAL);
-  const nowMs = sgtAt(7, 21, 30); // R1 and R2 have finished
+  const nowMs = sgtAt(7, 21, 30);
   const sa = {
     code: 'PGP',
     arrivals: [{ svc: 'K', etaS: 120, crowd: 'low', plate: 'PK1', berth: null }],
@@ -369,23 +351,19 @@ test('boardAt with stopped: services outside their hours come last, greyed, unle
     running: false,
     stopped: 'ended',
     resumesAt: '2026-10-07T23:40:00.000Z',
-    // Not running: no time to give, but still where it goes.
     eta: null,
     laterText: null,
     toText: r1.toText,
   });
-  // The feed still reporting an R1 at PGP: the feed wins, and it is a running row.
   const late = { ...sa, arrivals: [...sa.arrivals, { svc: 'R1', etaS: 300, crowd: null, plate: 'PR1', berth: null }] };
   const r1Live = boardAt(REAL, idx, 'PGP', late, nowMs, { stopped: true }).find((r) => r.svc === 'R1');
-  assert.equal(r1Live.running, true);
+  assert.equal(r1Live.running, true, 'the feed still reporting an R1 wins: a running row');
   assert.equal(r1Live.etaS, 300);
   assert.equal('stopped' in r1Live, false);
 });
 
 test("before a service opens, the feed's times hours ahead are not shown as live buses", () => {
   const idx = indexGraph(REAL);
-  // Thursday 8 October, 01:13: A2 and D2 open at 07:15. NUS's feed still
-  // lists them, hours ahead and off their hours (an A2 at 09:16): no bus.
   const night = sgtAt(8, 1, 13);
   const sa = (nowMs, arrivals) => ({ code: 'PGPR', arrivals, fetchedAt: nowMs, stale: false, available: true });
   const far = sa(night, [
@@ -401,20 +379,17 @@ test("before a service opens, the feed's times hours ahead are not shown as live
   }
   assert.ok(!boardAt(REAL, idx, 'PGPR', far, night).some((r) => r.svc === 'A2'), 'left out of a board without stopped ones');
 
-  // A bus still out from the night before (due before the opening) is live.
   const late = boardAt(REAL, idx, 'PGPR', sa(night, [{ svc: 'A2', etaS: 120, crowd: null, plate: 'PA1', berth: null }]), night);
-  assert.equal(late.find((r) => r.svc === 'A2').quality, 'live');
+  assert.equal(late.find((r) => r.svc === 'A2').quality, 'live', 'a bus still out from the night before is live');
 
-  // 07:05, the first A2 due at 07:20: shown, but as the timetable's time.
   const early = sgtAt(8, 7, 5);
   const first = boardAt(REAL, idx, 'PGPR', sa(early, [{ svc: 'A2', etaS: 900, crowd: null, plate: 'PA1', berth: null }]), early).find(
     (r) => r.svc === 'A2',
   );
   assert.equal(first.running, true);
-  assert.equal(first.quality, 'scheduled');
+  assert.equal(first.quality, 'scheduled', "the first A2, before the opening, as the timetable's time");
   assert.equal(first.eta, '~15 min');
 
-  // The rule itself: kept up to the lead, dropped past it, untouched while it runs.
   const at = (etaS) => [{ svc: 'A2', etaS, crowd: null, plate: null, berth: null }];
   const open = sgtAt(8, 7, 15);
   assert.equal(beforeOpening(REAL, 'A2', at(open / 1000 - early / 1000 + FIRST_BUS_LEAD_S), early, early).length, 0, 'past the lead');
@@ -433,10 +408,7 @@ test('food courts are in the search, each with both of its stops', () => {
   assert.deepEqual(dest.find((d) => d.code === 'FRONTIER-FOOD').stops, ['S17', 'LT27']);
 });
 
-// Text on a service's colour is white or near-black (#1c1917), whichever
-// reads better (account/dom.js inkOn, and the apps): one of them must reach
-// WCAG's 4.5:1 on every colour.
-test('every service colour has an ink that reads on it', () => {
+test('every service colour has an ink, white or near-black #1c1917 as inkOn picks, that reaches WCAG 4.5:1 on it', () => {
   const lum = (hex) => {
     const n = parseInt(hex.slice(1), 16);
     const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -465,11 +437,10 @@ test('every route is drawn along the roads, through its own stops', () => {
     const r = map.routes[svc];
     assert.equal(r.shaped, true, `${svc} has no road shape for its current stops: run scripts/data/route_shapes.py`);
     assert.ok(r.line.length > seq.length, `${svc} line is too coarse`);
-    // Each stop is near the line (it joined the road there).
     for (const code of seq) {
       const st = byCode.get(code);
       const near = Math.min(...r.line.map(([lon, lat]) => Math.hypot((lon - st.lon) * 111_320, (lat - st.lat) * 110_540)));
-      assert.ok(near < 70, `${svc}: ${code} is ${Math.round(near)} m from the line`);
+      assert.ok(near < 70, `${svc}: ${code} is ${Math.round(near)} m from the line it joined the road at`);
     }
   }
 });
@@ -502,9 +473,7 @@ test('search lists each place once: LT3 is a building and a room of the same nam
   assert.equal(dest.filter((d) => d.code === 'LT3').length, 1);
 });
 
-test('code-unit order lists the same buildings and residences as localeCompare did, for the real data', async () => {
-  // buildDestinations keeps the first code of each building (by label and
-  // stop), shortest first: the winner must not depend on the tie-break.
+test('code-unit order picks the same first code per building and lists residences as localeCompare did, for the real data', async () => {
   const entries = Object.entries(venuesJson.venues);
   const winners = (cmp) => {
     const won = new Map();
@@ -545,7 +514,10 @@ test('boardAt: a service whose rows the feed garbled has no data; the rest of th
   assert.equal(bySvc.get('D1').etaS, 120);
   assert.equal(bySvc.get('D2').quality, 'unknown', 'no data, not a headway guess');
   assert.equal(bySvc.get('D2').etaS, null);
-  // Without the mark, a service with no rows is the feed's "no bus": a guess.
   const { unread: _u, ...read } = sa;
-  assert.equal(new Map(boardAt(GRAPH, idx, 'COM3', read, nowMs).map((r) => [r.svc, r])).get('D2').quality, 'scheduled');
+  assert.equal(
+    new Map(boardAt(GRAPH, idx, 'COM3', read, nowMs).map((r) => [r.svc, r])).get('D2').quality,
+    'scheduled',
+    'without the mark, no rows is the feed\'s "no bus": a guess',
+  );
 });

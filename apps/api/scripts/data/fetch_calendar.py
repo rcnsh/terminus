@@ -35,7 +35,6 @@ HOLIDAYS = (
     "?resource_id=d_8ef23381f9417e4d4254ee8b4dcdb176&limit=1000"
 )
 
-# Both replies are tens of KB; one this big is not the calendar.
 MAX_BYTES = 5_000_000
 
 
@@ -69,7 +68,7 @@ def main() -> None:
     semesters = []
     for ay, sems in sorted(get_json(NUSMODS).items()):
         if int(ay.split("/")[1]) < this_year - 1:
-            continue  # long past
+            continue
         for sem, cfg in sorted(sems.items()):
             y, m, d = cfg["start"]
             semesters.append({"acadYear": ay, "semester": int(sem), "start": f"{y:04d}-{m:02d}-{d:02d}"})

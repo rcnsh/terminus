@@ -61,7 +61,6 @@ async function call(env, path, { method = 'GET', body, token, form, cookie, key,
   return res;
 }
 
-/** Full email sign-in; returns the cookie header value. */
 async function signIn(env, email) {
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } });
@@ -133,9 +132,8 @@ test('opening the link does not spend it; the POST does, once', async () => {
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const t = email.lastToken();
 
-  // A mail scanner fetching the link must not use it up.
   const get = await call(env, `/auth/verify?t=${t}`);
-  assert.equal(get.status, 200);
+  assert.equal(get.status, 200, 'a mail scanner fetching the link must not use it up');
   assert.match(await get.text(), /method="post"/);
 
   const first = await call(env, '/auth/verify', { method: 'POST', form: { t } });
@@ -194,9 +192,6 @@ test('another site cannot post a sign-in link or a sign-out', async () => {
 });
 
 test('a page on a sibling subdomain cannot change the account with the session cookie', async () => {
-  // The beta and any other *.terminus.run host are the same site, so the Lax
-  // cookie goes with their POSTs. A type that only mentions JSON needs no
-  // preflight, so it's refused as JSON too.
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const raw = async (path, headers, body) => {
@@ -209,9 +204,12 @@ test('a page on a sibling subdomain cannot change the account with the session c
   assert.equal((await raw('/api/me/pair-code', { cookie, 'sec-fetch-site': 'same-site' })).status, 403);
   assert.equal((await raw('/api/me/feedback', { ...sneaky, cookie, 'sec-fetch-site': 'same-site' }, '{"note":"hi"}')).status, 403);
   assert.equal((await raw('/api/auth/code', { ...sneaky, 'sec-fetch-site': 'same-site' }, '{}')).status, 403);
-  // Without the header check (an old browser), the body isn't read as JSON.
   const before = email.sent.length;
-  assert.equal((await raw('/api/auth/login', sneaky, JSON.stringify({ email: INVITED }))).status, 400);
+  assert.equal(
+    (await raw('/api/auth/login', sneaky, JSON.stringify({ email: INVITED }))).status,
+    400,
+    'an old browser without the header: not read as JSON',
+  );
   assert.equal(email.sent.length, before);
   assert.equal((await raw('/api/me/pair-code', { cookie, 'sec-fetch-site': 'same-origin' })).status, 200);
   assert.equal(
@@ -238,9 +236,8 @@ test('a repeated sign-in request in its cooldown does not spend the global email
   env.RL_MAIL = { limit: async () => ({ success: false }) };
   const busy = await call(env, '/api/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } });
   assert.equal(busy.status, 429);
-  // A blocked address answers the same as anyone else when it's busy.
   const blocked = await call(env, '/api/auth/login', { method: 'POST', body: { email: BLOCKED } });
-  assert.equal(blocked.status, 429);
+  assert.equal(blocked.status, 429, 'a blocked address answers the same as anyone else when busy');
 });
 
 test('pairing codes have one ceiling for everyone, on lookups and redeems', async () => {
@@ -272,7 +269,6 @@ test('the emailed code signs in once, and spends the link with it', async () => 
   assert.equal(msg.subject, `Your terminus code: ${code}`);
   assert.match(msg.text, /because someone entered this address/);
 
-  // Case, spaces and a dash are forgiven, as with pairing codes.
   const typed = `${code.slice(0, 3).toLowerCase()} -${code.slice(3)}`;
   const res = await call(env, '/api/auth/code', { method: 'POST', body: { email: ' Friend@U.NUS.edu', code: typed } });
   assert.equal(res.status, 200);
@@ -366,8 +362,6 @@ test('on the beta, emails come from "terminus beta" and link to the beta site', 
 test('with LINK_ORIGIN, emailed links go there: the old address, if a network refuses terminus.run', async () => {
   const { env, email } = setup();
   env.LINK_ORIGIN = 'https://terminus.rcn.sh';
-  // Sign-in links point at the request's own origin here (a .test host
-  // counts as local), so the new-device email, which always uses the site's, shows it.
   const cookie = await signIn(env, email);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
   await call(env, '/api/pair', { method: 'POST', body: { code, name: 'Pixel' } });
@@ -426,7 +420,6 @@ test('pairing: an app that names its platform in the body, with no client header
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
-  // As /api/auth/anon and /api/auth/app/start take it: an iPhone sideload has no header to send.
   const paired = await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone', platform: 'ios' } });
   assert.equal(paired.status, 200);
   const { devices } = await (await call(env, '/api/me/devices', { cookie })).json();
@@ -456,7 +449,6 @@ test('a web session in use renews itself; a fresh one is left alone', async () =
   assert.equal(fresh.status, 200);
   assert.equal(fresh.headers.get('set-cookie'), null, 'nothing to renew yet');
 
-  // A week and a bit from the end: the next page load extends it to 30 days again.
   const soon = Date.now() + 8 * 86_400_000;
   db.exec(`UPDATE sessions SET expires = ${soon}`);
   const res = await call(env, '/api/me', { cookie });
@@ -472,7 +464,6 @@ test('a web session in daily use still ends 180 days after sign-in, except with 
   const old = Date.now() - 181 * 86_400_000;
   db.exec(`UPDATE sessions SET created = ${old}, expires = ${Date.now() + 20 * 86_400_000}`);
   assert.equal((await call(env, '/api/me', { cookie })).status, 401);
-  // An account with no email keeps its browser: it has no other way in.
   const anon = db._db.prepare('SELECT user_id FROM sessions').get().user_id;
   db.exec(`UPDATE users SET email = NULL WHERE id = '${anon}'`);
   assert.equal((await call(env, '/api/me', { cookie })).status, 200);
@@ -513,10 +504,9 @@ test('profile: defaults, validated writes, and unknown stops rejected', async ()
   assert.equal(saved.places[0].to, 'KR-MRT');
   assert.deepEqual(saved.pinnedStops, []);
 
-  // Pins: shuttle stops, or a public stop of its own by LTA's code.
   const pinned = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { ...saved, pinnedStops: ['YIH', '16009', 'yih'] } });
   assert.equal(pinned.status, 200);
-  assert.deepEqual((await pinned.json()).pinnedStops, ['YIH', '16009']);
+  assert.deepEqual((await pinned.json()).pinnedStops, ['YIH', '16009'], "shuttle stops, or a public stop by LTA's code");
   assert.deepEqual(
     (await (await call(env, '/api/me/profile', { cookie })).json()).pinnedStops,
     ['YIH', '16009'],
@@ -581,10 +571,9 @@ test('/api/me/next reads the profile with the session, in one D1 round trip, and
   assert.ok(named(next[0]).tookMs >= 0);
   assert.deepEqual(next[0].indexes, ['next']);
 
-  // Other routes read the session alone, and the profile as they did.
   asked.length = 0;
   await call(env, '/api/me/profile', { cookie });
-  assert.ok(!asked.some((q) => /LEFT JOIN profiles/.test(q)));
+  assert.ok(!asked.some((q) => /LEFT JOIN profiles/.test(q)), 'other routes read the session alone');
   assert.ok(asked.some((q) => /FROM profiles WHERE user_id/.test(q)));
 });
 
@@ -622,8 +611,7 @@ test('/api/me/nearby lists boards for stops near the given point', async () => {
   const body = await res.json();
   assert.ok(body.stops.length >= 1);
   assert.equal(body.stops[0].stop.code, 'PGP');
-  // Its opposite or partner stop is always there, for the widget to swap to.
-  assert.equal(body.stops[0].opposite, 'PGPR');
+  assert.equal(body.stops[0].opposite, 'PGPR', 'its opposite or partner stop is there, for the widget to swap to');
   assert.ok(body.stops.some((s) => s.stop.code === 'PGPR'));
   assert.ok(
     body.stops.every((s) => s.board.every((r) => r.running === true)),
@@ -648,7 +636,6 @@ test('/api/me/stops: the stops asked for, as Nearby shows them, with your walk o
   assert.equal(body.stops[0].walkS, pgp.walkS, 'and the same walk');
   assert.ok(body.stops[0].board.every((r) => typeof r.dest === 'string'));
 
-  // A pinned stop only public buses call at is there with public buses off, as on /api/arrivals.
   const pub = await (await call(env, '/api/me/stops?codes=YIH,16009', { cookie })).json();
   assert.deepEqual(
     pub.stops.map((s) => s.stop.code),
@@ -666,7 +653,7 @@ test('/api/me/stops: the stops asked for, as Nearby shows them, with your walk o
 test('/api/me/nearby?stopped=1 lists the services not running too', async () => {
   const { env, email } = setup();
   const realNow = Date.now;
-  Date.now = () => Date.UTC(2026, 9, 7, 13, 30); // Wednesday 21:30 in Singapore
+  Date.now = () => Date.UTC(2026, 9, 7, 13, 30);
   try {
     const cookie = await signIn(env, email);
     const body = await (await call(env, '/api/me/nearby?lat=1.2918&lon=103.7804&stopped=1', { cookie })).json();
@@ -706,7 +693,7 @@ test('/api/me/next rests outside the day, but favourites still answer', async ()
       manual: [{ day: 5, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030 @ COM1' }],
     },
   });
-  installGlobals(makeFetch(), Date.UTC(2026, 7, 27, 12, 30)); // Thu 20:30 SGT
+  installGlobals(makeFetch(), Date.UTC(2026, 7, 27, 12, 30));
   const rest = await (await call(env, '/api/me/next', { cookie })).json();
   assert.equal(rest.mode, 'rest');
   assert.equal(rest.label, 'Done for today');
@@ -736,7 +723,6 @@ test('delete account removes every row for the user', async () => {
   const { token } = await (await call(env, '/api/pair', { method: 'POST', body: { code } })).json();
   assert.equal((await call(env, '/api/me', { method: 'DELETE', token })).status, 403, 'a device cannot delete the account');
 
-  // Something in every table that holds the account's data.
   assert.ok((await call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).ok);
   assert.ok((await call(env, '/api/me/feedback', { method: 'POST', cookie, body: { kind: 'other', note: 'hello', platform: 'web' } })).ok);
   const userId = db._db.prepare('SELECT id FROM users').get().id;
@@ -744,7 +730,6 @@ test('delete account removes every row for the user', async () => {
   db.exec(`INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES ('${userId}', 'home:1080', 'quiet', 'Home', 0)`);
   db.exec(`INSERT INTO login_requests (id, email, poll_hash, link_hash, code_hash, match, device_name, platform, status, created, expires)
     VALUES ('r', '${INVITED}', 'p', 'l', 'c', 7, 'Pixel', 'android', 'pending', 0, ${Date.now() + 60_000})`);
-  // A sign-in code still waiting in KV for the address.
   const codeKey = `code:${await hashToken(INVITED)}`;
   await env.KV.put(codeKey, '{}');
 
@@ -848,7 +833,6 @@ test('sign out everywhere also cancels pairing codes and sign-in links made befo
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const { code } = await (await call(env, '/api/me/pair-code', { method: 'POST', cookie })).json();
-  // A second browser asks for a link and waits (past the cooldown).
   const realNow = Date.now;
   Date.now = () => realNow() + 120_000;
   try {
@@ -888,7 +872,6 @@ test('every limit that refuses says when to try again', async () => {
   const cookie = await signIn(env, email);
   const never = { limit: async () => ({ success: false }) };
   const share = 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1';
-  // Each limiter refused on its own, on every route it guards.
   const cases = [
     ['RL_PUBLIC', 'GET', '/api/auth/config'],
     ['RL_PUBLIC', 'POST', '/auth/verify', { form: { t: 'x' } }],
@@ -931,7 +914,7 @@ test('no 429 in the API goes out without a retry-after', () => {
 
 test('signed in, the map and answers are limited per account, not per IP', async () => {
   const { env, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
+  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const never = { limit: async () => ({ success: false }) };
   assert.equal((await call({ ...env, RL_PUBLIC: never }, '/api/campus', { cookie })).status, 200);
@@ -946,7 +929,6 @@ test('signed in, the map and answers are limited per account, not per IP', async
   assert.equal((await call(env, '/api/campus')).status, 401);
 });
 
-/** A global fetch that answers NUSMods module requests, and delegates the rest. */
 function withNusmods(modules, { down = [] } = {}) {
   const inner = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
@@ -1137,7 +1119,6 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const errors = [];
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
-  // A fault (here a missing column), not D1 being away for a moment.
   env.DB.prepare = () => {
     throw new Error('D1_ERROR: no such column: secret_internals');
   };
@@ -1184,7 +1165,6 @@ test('/api/me/next carries refreshAt: the next class start while one is ahead', 
     body: { home: { stops: ['PGP'] }, manual: [{ day: 4, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030' }] },
   });
   const body = await (await call(env, '/api/me/next', { cookie })).json();
-  // Frozen clock: Thursday 09:00 SGT. The return-at mark for this class is 09:00 itself, so 10:00 is next.
   assert.equal(body.refreshAt, '2026-08-27T02:00:00Z');
   const place = await (await call(env, '/api/me/next?to=UTOWN', { cookie })).json();
   assert.equal(place.refreshAt, undefined);
@@ -1195,8 +1175,6 @@ test('the sign-in page names the account and refuses a dead link up front; the c
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const page = await call(env, `/auth/verify?t=${email.lastToken()}`);
   const html = await page.text();
-  // The whole address: a masked one (f•••@u.nus.edu) can't be told apart
-  // from a forwarded link to someone else's account at the same domain.
   assert.match(html, /friend@u\.nus\.edu/);
   assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
@@ -1225,7 +1203,6 @@ test('/api/me/next: a class carries a leave-by time, moved by the walk from home
   const a = await (await call(env, '/api/me/next', { cookie })).json();
   assert.equal(a.dest.why, 'class');
   assert.ok(a.leave, 'a class has a leave-by');
-  // Before the 11:00 class, and no live times two hours out.
   assert.ok(Date.parse(a.leave.at) < Date.parse('2026-08-27T03:00:00Z'));
   await put(5);
   const b = await (await call(env, '/api/me/next', { cookie })).json();
@@ -1236,8 +1213,6 @@ test('/api/me/next: a class carries a leave-by time, moved by the walk from home
 test('/api/me/next between classes counts the walk from the last room to its stop', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  // Frozen clock: Thursday 09:00. An 08:00 class in the Arts building (a short
-  // walk to AS5) just ended; the next is at 10:00.
   const put = (venue) =>
     call(env, '/api/me/profile', {
       method: 'PUT',
@@ -1279,11 +1254,8 @@ test('/api/me/next: a slower walking pace means leaving earlier', async () => {
   const normal = await (await call(env, '/api/me/next', { cookie })).json();
   await put('slow');
   const slow = await (await call(env, '/api/me/next', { cookie })).json();
-  // At least the extra time on the room's walk; more when the slower walk
-  // changes which way wins.
   assert.ok(Date.parse(normal.leave.at) - Date.parse(slow.leave.at) >= (Math.round(m / 1.1) - Math.round(m / 1.3)) * 1000);
-  // The speed comes with the answer, for walk times the apps show themselves (search).
-  assert.equal(normal.walkSpeedMs, 1.3);
+  assert.equal(normal.walkSpeedMs, 1.3, 'the speed comes with the answer, for walk times the apps show themselves');
   assert.equal(slow.walkSpeedMs, 1.1);
 });
 
@@ -1312,9 +1284,8 @@ test('a food court works as a favourite and a destination', async () => {
   const next = await (await call(env, '/api/me/next?place=deck', { cookie })).json();
   assert.equal(next.dest.to, 'THE-DECK');
   assert.equal(next.dest.label, 'Deck');
-  // Routed from home to one of its stops, not a setup or "no start" answer.
   assert.equal(next.stop.code, 'PGP');
-  assert.doesNotMatch(next.label, /Set up|No start point/);
+  assert.doesNotMatch(next.label, /Set up|No start point/, 'routed from home to one of its stops');
 });
 
 test('/api/me/next in your residence: "You\'re home" after the last class, leave-by in a long gap', async () => {
@@ -1326,7 +1297,6 @@ test('/api/me/next in your residence: "You\'re home" after the last class, leave
   );
   const put = (manual) => call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, manual } });
 
-  // Frozen clock: Thursday 09:00. The only class ended at 08:50.
   await put([{ day: 4, arriveByMin: 480, endMin: 530, to: 'COM3', label: 'CS2030' }]);
   const there = await (await call(env, `/api/me/next?lat=${lat}&lon=${lon}`, { cookie })).json();
   assert.equal(there.label, "You're home");
@@ -1334,7 +1304,6 @@ test('/api/me/next in your residence: "You\'re home" after the last class, leave
   const away = await (await call(env, '/api/me/next?lat=1.2966&lon=103.7764', { cookie })).json();
   assert.equal(away.dest.why, 'home', 'elsewhere on campus, still the way home');
 
-  // A long gap: 08:00 class done, the next at 14:00.
   await put([
     { day: 4, arriveByMin: 480, endMin: 530, to: 'COM3', label: 'CS2030' },
     { day: 4, arriveByMin: 840, endMin: 900, to: 'LT27', label: 'MA1521' },
@@ -1353,7 +1322,6 @@ test('/api/me/next from inside your residence counts your own walk to your stop'
     v.toFixed(4),
   );
   const { PGPR, PGP } = residencesJson.residences.PGP.stops;
-  // To PGP Foyer, the nearer: your own walk. To PGP, as much further as the paths say.
   const walkTo = async (homeWalkMin) => {
     await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGPR', 'PGP'] }, homeWalkMin } });
     const { leave } = await (await call(env, `/api/me/next?to=UTOWN&lat=${lat}&lon=${lon}`, { cookie })).json();
@@ -1365,7 +1333,7 @@ test('/api/me/next from inside your residence counts your own walk to your stop'
 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
+  delete env[Symbol.for('terminus.testOpen')];
   for (const path of [
     '/api/next?lat=1.2966&lon=103.7764',
     '/api/trip?to=UTOWN&from=PGP',
@@ -1419,8 +1387,10 @@ test('/api/campus gives each residence its walk in minutes, at the normal pace, 
   const cookie = await signIn(env, email);
   const { residences } = await (await call(env, '/api/campus', { cookie })).json();
   for (const r of residences) assert.equal(r.walkMin, Math.max(1, Math.round(r.walkM / WALK.speedMs / 60)), r.code);
-  // PGP's own stop is a short walk.
-  assert.ok(residences.every((r) => Number.isInteger(r.walkMin) && r.walkMin >= 1));
+  assert.ok(
+    residences.every((r) => Number.isInteger(r.walkMin) && r.walkMin >= 1),
+    "even PGP's own stop is a short walk",
+  );
 });
 
 test('the profile comes with its limits, wherever it is sent, and they are the ones enforced', async () => {
@@ -1439,10 +1409,9 @@ test('the profile comes with its limits, wherever it is sent, and they are the o
   };
   const got = await (await call(env, '/api/me/profile', { cookie })).json();
   assert.deepEqual(got.limits, want);
-  // Sent back whole, as the apps do, the limits are ignored, not an error.
   const put = await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { ...got, homeWalkMin: want.homeWalkMin.max } });
   assert.equal(put.status, 200);
-  assert.deepEqual((await put.json()).limits, want);
+  assert.deepEqual((await put.json()).limits, want, 'sent back whole, as the apps do, the limits are ignored');
   assert.equal(
     (await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { homeWalkMin: want.homeWalkMin.max + 1 } })).status,
     400,
@@ -1500,10 +1469,9 @@ test('a session token that happens to start tk_ is still a session, not a missin
   const { env, db } = setup();
   delete env[Symbol.for('terminus.testOpen')];
   const { token } = await (await call(env, '/api/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
-  // Session tokens are random base64url: 1 in 262,144 starts this way.
   const unlucky = `tk_${token.slice(3)}`;
   db._db.prepare('UPDATE sessions SET token_hash = ? WHERE token_hash = ?').run(await hashToken(unlucky), await hashToken(token));
-  assert.equal((await call(env, '/api/arrivals?stop=COM3', { token: unlucky })).status, 200);
+  assert.equal((await call(env, '/api/arrivals?stop=COM3', { token: unlucky })).status, 200, 'random base64url: 1 in 262,144 starts tk_');
   assert.equal((await call(env, '/api/arrivals?stop=COM3', { token: 'tk_nonsense' })).status, 401);
 });
 
@@ -1526,9 +1494,12 @@ test('/api/buses remembers who was let in for a while; /me and the other answers
   assert.equal((await at(FROZEN_NOW + 5_000, '/api/buses?svc=D2')).status, 200);
   assert.equal((await at(FROZEN_NOW + 10_000, '/api/buses?svc=A1')).status, 200);
   assert.equal(lookups, 1, 'one look-up for three polls');
-  // Signed out: the map may see the buses for the rest of the half-minute, nothing else.
   db._db.prepare('DELETE FROM sessions').run();
-  assert.equal((await at(FROZEN_NOW + 15_000, '/api/buses?svc=D2')).status, 200);
+  assert.equal(
+    (await at(FROZEN_NOW + 15_000, '/api/buses?svc=D2')).status,
+    200,
+    'signed out, the map sees buses for the rest of the half-minute',
+  );
   assert.equal((await at(FROZEN_NOW + 15_000, '/api/arrivals?stop=COM3')).status, 401);
   assert.equal((await at(FROZEN_NOW + 15_000, '/api/me')).status, 401);
   assert.equal((await at(FROZEN_NOW + 30_000, '/api/buses?svc=D2')).status, 401, 'then asked again, and refused');
@@ -1580,7 +1551,6 @@ test('feedback: a wrong answer is kept with the account, its note emailed withou
   assert.equal(sent.to, 'ops@example.test');
   assert.equal(sent.subject, 'terminus wrong answer: It never came');
   assert.match(sent.text, /It never came/);
-  // The inbox keeps mail after the account goes: the address and the answer stay on the dashboard.
   assert.doesNotMatch(`${sent.subject}\n${sent.text}`, new RegExp(`${INVITED}|PGP|Prince George|D2`));
 
   const row = db._db.prepare('SELECT kind, note, platform, app_version, context FROM feedback').get();
@@ -1693,7 +1663,6 @@ test('feedback: a stop suggestion names a building and its stop, and the email c
   env.HEALTH_TOKEN = 'operator-secret';
   const cookie = await signIn(env, email);
   const post = (body) => call(env, '/api/me/feedback', { method: 'POST', cookie, body });
-  // A room stands for its building, and why can be left out.
   assert.equal(
     (await post({ kind: 'stop', venue: 'com1-0208', stop: 'CLB', note: 'The bridge goes straight there', platform: 'web' })).status,
     201,
@@ -1846,7 +1815,6 @@ test('a browser can use terminus without an email, and an email added later keep
   });
   assert.equal(put.status, 200);
 
-  // The emailed code, typed in the same browser: the email goes to this account.
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() }, cookie });
   assert.equal(res.status, 303);
@@ -1867,7 +1835,6 @@ test('an email that has an account already wins over a browser without one', asy
   });
   const cookie = (await call(env, '/api/auth/anon/web', { method: 'POST', body: {} })).headers.get('set-cookie').split(';')[0];
   await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] } });
-  // A minute later, as far as the one-email-a-minute rule goes.
   for (const k of env.KV._map.keys()) if (k.startsWith('mail:')) env.KV._map.delete(k);
   await call(env, '/api/auth/login', { method: 'POST', body: { email: INVITED } });
   const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() }, cookie });
@@ -1949,7 +1916,6 @@ test('profile: a save sent with If-Match is refused when another device saved fi
   assert.match(v1, /^"[1-9]\d*"$/);
   assert.equal((await call(env, '/api/me/profile', { cookie })).headers.get('etag'), v1);
 
-  // Another device saves; a save from the old version is refused, compressed ETag or not.
   const other = await call(env, '/api/me/profile', { method: 'PUT', cookie, ifMatch: `W/${v1}`, body: { home: { stops: ['UTOWN'] } } });
   assert.equal(other.status, 200);
   assert.notEqual(other.headers.get('etag'), v1, 'a new version, even within the same millisecond');
@@ -1963,9 +1929,12 @@ test('profile: a save sent with If-Match is refused when another device saved fi
     'one is saved already',
   );
 
-  // Without If-Match, the last save wins.
   assert.equal((await call(env, '/api/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['KR-MRT'] } } })).status, 200);
-  assert.deepEqual((await (await call(env, '/api/me/profile', { cookie })).json()).home.stops, ['KR-MRT']);
+  assert.deepEqual(
+    (await (await call(env, '/api/me/profile', { cookie })).json()).home.stops,
+    ['KR-MRT'],
+    'without If-Match, the last save wins',
+  );
 });
 
 test('a one-off trip added while another device saves is not lost, nor is the other save', async () => {
@@ -1974,7 +1943,6 @@ test('a one-off trip added while another device saves is not lost, nor is the ot
   const tomorrow = new Date(Date.now() + 8 * 3_600_000 + 86_400_000).toISOString().slice(0, 10);
   const add = (to, atMin) => call(env, '/api/me/once', { method: 'POST', cookie, body: { to, atMin, date: tomorrow } });
   assert.equal((await add('COM3', 600)).status, 200);
-  // Just after this request reads the profile, another device adds a trip.
   const prepare = db.prepare;
   let armed = true;
   db.prepare = (sql) => {
@@ -2008,7 +1976,7 @@ test('a one-off trip added while another device saves is not lost, nor is the ot
 
 test('D1 down: the answers and /me say 503 with Retry-After; one dropped query is tried again', async () => {
   const { env, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
+  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const log = console.error;
   console.error = () => {};
@@ -2034,14 +2002,11 @@ test('D1 down: the answers and /me say 503 with Retry-After; one dropped query i
       assert.deepEqual(await r.json(), { error: "terminus can't reach your account right now; try again in a minute" });
     }
 
-    // D1's overload message says "too many", yet it is an outage all the same.
     env.DB.prepare = () => {
       throw new Error('D1 DB is overloaded. Too many requests queued.');
     };
     for (const path of ['/api/campus', '/api/me']) assert.equal((await call(env, path, { cookie })).status, 503, path);
 
-    // A fault in the query, as when a deploy runs ahead of its migration,
-    // is a 500 and isn't run twice.
     let tries = 0;
     env.DB.prepare = () => {
       tries++;
@@ -2082,7 +2047,6 @@ test('Turnstile down is logged, not only told to the visitor as a failed check',
       false,
     );
     assert.equal(errors.length, 2);
-    // Told apart, for a caller that would say "try again" rather than "failed".
     assert.equal(
       await checkTurnstile(env, 'visitor-token-7', null, async () => {
         throw new Error('timed out');
@@ -2096,7 +2060,6 @@ test('Turnstile down is logged, not only told to the visitor as a failed check',
       ),
       'ok',
     );
-    // A pass for another action, or from another site, isn't one.
     assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true })), 'failed');
   } finally {
     console.error = log;

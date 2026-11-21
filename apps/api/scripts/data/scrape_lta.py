@@ -34,19 +34,9 @@ from datetime import datetime, timezone
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASE = "https://datamall2.mytransport.sg/ltaodataservice/"
 
-# A public stop this close to a shuttle stop is the same shelter: the shuttle
-# stop keeps its code and gains the public one. Measured ones are under 12 m;
-# the next is 24 m away and on the other side of the stop's name.
 SAME_SHELTER_M = 20
-# Public stops this far from the nearest shuttle stop are kept as stops of
-# their own: Kent Ridge Terminal's public stop on Clementi Road, the NUH
-# stops, the stops opposite the terminal. Not Pasir Panjang Road or the AYE,
-# 250 m and more away: this is about the campus, not the island.
 RADIUS_M = 200
-# BusRoutes, the largest dataset, is about 26,000 rows: 53 pages of 500. A
-# dataset that keeps going far past that is a server answering in a loop.
 MAX_PAGES = 200
-# A page of 500 rows is about 200 KB.
 MAX_BYTES = 5_000_000
 
 
@@ -134,8 +124,6 @@ def mean_minutes(freq: str | None) -> int | None:
 def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
     sstops = shuttle["stops"]
 
-    # Each public stop near campus: the same shelter as a shuttle stop, or a
-    # stop of its own. One public stop per shuttle stop, the nearest.
     near = []
     for s in stops:
         try:
@@ -148,7 +136,7 @@ def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
         if best[0] <= RADIUS_M:
             near.append({"code": str(s["BusStopCode"]), "name": str(s.get("Description") or "").strip(), "road": str(s.get("RoadName") or "").strip(), "lat": lat, "lon": lon, "d": best[0], "shuttle": best[1]["code"]})
     near.sort(key=lambda x: x["d"])
-    merged: dict[str, str] = {}  # public code -> shuttle code
+    merged: dict[str, str] = {}
     taken: set[str] = set()
     for s in near:
         if s["d"] <= SAME_SHELTER_M and s["shuttle"] not in taken:
@@ -157,9 +145,6 @@ def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
     code_of = lambda c: merged.get(c, c)
     campus = {s["code"] for s in near}
 
-    # Each service and direction, trimmed to its campus stops, in order. A
-    # loop keeps the closing stop so the graph sees it as a loop; a service
-    # with one campus stop can't take anyone anywhere and is dropped.
     by_dir: dict[tuple[str, str], list] = {}
     for r in routes:
         key = (str(r["ServiceNo"]), str(r["Direction"]))
@@ -184,8 +169,6 @@ def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
         seq = [code_of(str(r["BusStopCode"])) for r in on]
         km = [float(r.get("Distance") or 0) for r in on]
         if loop:
-            # The loop closes at its terminal. When the trimmed sequence does
-            # not end there, the way back round is the rest of the route.
             total = float(rows[-1].get("Distance") or km[-1])
             if seq[0] != seq[-1]:
                 seq.append(seq[0])
@@ -205,19 +188,12 @@ def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
             "saturday": [hhmm(first.get("SAT_FirstBus")), hhmm(first.get("SAT_LastBus"))],
             "sunday": [hhmm(first.get("SUN_FirstBus")), hhmm(first.get("SUN_LastBus"))],
         }
-        # Both times "-" is a day it doesn't run (95B, 96A and the other
-        # weekday-only services at weekends): null, which the Worker reads
-        # as "not today". Left out, the day would be "hours unknown, assume
-        # running", and a guessed bus would be offered all weekend. Only one
-        # of the two missing is unknown, and left out.
         hours[key] = {d: (w if all(w) else None) for d, w in h.items() if all(w) or not any(w)}
         freq = [mean_minutes(info.get(f)) for f in ("AM_Peak_Freq", "AM_Offpeak_Freq", "PM_Peak_Freq", "PM_Offpeak_Freq")]
         freq = [f for f in freq if f]
         if freq:
             headway[key] = max(freq) * 60
 
-    # Only stops some kept service calls at: a stop within range that no
-    # route reaches is a dot with nothing to say.
     used = {c for seq in out_routes.values() for c in seq}
     out_stops = []
     for s in near:
@@ -271,8 +247,6 @@ def main() -> int:
         return 0
 
     out = pathlib.Path(args.out)
-    # Only write when something other than the timestamp changed, so the
-    # weekly workflow doesn't commit a timestamp-only "refresh".
     if out.exists():
         try:
             previous = json.loads(out.read_text())

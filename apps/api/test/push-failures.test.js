@@ -1,9 +1,3 @@
-/**
- * Push when things go wrong (push.ts, webpush.ts): a stale FCM access token,
- * Firebase refusing to mint one, the database failing, and a web push
- * service erroring. Each is counted as it should be, and nobody's
- * registration is thrown away for a fault that isn't theirs.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -40,7 +34,6 @@ async function vapidKey() {
   return JSON.stringify(await crypto.subtle.exportKey('jwk', privateKey));
 }
 
-/** A user whose devices have these push tokens, and a fetch that plays Firebase and the push service. */
 async function setup(
   tokens,
   {
@@ -145,11 +138,6 @@ test('a web push service answering 5xx counts as failed and keeps the subscripti
 
 for (const status of [401, 403]) {
   test(`a web push service answering ${status} counts as failed and keeps the subscription`, async () => {
-    // A 401 or 403 refuses our VAPID signature (RFC 8292, sections 2 and
-    // 4.2): a key that isn't the one the browser subscribed with, or a token
-    // the service's clock reads as expired. The subscription itself is
-    // still good, and the web app renews it with the current key when next
-    // opened; only a 404 or 410 says it's gone (RFC 8030, section 7.3).
     const sub = `web:${JSON.stringify(await subscription())}`;
     const { env, calls, pushToken } = await setup([sub], { push: () => new Response('forbidden', { status }) });
     env.VAPID_PRIVATE_KEY = await vapidKey();

@@ -1,43 +1,4 @@
 #!/usr/bin/env node
-/**
- * Backtests src/ops/etamodel.ts against the feed's own arrival times: fits the
- * model on the earlier data, then, on the later data it never saw, scores
- * each method against when the bus really came. Prints Markdown (MAE,
- * median and 90th-percentile absolute error, mean signed error, by how far
- * ahead the feed was looking), and writes it with --out.
- *
- * Two kinds of input, either or both:
- *
- * - `--recording dev/eta/2026-10-22.jsonl`: what scripts/probes/record_eta.mjs
- *   wrote (the map's buses and the boards, from a live site). Passings come
- *   from the buses as the map placed them (passingsFromReadings); the
- *   boards carry no plate, so a board's time is for the service's next bus
- *   of any plate.
- * - `--day timelapse/2026-10-21.json.gz --predictions ae-2026-10-21.jsonl`:
- *   a timelapse recorder day from R2 and the feed's predictions for it from
- *   Analytics Engine, one JSON object a line, `{t, svc, plate, stop, etaS}`
- *   (eta.ts Prediction; docs/eta-model.md has the query). Passings come
- *   from eta.ts passingsOf, and each prediction is for its own plate.
- *
- * With data from two Singapore days or more, the last day is the test and
- * the rest train; with one, the first --split of its time trains (0.6 by
- * default) and the rest tests. With --walk-from a date, each day from it
- * on is tested on a model fitted on the WALK_DAYS days before it, as the
- * shadow does (etashadow.ts), and the days' questions are scored together. A question whose bus could have come after
- * the data ends isn't asked, so a short recording can't favour short
- * horizons. "Is it better than the feed?" tests the checked feed and the
- * blend (or the --methods given) against the feed over the days together
- * (etamodel.ts pairedTest), with and without incident days. Nothing here is random: the same files
- * give the same report (the test's resampling has a fixed seed).
- *
- *   node scripts/probes/eta_backtest.mjs [--recording f.jsonl]... [--day d.json.gz --predictions p.jsonl]...
- *                                 [--split 0.6] [--walk-from 2026-10-12] [--out results.md] [--model-out model.json]
- *                                 [--recent-min 30] [--recent-n 2] [--recent-prior 0] [--methods checked,blend]
- *
- * The --recent-* settings are the buses just ahead's (etamodel.ts Recent):
- * how many minutes back a segment counts, how many are needed, and how
- * many segments history's median is worth beside them (0: replaced).
- */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -68,10 +29,32 @@ import {
 } from '../../src/ops/etamodel.ts';
 
 const args = process.argv.slice(2);
+const USAGE = `usage: node scripts/probes/eta_backtest.mjs [--recording f.jsonl]... [--day d.json.gz --predictions p.jsonl]...
+         [--split 0.6] [--walk-from 2026-10-12] [--out results.md] [--model-out model.json]
+         [--recent-min 30] [--recent-n 2] [--recent-prior 0] [--methods checked,blend]
+
+  --recording     what record_eta.mjs wrote: the map's buses and the boards, from a live site
+  --day           a timelapse recorder day from R2, with --predictions: the feed's predictions
+                  for it from Analytics Engine (JSON lines of {t, svc, plate, stop, etaS}, or the
+                  SQL API's reply as it comes; the query is in docs/eta-model.md)
+  --split         with one Singapore day, the share of its time that trains (the rest tests);
+                  with two days or more the last day tests and the rest train
+  --walk-from     each day from this date on is tested on a model fitted on the 28 days before it
+  --recent-min    how many minutes back a segment of the buses just ahead counts
+  --recent-n      how many such segments are needed
+  --recent-prior  how many segments history's median is worth beside them (0: replaced)
+  --methods       what "Is it better than the feed?" tests against the feed
+  --out           also write the Markdown report here; --model-out writes the fitted model
+
+The same files always give the same report: the paired test resamples with a fixed seed.`;
 const usage = (why) => {
-  console.error(`eta_backtest: ${why}`);
+  console.error(`eta_backtest: ${why}\n\n${USAGE}`);
   process.exit(2);
 };
+if (args.includes('--help')) {
+  console.log(USAGE);
+  process.exit(0);
+}
 const all = (name) => {
   const out = [];
   for (let i = args.indexOf(`--${name}`); i >= 0; i = args.indexOf(`--${name}`)) {
@@ -89,10 +72,8 @@ const predictionFiles = all('predictions');
 const SPLIT = Number(one('split', '0.6'));
 const OUT = one('out', null);
 const WALK_FROM = one('walk-from', null);
-/** Days a walked day's model is fitted on: the shadow's history. */
 const WALK_DAYS = 28;
 const MODEL_OUT = one('model-out', null);
-/** The methods "Is it better than the feed?" tests: the two that could be served, unless asked for others. */
 const CANDIDATES = one('methods', 'checked,blend').split(',');
 const recent = {
   windowMs: Number(one('recent-min', `${RECENT.windowMs / 60_000}`)) * 60_000,
@@ -109,7 +90,6 @@ if (!CANDIDATES.every((m) => METHODS.includes(m) && m !== 'feed'))
 if (!(recent.windowMs > 0 && recent.minN >= 1 && recent.prior >= 0))
   usage('--recent-min over 0, --recent-n 1 or more, --recent-prior 0 or more');
 
-/** After the time a question was given, how long its bus may take to come: the data must run that long. */
 const TAIL_MS = 10 * 60_000;
 const sgtDate = (ms) => new Date(ms + SGT_MS).toISOString().slice(0, 10);
 const clock = (ms) => new Date(ms + SGT_MS).toISOString().slice(11, 16);
@@ -119,7 +99,6 @@ const jsonLines = (path) =>
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l));
 
-/** This deploy's routes, rung: the default where a recording doesn't say. */
 const routes = Object.fromEntries(
   Object.entries(GRAPH.routes ?? {}).map(([svc, seq]) => [
     svc,
@@ -127,7 +106,6 @@ const routes = Object.fromEntries(
   ]),
 );
 
-/** Units of data: {source, date, start, end, passings, queries, lagMs, readings}. */
 const units = [];
 
 for (const path of recordings) {
@@ -136,8 +114,6 @@ for (const path of recordings) {
   for (const [svc, r] of Object.entries(meta?.routes ?? {})) if (r.seq?.length) routes[svc] = ringOf(r.seq, r.loop);
   const readings = rows.filter((r) => r.k === 'bus');
   const passings = passingsFromReadings(readings);
-  // A board's time at a route's first stop is for the bus leaving it (its -S
-  // berth), not one reaching it, so it can't be scored against a passing.
   const queries = rows
     .filter((r) => r.k === 'board' && r.available !== false)
     .flatMap((r) =>
@@ -154,19 +130,13 @@ for (const path of recordings) {
   units.push({ source: path, date: sgtDate(start), start, end, passings, queries, lagMs: 0, readings: readings.length });
 }
 
-/**
- * The feed's predictions in [path]: JSON lines of {t, svc, plate, stop,
- * etaS, berth?}, or Analytics Engine's SQL reply as it comes ({data:
- * [{kind, plate, stop, svc, berth, eta, timestamp}]}, the query in
- * docs/eta-model.md), each question once (eta.ts askedOnce).
- */
 function predictionsIn(path) {
   const text = readFileSync(path, 'utf8');
   let whole = null;
   try {
     whole = JSON.parse(text);
   } catch {
-    // JSON lines, then.
+    whole = null;
   }
   if (Array.isArray(whole?.data)) {
     return askedOnce(whole.data).map((r) => ({
@@ -185,9 +155,6 @@ for (let i = 0; i < days.length; i++) {
   const raw = readFileSync(days[i]);
   const day = JSON.parse((days[i].endsWith('.gz') ? gunzipSync(raw) : raw).toString('utf8'));
   const passings = passingsOf(day);
-  // The day's own predictions (one file can serve several days), each
-  // cached answer once and none for a bus leaving its first stop (as eta.ts
-  // scoreEtas), up to 30 minutes ahead.
   const { open, close } = windowOf(day.date);
   const seen = new Set();
   const queries = predictionsIn(predictionFiles[i])
@@ -206,7 +173,6 @@ for (let i = 0; i < days.length; i++) {
 
 if (!units.length) usage('no usable data');
 
-// Questions whose bus may not have come before the data ends are left out.
 const answerable = (end, q) => q.t + (q.etaS ?? 0) * 1000 + TAIL_MS <= end;
 
 const dates = [...new Set(units.map((u) => u.date))].sort();
@@ -214,11 +180,9 @@ const answerableIn = (u) => ({ ...u, queries: u.queries.filter((q) => answerable
 let train;
 let test;
 let how;
-/** Walked: each test day with the model fitted on the days before it. */
 let walked = null;
 if (WALK_FROM !== null) {
   const fromOf = (date) => new Date(Date.parse(`${date}T00:00:00Z`) - WALK_DAYS * 86_400_000).toISOString().slice(0, 10);
-  // A day with nothing recorded in the days before it has no model to test.
   const tested = dates.filter((d) => d >= WALK_FROM && dates.some((x) => x < d && x >= fromOf(d)));
   if (!tested.length) usage(`no day from ${WALK_FROM} on has a day in the ${WALK_DAYS} before it`);
   walked = tested.map((date) => {
@@ -237,8 +201,6 @@ if (WALK_FROM !== null) {
   const start = Math.min(...units.map((u) => u.start));
   const end = Math.max(...units.map((u) => u.end));
   const cut = start + SPLIT * (end - start);
-  // Training sees only what was known before the cut: its passings, and
-  // questions whose bus came (or should have) before it.
   train = units.map((u) => ({
     ...u,
     passings: u.passings.filter((x) => (x.seen ?? x.t + u.lagMs) < cut),
@@ -328,15 +290,10 @@ p(
     `(${scored.length ? Math.round((gated.length / scored.length) * 100) : 0}%); the buses just ahead changed history's answer on ${fresh.length}.`,
 );
 
-// Better than the feed over the days together (pairedTest), not day by day:
-// a day has a few dozen questions at a horizon, too few to tell a gain from luck.
 const full = cases.filter((c) => METHODS.every((m) => c.answers[m] !== null));
 const dayOf = (c) => serviceDate(c.t);
-/** A day the feed was this often over MISS_S off is an incident (an outage, stuck times): reported apart, not averaged in unseen. */
 const INCIDENT_MISS = 0.2;
 const INCIDENT_MIN_N = 20;
-// An incident is judged on every question the feed answered that day: in an
-// outage history can't answer many of them, and they would drop out of `full`.
 const byDay = new Map();
 for (const c of cases) {
   const d = byDay.get(dayOf(c)) ?? { all: [], cs: [] };

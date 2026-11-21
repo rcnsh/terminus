@@ -1,8 +1,3 @@
-/**
- * The /api/me/next answer at its edges: operating hours, the age of an answer,
- * which stops are tried, the walk the whole way, and what is shown as live.
- * On the real stop graph (data/stops.json), as the answer is made.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -18,10 +13,8 @@ import { RIDE, WALK } from '../src/config.ts';
 
 const idx = indexGraph(GRAPH);
 const stop = (code) => idx.byCode.get(code);
-/** An instant from a Singapore wall-clock time, "2026-08-27T06:30". */
 const at = (sgt) => Date.parse(`${sgt}+08:00`);
 const MIN = 60_000;
-/** Each stop's board, fetched at `fetchedAt`: `rows` for the stops named, nothing at the rest. */
 const boards = (codes, fetchedAt, rows = {}, extra = {}) =>
   new Map(
     codes.map((code) => [
@@ -36,14 +29,11 @@ const boards = (codes, fetchedAt, rows = {}, extra = {}) =>
       },
     ]),
   );
-/** From home at PGP, a five-minute walk to the stop, no location. */
 const FROM_PGP = { lat: null, lon: null, to: 'UTOWN', originCode: 'PGP', originWalkS: 300 };
 const codesOf = (cands) => cands.map((c) => c.stop.code);
 
-/* Operating hours. */
-
 test('before the first bus, a class gets the first bus after it starts, not "Services ended"', () => {
-  const now = at('2026-08-27T06:30'); // a Thursday; the D2 starts at 07:15
+  const now = at('2026-08-27T06:30');
   const classAt = at('2026-08-27T08:00');
   const cands = candidateStops(GRAPH, FROM_PGP);
   const byStop = boards(codesOf(cands), now);
@@ -56,8 +46,7 @@ test('before the first bus, a class gets the first bus after it starts, not "Ser
   const opens = serviceResumesAt(GRAPH, 'D2', now);
   assert.ok(d2.fromMs + d2.boardS * 1000 > opens, 'a bus after it starts');
   assert.ok(d2.opensInS > 0);
-  // Waiting for it to start is no reason to walk 32 minutes instead.
-  assert.equal(walkVerdict(32 * 60, d2), 'lose');
+  assert.equal(walkVerdict(32 * 60, d2), 'lose', 'waiting for it to start is no reason to walk 32 minutes instead');
 
   const leave = leaveBy({
     options: opts,
@@ -72,28 +61,35 @@ test('before the first bus, a class gets the first bus after it starts, not "Ser
   assert.equal(leave.estimated, true);
   assert.ok(Date.parse(leave.board) >= opens);
 
-  // A service that only starts after you'd need it is still no way there.
-  assert.deepEqual(scoreOptions(GRAPH, cands, byStop, now, undefined, { openBy: at('2026-08-27T07:00') }), []);
+  assert.deepEqual(
+    scoreOptions(GRAPH, cands, byStop, now, undefined, { openBy: at('2026-08-27T07:00') }),
+    [],
+    'a service that only starts after you need it is still no way there',
+  );
 });
 
 test('no bus is guessed after the service stops for the night', () => {
-  const now = at('2026-08-27T22:58'); // at the stop 23:03; the last D2 is at 23:00
+  const now = at('2026-08-27T22:58');
   const cands = candidateStops(GRAPH, FROM_PGP);
   assert.ok(!scoreOptions(GRAPH, cands, boards(codesOf(cands), now), now).some((o) => o.svc === 'D2'), 'the feed lists nothing');
-  // The last listed bus leaves before you can get there: no headway after it either.
   const listed = boards(codesOf(cands), now, { PGP: [{ svc: 'D2', etaS: 60 }] });
-  assert.ok(!scoreOptions(GRAPH, cands, listed, now).some((o) => o.svc === 'D2'), 'after the last bus');
-  // Past the close itself, with the last bus still listed out of reach: no
-  // guessed bus after it ("D2 · ~11 min · estimated" at 23:02).
+  assert.ok(
+    !scoreOptions(GRAPH, cands, listed, now).some((o) => o.svc === 'D2'),
+    'the last listed bus leaves before you reach the stop: no headway after it',
+  );
   const later = at('2026-08-27T23:02');
   const stillListed = boards(codesOf(cands), later, { PGP: [{ svc: 'D2', etaS: 60 }] });
-  assert.ok(!scoreOptions(GRAPH, cands, stillListed, later).some((o) => o.svc === 'D2'), 'after the close');
-  // With a class's openBy, the next start is tomorrow: still nothing tonight.
-  assert.ok(!scoreOptions(GRAPH, cands, stillListed, later, undefined, { openBy: at('2026-08-27T23:30') }).some((o) => o.svc === 'D2'));
+  assert.ok(
+    !scoreOptions(GRAPH, cands, stillListed, later).some((o) => o.svc === 'D2'),
+    'past the close, the last bus still listed out of reach: no guessed bus after it',
+  );
+  assert.ok(
+    !scoreOptions(GRAPH, cands, stillListed, later, undefined, { openBy: at('2026-08-27T23:30') }).some((o) => o.svc === 'D2'),
+    "with a class's openBy the next start is tomorrow: still nothing tonight",
+  );
 });
 
 test('a leave-by never boards a bus after the service has stopped', () => {
-  // Saturday 17:30, a class at 20:30 at Opp SDE 3: the K stops at 19:04 on Saturdays.
   const now = at('2026-10-10T17:30');
   const cands = candidateStops(GRAPH, { ...FROM_PGP, to: 'SDE3-OPP' });
   const byStop = boards(codesOf(cands), now, { PGP: [{ svc: 'K', etaS: 600 }] });
@@ -108,11 +104,11 @@ test('a leave-by never boards a bus after the service has stopped', () => {
     nowMs: now,
   });
   assert.equal(leave.svc, 'K');
-  assert.ok(Date.parse(leave.board) <= serviceEndsAt(GRAPH, 'K', now), `boards ${leave.board}`);
+  assert.ok(Date.parse(leave.board) <= serviceEndsAt(GRAPH, 'K', now), `boards ${leave.board}; the K stops at 19:04 on Saturdays`);
 });
 
 test('too late for a bus with no live times: board when you can reach the stop, never in the past', () => {
-  const now = at('2026-08-27T09:50'); // class at 10:00, the feed has no times
+  const now = at('2026-08-27T09:50');
   const cands = candidateStops(GRAPH, FROM_PGP);
   const byStop = boards(codesOf(cands), now);
   const opts = scoreOptions(GRAPH, cands, byStop, now);
@@ -131,7 +127,6 @@ test('too late for a bus with no live times: board when you can reach the stop, 
 });
 
 test('late because the service has not started yet: leave for its first bus, not now', () => {
-  // 06:20, a class at 08:30 at Botanic Gardens MRT: the P from Kent Vale starts at 08:20.
   const now = at('2026-10-08T06:20');
   const cands = candidateStops(GRAPH, { ...FROM_PGP, to: 'BG-MRT', originCode: 'KV' });
   const byStop = boards(codesOf(cands), now);
@@ -148,22 +143,19 @@ test('late because the service has not started yet: leave for its first bus, not
   });
   assert.equal(leave.svc, 'P');
   const opens = serviceResumesAt(GRAPH, 'P', now);
-  assert.equal(Date.parse(leave.board), opens);
+  assert.equal(Date.parse(leave.board), opens, 'the first P from Kent Vale, at 08:20');
   assert.ok(Date.parse(leave.at) > now + 100 * MIN, `leave ${leave.at}`);
 });
-
-/* Which stops are tried. */
 
 test('without a location, the stop across the road is tried too, a crossing further', () => {
   const cands = candidateStops(GRAPH, { ...FROM_PGP, to: 'COM3', originCode: 'KR-MRT' });
   const opp = cands.find((c) => c.stop.code === 'KR-MRT-OPP');
   assert.ok(opp, codesOf(cands).join());
   assert.ok(opp.walkS > 300 && opp.walkS < 300 + 120, `${opp.walkS} s`);
-  // AS 5 has no bus to Kent Vale; Opp NUSS, across the road, has.
   const kv = candidateStops(GRAPH, { ...FROM_PGP, to: 'KV', originCode: 'AS5' });
   assert.ok(
     kv.some((c) => c.stop.code === 'NUSS-OPP' && c.legs.length),
-    codesOf(kv).join(),
+    `AS 5 has no bus to Kent Vale; Opp NUSS, across the road, has: ${codesOf(kv).join()}`,
   );
 });
 
@@ -175,9 +167,11 @@ test('without a location, from home, every home stop is tried', () => {
 });
 
 test('with a location, a nearby stop no bus there calls at does not crowd out one that does', () => {
-  // Opp SDE 3 is nearest, but only the K calls there, and it doesn't go to UTown.
   const cands = candidateStops(GRAPH, { lat: 1.297, lon: 103.771, to: 'UTOWN', originCode: null });
-  assert.ok(!cands.some((c) => c.stop.code === 'SDE3-OPP'), codesOf(cands).join());
+  assert.ok(
+    !cands.some((c) => c.stop.code === 'SDE3-OPP'),
+    `Opp SDE 3 is nearest, but only the K, which skips UTown, calls there: ${codesOf(cands).join()}`,
+  );
   assert.ok(
     cands.some((c) => c.stop.code === 'LT13-OPP'),
     codesOf(cands).join(),
@@ -198,21 +192,16 @@ test('the same D2 from the other side of the road, the wrong way round the loop,
   assert.equal(pickAlt(opts), null);
 });
 
-/* Riding. */
-
 test('route P is timed by distance over its long stretches', () => {
   const kv = stop('KV');
   const cg = stop('CG');
   const s = shuttleRideS(idx, ['KV', 'CG'], RIDE.secondsPerHop);
   assert.equal(s, Math.round(haversineM(kv.lat, kv.lon, cg.lat, cg.lon) / RIDE.longHopMs));
   assert.ok(s > 10 * 60, `${s} s`);
-  // An ordinary hop is the per-stop figure, as ever.
-  assert.equal(shuttleRideS(idx, ['PGP', 'KR-MRT'], RIDE.secondsPerHop), RIDE.secondsPerHop);
+  assert.equal(shuttleRideS(idx, ['PGP', 'KR-MRT'], RIDE.secondsPerHop), RIDE.secondsPerHop, 'an ordinary hop is the per-stop figure');
   const leg = candidateStops(GRAPH, { ...FROM_PGP, to: 'CG', originCode: 'KV' })[0].legs.find((l) => l.svc === 'P');
   assert.equal(leg.rideS, s);
 });
-
-/* The walk the whole way. */
 
 test('the whole walk follows the paths, the same with a location or without', () => {
   const from = stop('UHALL-OPP');
@@ -222,7 +211,6 @@ test('the whole walk follows the paths, the same with a location or without', ()
 });
 
 test('a room near you is walked to directly, not by way of its stop', () => {
-  // The room 400 m north of UTown's stop; you, 100 m north of the room.
   const utown = stop('UTOWN');
   const room = { lat: utown.lat + 0.0036, lon: utown.lon };
   const input = { lat: room.lat + 0.0009, lon: room.lon, to: 'UTOWN', originCode: null, endWalkS: 336, destAt: room };
@@ -244,8 +232,6 @@ test('a place with several stops is walked to by whichever is nearest the walk',
   assert.deepEqual(wholeWalk(GRAPH, input, from), { s: 0, endS: 90 });
 });
 
-/* The age of an answer. */
-
 test('a stale answer is counted from now: its bus is no further away than it is', () => {
   const now = at('2026-08-27T09:00');
   const fetchedAt = now - 240_000;
@@ -255,15 +241,13 @@ test('a stale answer is counted from now: its bus is no further away than it is'
   assert.equal(d2.quality, 'stale');
   assert.equal(d2.boardS, 180, 'due in 3 minutes now, not 7');
   assert.equal(d2.fromMs + d2.boardS * 1000, fetchedAt + 420_000, 'the same departure');
-  // A walk a minute quicker than the bus is no reason to walk.
-  assert.notEqual(walkVerdict(d2.totalS - 60, d2), 'win');
+  assert.notEqual(walkVerdict(d2.totalS - 60, d2), 'win', 'a walk a minute quicker than the bus is no reason to walk');
 });
 
 test("a stale answer's card counts from the request: its next change is never in the past", async () => {
   const { default: fixture } = await import('../../../fixtures/answers/class-bus.json', { with: { type: 'json' } });
   const { card: _card, refreshAt: _r, ...answer } = fixture;
   const now = Date.parse(answer.asOf);
-  // Read four minutes ago; leave in two. Its "time to go" moment was a minute or more ago.
   const old = {
     ...answer,
     quality: 'stale',
@@ -273,8 +257,6 @@ test("a stale answer's card counts from the request: its next change is never in
   const card = cardFor(old, false, { key: 'k', phase: 'idle' }, null, now);
   assert.ok(Date.parse(card.nextChangeAt) > now, card.nextChangeAt);
 });
-
-/* Fares. */
 
 test('walking is free: a public bus must beat it by its fare too', () => {
   const pub = { totalS: 614, walkS: 0, quality: 'live', paid: true };
@@ -289,7 +271,6 @@ test('a free bus with no times does not take the headline from a live public bus
     (c) => c.stop.code === 'IT',
   );
   const shuttleDown = null;
-  // Ten minutes away: later than the A2's sort key, which is no time at all.
   const lta = {
     code: 'IT',
     arrivals: [{ svc: '95', etaS: 600, crowd: null, plate: null, berth: null }],
@@ -299,16 +280,13 @@ test('a free bus with no times does not take the headline from a live public bus
   };
   const byStop = new Map([['IT', mergeFeeds('IT', now, shuttleDown, lta)]]);
   const opts = scoreOptions(GRAPH_PUBLIC, cands, byStop, now);
-  assert.equal(opts[0].svc, '95');
+  assert.equal(opts[0].svc, '95', 'a live 95 ten minutes away ranks over an A2 with no time at all');
   assert.equal(opts.find((o) => o.svc === 'A2').quality, 'unknown');
 });
-
-/* What is live. */
 
 test('a leave-by from a stale feed is not shown as live', () => {
   const now = at('2026-08-27T09:00');
   const cands = candidateStops(GRAPH, FROM_PGP);
-  // The D2 at 09:08, read two minutes ago; for a class at 09:25 it's the one to catch.
   const byStop = boards(codesOf(cands), now - 120_000, { PGP: [{ svc: 'D2', etaS: 600 }] }, { stale: true });
   const opts = scoreOptions(GRAPH, cands, byStop, now);
   const leave = leaveBy({
@@ -328,7 +306,6 @@ test('a leave-by from a stale feed is not shown as live', () => {
 });
 
 test("a timetabled public bus in a class's leave-by is an estimate", () => {
-  // Kent Ridge Ter's own stop, a class at IT: a live 95, and a 151 LTA only has from its timetable.
   const now = at('2026-08-27T09:00');
   const input = { lat: 1.293619, lon: 103.771475, to: 'IT', originCode: null };
   const cands = candidateStops(GRAPH_PUBLIC, input).filter((c) => c.stop.code === '16009');
@@ -353,19 +330,16 @@ test("a timetabled public bus in a class's leave-by is an estimate", () => {
 });
 
 test('choosing the stops that go there still asks the feed about WALK.maxCandidates at most', () => {
-  // Skipping stops with no bus there doesn't fan a request out to more of them.
   const cands = candidateStops(GRAPH, { lat: 1.297, lon: 103.771, to: 'UTOWN', originCode: null });
-  assert.ok(cands.length <= WALK.maxCandidates);
+  assert.ok(cands.length <= WALK.maxCandidates, 'skipping stops with no bus there does not fan a request out to more of them');
 });
 
 test('riding a public bus reads its arrival from the public graph, by its route', async () => {
   const { nextArrival } = await import('../src/answer/next.ts');
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
-  // A stop on the 151's first direction in the public graph.
   const pidx = indexGraph(GRAPH_PUBLIC);
   const alight = [...pidx.routes.get('151/1').pos.keys()][1];
   const asked = [];
-  // As the Trip object builds them: no public graph among the deps.
   const deps = {
     graph: GRAPH,
     answerFor: async () => {
@@ -381,15 +355,11 @@ test('riding a public bus reads its arrival from the public graph, by its route'
   assert.equal(await nextArrival({}, {}, deps, b, nowMs), new Date(nowMs + 240_000).toISOString().replace(/\.\d{3}Z$/, 'Z'));
   assert.equal(asked[0], GRAPH_PUBLIC, 'asked of the graph that has LTA, not the shuttle feed');
 
-  // A shuttle ride still asks the shuttle graph.
   await nextArrival({}, {}, deps, { svc: 'D2', stop: 'x', board: null, arrive: null, alightCode: 'COM3' }, nowMs);
-  assert.equal(asked[1], GRAPH);
+  assert.equal(asked[1], GRAPH, 'a shuttle ride still asks the shuttle graph');
 });
 
 test('a public second bus is looked for in the public graph, a shuttle one in the shuttle graph', async () => {
-  // Transfers are shuttle-only today (transfer.ts) and BusChange carries no
-  // fare mark, so no answer builds this change yet: it's built by hand, for
-  // when a public bus can be the second one.
   const { secondBus } = await import('../src/answer/next.ts');
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
   const pidx = indexGraph(GRAPH_PUBLIC);
@@ -422,8 +392,6 @@ test('riding counts the bus from its own feed: at a shared shelter, not the olde
   const nowMs = Date.parse('2026-08-27T02:00:00Z');
   const pidx = indexGraph(GRAPH_PUBLIC);
   const alight = [...pidx.routes.get('151/1').pos.keys()][1];
-  // The shuttle half was fetched a minute ago and is stale; LTA 5 s ago. The
-  // stop's own state is the two together: the older time, stale.
   const shuttle = { fetchedAt: nowMs - 60_000, stale: true, available: true };
   const pub = { fetchedAt: nowMs - 5_000, stale: false, available: true };
   const deps = {
@@ -446,8 +414,7 @@ test('riding counts the bus from its own feed: at a shared shelter, not the olde
   const want = new Date(pub.fetchedAt + 240_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   assert.equal(await liveArrival({}, {}, deps, b, nowMs), want);
   assert.equal(await nextArrival({}, {}, deps, b, nowMs), want);
-  // The public feed stale itself: no live time.
   pub.stale = true;
-  assert.equal(await liveArrival({}, {}, deps, b, nowMs), null);
+  assert.equal(await liveArrival({}, {}, deps, b, nowMs), null, 'the public feed stale itself: no live time');
   assert.equal(await nextArrival({}, {}, deps, b, nowMs), null);
 });

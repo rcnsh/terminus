@@ -1,9 +1,3 @@
-/**
- * The Worker's entry points the other tests don't reach: the beta's
- * "noindex" on its pages (HTMLRewriter, which Node lacks, stubbed here as a
- * pass-through), the cron's scheduled() handler, and the operator's /api/health
- * auth probe and version lookup.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -14,7 +8,6 @@ import { PLAY_URL } from '../src/feeds/appversion.ts';
 const BASE = 'https://bus.example.test';
 const BETA = 'https://beta.terminus.run';
 
-/** Just enough of HTMLRewriter: remembers the selectors, passes the body through. */
 class HTMLRewriterStub {
   static selectors = [];
   on(selector) {
@@ -26,7 +19,6 @@ class HTMLRewriterStub {
   }
 }
 
-/** Static assets: one HTML page and one stylesheet. */
 const ASSETS = {
   async fetch(req) {
     const path = new URL(req.url).pathname;
@@ -61,7 +53,6 @@ test('the beta asks for its HTML pages not to be indexed, and marks them; the st
     ['html', '.wordmark'],
     'the page is marked as the beta, and the tag goes beside the wordmark',
   );
-  // Not HTML: nothing to mark, nothing to say.
   const css = await call(beta, '/assets/site.css');
   assert.equal(css.headers.get('x-robots-tag'), null);
 
@@ -138,7 +129,6 @@ test('/api/admin/appversion: the version the cron keeps, for SCRAPE_TOKEN alone 
   const probe = await (await call(env, '/api/health?probe=1&versions=1', { 'x-health-token': 'scrape-only' })).json();
   assert.equal(probe.auth, undefined, 'nor the auth probe');
   assert.equal(probe.versions, undefined, 'nor the version lookup, which asks Google Play');
-  // Unset, it opens nothing.
   const none = { ...env, SCRAPE_TOKEN: undefined };
   assert.equal((await call(none, '/api/admin/appversion', { 'x-health-token': 'scrape-only' })).status, 404);
 });
@@ -158,9 +148,7 @@ test("opening the web app signed out goes straight to sign-in; signed in, or the
   }
   const signedIn = await call(env, '/app/', { ...navigate, cookie: '__Host-tm_s=abc' });
   assert.equal(await signedIn.text(), 'page for /app/');
-  // Passed on by the service worker, it's still a page being opened.
   assert.equal((await call(env, '/app/', { 'sec-fetch-mode': 'same-origin', 'sec-fetch-dest': 'document' })).status, 302);
-  // The service worker keeping its copy of the app gets the app.
   const kept = await call(env, '/app/', { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' });
   assert.equal(await kept.text(), 'page for /app/');
   assert.equal(await (await call(env, '/account/', navigate)).text(), 'page for /account/');

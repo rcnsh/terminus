@@ -1,28 +1,21 @@
 #!/usr/bin/env node
-/**
- * Records what the map is shown: /api/buses on a live site, every 5 s per
- * service, for a few minutes, with a throwaway anonymous account (deleted at
- * the end). Then checks each bus's `along` (metres along its route line):
- * between two readings on its line it may go back at most 60 m (GPS error:
- * src/map/buses.ts's TRACK_BACK_M of 50 m, plus 10 m of slack) and forward at
- * most 100 m + 20 m/s since, as src/map/buses.ts tracks it. A
- * jump outside that is a bus switching to the other side of the road, or
- * being drawn backwards. Prints a Markdown report, and exits 1 when a move
- * is flagged, or when it saw no buses at all (so checked nothing).
- *
- * The load is one person watching the map: one /api/buses call per service
- * every 5 s, which the Worker caches 5 s per service anyway.
- *
- *   node scripts/probes/record_buses.mjs [--site https://terminus.run] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
- */
 
 import { writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
+const USAGE = `usage: node scripts/probes/record_buses.mjs [--site https://terminus.run] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
+
+Reads /api/buses on a live site every 5 s per service for --minutes (at most 60),
+with a throwaway anonymous account, and checks each bus's \`along\` between readings.
+Prints a Markdown report; exits 1 on a flagged move, or when it saw no buses.`;
 const usage = (why) => {
-  console.error(`record_buses: ${why}`);
+  console.error(`record_buses: ${why}\n\n${USAGE}`);
   process.exit(2);
 };
+if (args.includes('--help')) {
+  console.log(USAGE);
+  process.exit(0);
+}
 const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   if (i < 0) return fallback;
@@ -38,9 +31,7 @@ const SERVICES = args.length ? args : ['A1', 'A2', 'D1', 'D2'];
 const EVERY_MS = 5_000;
 const BACK_M = 60;
 const AHEAD_M = 100;
-/** Metres a second on top of AHEAD_M (src/map/buses.ts TRACK_AHEAD_MPS). */
 const AHEAD_MPS = 20;
-/** A request the site hasn't answered in this long has failed: a hung one would stall the recording. */
 const TIMEOUT_MS = 15_000;
 const within = () => AbortSignal.timeout(TIMEOUT_MS);
 
@@ -50,7 +41,6 @@ function haversine(aLat, aLon, bLat, bLon) {
   return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
-/** A route line's length. */
 function lengthOf(line) {
   let total = 0;
   for (let i = 1; i < line.length; i++) total += haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]);
@@ -72,8 +62,6 @@ async function record() {
   let routes = {};
   try {
     const campus = await (await fetch(`${SITE}/api/campus`, { headers, signal: within() })).json();
-    // /api/campus says which routes are loops: a loop's line can end tens of
-    // metres from where it starts (A1, A2), so the ends can't tell.
     routes = Object.fromEntries(
       SERVICES.map((s) => [s, { line: campus.routes?.[s]?.line ?? [], loop: campus.routes?.[s]?.loop === true }]),
     );
@@ -86,7 +74,6 @@ async function record() {
             const r = await fetch(`${SITE}/api/buses?svc=${encodeURIComponent(svc)}`, { headers, signal: within() });
             if (!r.ok) return void failed++;
             const d = await r.json();
-            // Which Cloudflare data centre answered: each keeps its own tracks.
             const colo = r.headers.get('cf-ray')?.split('-')[1] ?? '?';
             for (const b of d.buses ?? []) rows.push({ t: tick, svc, colo, ...b });
           } catch {
@@ -124,13 +111,12 @@ function check({ routes, rows }) {
         readings++;
         if (r.along == null) {
           offLine++;
-          prev = null; // a gap off its line: start again
+          prev = null;
           continue;
         }
         if (prev && r.along !== prev.along) {
           moves++;
           let gone = r.along - prev.along;
-          // Round a loop, past its start.
           if (loop && total > 0 && gone < -total / 2) gone += total;
           if (loop && total > 0 && gone > total / 2) gone -= total;
           const dt = (r.t - prev.t) / 1000;
@@ -176,7 +162,6 @@ console.log(
 );
 if (!trace.rows.length) {
   console.log('\n**No buses seen**, so nothing was checked: none running (try inside their hours), or the feed is down.');
-  // A run that checked nothing hasn't passed.
   process.exitCode = 1;
 } else if (!bad.length) console.log('\n**No flagged moves:** no bus switched sides or jumped.');
 else {
@@ -184,6 +169,5 @@ else {
     `\n**${bad.length} flagged moves:**\n\n| service | bus | at (UTC) | from | to | moved | over | data centre |\n|---|---|---|---|---|---|---|---|`,
   );
   for (const b of bad) console.log(`| ${b.svc} | ${b.bus} | ${b.at} | ${b.from} m | ${b.to} m | ${b.gone} m | ${b.dt} s | ${b.colos} |`);
-  // A failed check fails the run, so a red run is what says so.
   process.exitCode = 1;
 }

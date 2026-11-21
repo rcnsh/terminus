@@ -1,8 +1,3 @@
-/**
- * Changing buses (transfer.ts): which trips with a change are worth timing,
- * how many stops that asks the feed about, and how each is timed, ranked,
- * worded and planned for a class. On the real stop graph (data/stops.json).
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -17,15 +12,12 @@ import { withLang } from '../src/i18n.ts';
 import { TRANSFER, WALK } from '../src/config.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
-// How a headway guess is used, not how long it is: one guess for every shuttle.
 withoutMeasuredHeadways();
 
 const idx = indexGraph(GRAPH);
 const stop = (code) => idx.byCode.get(code);
-/** An instant from a Singapore wall-clock time, "2026-08-27T09:00". */
 const at = (sgt) => Date.parse(`${sgt}+08:00`);
-const NOW = at('2026-08-27T09:00'); // a Thursday in term
-/** Each stop's board, fetched at `fetchedAt`: `rows` for the stops named, nothing at the rest. */
+const NOW = at('2026-08-27T09:00');
 const boards = (codes, fetchedAt, rows = {}, extra = {}) =>
   new Map(
     codes.map((code) => [
@@ -41,10 +33,8 @@ const boards = (codes, fetchedAt, rows = {}, extra = {}) =>
     ]),
   );
 
-/** From COM3 without a location, to College Green (CG): only P goes there, and not from COM3. */
 const COM3_CG = { lat: null, lon: null, to: 'CG', originCode: 'COM3' };
 
-/** The trip planned and scored as answerFor does it. */
 function scored(input, rows, { extra, nowMs = NOW, graph = GRAPH } = {}) {
   const cands = candidateStops(graph, input);
   const plan = planTransfers(graph, input, cands);
@@ -53,7 +43,6 @@ function scored(input, rows, { extra, nowMs = NOW, graph = GRAPH } = {}) {
   return { cands, plan, byStop, options };
 }
 
-// Changing buses on; each test of 'beats' sets that itself.
 TRANSFER.mode = 'noDirect';
 
 const answerOf = ({ cands, options }, nowMs = NOW) =>
@@ -78,9 +67,14 @@ test('no single bus from COM3 to CG; one change of bus gets there, always onto P
     assert.equal(r.leg2.svc, 'P');
     assert.notEqual(r.leg1.svc, r.leg2.svc);
   }
-  // The change by D2 at KR MRT and by D1 at UTown are both there.
-  assert.ok(routes.some((r) => r.leg1.svc === 'D2' && r.at.code === 'KR-MRT'));
-  assert.ok(routes.some((r) => r.leg1.svc === 'D1' && r.at.code === 'UTOWN'));
+  assert.ok(
+    routes.some((r) => r.leg1.svc === 'D2' && r.at.code === 'KR-MRT'),
+    'the change by D2 at KR MRT',
+  );
+  assert.ok(
+    routes.some((r) => r.leg1.svc === 'D1' && r.at.code === 'UTOWN'),
+    'the change by D1 at UTown',
+  );
 });
 
 test('a change is never at the start or the end, never onto the same service, and never onto a public bus', () => {
@@ -93,8 +87,7 @@ test('a change is never at the start or the end, never onto the same service, an
         assert.notEqual(r.leg1.svc, r.leg2.svc);
         assert.notEqual(r.board.code, from.code);
         assert.ok(!targets.some((t) => t.code === r.board.code || t.code === r.at.code));
-        // Across the road only when it changes to the opposite stop.
-        assert.equal(r.crossM > 0, r.board.code !== r.at.code);
+        assert.equal(r.crossM > 0, r.board.code !== r.at.code, 'across the road only when it changes to the opposite stop');
       }
     }
   }
@@ -109,8 +102,6 @@ test('where a single bus goes there, no change is timed (mode noDirect)', () => 
 
 for (const mode of ['noDirect', 'beats'])
   test(`a trip with a change asks the feed about at most TRANSFER.maxFetch more stops, from anywhere to anywhere (${mode})`, () => {
-    // Every pair of stops, from the stop and from a location at it: the
-    // stops near you as ever, and no more than maxFetch more.
     const was = TRANSFER.mode;
     TRANSFER.mode = mode;
     try {
@@ -124,14 +115,16 @@ for (const mode of ['noDirect', 'beats'])
             const cands = candidateStops(GRAPH, input);
             const plan = planTransfers(GRAPH, input, cands);
             const origins = new Set(plan.routes.map((r) => r.origin.code));
-            // Where no bus goes there, the stops near you stand in for the one the answer had.
             const direct = cands.some((c) => c.legs.length > 0);
             const extra = plan.fetch.filter((c) => direct || !origins.has(c));
-            assert.ok(extra.length <= TRANSFER.maxFetch, `${from.code}->${to.code}: ${plan.fetch}`);
+            assert.ok(
+              extra.length <= TRANSFER.maxFetch,
+              `${from.code}->${to.code}: ${plan.fetch}; where no bus goes there, the stops near you stand in for the answer's`,
+            );
             assert.ok(origins.size <= WALK.maxCandidates);
-            // Every route is timed on stops that are fetched.
             const fetched = new Set([...cands.map((c) => c.stop.code), ...plan.fetch]);
-            for (const r of plan.routes) assert.ok(fetched.has(r.origin.code) && fetched.has(r.board.code));
+            for (const r of plan.routes)
+              assert.ok(fetched.has(r.origin.code) && fetched.has(r.board.code), 'every route is timed on stops that are fetched');
           }
         }
       }
@@ -141,7 +134,6 @@ for (const mode of ['noDirect', 'beats'])
   });
 
 test('both buses live: the trip is live, and the second bus is the first you can catch after the first gets in', () => {
-  // D1 in 2 min to UTown, a P there before you're off it (in 5) and after (in 15).
   const s = scored(COM3_CG, {
     COM3: [{ svc: 'D1', etaS: 120 }],
     UTOWN: [
@@ -204,11 +196,10 @@ test('the answer says where to change and to which bus, in English and Chinese, 
   assert.match(a.label, /^D1 · 2 min$/);
   assert.match(a.detail, /change at UTown to P/);
   assert.match(a.alt, /^D2 → P · /);
-  // The bus to catch is the first; the trip's end is the destination.
-  assert.equal(a.bus.svc, 'D1');
+  assert.equal(a.bus.svc, 'D1', 'the bus to catch is the first');
   assert.equal(a.bus.stopCode, 'COM3');
   assert.equal(a.bus.toStop, s.options[0].to && a.bus.toStop);
-  assert.equal(s.options[0].to.code, 'CG');
+  assert.equal(s.options[0].to.code, 'CG', "the trip's end is the destination");
   assert.equal(a.arriveAt, a.bus.arrive);
   assert.deepEqual(Object.keys(a.bus.change).sort(), [
     'board',
@@ -231,7 +222,6 @@ test('in mode beats, a change wins only when it saves TRANSFER.worthS over the s
   const was = TRANSFER.mode;
   TRANSFER.mode = 'beats';
   try {
-    // At CLB, to Botanic Gardens MRT: P from a stop nearby the long way round, or K to KV and P from there.
     const input = { lat: stop('CLB').lat, lon: stop('CLB').lon, to: 'BG-MRT', originCode: null };
     const cands = candidateStops(GRAPH, input);
     assert.ok(
@@ -250,10 +240,12 @@ test('in mode beats, a change wins only when it saves TRANSFER.worthS over the s
     const change = options.find((o) => o.change);
     const single = options.find((o) => !o.change);
     assert.ok(change && single);
-    // The ranking counts the change as worthS: first only when it saves more.
-    assert.equal(options[0] === change, change.totalS + TRANSFER.worthS < single.totalS);
-    // The alternative to a change is the single bus.
-    if (options[0] === change) assert.equal(pickAlt(options), single);
+    assert.equal(
+      options[0] === change,
+      change.totalS + TRANSFER.worthS < single.totalS,
+      'the change ranks first only when it saves more than worthS',
+    );
+    if (options[0] === change) assert.equal(pickAlt(options), single, 'the alternative to a change is the single bus');
     else assert.ok(!pickAlt(options)?.change);
   } finally {
     TRANSFER.mode = was;
@@ -267,9 +259,6 @@ test('a guessed single bus still loses to a measured change only when the change
     const input = { lat: stop('CLB').lat, lon: stop('CLB').lon, to: 'BG-MRT', originCode: null };
     const cands = candidateStops(GRAPH, input);
     const plan = planTransfers(GRAPH, input, cands);
-    // Live K and P; the single bus has no times (a headway guess). The
-    // change is measured, so it ranks first by tier, unless the guessed
-    // single bus gets there sooner than the change by what it's worth.
     const byStop = boards([...cands.map((c) => c.stop.code), ...plan.fetch], NOW, {
       CLB: [{ svc: 'K', etaS: 120 }],
       KV: [{ svc: 'P', etaS: 2400 }],
@@ -277,14 +266,18 @@ test('a guessed single bus still loses to a measured change only when the change
     const options = scoreOptions(GRAPH, cands, byStop, NOW, () => 0, { transfers: plan.routes });
     const change = options.find((o) => o.change);
     const single = options.find((o) => !o.change && o.quality !== 'unknown');
-    if (change && single && single.totalS <= change.totalS + TRANSFER.worthS) assert.equal(options[0].change, undefined);
+    if (change && single && single.totalS <= change.totalS + TRANSFER.worthS)
+      assert.equal(
+        options[0].change,
+        undefined,
+        'the measured change ranks first by tier unless the guessed single bus is sooner by worthS',
+      );
   } finally {
     TRANSFER.mode = was;
   }
 });
 
 test("a class's leave-by with a change: the latest first bus that makes the latest second bus that's on time", () => {
-  // A 10:00 class at CG, two minutes on from the stop. P every 20 min at KR MRT and UTown.
   const rows = {
     COM3: [
       { svc: 'D1', etaS: 120 },
@@ -307,14 +300,18 @@ test("a class's leave-by with a change: the latest first bus that makes the late
   assert.ok(leave.change, 'the leave-by is for a trip with a change');
   assert.equal(leave.svc, leave.svc.trim());
   assert.ok(Date.parse(leave.arrive) <= arriveBy.atMs, 'on time');
-  // The first bus gets in before the second leaves, with time to change.
-  assert.ok(Date.parse(leave.change.reach) + TRANSFER.changeBufferS * 1000 <= Date.parse(leave.change.board));
+  assert.ok(
+    Date.parse(leave.change.reach) + TRANSFER.changeBufferS * 1000 <= Date.parse(leave.change.board),
+    'the first bus gets in before the second leaves, with time to change',
+  );
   assert.ok(Date.parse(leave.board) < Date.parse(leave.change.reach));
   assert.equal(leave.estimated, false, 'both buses are live');
-  // No later pair of live buses would still be on time.
   for (const o of s.options) {
     if (!o.change) continue;
-    assert.ok(o.fromMs + o.totalS * 1000 + 120_000 > arriveBy.atMs || Date.parse(leave.board) >= o.fromMs + o.boardS * 1000);
+    assert.ok(
+      o.fromMs + o.totalS * 1000 + 120_000 > arriveBy.atMs || Date.parse(leave.board) >= o.fromMs + o.boardS * 1000,
+      'no later pair of live buses would still be on time',
+    );
   }
 });
 
@@ -345,13 +342,10 @@ test('late whatever you do: the first bus you can catch, then the first second b
   assert.ok(Date.parse(leave.at) <= NOW + 1000, 'leave now');
 });
 
-/* Following a trip that changes buses (trip.ts, plan.ts). */
-
 import { laterChange, leaveOf, secondBusOf, tripEnd } from '../src/answer/trip.ts';
 import { planOfLeave, sameBus } from '../src/answer/plan.ts';
 import { secondLeavesMs } from '../src/answer/phase.ts';
 
-/** A leave-by for K at PGP to Kent Vale, then P to College Green. */
 const TWO_BUS_LEAVE = {
   at: '2026-08-27T01:17:40Z',
   estimated: false,
@@ -408,16 +402,15 @@ test('the same first bus with another change is another plan', () => {
 });
 
 test('a guessed second bus past the close, or on a day it does not run, still leaves a headway after its time', () => {
-  // D2 closes at 23:00 on a weekday: a second bus guessed for 23:05, pushed past it by a later first bus.
   const board = Date.parse('2026-08-27T23:05:00+08:00');
   const headway = Math.max(60, headwayFor(GRAPH, 'D2', board)) * 1000;
   const change = { svc: 'D2', stop: 'UTOWN', board: new Date(board).toISOString(), estimated: true };
   assert.equal(secondLeavesMs(change), board + headway, 'not the next morning');
-  // R1 does not run on Christmas Day.
   const xmas = Date.parse('2026-12-25T12:00:00+08:00');
   assert.equal(
     secondLeavesMs({ ...change, svc: 'R1', board: new Date(xmas).toISOString() }),
     xmas + Math.max(60, headwayFor(GRAPH, 'R1', xmas)) * 1000,
+    'R1 does not run on Christmas Day',
   );
 });
 

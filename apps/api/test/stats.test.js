@@ -1,10 +1,3 @@
-/**
- * The operator's extra statistics (collect.ts): the switches, the daily
- * active counts (usage.ts), arrival times against where the recorder saw the
- * buses (eta.ts), crash reports (apperrors.ts), what still uses the old
- * address and paths (legacy.ts) and the settings' counts (settings.ts). On
- * the real route lines.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -65,7 +58,6 @@ test('every collector is off until the operator turns it on, and only the operat
       .status,
     400,
   );
-  // KV failing is off: it may hold an "off" nobody can read.
   assert.equal(
     await collecting(
       {
@@ -145,9 +137,12 @@ test('POST /api/errors keeps a scrubbed report only while switched on, with no o
     stack: 'at a.B.c(B.kt:10)',
     fatal: true,
   };
-  // A cookie or a token sent along changes nothing: no account is looked up.
   const headers = { cookie: 'terminus_session=abc', authorization: 'Bearer xyz' };
-  assert.equal((await send(env, '/api/errors', { method: 'POST', body: report, headers })).status, 204);
+  assert.equal(
+    (await send(env, '/api/errors', { method: 'POST', body: report, headers })).status,
+    204,
+    'a cookie or token sent along looks up no account',
+  );
   assert.equal(ae.rows('apperror').length, 0, 'off: answered, and dropped');
 
   await env.KV.put('config:collect:errors', 'on');
@@ -186,23 +181,25 @@ test('a dismissed crash is hidden until a report comes in after it was dismissed
   const dismissed = JSON.parse(await env.KV.get('config:crashes:dismissed'));
   assert.ok(dismissed['18b32d7aae56'] >= before);
 
-  // Analytics Engine's max(timestamp): UTC, to the second.
-  const ae = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  const aeTimestampUtc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
   const crashes = [
-    { fingerprint: '18b32d7aae56', last: ae(before - 60_000) },
-    { fingerprint: 'aaaaaaaaaaaa', last: ae(before - 60_000) },
+    { fingerprint: '18b32d7aae56', last: aeTimestampUtc(before - 60_000) },
+    { fingerprint: 'aaaaaaaaaaaa', last: aeTimestampUtc(before - 60_000) },
   ];
   assert.deepEqual(
     undismissed(crashes, dismissed).map((e) => e.fingerprint),
     ['aaaaaaaaaaaa'],
   );
-  const again = [{ fingerprint: '18b32d7aae56', last: ae(before + 60_000) }];
+  const again = [{ fingerprint: '18b32d7aae56', last: aeTimestampUtc(before + 60_000) }];
   assert.deepEqual(undismissed(again, dismissed), again, 'reported again since: back');
 
-  // A dismissal from over a week ago goes when the next is written.
   await env.KV.put('config:crashes:dismissed', JSON.stringify({ '000000000000': before - 9 * DAY }));
   await dismiss('18b32d7aae56');
-  assert.deepEqual(Object.keys(JSON.parse(await env.KV.get('config:crashes:dismissed'))), ['18b32d7aae56']);
+  assert.deepEqual(
+    Object.keys(JSON.parse(await env.KV.get('config:crashes:dismissed'))),
+    ['18b32d7aae56'],
+    'a dismissal over a week old goes when the next is written',
+  );
 });
 
 async function seedSessions(db, now) {
@@ -221,10 +218,8 @@ async function seedSessions(db, now) {
   await user('u1', 'a@u.nus.edu');
   await user('u2', null);
   await user('u3', null);
-  // u1: Android today and the website today; one account, counted once in all.
   await session('s1', 'u1', 'device', 3_600_000, 'android', 'android/3.1.0');
   await session('s2', 'u1', 'web', 3_600_000, null, null);
-  // u2: a Mac three days ago; u3: Android twenty days ago, on an old version.
   await session('s3', 'u2', 'device', 3 * DAY, 'mac', 'mac/3.1.0');
   await session('s4', 'u3', 'device', 20 * DAY, 'android', 'android/3.0.0');
 }
@@ -235,7 +230,7 @@ test('the active counts: accounts in all and by app, devices by version, nothing
   await seedSessions(db, now);
   const rows = await countActive(db, now);
   const of = (scope, name) => rows.find((r) => r.scope === scope && r.name === name);
-  assert.deepEqual(of('all', 'all'), { scope: 'all', name: 'all', d1: 1, d7: 2, d30: 3 });
+  assert.deepEqual(of('all', 'all'), { scope: 'all', name: 'all', d1: 1, d7: 2, d30: 3 }, 'u1 on Android and the website is one account');
   assert.deepEqual(of('app', 'android'), { scope: 'app', name: 'android', d1: 1, d7: 1, d30: 2 });
   assert.deepEqual(of('app', 'web'), { scope: 'app', name: 'web', d1: 1, d7: 1, d30: 1 });
   assert.deepEqual(of('app', 'mac'), { scope: 'app', name: 'mac', d1: 0, d7: 1, d30: 1 });
@@ -259,7 +254,7 @@ test('the dashboard lists every paired device’s version by when it was last us
 });
 
 test('the counts are written once a Singapore day, and not at all while switched off', async () => {
-  const now = Date.UTC(2026, 9, 11, 16, 5); // 00:05 on the 12th in Singapore
+  const now = Date.UTC(2026, 9, 11, 16, 5);
   const ae = makeAnalytics();
   const env = { ...makeEnv(makeKV(), ae), DB: makeD1() };
   await seedSessions(env.DB, now);
@@ -300,7 +295,6 @@ test('a request on the old address or an old path is counted by app and route, w
     'other',
     'only a well-formed version',
   );
-  // No query, and no part with a digit in it: no stop, id or tile can single anyone out.
   assert.equal(routeOf('/api/me/next'), '/api/me/next');
   assert.equal(routeOf('/api/me/trips/9f8e7d6c'), '/api/me/trips');
   assert.equal(routeOf('/api/stops/UTOWN/arrivals'), '/api/stops/UTOWN');
@@ -328,7 +322,6 @@ test('the old address and paths are counted only while switched on', async () =>
   await call('https://terminus.rcn.sh/api/health', app);
   assert.equal(ae.rows('legacy').length, 0, 'off');
   assert.equal(reads, 1, 'the switch is read once a minute, not on every old request');
-  // Turned on from the dashboard: counted from the next request, not a minute later.
   await send(env, '/api/admin/collect', { method: 'POST', body: { name: 'legacy', on: true }, headers: { 'x-health-token': 'op' } });
   await call('https://terminus.rcn.sh/api/health?x=1', app);
   assert.equal((await call('https://bus.example.test/next', app)).status, 426);
@@ -340,7 +333,7 @@ test('the old address and paths are counted only while switched on', async () =>
       { kind: 'legacy', what: 'address', client: 'mac/3.2.0', route: '/api/health', n: 1 },
       { kind: 'legacy', what: 'path', client: 'mac/3.2.0', route: '/next', n: 1 },
     ],
-    'one row for each, and none for a request on the new address',
+    'turned on from the dashboard, counted from the next request: one row for each, and none for a request on the new address',
   );
 });
 
@@ -376,7 +369,6 @@ test("requests made with an API key are counted against it only while switched o
     'sampled per key',
   );
 
-  // Two requests can touch last_used in the same millisecond: set the order outright.
   db._db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').run(now - 60_000, 'k1');
   db._db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').run(now - 1000, 'k2');
   const s = await adminStats({ ...env, DB: db }, now + 1000);
@@ -423,8 +415,10 @@ test('the settings: each value counted over the accounts, an older profile at th
     rows.every((r) => r.of === 3 && Object.keys(r).join() === 'setting,value,n,of'),
     'totals only',
   );
-  // A place's name, a stop or a class never becomes a value.
-  assert.ok(rows.every((r) => !JSON.stringify(r).includes('gym')));
+  assert.ok(
+    rows.every((r) => !JSON.stringify(r).includes('gym')),
+    "a place's name, a stop or a class never becomes a value",
+  );
 });
 
 test('the settings are read from the accounts used this month, written once a Singapore day while switched on', async () => {
@@ -476,10 +470,6 @@ test('the settings are read from the accounts used this month, written once a Si
 const DATE = '2026-08-26';
 const { open } = windowOf(DATE);
 
-/**
- * A recorded day with one bus per entry, driving its route's real line at
- * [speed] m/s from [from] metres, read every 30 s for [readings].
- */
 function dayWith(buses) {
   const plates = buses.map((b) => b.plate);
   const rows = [];
@@ -500,15 +490,12 @@ function dayWith(buses) {
   return buildDayFile({ date: DATE, t0: open, pollMs: 30_000, plates, rows, map: mapSnapshot() });
 }
 
-/** A recorded day of one bus on [svc], read every 30 s at each of [alongs] metres along its line. */
 function dayAlong(svc, alongs, plate = 'PD539C') {
   const rows = alongs.map((along, k) => ({ dt: k ? 30_000 : 0, svc, buses: encodeBus({ plate, lat: 1.3, lon: 103.78, along }, 0) }));
   return buildDayFile({ date: DATE, t0: open, pollMs: 30_000, plates: [plate], rows, map: mapSnapshot() });
 }
 
 test('a reading on the far side of a road the line takes both ways is passed over, and the stops either side still count', () => {
-  // D1 from CLB to BIZ2, as recorded: LT13 (3,929 m) and LT13-OPP (1,005 m) are the two sides of one
-  // road, as are AS5 (4,086 m) and NUSS-OPP (617 m); twice the bus was placed on the far side.
   const at = (stop) => SHAPES.D1.at[SHAPES.D1.stops.indexOf(stop)];
   assert.deepEqual([at('LT13'), at('AS5')].map(Math.round), [3929, 4086]);
   const passed = passingsOf(dayAlong('D1', [3580, 3676, 1034, 3916, 4006, 709, 4273, 4438, 4572, 4622]));
@@ -517,21 +504,22 @@ test('a reading on the far side of a road the line takes both ways is passed ove
     ['LT13', 'AS5', 'BIZ2'],
     'nothing at LT13-OPP or NUSS-OPP',
   );
-  // LT13's mark, 25 m before it, between the readings at 30 s (3,676 m) and 90 s (3,916 m).
-  assert.equal(passed[0].t, open + 30_000 + Math.round(((at('LT13') - 25 - 3676) / (3916 - 3676)) * 60_000));
-  // It is known only when the reading after the crossing arrives (the one at 90 s), not a poll later.
-  assert.equal(passed[0].seen, open + 90_000);
+  assert.equal(
+    passed[0].t,
+    open + 30_000 + Math.round(((at('LT13') - 25 - 3676) / (3916 - 3676)) * 60_000),
+    "LT13's mark, 25 m before it, between the readings at 30 s and 90 s",
+  );
+  assert.equal(passed[0].seen, open + 90_000, 'known when the reading after the crossing arrives, not a poll later');
   assert.ok(passed.every((p) => p.seen >= p.t));
-  // Two readings in a row that agree are where the bus is, even away from the last good one.
   const moved = passingsOf(dayAlong('D1', [3580, 900, 930, 960, 990, 1020, 1300, 1400]));
   assert.deepEqual(
     moved.map((p) => p.stop),
     ['LT13-OPP', 'IT'],
+    'two readings in a row that agree are where the bus is, even away from the last good one',
   );
 });
 
 test('a wrong first reading invents nothing, and a bus round the end of its line goes on', () => {
-  // Its first reading on the far side, 668 m back; then driving at 7 m/s from 2,880 m.
   const d1 = passingsOf(dayAlong('D1', [2212, 3090, 3300, 3510, 3720]));
   const mark = (svc, stop) => SHAPES[svc].at[SHAPES[svc].stops.indexOf(stop)] - 25;
   assert.deepEqual(
@@ -540,7 +528,6 @@ test('a wrong first reading invents nothing, and a bus round the end of its line
     'not UTOWN, which it passed before',
   );
   assert.equal(d1[0].t, open + 30_000 + Math.round(((mark('D1', 'YIH') - 3090) / 210) * 30_000));
-  // K ends at PGPR and starts its next trip at PGP straight away.
   const k = SHAPES.K;
   const kTotal = k.at.at(-1);
   const trip = passingsOf(dayAlong('K', [kTotal - 150, kTotal - 15, kTotal, 0, 0, 300, 600, 900, 1200, 1500], 'PK1'));
@@ -548,40 +535,34 @@ test('a wrong first reading invents nothing, and a bus round the end of its line
     trip.some((p) => p.stop === k.stops[1]),
     `${k.stops[1]} on the next trip: ${trip.map((p) => p.stop)}`,
   );
-  assert.ok(!trip.some((p) => p.stop === k.stops[0]), 'starting at PGP is not arriving there');
-  // A2 round its loop's end with a reading missing (off its line) between.
+  assert.ok(!trip.some((p) => p.stop === k.stops[0]), 'K ends at PGPR and starts again at PGP straight away: not arriving there');
   const a2 = SHAPES.A2.at.at(-1);
   const round = passingsOf(dayAlong('A2', [a2 - 300, a2 - 150, -1, 350, 650], 'PA2'));
   assert.ok(
     round.some((p) => p.stop === 'KRB'),
-    `KRB: ${round.map((p) => p.stop)}`,
+    `A2 round its loop's end with a reading off its line between, KRB: ${round.map((p) => p.stop)}`,
   );
-  // Into Kent Ridge Bus Terminal, backing out the way it came in, then off on its next lap: there once.
   const layover = passingsOf(dayAlong('A2', [a2 - 300, a2 - 150, a2 - 10, a2 - 8, a2 - 60, 212, 350], 'PA2'));
   assert.deepEqual(
     layover.filter((p) => p.stop === 'KRB').map((p) => p.t),
     [open + 30_000 + Math.round((125 / 140) * 30_000)],
-    'arriving, not again on leaving',
+    'into Kent Ridge Bus Terminal and backing out the way it came: arriving, not again on leaving',
   );
 });
 
 test('a bus reaches each stop on its line as it passes it, round a loop too, and never "arrives" where a route starts', () => {
   const d2 = SHAPES.D2;
   const total = d2.at.at(-1);
-  // D2 is a loop from COM3 to COM3; this bus comes round the end and starts again.
   const loop = passingsOf(dayWith([{ plate: 'PA1A', svc: 'D2', from: total - 300, speed: 8, readings: 10, loop: true }]));
   const com3 = loop.filter((p) => p.stop === 'COM3');
   assert.equal(com3.length, 1, 'COM3 once, across the end of the line');
-  // 275 m to the mark 25 m before the stop, at 8 m/s.
-  assert.equal(com3[0].t, open + Math.round((275 / 8) * 1000));
+  assert.equal(com3[0].t, open + Math.round((275 / 8) * 1000), '275 m to the mark 25 m before the stop, at 8 m/s');
 
-  // K runs PGP to PGPR: starting at PGP is not arriving there.
   const k = passingsOf(dayWith([{ plate: 'PA2B', svc: 'K', from: 0, speed: 8, readings: 40 }]));
-  assert.ok(!k.some((p) => p.stop === 'PGP'));
+  assert.ok(!k.some((p) => p.stop === 'PGP'), 'K runs PGP to PGPR: starting at PGP is not arriving there');
   const second = SHAPES.K.stops[1];
   assert.equal(k.find((p) => p.stop === second).t, open + Math.round(((SHAPES.K.at[1] - 25) / 8) * 1000));
 
-  // Readings too far apart, or a jump no bus could make, say nothing.
   assert.deepEqual(
     passingsOf(
       dayWith([
@@ -590,6 +571,7 @@ test('a bus reaches each stop on its line as it passes it, round a loop too, and
       ]),
     ).filter((p) => p.plate === 'PA3C' && p.t > open + 30_000),
     [],
+    'readings too far apart say nothing',
   );
   assert.deepEqual(passingsOf(dayWith([{ plate: 'PA4D', svc: 'K', from: 0, speed: 100, readings: 5 }])), [], 'too fast: a bad fix');
 });
@@ -601,11 +583,11 @@ test('each prediction is scored against its own plate at its own stop, and a cac
   const p = (t, etaS, plate = 'PA2B') => ({ t, svc: 'K', plate, stop, etaS });
   const { scored, predictions } = scoreEtas(
     [
-      p(open + 30_000, Math.round((came - open - 30_000) / 1000) - 90), // said 90 s too soon: the bus came later
-      p(open + 31_000, 0), // the same cached answer, a second later
-      p(open + 60_000, Math.round((came - open - 60_000) / 1000) + 45), // said 45 s too late
-      p(open + 60_000, 120, 'PZ9Z'), // a plate never seen: not scored
-      { ...p(open + 90_000, 30), berth: 'PGP-K-S' }, // leaving its first stop: not scored, nor counted
+      p(open + 30_000, Math.round((came - open - 30_000) / 1000) - 90),
+      p(open + 31_000, 0),
+      p(open + 60_000, Math.round((came - open - 60_000) / 1000) + 45),
+      p(open + 60_000, 120, 'PZ9Z'),
+      { ...p(open + 90_000, 30), berth: 'PGP-K-S' },
     ],
     passingsOf(day),
   );
@@ -613,6 +595,7 @@ test('each prediction is scored against its own plate at its own stop, and a cac
   assert.deepEqual(
     scored.map((s) => s.errS),
     [90, -45],
+    'said 90 s too soon, then 45 s too late; an unseen plate and a bus leaving its first stop not scored',
   );
   assert.equal(scored[0].hour, 6, 'Singapore hour: the window opens at 06:30');
   assert.deepEqual(statsOf([90, -45, 10, 200]), { n: 4, medianS: 50, within1: 0.5, late2: 0.25, early1: 0 });

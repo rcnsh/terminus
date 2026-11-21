@@ -1,9 +1,3 @@
-/**
- * Faults that must cost only what they touch: Turnstile's own error, a push
- * address the export can't read, a metric that won't write, or a trip's
- * state that can't be read. Each is logged or reported
- * as itself, and never takes the request down with it.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -14,7 +8,6 @@ import { loadDay } from '../src/answer/trip.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
 
-/** Runs fn with console.error captured. */
 async function logged(fn) {
   const lines = [];
   const err = console.error;

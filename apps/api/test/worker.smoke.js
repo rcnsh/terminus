@@ -22,8 +22,6 @@ async function call(path, { fetchImpl, env, cache, headers } = {}) {
   if (fetchImpl) globalThis.fetch = fetchImpl;
   const ctx = makeCtx();
   const res = await worker.fetch(new Request(BASE + path, { headers }), env ?? makeEnv(), ctx);
-  // The real ExecutionContext keeps the Worker alive until these settle.
-  // Not awaiting them races the cache writes the next call depends on.
   await ctx.settle();
   return { res, ctx, cache: c };
 }
@@ -35,15 +33,12 @@ test('query parsing does not turn a missing lat into the Gulf of Guinea', () => 
   assert.equal(numParam(u, 'bad'), null);
   assert.equal(numParam(u, 'lon'), 103.7);
 
-  // One coordinate without the other is not a position.
-  assert.deepEqual(coordsFrom(u), { lat: null, lon: null });
+  assert.deepEqual(coordsFrom(u), { lat: null, lon: null }, 'one coordinate without the other is not a position');
   assert.deepEqual(coordsFrom(new URL(`${BASE}/api/next?lat=1.29&lon=103.77`)), { lat: 1.29, lon: 103.77 });
   assert.deepEqual(coordsFrom(new URL(`${BASE}/api/next?lat=999&lon=103.77`)), { lat: null, lon: null });
 });
 
-test('/api/next with nothing at all prompts setup, not a fabricated destination', async () => {
-  // No coordinates, no ?to=. A stranger must not be shown someone
-  // else's hardcoded commute.
+test('/api/next with no coordinates and no ?to= prompts setup, not someone else’s commute', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/api/next', { fetchImpl });
   assert.equal(res.status, 200);
@@ -69,12 +64,8 @@ test('the answer is a valid Answer and its label fits the contract', async () =>
   assert.equal(a.quality, 'live');
   assert.match(a.label, /^D2 · \d+ min$/);
   assert.equal(typeof a.detail, 'string');
-  // The alt must be a genuinely different first leg. D2 is live and wins; R2
-  // also runs PGP -> UTown but has no live vehicle, so it is offered as an
-  // estimate -- which is exactly the tiering rule: a measurement ranks above
-  // a guess, and the guess is still worth showing as the fallback.
   assert.ok(typeof a.alt === 'string', 'a second option should be offered');
-  assert.ok(!a.alt.startsWith('D2'), `alt must be a different first leg: ${a.alt}`);
+  assert.ok(!a.alt.startsWith('D2'), `alt must be a different first leg, the R2 with no live bus offered as an estimate: ${a.alt}`);
   assert.deepEqual(
     a.arrivals.filter((x) => x.svc === 'A1').map((x) => x.etaS),
     [540],
@@ -88,20 +79,17 @@ test('the answer is a valid Answer and its label fits the contract', async () =>
   assert.equal(a.arrivals.find((x) => x.svc === 'A1').crowd, 'high', 'crowd is plumbed through');
 });
 
-test('a cache-busting ?t= does not defeat the cache', async () => {
-  // The tile appends ?t= on every call and getLastKnownLocation jitters the
-  // coordinates, so a cache keyed on the request URL would never hit. The
-  // entry is keyed on the resolved stop code instead.
+test('a cache-busting ?t= does not defeat the cache: it is keyed on the resolved stop', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
 
   await call('/api/trip?to=UTOWN&from=PGP&t=1', { fetchImpl, cache });
   await call('/api/trip?to=UTOWN&from=PGP&t=2', { fetchImpl, cache });
   await call('/api/trip?to=UTOWN&from=PGP&t=3', { fetchImpl, cache });
-  assert.equal(fetchImpl.counts.shuttle, 1);
+  assert.equal(fetchImpl.counts.shuttle, 1, 'one feed call for three ?t= values');
 });
 
-test('a dead upstream returns quality "stale" with the original timestamp', async () => {
+test('a dead upstream returns quality "stale" with the original timestamp, reading the cached response once', async () => {
   const fetchedAt = Date.now() - 185_000;
   const dead = makeFetch({ fail: true });
   const cache = installGlobals(dead);
@@ -112,8 +100,6 @@ test('a dead upstream returns quality "stale" with the original timestamp', asyn
     stale: false,
   });
 
-  // Reading the cached Response twice would throw here and turn "upstream is
-  // down" into "the Worker is down". It must not.
   const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
   assert.equal(res.status, 200, 'upstream being down is not a Worker error');
 
@@ -132,20 +118,16 @@ test('a dead upstream with a cold cache says so instead of inventing a time', as
   assert.equal(res.status, 200, 'upstream being down is not a Worker error');
 
   const a = await res.json();
-  // Not 'scheduled': that would claim the feed answered and had no bus.
-  assert.equal(a.quality, 'unknown');
+  assert.equal(a.quality, 'unknown', 'not scheduled, which would claim the feed answered with no bus');
   assert.match(a.label, /^\w+ · no times$/);
   assert.match(a.detail, /live times unavailable/);
   assert.ok(a.label.length <= LABEL_MAX);
 
-  // The graph still knows which service goes there, so the answer is not empty.
-  assert.ok(a.stop.code.length > 0);
+  assert.ok(a.stop.code.length > 0, 'the graph still knows which service goes there');
   assert.match(a.detail, /\d+ stop/);
 });
 
-test('a stop the feed answered for is scheduled, not unknown', async () => {
-  // Feed reachable, but every service reports "-": no bus, which is real
-  // information and earns a headway estimate.
+test('a stop the feed answered with "-" for is scheduled with a headway estimate, not unknown', async () => {
   const quiet = makeFetch({ byStop: { PGP: [{ name: 'D2', arrivalTime: '-', nextArrivalTime: '-' }] } });
   const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl: quiet });
   const a = await res.json();
@@ -194,10 +176,9 @@ test('/docs is the API documentation, rendered from /openapi.json', async () => 
   const html = await res.text();
   assert.match(html, /<elements-api[^>]+apiDescriptionUrl="\/api\/openapi.json"/);
 
-  // `/` is the static landing page, served by the assets layer before the Worker runs.
   for (const gone of ['/', '/manifest.webmanifest', '/sw.js', '/icon.svg', '/vapid', '/subscribe', '/nope']) {
     const { res: r } = await call(gone, { fetchImpl });
-    assert.equal(r.status, 404, gone);
+    assert.equal(r.status, 404, `${gone}: the landing page is served by the assets layer, before the Worker`);
   }
 });
 
@@ -218,19 +199,15 @@ test('/api/openapi.json and /docs are built once and sent the same', async () =>
 });
 
 test('the apps and the API docs carry the same version and build number', async () => {
-  // A release bumps them together: a mismatch ships an app that says one
-  // version and updates as another.
   const { readFileSync } = await import('node:fs');
   const gradle = readFileSync(new URL('../../android/app/build.gradle.kts', import.meta.url), 'utf8');
   const plist = readFileSync(new URL('../../macos/Support/Info.plist', import.meta.url), 'utf8');
   const xcodegen = readFileSync(new URL('../../ios/project.yml', import.meta.url), 'utf8');
-  // Exactly one match each, so a second definition can't hide behind the first.
   const only = (text, re, what) => {
     const all = [...text.matchAll(re)];
-    assert.equal(all.length, 1, `${what}: expected one, found ${all.length}`);
+    assert.equal(all.length, 1, `${what}: expected one, found ${all.length}; a second definition could hide behind the first`);
     return all[0][1];
   };
-  // The literals in defaultConfig; the beta build's `versionCode = it.toInt()` is no number.
   const versionName = only(gradle, /\bversionName = "([^"]+)"/g, 'versionName in apps/android/app/build.gradle.kts');
   const versionCode = only(gradle, /\bversionCode = (\d+)\b/g, 'versionCode in apps/android/app/build.gradle.kts');
   const macVersion = only(
@@ -254,7 +231,6 @@ test('the apps and the API docs carry the same version and build number', async 
     versionCode,
     'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts',
   );
-  // The iPhone app's, set once in project.yml's settings (its Info.plists read them).
   const iosVersion = only(xcodegen, /^\s*MARKETING_VERSION: "?([^"\s]+)"?\s*$/gm, 'MARKETING_VERSION in apps/ios/project.yml');
   const iosBuild = only(xcodegen, /^\s*CURRENT_PROJECT_VERSION: "?([^"\s]+)"?\s*$/gm, 'CURRENT_PROJECT_VERSION in apps/ios/project.yml');
   assert.equal(API_VERSION, iosVersion, 'API_VERSION in src/openapi.ts matches MARKETING_VERSION in apps/ios/project.yml');
@@ -271,12 +247,9 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   assert.equal(res.status, 200);
   const spec = await res.json();
   assert.equal(spec.openapi, '3.1.0');
-  // The docs' version is the apps' version (the test above keeps them in step).
-  assert.equal(spec.info.version, API_VERSION);
+  assert.equal(spec.info.version, API_VERSION, 'the docs carry the apps’ version');
   assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
 
-  // Every method on every path, with path parameters as `*`: the account
-  // routes from their own table, the rest by hand.
   const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
   const documented = Object.entries(spec.paths)
     .flatMap(([path, item]) => METHODS.filter((m) => item[m]).map((m) => `${m.toUpperCase()} ${path.replace(/\{\w+\}/g, '*')}`))
@@ -331,13 +304,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   ].sort();
   assert.deepEqual(documented, routed);
 
-  // Every documented public GET answers with its required params filled from
-  // the spec's own examples -- a renamed route or param shows up here, not in
-  // prod. Account routes are exercised in accounts.test.js.
   for (const [path, item] of Object.entries(spec.paths)) {
-    // Account routes have their own security; `security: []` means open (health).
-    // The map and downloads need R2, and are tested on their own; the
-    // operator's passkey challenge needs HEALTH_TOKEN (openapi.test.js).
     if (
       !item.get ||
       item.get.security?.length ||
@@ -347,13 +314,11 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     )
       continue;
     const q = new URLSearchParams();
-    // `from` is only conditionally required (no location), so fill it too.
     for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));
     const { res: r } = await call(`${path}${q.size ? '?' + q : ''}`, { fetchImpl });
-    assert.equal(r.status, 200, `${path} documented but answered ${r.status}`);
+    assert.equal(r.status, 200, `${path} documented but answered ${r.status} with the spec’s own examples`);
   }
 
-  // Every $ref resolves.
   const refs = [...JSON.stringify(spec).matchAll(/"#\/components\/schemas\/(\w+)"/g)].map((m) => m[1]);
   for (const r of refs) assert.ok(spec.components.schemas[r], `dangling $ref ${r}`);
 });
@@ -386,7 +351,7 @@ test('/api/campus serves the static map + destination search data, cached hard',
 
 test("/api/arrivals reports one stop's board without needing a destination", async () => {
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  const { res } = await call('/api/arrivals?stop=com3', { fetchImpl }); // lowercase, like a URL a user might paste
+  const { res } = await call('/api/arrivals?stop=com3', { fetchImpl });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.stop.code, 'COM3');
@@ -412,21 +377,19 @@ test('/api/arrivals names the stop across the road, and each row says where it g
   assert.equal(k.color, '#2b9ad6');
   assert.equal(k.crowd, 'high');
   assert.ok(k.endsAt === null || Number.isFinite(Date.parse(k.endsAt)));
-  // A stop with no opposite stop says so.
   const utown = await (await call('/api/arrivals?stop=UTOWN', { fetchImpl: makeFetch({}) })).res.json();
-  assert.equal(utown.stop.opposite, null);
+  assert.equal(utown.stop.opposite, null, 'a stop with no opposite stop says so');
   assert.equal(utown.stop.oppositeName, null);
-  // PGP's Foyer is near it, not across the road: named, not "Across the road".
   const pgp = await (await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({}) })).res.json();
   assert.equal(pgp.stop.opposite, 'PGPR');
-  assert.equal(pgp.stop.oppositeAcross, false);
+  assert.equal(pgp.stop.oppositeAcross, false, 'PGP Foyer is near it, not across the road');
   assert.equal(pgp.stop.oppositeName, "Prince George's Park Foyer");
 });
 
 test('/api/arrivals?stopped=1 adds the services not running, after the others; without it nothing changes but `running`', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: [{ name: 'K', arrivalTime: '2', passengers: 'low' }] } });
   const cache = installGlobals(fetchImpl);
-  Date.now = () => Date.UTC(2026, 9, 7, 13, 30); // Wednesday 21:30 in Singapore: R1 and R2 have finished
+  Date.now = () => Date.UTC(2026, 9, 7, 13, 30);
   const plain = await (await call('/api/arrivals?stop=PGP', { fetchImpl, cache })).res.json();
   assert.ok(plain.board.every((r) => r.running === true && !('stopped' in r)));
   assert.ok(!plain.board.some((r) => r.svc === 'R1'));
@@ -450,7 +413,6 @@ test('/api/arrivals on an unknown stop is a 400, not a fabricated empty board', 
   assert.equal(fetchImpl.counts.shuttle, 0);
 });
 
-// Two D2 buses: one on its route (placed by the test), one parked far from it.
 const D2_BUSES = [
   {
     vehplate: 'PD123A',
@@ -465,7 +427,6 @@ const D2_BUSES = [
 
 test('/api/buses shows each bus on its route at a stop or between two, with its number plate; one off its route is left out', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
-  // Put the first bus a third of the way along D2's line, heading along it.
   const i = Math.floor(shape.line.length / 3);
   const [aLon, aLat] = shape.line[i];
   const [bLon, bLat] = shape.line[i + 1];
@@ -493,9 +454,8 @@ test('/api/buses shows each bus on its route at a stop or between two, with its 
   assert.equal(on.plate, 'PD123A', 'each bus comes with its plate');
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
 
-  // A second look, the clock unmoved, is served from the cache.
   await call('/api/buses?svc=D2', { fetchImpl, cache });
-  assert.equal(fetchImpl.counts.shuttle, 1);
+  assert.equal(fetchImpl.counts.shuttle, 1, 'a second look, the clock unmoved, is from the cache');
 });
 
 test('/api/buses: an unknown service is a 400; an unreachable feed is unavailable, not empty', async () => {
@@ -531,14 +491,12 @@ test('/api/lines: each service’s buses out, counted as /api/buses places them,
   await call('/api/lines', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, reads, 'asked again at once: from the cache');
 
-  // A feed that doesn't answer is "don't know", not "none out".
   const { res: down } = await call('/api/lines', { fetchImpl: makeFetch({ fail: true }) });
-  assert.equal((await down.json()).lines.K, null);
+  assert.equal((await down.json()).lines.K, null, 'a feed that does not answer is unknown, not none out');
 });
 
 test('/api/line: a service’s stops in order, its buses on them, and with a stop that stop’s row; one read of each feed', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D1;
-  // A D1 bus a third of the way along the line between two of its points, heading along it.
   const i = Math.floor(shape.line.length / 3);
   const [aLon, aLat] = shape.line[i];
   const [bLon, bLat] = shape.line[i + 1];
@@ -574,24 +532,20 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
   assert.equal(body.stop.row.etaS, 360);
   assert.deepEqual(body.stop.row.towards, ['Central Library', 'COM 3']);
   assert.equal(body.stop.row.crowd, 'medium');
-  // The bus where /api/buses puts it.
   const [bus] = body.buses;
   assert.equal(bus.plate, 'PD418C');
   assert.equal(bus.crowd, 'low');
   const map = (await (await call('/api/buses?svc=D1', { fetchImpl, cache })).res.json()).buses[0];
-  assert.equal(bus.id, map.id);
-  // A third of the way along a stretch of road: between two stops, after Opp YIH.
+  assert.equal(bus.id, map.id, 'the bus where /api/buses puts it');
   assert.equal(map.at, null, 'between stops on the map');
   assert.equal(map.stretch.last.code, 'YIH-OPP');
   assert.deepEqual([bus.at, body.stops[bus.after].code], [null, 'YIH-OPP']);
   assert.equal(fetchImpl.counts.shuttle, 2, 'one buses read (cached for /buses after) and one arrivals read');
-  // Its count as /api/lines words it, so the list of services can match the page.
-  assert.deepEqual(body.out, { out: 1, outText: '1 out', stale: false });
+  assert.deepEqual(body.out, { out: 1, outText: '1 out', stale: false }, 'counted as /api/lines words it');
 
-  // Without a stop: no `stop`, and no arrivals read.
   const plain = makeFetch({ buses: { D1: [] } });
   const bare = await (await call('/api/line?svc=D1', { fetchImpl: plain })).res.json();
-  assert.equal('stop' in bare, false);
+  assert.equal('stop' in bare, false, 'without a stop, no stop and no arrivals read');
   assert.deepEqual(bare.buses, []);
   assert.deepEqual(bare.out, { out: 0, outText: 'None out', stale: false });
   assert.equal(plain.counts.shuttle, 1);
@@ -602,14 +556,14 @@ test('/api/line: a service’s stops in order, its buses on them, and with a sto
 test('/api/line says whether the service is running, and its row at the stop comes even when it is not', async () => {
   const fetchImpl = makeFetch({ buses: { R1: [] } });
   const cache = installGlobals(fetchImpl);
-  Date.now = () => Date.UTC(2026, 9, 10, 1); // Saturday 09:00 in Singapore: no R1 at weekends
+  Date.now = () => Date.UTC(2026, 9, 10, 1);
   const body = await (await call('/api/line?svc=R1&stop=PGP', { fetchImpl, cache })).res.json();
   assert.equal(body.running, false);
   assert.equal(body.stopped, 'noService');
   assert.equal(body.resumesAt, '2026-10-11T23:40:00.000Z', 'Monday 07:40');
   assert.equal(body.endsAt, null);
   assert.deepEqual([body.stop.row.svc, body.stop.row.running, body.stop.row.stopped], ['R1', false, 'noService']);
-  Date.now = () => Date.UTC(2026, 9, 7, 4); // Wednesday noon
+  Date.now = () => Date.UTC(2026, 9, 7, 4);
   const on = await (await call('/api/line?svc=R1', { fetchImpl, cache })).res.json();
   assert.deepEqual([on.running, on.stopped, on.resumesAt], [true, null, null]);
 });
@@ -624,7 +578,7 @@ test('/api/line: a bus still out after hours means the service is running, never
     buses: { R1: [{ vehplate: 'PD500A', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360 }] },
   });
   const cache = installGlobals(fetchImpl);
-  Date.now = () => Date.UTC(2026, 9, 7, 11, 45); // Wednesday 19:45 in Singapore: R1's hours end at 19:30
+  Date.now = () => Date.UTC(2026, 9, 7, 11, 45);
   const body = await (await call('/api/line?svc=R1', { fetchImpl, cache })).res.json();
   assert.equal(body.buses.length, 1);
   assert.deepEqual([body.running, body.stopped, body.resumesAt], [true, null, null]);
@@ -642,18 +596,13 @@ test('/api/line: an unknown service or a stop it doesn’t call at is a 400, and
   assert.equal((await zh.json()).error, '这条线路不经过这个车站');
   assert.equal(none.counts.shuttle, 0);
 
-  // An unreachable feed: unavailable, no buses, and the row is unknown rather than made up.
   const down = await (await call('/api/line?svc=K&stop=YIH', { fetchImpl: makeFetch({ fail: true }) })).res.json();
   assert.equal(down.available, false);
   assert.deepEqual(down.buses, []);
-  assert.ok(down.stop.row === null || down.stop.row.etaS === null);
+  assert.ok(down.stop.row === null || down.stop.row.etaS === null, 'an unreachable feed leaves the row unknown, not made up');
 });
 
-test('walking is offered end to end when it beats the bus', async () => {
-  // Standing at COM3, UTown is a ~14 min walk. A D1 twenty minutes out plus
-  // four stops of riding loses to that, even with the walk's minutes counted
-  // for the heat, and the endpoint must be willing to say so rather than
-  // dutifully reporting the bus.
+test('walking is offered end to end when it beats the bus, even counted for the heat', async () => {
   const slow = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '20', passengers: 'low' }] } });
   const { res } = await call('/api/trip?to=UTOWN&lat=1.29466&lon=103.77441', { fetchImpl: slow });
   const a = await res.json();
@@ -667,7 +616,6 @@ test('walking is offered end to end when it beats the bus', async () => {
 
 test('the destination stop is never offered as somewhere to catch a bus', async () => {
   const f = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '3' }] } });
-  // Standing on COM3 with COM3 as the destination.
   const { res } = await call('/api/trip?to=COM3&lat=1.29466&lon=103.77441', { fetchImpl: f });
   const a = await res.json();
   assert.notEqual(a.stop.code, 'COM3', 'boarding at your destination is not an option');
@@ -691,10 +639,9 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
   const answers = ae.rows('answer');
   assert.equal(answers.length, 1, 'exactly one decision per request');
 
-  // Its raw positions are pinned in analytics-rows.test.js; here, what it says.
   const [row] = answers;
   const r = named(row);
-  assert.equal(r.stop, a.stop.code);
+  assert.equal(r.stop, a.stop.code, 'what the row says; its positions are pinned in analytics-rows.test.js');
   assert.equal(r.svc, 'D2');
   assert.equal(r.dest, 'UTOWN', 'destination, for checking the direction later');
   assert.equal(r.quality, 'live');
@@ -704,7 +651,6 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
   assert.equal(r.via, '', 'one bus: no change stop');
   assert.equal(r.changeWaitS, -1, 'one bus: no wait at a change');
 
-  // The segment-time seed: plate is the join key across stops.
   const arrivals = ae.named('arrival');
   assert.ok(arrivals.length > 0);
   assert.ok(
@@ -714,7 +660,7 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
   assert.equal(arrivals.length, a.arrivals.filter((x) => x.etaS != null).length, 'one row per timed arrival, none for "-"');
   assert.ok(
     arrivals.some((r) => r.plate.length > 0),
-    'plate is recorded',
+    'plate is recorded: it joins segment times across stops',
   );
 });
 
@@ -738,17 +684,13 @@ test('a thrown analytics binding cannot take down a response', async () => {
 });
 
 test('/api/next with coordinates but no timetable shows nearby buses, no invented destination', async () => {
-  // Standing near COM3, no timetable. The honest answer is "what is coming at
-  // your nearest stop", with no destination and so no walk/ride computation.
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
-  // COM3 coordinates.
   const { res } = await call('/api/next?lat=1.29443&lon=103.77522', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
   assert.ok(a.stop.code.length > 0, 'a real nearby stop');
   assert.ok(a.label.length > 0);
-  // No destination was chosen, so the detail must not claim to send you anywhere.
-  assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail));
+  assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail), 'no destination chosen, so the detail sends you nowhere');
   assert.notEqual(a.quality, undefined);
 });
 
@@ -762,8 +704,7 @@ test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59
   assert.equal(req.method, 'POST');
   assert.ok(req.url.endsWith('/bus-proxy/shuttle-service'), req.url);
   assert.equal(req.headers.get('x-api-key'), 'test-proxy-key');
-  // The guest JWT rides in both the Bearer header and the body envelope.
-  assert.equal(req.headers.get('authorization'), `Bearer ${req.body.token}`);
+  assert.equal(req.headers.get('authorization'), `Bearer ${req.body.token}`, 'the guest JWT in both the Bearer header and the body');
   assert.equal(req.body.busstopname, 'COM3');
   assert.equal(req.body.domain, 'PUBLIC');
   for (const k of ['userid', 'deviceid', 'ipaddr', 'version']) assert.ok(req.body[k], `body.${k}`);
@@ -775,9 +716,7 @@ test('a rejected proxy call retries once with a genuinely fresh token', async ()
   assert.equal((await res.json()).available, true, 'the retry succeeded');
 
   assert.equal(fetchImpl.counts.shuttle, 2);
-  // One mint for the first call (a fresh KV has no token), one for the retry,
-  // which must mint rather than read the rejected token back out of KV.
-  assert.equal(fetchImpl.counts.auth, 2, 'the retry minted a token');
+  assert.equal(fetchImpl.counts.auth, 2, 'one mint for the first call, and the retry minted rather than reading the refused token from KV');
   const [first, second] = fetchImpl.requests;
   assert.notEqual(first.body.token, second.body.token, 'the retry used a different token');
 });
@@ -787,8 +726,7 @@ test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', as
   const { res } = await call('/api/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
-  // 'scheduled' would claim the feed answered and had no bus. It never answered.
-  assert.equal(a.quality, 'unknown');
+  assert.equal(a.quality, 'unknown', 'not scheduled: the feed never answered');
   assert.equal(fetchImpl.counts.shuttle, 2, 'one retry, not a loop');
 });
 
@@ -818,12 +756,11 @@ test('the version string comes from config:appVersion in KV, else the secret', a
   await call('/api/arrivals?stop=COM3', { fetchImpl: plain });
   assert.equal(plain.mints[0].version, '0.0.0-test', 'no key: the secret');
 
-  // A typo in KV would fail every call, so it is ignored.
   const typo = makeKV();
   await typo.put('config:appVersion', '2.60.0');
   const guarded = makeFetch({ byStop: { COM3: D2_IN_4 } });
   await call('/api/arrivals?stop=COM3', { fetchImpl: guarded, env: makeEnv(typo) });
-  assert.equal(guarded.mints[0].version, '0.0.0-test');
+  assert.equal(guarded.mints[0].version, '0.0.0-test', 'a typo in KV is ignored');
 });
 
 test('a new version written to KV is live within a minute, with a token minted for it', async () => {
@@ -871,7 +808,6 @@ test('a NUS host answering 429 or 5xx is not retried, and quiets every stop', as
 });
 
 test('a NUS host that never answers, or cannot be reached, quiets every stop', async () => {
-  // Short timeouts, so the test doesn't wait out the real 5 s.
   const { TTL } = await import('../src/config.ts');
   const saved = TTL.upstreamTimeoutMs;
   TTL.upstreamTimeoutMs = 50;
@@ -890,8 +826,7 @@ test('a NUS host that never answers, or cannot be reached, quiets every stop', a
   }
 });
 
-test('a failed token mint is not tried again by every stop that wants one', async () => {
-  // 400: the NUS load balancer's intermittent "Contradictory scheme headers".
+test('a failed token mint (a 503, or the load balancer’s intermittent 400) is not tried again by every stop that wants one', async () => {
   for (const mintStatus of [400, 503]) {
     const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, mintStatus });
     const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl });
@@ -913,18 +848,16 @@ test('a refusal a fresh token did not cure is not met with another mint per stop
   await call('/api/arrivals?stop=COM3', { fetchImpl, env, cache });
   assert.equal(fetchImpl.counts.auth, 2, 'within remintGapS, no second mint');
   assert.equal(fetchImpl.counts.shuttle, 3, 'and no retry with the token already refused');
-  // A minute on, one more fresh token may be tried.
   Date.now = () => FROZEN_NOW + 61_000;
   await call('/api/arrivals?stop=UTOWN', { fetchImpl, env, cache });
-  assert.equal(fetchImpl.counts.auth, 3);
+  assert.equal(fetchImpl.counts.auth, 3, 'a minute on, one more fresh token');
   assert.equal(fetchImpl.counts.shuttle, 5);
 });
 
-test("a refused token is retried with another isolate's newer one from KV, without a mint", async () => {
+test("a refused token is retried with another isolate's newer one from KV, without a mint, when the memo is older", async () => {
   const kv = makeKV();
   const env = makeEnv(kv);
   const { cache } = await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({ byStop: { PGP: D2_IN_4 } }), env });
-  // Another isolate has since minted: its token is in KV, this one's memo is older.
   const newer = {
     token: 'another-isolate-token-0123456789',
     userid: 'U2',
@@ -949,11 +882,10 @@ test('while another isolate fetches a stale stop, the stale answer is served wit
   const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal((await res.json()).available, true);
   assert.equal(fetchImpl.counts.shuttle, 0, 'the other fetch fills the cache');
-  // Its marker gone, the next request fetches, and clears its own marker after.
   await cache.delete(`${ARRIVALS_KEY('PGP')}/pending`);
   await call('/api/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
-  assert.equal(await cache.match(`${ARRIVALS_KEY('PGP')}/pending`), undefined);
+  assert.equal(await cache.match(`${ARRIVALS_KEY('PGP')}/pending`), undefined, 'the next fetch clears its own marker');
 });
 
 test('a code that is not a stop (a food court) is never sent to either feed', async () => {
@@ -981,9 +913,8 @@ test("the beta's cache keys are its own: the stable site's breaker doesn't quiet
   assert.equal((await res.json()).available, true, "the stable site's breaker isn't the beta's");
   assert.ok(cache._store.has('https://beta.terminus.internal/arrivals/PGP'));
   assert.ok(!cache._store.has(ARRIVALS_KEY('PGP')));
-  // The stable site, with its breaker open, still asks nothing.
   const { res: stable } = await call('/api/arrivals?stop=PGP', { fetchImpl, cache });
-  assert.equal((await stable.json()).available, false);
+  assert.equal((await stable.json()).available, false, 'the stable site, its breaker open, asks nothing');
   assert.equal(fetchImpl.counts.shuttle, 1);
   scopeCache(makeEnv());
 });
@@ -1009,7 +940,6 @@ test('concurrent requests for a cold stop share one upstream call', async () => 
 });
 
 test('a hung feed times out; with a stale answer on hand it is served instead', async () => {
-  // Short timeouts, so the test doesn't wait out the real 5 s.
   const { TTL } = await import('../src/config.ts');
   const saved = { t: TTL.upstreamTimeoutMs, r: TTL.staleRaceMs };
   TTL.upstreamTimeoutMs = 200;
@@ -1037,14 +967,12 @@ test('a feed that says OK but has no arrivals list is a failure, not "no bus"', 
   assert.equal((await res.json()).available, false);
 });
 
-test('a feed whose rows changed shape is a failure the monitor sees, not every bus turned into an estimate', async () => {
-  // A rename upstream: the list is there, but its rows say routeName, not name.
+test('a feed whose rows renamed name to routeName is a failure the monitor confirms, not every bus turned into an estimate', async () => {
   const raw = { code: '00000', msg: '', data: { etas: { timings: [{ routeName: 'D2', arrivalTime: '3', nextArrivalTime: '15' }] } } };
   const { res } = await call('/api/arrivals?stop=PGP', { fetchImpl: makeFetch({ raw }) });
   const body = await res.json();
   assert.equal(body.available, false);
   assert.ok(body.board.length > 0 && body.board.every((x) => x.quality === 'unknown'), 'no headway guess passed off as the board');
-  // The monitor's probe fails the same way, so the outage is confirmed and emailed.
   const { checkUpstream, FAILS_TO_ALERT } = await import('../src/ops/monitor.ts');
   installGlobals(makeFetch({ raw }));
   const env = makeEnv();
@@ -1060,15 +988,12 @@ test('concurrent token requests share one mint instead of each minting', async (
   const env = makeEnv();
   const { getSession } = await import('../src/feeds/auth.ts');
 
-  // force: true bypasses memo and KV, so all three would mint without dedupe.
   const sessions = await Promise.all([1, 2, 3].map(() => getSession(env, Date.now(), { force: true })));
-  assert.equal(fetchImpl.counts.auth, 1, 'one mint shared by all three callers');
+  assert.equal(fetchImpl.counts.auth, 1, 'one mint shared by all three forced callers');
   assert.ok(sessions.every((s) => s.token === sessions[0].token));
 
-  // Once it settles, the next forced refresh mints again rather than reusing
-  // a finished promise forever.
   await getSession(env, Date.now(), { force: true });
-  assert.equal(fetchImpl.counts.auth, 2);
+  assert.equal(fetchImpl.counts.auth, 2, 'once settled, a forced refresh mints again');
 });
 
 test('downloads serve whatever latest.json points at', async () => {
@@ -1084,7 +1009,6 @@ test('downloads serve whatever latest.json points at', async () => {
   };
   const reads = [];
   const env = { ...makeEnv(), FILES: bucket };
-  // latest.json and the appcast are read on every request: a put shows at once.
   const putLater = put;
   const get = async (p) => {
     const cache = installGlobals(makeFetch({}), FROZEN_NOW);
@@ -1123,7 +1047,6 @@ test('downloads serve whatever latest.json points at', async () => {
       mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
     }),
   );
-  // The arm64 APK unless the app asks for its own.
   put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
   put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
   putLater(
@@ -1139,7 +1062,7 @@ test('downloads serve whatever latest.json points at', async () => {
       mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
     }),
   );
-  assert.equal(await (await get('/download/android')).text(), 'ARM64');
+  assert.equal(await (await get('/download/android')).text(), 'ARM64', 'the arm64 APK unless the app asks for its own');
   assert.equal(await (await get('/download/android?abi=armeabi-v7a')).text(), 'ARMV7');
   assert.equal(await (await get('/download/android?abi=x86_64')).text(), 'ARM64', 'a type not built: the arm64 one');
   assert.equal(await (await get('/download/android?abi=__proto__')).text(), 'ARM64');
@@ -1150,27 +1073,32 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal(dmg.headers.get('content-type'), 'application/x-apple-diskimage');
   assert.match(dmg.headers.get('content-disposition'), /terminus-1\.0\.1\.dmg/);
 
-  // Sparkle: the appcast, and release files by their versioned path.
   assert.equal((await get('/download/appcast.xml')).status, 404, 'no appcast yet');
   putLater('appcast.xml', '<rss/>');
   const feed = await get('/download/appcast.xml');
   assert.equal(feed.headers.get('content-type'), 'application/xml; charset=utf-8');
   assert.equal(await feed.text(), '<rss/>');
-  // Read from R2 on every request, so a release is live the moment it's put.
   const before = reads.length;
   assert.equal(await (await get('/download/appcast.xml')).text(), '<rss/>');
   assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
   assert.equal((await get('/download/latest.json')).headers.get('cache-control'), 'public, max-age=300');
-  assert.deepEqual(reads.slice(before), ['appcast.xml', 'latest.json', 'latest.json'], 'neither kept');
+  assert.deepEqual(
+    reads.slice(before),
+    ['appcast.xml', 'latest.json', 'latest.json'],
+    'neither kept: a release is live the moment it is put',
+  );
   const byPath = await get('/download/releases/1.0.1/terminus-1.0.1.dmg');
   assert.equal(byPath.status, 200);
   assert.equal(byPath.headers.get('content-type'), 'application/x-apple-diskimage');
   assert.equal(await byPath.text(), 'DMG');
   assert.equal((await get('/download/releases/9.9.9/terminus-9.9.9.dmg')).status, 404);
   assert.equal((await get('/download/releases/1.0.1/other.dmg')).status, 404, 'only release files');
-  // A pre-release version is a release file like any other.
   put('releases/2.0.0-beta/terminus-2.0.0-beta.apk', 'BETA');
-  assert.equal(await (await get('/download/releases/2.0.0-beta/terminus-2.0.0-beta.apk')).text(), 'BETA');
+  assert.equal(
+    await (await get('/download/releases/2.0.0-beta/terminus-2.0.0-beta.apk')).text(),
+    'BETA',
+    'a pre-release is a release file',
+  );
   assert.equal((await get('/download/releases/2.0.0-Beta/terminus-2.0.0-Beta.apk')).status, 404);
 });
 
@@ -1196,14 +1124,13 @@ test('/api/status.json: the feed state and outages, public and cached', async ()
     JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }),
   );
   await kv.put('monitor:incidents', JSON.stringify([{ start: now - 3_600_000, end: null, cause: 'version' }]));
-  // Each isolate reads the records once a minute, not three KV reads a request.
   const cache = installGlobals(makeFetch({}), now + 59_000);
   let reads = 0;
   const get = kv.get.bind(kv);
   kv.get = (...a) => (reads++, get(...a));
   res = (await call('/api/status.json', { env, cache })).res;
   assert.equal((await res.json()).feed, 'unknown', 'kept for a minute');
-  assert.equal(reads, 0);
+  assert.equal(reads, 0, 'each isolate reads the records once a minute');
   Date.now = () => now + 60_000;
   res = (await call('/api/status.json', { env, cache })).res;
   assert.equal(reads, 3);
@@ -1252,7 +1179,6 @@ test('every response carries nosniff and HSTS; HTML gets a CSP, /docs one that a
   assert.match(await docs.text(), /integrity="sha384-/);
 });
 
-/** An R2 bucket of these files (text), ranges and all. */
 const rangedBucket = (files) => makeBucket((key) => (files.has(key) ? new TextEncoder().encode(files.get(key)) : null));
 
 test('/map serves the map file in pieces, and its fonts and icons', async () => {
@@ -1283,8 +1209,7 @@ test('/map serves the map file in pieces, and its fonts and icons', async () => 
   assert.equal(glyphs.headers.get('content-type'), 'application/x-protobuf');
   assert.equal((await get('/map/sprites/v4/dark@2x.png')).headers.get('content-type'), 'image/png');
 
-  // Nothing else under map/ is reachable.
-  assert.equal((await get('/map/fonts/..%2F..%2Flatest.json/0-255.pbf')).status, 404);
+  assert.equal((await get('/map/fonts/..%2F..%2Flatest.json/0-255.pbf')).status, 404, 'nothing else under map/ is reachable');
   assert.equal((await get('/map/latest.json')).status, 404);
   assert.equal((await get('/map/fonts/Noto Sans Regular/0-255.pbf.bak')).status, 404);
 });
@@ -1302,7 +1227,6 @@ test('map pieces are kept at the edge: R2 is read once per piece, and a new uplo
   assert.equal(await first.text(), '0123');
   const etag = first.headers.get('etag');
 
-  // Everyone after asks for the same piece: from the cache, the same bytes.
   for (let i = 0; i < 3; i++) {
     const again = await get('/map/campus.pmtiles', { range: 'bytes=8-11' });
     assert.equal(again.status, 206);
@@ -1312,25 +1236,21 @@ test('map pieces are kept at the edge: R2 is read once per piece, and a new uplo
   }
   assert.equal(bucket.gets, 1, 'one R2 read for four people');
 
-  // The whole file (Android keeps it for offline), and the last bytes.
   assert.equal(await (await get('/map/campus.pmtiles')).text(), 'PMTiles-0123456789');
   assert.equal(await (await get('/map/campus.pmtiles')).text(), 'PMTiles-0123456789');
   assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=-4' })).text(), '6789');
-  assert.equal(bucket.gets, 3);
-  // A copy that's current costs no read, weakened by compression or not.
+  assert.equal(bucket.gets, 3, 'the whole file, as Android keeps it offline, and the last bytes');
   assert.equal((await get('/map/campus.pmtiles', { 'if-none-match': `W/${etag}` })).status, 304);
   assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=18-' })).status, 416);
-  assert.equal(bucket.gets, 3);
+  assert.equal(bucket.gets, 3, 'a current copy costs no read, weak ETag or not');
 
-  // A new map is uploaded. Within minutes its pieces are served, never the
-  // old file's bytes under the new file's ETag.
   files.set('map/campus.pmtiles', 'PMTiles-abcdefghij');
   const was = Date.now;
   Date.now = () => was() + 10 * 60_000;
   try {
     const fresh = await get('/map/campus.pmtiles', { range: 'bytes=8-11' });
     assert.equal(await fresh.text(), 'abcd');
-    assert.notEqual(fresh.headers.get('etag'), etag);
+    assert.notEqual(fresh.headers.get('etag'), etag, 'never the old bytes under the new ETag');
   } finally {
     Date.now = was;
   }
@@ -1342,7 +1262,6 @@ test('when R2 fails, map pieces in the edge cache are still served and the rest 
   const env = { ...makeEnv(), FILES: bucket };
   const cache = installGlobals(makeFetch({}));
   const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
-  // Past what earlier tests taught this isolate of the file.
   const was = Date.now;
   let aheadMs = 30 * 60_000;
   Date.now = () => was() + aheadMs;
@@ -1350,7 +1269,6 @@ test('when R2 fails, map pieces in the edge cache are still served and the rest 
   try {
     assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
 
-    // R2 goes down, and this isolate's memo of the file lapses.
     let heads = 0;
     bucket.head = async () => {
       heads++;
@@ -1363,16 +1281,14 @@ test('when R2 fails, map pieces in the edge cache are still served and the rest 
     const cached = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
     assert.equal(cached.status, 206, 'the piece is in the edge cache');
     assert.equal(await cached.text(), 'PMTiles');
-    // The last known ETag is trusted a while: cached pieces don't each ask R2 again.
     for (let i = 0; i < 3; i++) assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).status, 206);
-    assert.equal(heads, 1);
+    assert.equal(heads, 1, 'the last known ETag is trusted a while');
     aheadMs += 31_000;
     assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).status, 206);
     assert.equal(heads, 2, 'R2 is asked again after 30 s');
-    // A new isolate never saw R2 answer, but the data centre's cache kept the head.
     forgetHeads();
     const fresh = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
-    assert.equal(fresh.status, 206, 'a new isolate serves the cached piece too');
+    assert.equal(fresh.status, 206, 'a new isolate serves the cached piece too: the data centre’s cache kept the head');
     assert.equal(await fresh.text(), 'PMTiles');
     for (const headers of [{ range: 'bytes=8-11' }, {}, { range: 'bytes=0-1,4-5' }, { 'if-range': '"x"', range: 'bytes=0-1' }]) {
       const res = await get('/map/campus.pmtiles', headers);
@@ -1380,9 +1296,12 @@ test('when R2 fails, map pieces in the edge cache are still served and the rest 
       assert.equal(res.headers.get('retry-after'), '60');
     }
 
-    // R2 is back: the file wasn't taken for replaced, and a range past its end is still 416.
     Object.assign(bucket, { head, get: read });
-    assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).text(), '0123');
+    assert.equal(
+      await (await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).text(),
+      '0123',
+      'R2 back: the file was not taken for replaced',
+    );
     assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=99-' })).status, 416);
   } finally {
     Date.now = was;
@@ -1423,17 +1342,14 @@ test('reads from R2 for the map are limited per IP; pieces in the edge cache are
 
   assert.equal((await get('/map/fonts/Noto%20Sans%20Medium/256-511.pbf')).status, 200);
   assert.deepEqual(asked, ['map:203.0.113.9'], 'one read from R2, asked once');
-  // A lecture hall behind the same address: from the cache, never limited.
   for (let i = 0; i < 5; i++) assert.equal(await (await get('/map/fonts/Noto%20Sans%20Medium/256-511.pbf')).text(), 'GLYPHS');
-  assert.equal(asked.length, 1);
-  // Past the limit, a file not yet in the cache waits.
+  assert.equal(asked.length, 1, 'a lecture hall behind one address is served from the cache, never limited');
   const limited = await get('/map/sprites/v4/light.json');
-  assert.equal(limited.status, 429);
+  assert.equal(limited.status, 429, 'past the limit, a file not yet cached waits');
   assert.equal(limited.headers.get('retry-after'), '60');
-  // A glyph range MapLibre never asks for is no file: no read, no limit.
   const before = headCalls;
   assert.equal((await get('/map/fonts/Noto%20Sans%20Medium/1-5.pbf')).status, 404);
-  assert.equal(headCalls, before);
+  assert.equal(headCalls, before, 'a glyph range MapLibre never asks for: no read, no limit');
   assert.equal(asked.length, 2);
 });
 
@@ -1456,7 +1372,6 @@ test('fonts and icons are kept by path: no look at R2 for what the edge has, and
   assert.ok(etag);
   assert.equal(first.headers.get('content-length'), '9');
   assert.equal(first.headers.get('cache-control'), 'public, max-age=2592000');
-  // Days later, past any look at the file, still from the edge: R2 isn't asked, nor the limit.
   Date.now = () => FROZEN_NOW + 3 * 86_400_000;
   for (let i = 0; i < 3; i++) {
     const again = await get('/map/sprites/v4/light@2x.png');
@@ -1472,8 +1387,7 @@ test('fonts and icons are kept by path: no look at R2 for what the edge has, and
   assert.equal(headCalls, 0, 'never a head()');
   assert.equal(bucket.gets, 1, 'one read');
   assert.equal(asked.length, 1, 'limited only where R2 was read');
-  // A file not in the cache, past the limit, waits.
-  assert.equal((await get('/map/sprites/v4/dark.json')).status, 429);
+  assert.equal((await get('/map/sprites/v4/dark.json')).status, 429, 'a file not cached, past the limit, waits');
 });
 
 test('a piece of the map in the edge cache is served even once R2 may not be read', async () => {
@@ -1491,16 +1405,14 @@ test('a piece of the map in the edge cache is served even once R2 may not be rea
   assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
   assert.equal(headCalls, 1);
   open = false;
-  // Past the time the file's ETag is trusted: the limit says no reads, but the piece is in the cache.
   Date.now = () => FROZEN_NOW + 10 * 60_000;
   const piece = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
   assert.equal(piece.status, 206);
   assert.equal(piece.headers.get('content-range'), 'bytes 0-6/18');
   assert.equal(piece.headers.get('content-length'), '7');
   assert.equal(await piece.text(), 'PMTiles');
-  assert.equal(headCalls, 1, 'R2 not asked');
-  // A piece that isn't cached still waits.
-  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).status, 429);
+  assert.equal(headCalls, 1, 'past the time the ETag is trusted and over the limit, the cached piece is served without R2');
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).status, 429, 'a piece not cached still waits');
 });
 
 test('/api/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
@@ -1549,8 +1461,6 @@ test('files served without the Worker get the same headers from _headers', async
   const { readFile, readdir } = await import('node:fs/promises');
   const { withSecurityHeaders } = await import('../src/http.ts');
   const { openApiSpec } = await import('../src/openapi.ts');
-  // Cloudflare's own matching, for runWorkerFirst and _headers alike: `*`
-  // is any run of characters, across `/` too.
   const glob = (p) =>
     new RegExp(
       `^${p
@@ -1563,7 +1473,6 @@ test('files served without the Worker get the same headers from _headers', async
   const skip = first.filter((p) => p.startsWith('!')).map((p) => glob(p.slice(1)));
   const skips = (path) => skip.some((r) => r.test(path));
 
-  // _headers: a path, then its indented headers.
   const rules = [];
   for (const line of (await readFile(new URL('../../web/public/_headers', import.meta.url), 'utf8')).split('\n')) {
     if (!line.trim() || line.startsWith('#')) continue;
@@ -1585,13 +1494,11 @@ test('files served without the Worker get the same headers from _headers', async
     "the pages' scripts and styles skip the Worker",
   );
   for (const path of skipped) {
-    // Nothing that skips it is a page, which would need the CSP.
-    assert.ok(!path.endsWith('.html'), `${path} is a page`);
+    assert.ok(!path.endsWith('.html'), `${path} is a page, which needs the CSP the Worker adds`);
     const set = {};
     for (const r of rules.filter((x) => x.re.test(path))) {
       for (const [k, v] of Object.entries(r.set)) {
-        // Cloudflare appends a header two rules both set.
-        assert.ok(!(k in set), `${path}: two rules set ${k}`);
+        assert.ok(!(k in set), `${path}: two rules set ${k}, which Cloudflare appends`);
         set[k] = v;
       }
     }
@@ -1602,7 +1509,6 @@ test('files served without the Worker get the same headers from _headers', async
     delete viaWorker['content-type'];
     assert.deepEqual(set, viaWorker, `${path}: the headers the Worker would give`);
   }
-  // Pages, and everything the Worker itself answers, still reach it.
   for (const path of files.filter((f) => f.endsWith('.html')))
     assert.ok(!skips(path.replace(/index\.html$/, '')), `${path} reaches the Worker`);
   const routes = Object.keys(openApiSpec(BASE).paths).map((p) => p.replace(/\{[^}]+\}/g, 'x'));
@@ -1621,9 +1527,12 @@ test('files served without the Worker get the same headers from _headers', async
   ]) {
     assert.ok(!skips(path), `${path} reaches the Worker`);
   }
-  // Only the versioned /vendor/ folders, and the fonts, are kept without asking.
   const kept = rules.filter((r) => r.set['cache-control']).map((r) => String(r.re));
-  assert.deepEqual(kept, [String(glob('/assets/fonts/*')), String(glob('/vendor/*'))]);
+  assert.deepEqual(
+    kept,
+    [String(glob('/assets/fonts/*')), String(glob('/vendor/*'))],
+    'only the fonts and versioned vendor folders are kept without asking',
+  );
   for (const dir of (await readdir(new URL('../../web/public/vendor/', import.meta.url), { withFileTypes: true })).filter((d) =>
     d.isDirectory(),
   )) {
@@ -1637,15 +1546,14 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   assert.match(robots, /^User-agent: \*$/m);
   assert.match(robots, /^Sitemap: https:\/\/terminus\.run\/sitemap\.xml$/m);
   assert.doesNotMatch(robots, /^Disallow: \/$/m, 'the stable site is open to search');
-  // The answers (keyed: no `security` of their own in the spec) are not for
-  // search; the docs that describe them are.
   const { openApiSpec } = await import('../src/openapi.ts');
   const keyed = Object.entries(openApiSpec(BASE).paths)
     .filter(([, item]) => item.get && item.get.security === undefined)
     .map(([p]) => p);
-  assert.ok(keyed.includes('/api/next') && keyed.includes('/api/stops/pairs'));
-  // As search engines read it: the longest rule matching a path decides,
-  // and an Allow wins a tie.
+  assert.ok(
+    keyed.includes('/api/next') && keyed.includes('/api/stops/pairs'),
+    'the keyed answers, with no security of their own in the spec',
+  );
   const rules = [...robots.matchAll(/^(Allow|Disallow): (\S+)$/gm)].map((m) => ({ allow: m[1] === 'Allow', path: m[2] }));
   const open = (p) => {
     const hits = rules
@@ -1664,12 +1572,10 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   assert.ok(locs.includes('/'));
   for (const path of locs) {
     if (path === '/docs') continue;
-    // Each page is a file the site serves, and one that wants to be indexed.
     const file = new URL(`../../web/public${path}index.html`, import.meta.url);
     assert.ok(existsSync(file), `${path} is a page`);
     assert.doesNotMatch(readFileSync(file, 'utf8'), /name="robots" content="noindex/, `${path} doesn't say noindex`);
   }
-  // The link preview image the landing page names is there.
   const landing = readFileSync(new URL('../../web/public/index.html', import.meta.url), 'utf8');
   const og = landing.match(/property="og:image" content="https:\/\/terminus\.run(\/[^"]+)"/)?.[1];
   assert.ok(og && existsSync(new URL(`../../web/public${og}`, import.meta.url)), `og:image ${og} exists`);
@@ -1703,14 +1609,16 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
     }
   }
   assert.ok(opLinks > 0, 'some links point at operations, so the check above ran');
-  // Each endpoint it shows, with its example query, answers.
   for (const [, path] of text.matchAll(/^- \[GET ([^\]]+)\]/gm)) {
     const { res: r } = await call(path, { fetchImpl });
-    assert.equal(r.status, 200, `${path} answers`);
+    assert.equal(r.status, 200, `${path}, shown in /llms.txt with its example query, answers`);
   }
-  // Without JavaScript, the docs page points at both.
   const docs = await (await call('/docs')).res.text();
-  assert.match(docs, /<noscript>[^]*href="\/api\/openapi.json"[^]*href="\/llms.txt"[^]*<\/noscript>/);
+  assert.match(
+    docs,
+    /<noscript>[^]*href="\/api\/openapi.json"[^]*href="\/llms.txt"[^]*<\/noscript>/,
+    'without JavaScript, /docs points at both',
+  );
 });
 
 test('/api/line is as old as its stop row: a kept board is not "Updated 0 s ago"', async () => {
@@ -1759,18 +1667,15 @@ test('the API before 3.0, at its old paths: an app is told to update, anyone els
     assert.equal(other.status, 308, `${method} ${path} from anyone else`);
     assert.equal(other.headers.get('location'), `/api${path}`, 'the query goes with it');
   }
-  // The pages never moved: the two an email links to, the pairing page, the docs and the site.
   for (const path of ['/auth/verify?t=abc', '/auth/approve?r=abc', '/pair?code=K7QX4M', '/docs', '/', '/account/']) {
     const res = await at(path, { headers: app });
     assert.ok(res.status !== 426 && res.status !== 308, `${path} is a page (${res.status})`);
   }
-  // Nor did the downloads (the Mac's update feed) or the map.
   for (const path of ['/download/latest.json', '/map/style.json']) {
     const res = await at(path, { headers: app });
-    assert.ok(res.status !== 426 && res.status !== 308, path);
+    assert.ok(res.status !== 426 && res.status !== 308, `${path}: the downloads and the map never moved`);
   }
-  // A path that only starts like one is not one.
-  assert.notEqual((await at('/meet', { headers: app })).status, 426);
+  assert.notEqual((await at('/meet', { headers: app })).status, 426, 'a path that only starts like an old one is not one');
 });
 
 test('a page opened on the old address goes to terminus.run; the apps and the updater stay', async () => {
@@ -1786,10 +1691,8 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
     const res = await at('terminus.rcn.sh', path, html);
     assert.equal(res.status, 301, path);
     assert.equal(res.headers.get('location'), `https://terminus.run${path}`);
-    // Search engines move it for good; a browser asks again after a day, so moving back stays possible.
-    assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=86400', 'a day, so moving back stays possible');
   }
-  // What the apps, the Mac's updater and Android's link check ask for there is answered there.
   for (const [path, accept] of [
     ['/api/me/next', 'application/json'],
     ['/api/campus', 'application/json'],
@@ -1799,19 +1702,20 @@ test('a page opened on the old address goes to terminus.run; the apps and the up
     ['/robots.txt', html],
     ['/download/latest.json', null],
   ]) {
-    assert.notEqual((await at('terminus.rcn.sh', path, accept)).status, 301, path);
+    assert.notEqual(
+      (await at('terminus.rcn.sh', path, accept)).status,
+      301,
+      `${path}: the apps, the updater and Android’s link check stay`,
+    );
   }
   assert.notEqual((await at('terminus.rcn.sh', '/api/auth/code', html, on(), 'POST')).status, 301, 'only GET and HEAD');
-  // The new address itself, and an address that isn't ours, are never redirected.
-  assert.notEqual((await at('terminus.run', '/', html)).status, 301);
+  assert.notEqual((await at('terminus.run', '/', html)).status, 301, 'the new address is never redirected');
   assert.notEqual((await at('bus.example.test', '/', html)).status, 301);
-  // The beta sends its own old address to itself, and never the stable one's.
   const beta = { ...on(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   assert.equal((await at('beta.terminus.rcn.sh', '/account/', html, beta)).headers.get('location'), 'https://beta.terminus.run/account/');
-  assert.notEqual((await at('terminus.rcn.sh', '/', html, beta)).status, 301);
+  assert.notEqual((await at('terminus.rcn.sh', '/', html, beta)).status, 301, 'the beta never sends the stable site’s old address');
   assert.notEqual((await at('beta.terminus.rcn.sh', '/', html)).status, 301);
-  // Off unless MOVE_PAGES is "on" (off if a network refuses terminus.run): the old address serves its pages.
-  assert.notEqual((await at('terminus.rcn.sh', '/account/', html, makeEnv())).status, 301);
+  assert.notEqual((await at('terminus.rcn.sh', '/account/', html, makeEnv())).status, 301, 'off unless MOVE_PAGES is on');
 });
 
 test('iOS universal links: the association names the app for /pair on every address of the site, only with a team id', async () => {
@@ -1826,14 +1730,12 @@ test('iOS universal links: the association names the app for /pair on every addr
     return res;
   };
   const html = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
-  // No Apple developer account yet: nothing to claim, so nothing served.
-  assert.equal((await at('terminus.run', makeEnv())).status, 404);
+  assert.equal((await at('terminus.run', makeEnv())).status, 404, 'no team id: nothing to claim');
 
   const stable = { ...makeEnv(), APPLE_TEAM_ID: 'ABCDE12345', MOVE_PAGES: 'on' };
   for (const host of ['terminus.run', 'terminus.rcn.sh']) {
-    // Apple's fetch takes no redirect: answered on the old address too, even to a browser.
     const res = await at(host, stable, html);
-    assert.equal(res.status, 200, host);
+    assert.equal(res.status, 200, `${host}: Apple’s fetch takes no redirect, so the old address answers too`);
     assert.equal(res.headers.get('content-type'), 'application/json');
     assert.equal(res.headers.get('cache-control'), 'public, max-age=3600');
     assert.deepEqual(await res.json(), {
@@ -1850,11 +1752,14 @@ test('iOS universal links: the association names the app for /pair on every addr
       },
     });
   }
-  // The beta's app has its own bundle id.
   const beta = { ...stable, PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   for (const host of ['beta.terminus.run', 'beta.terminus.rcn.sh']) {
     const res = await at(host, beta, html);
     assert.equal(res.status, 200, host);
-    assert.deepEqual((await res.json()).applinks.details[0].appIDs, ['ABCDE12345.sh.rcn.terminus.beta']);
+    assert.deepEqual(
+      (await res.json()).applinks.details[0].appIDs,
+      ['ABCDE12345.sh.rcn.terminus.beta'],
+      'the beta app has its own bundle id',
+    );
   }
 });

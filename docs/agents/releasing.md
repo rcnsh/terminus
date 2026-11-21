@@ -8,7 +8,10 @@ release.
     is a pnpm built-in). It first runs `scripts/deploy/predeploy.mjs`, which
     refuses unmerged files, conflict markers or uncommitted changes in
     `apps/api` and `apps/web/public` and runs `pnpm check`; then it applies
-    the stable D1's pending migrations and runs `cf deploy`. It needs
+    the stable D1's pending migrations and runs `cf deploy`. A file counts as
+    conflicted only with both `<<<<<<<` and `>>>>>>>` lines (Markdown's setext
+    headings use `=======`), and predeploy runs before the migrations, so a
+    refused deploy changes nothing. It needs
     Cloudflare credentials: `CLOUDFLARE_API_TOKEN`, or a browser login
     with `pnpm exec cf auth login`, which `cf` keeps on the machine.
     `pnpm exec cf auth whoami` says which is in use; a missing token in
@@ -18,7 +21,10 @@ release.
     `scripts/deploy/smoke.mjs https://beta.terminus.run --account`: a
     throwaway account asks for a trip and steps to the later bus. After a
     production deploy, run `node scripts/deploy/smoke.mjs https://terminus.run` from `apps/api`
-    (no `--account`: pages and health only, no account made).
+    (no `--account`: pages and health only, no account made). A feed outage
+    is a warning, not a failure, since the deploy can be fine while NUS is
+    down; `--account` is skipped when no bus runs, and its anonymous account
+    goes after 60 days unused.
   - Each deploy is labelled with its commit (`--message`), so which commit
     is live is the newest message in
     `pnpm exec cf workers deployments list --worker terminus --per-page 3`

@@ -9,7 +9,6 @@ import oppositesJson from '../data/opposites.json' with { type: 'json' };
 
 const stop = (code, name, lat, lon, opposite = null) => ({ code, name, longName: name, lat, lon, opposite });
 
-// Two directions of one road: X and Opp X, 0.0002° of latitude (~22 m) apart.
 const TINY = {
   generated: '2026-01-01T00:00:00Z',
   stops: [
@@ -20,9 +19,7 @@ const TINY = {
     stop('C', 'C', 1.3, 103.8),
   ],
   routes: {
-    // A loop: its last entry repeats the first and is one call, not two.
     L: ['A', 'X', 'B', 'X-OPP', 'A'],
-    // A line: it terminates at C.
     T: ['A', 'X', 'C'],
   },
   loops: { L: true, T: false },
@@ -75,8 +72,6 @@ test('on the real graph: every stop once, pairs across real roads', () => {
     assert.ok(p.crossingM > 0 && p.crossingM < 200, `${p.id} crossing ${p.crossingM} m`);
     assert.equal(p.sides[0].code, p.id);
   }
-  // The case the answers say "cross the road" for: D2 calls on both sides of
-  // KR MRT, heading opposite ways.
   const kr = places.find((p) => p.id === 'KR-MRT');
   assert.equal(kr.sides[1].code, 'KR-MRT-OPP');
   const d2 = kr.sides.map((s) => s.services.find((c) => c.svc === 'D2')?.next);
@@ -111,14 +106,12 @@ test('the hand-listed pairs: BIZ 2 and Opp HSSML, AS 5 and Opp NUSS', () => {
 });
 
 test('a bus that stops on the far side counts, with the walk back across in its ride time', () => {
-  // PGP to AS 5: R2 calls at Opp NUSS two stops on; A1 goes the long way round.
   const [c] = candidateStops(GRAPH, { to: 'AS5', originCode: 'PGP', lat: null, lon: null });
   const r2 = c.legs.find((l) => l.svc === 'R2');
   const a1 = c.legs.find((l) => l.svc === 'A1');
   assert.ok(r2 && r2.crossS > 60 && r2.crossS < 240, `R2 crosses in ${r2?.crossS}s`);
   assert.equal(legRideS(r2), r2.hops * RIDE.secondsPerHop + r2.crossS);
   assert.ok(a1 && !a1.crossS, 'the bus to the stop itself has no crossing');
-  // Both sides reachable: the cheaper one wins, crossing counted.
   const [it] = candidateStops(GRAPH, { to: 'AS5', originCode: 'IT', lat: null, lon: null });
   for (const l of it.legs) assert.ok(legRideS(l) > 0);
 });

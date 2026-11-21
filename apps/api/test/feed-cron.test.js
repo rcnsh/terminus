@@ -1,10 +1,3 @@
-/**
- * What the 15-minute cron asks of the feeds (docs/agents/feeds.md): one NUS
- * stop and one LTA stop a run, past the cache; the public feed's record;
- * the app-version candidate check, which costs NUS a mint and a call per
- * candidate and so must not spend them on failures that say nothing of the
- * version; and the calendar kept in KV, which a broken copy mustn't stop.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import nusmods from './fixtures/calendar/nusmods.json' with { type: 'json' };
@@ -27,7 +20,6 @@ const OLD = 'univus_android_2.59.2_140';
 const NEW = 'univus_android_2.60.0_141';
 const ltaEnv = (kv = makeKV()) => ({ ...makeEnv(kv), LTA_ACCOUNT_KEY: 'test-account-key' });
 
-/** Runs [fn] with console.error and console.log quiet: the cron logs its failures. */
 async function quietly(fn) {
   const { error, log } = console;
   console.error = console.log = () => {};
@@ -41,13 +33,11 @@ async function quietly(fn) {
 test('a cron run asks NUS for one stop and LTA for one stop, past the cache, and nothing more', async () => {
   const fetchImpl = makeFetch({ byStop: { [PROBE_STOP]: [] }, publicStops: { [PUBLIC_PROBE[1]]: [] } });
   const cache = installGlobals(fetchImpl);
-  // Fresh answers for both stops are in the cache: the probe goes past them,
-  // or a cached answer would hide an outage.
   cache.seed(`https://terminus.internal/arrivals/${PROBE_STOP}`, { code: PROBE_STOP, arrivals: [], fetchedAt: FROZEN_NOW });
   cache.seed(`https://terminus.internal/public/${PUBLIC_PROBE[1]}`, { code: PUBLIC_PROBE[0], arrivals: [], fetchedAt: FROZEN_NOW });
   const env = ltaEnv();
   await quietly(() => runCron(env, FROZEN_NOW));
-  assert.equal(fetchImpl.counts.shuttle, 1, 'one NUS stop');
+  assert.equal(fetchImpl.counts.shuttle, 1, 'one NUS stop, past its fresh cached answer, which would hide an outage');
   assert.deepEqual(
     fetchImpl.requests.filter((r) => r.url.includes('bus-proxy')).map((r) => r.body.busstopname),
     [PROBE_STOP],
@@ -89,11 +79,6 @@ test('the public feed is not checked at all without an LTA key', async () => {
   assert.equal(await readPublicFeed(env), null);
 });
 
-/**
- * NUS plus the Play page, which shows 2.60.0. `mint` and `proxy`
- * answer for a version string: a Response, or undefined for the usual
- * accepted answer.
- */
 function world({ mint = () => undefined, proxy = () => undefined } = {}) {
   const hits = { mint: 0, proxy: 0, pages: 0 };
   let serial = 0;
@@ -177,11 +162,9 @@ test('a candidate check that fails for another reason stops, says so, and tries 
     assert.match(r.note, why, what);
     assert.doesNotMatch(r.note, /NUS refused/, `${what}: no verdict on the version`);
     assert.equal(hits.mint, 1, `${what}: stopped at the first candidate`);
-    // Fifteen minutes on, Play isn't read again; the refusal still
-    // names the version, which wasn't marked tried, so it's tried again.
     broken = false;
     const again = await autoUpdateVersion(env, FROZEN_NOW + 15 * 60_000, `{"want":"${NEW}"}`, 'COM3');
-    assert.deepEqual(again, { status: 'switched', from: OLD, to: NEW }, what);
+    assert.deepEqual(again, { status: 'switched', from: OLD, to: NEW }, `${what}: not marked tried, so tried again 15 minutes on`);
   }
 });
 
@@ -190,7 +173,6 @@ test('the automatic update throwing inside the cron is noted, and the rest of th
   const ae = makeAnalytics();
   env.AE = ae;
   env.LTA_ACCOUNT_KEY = 'test-account-key';
-  // NUS accepts the new version, but writing it to KV fails: autoUpdateVersion throws.
   const put = env.KV.put.bind(env.KV);
   env.KV.put = async (k, v, o) => {
     if (k === 'config:appVersion') throw new Error('KV write quota');
@@ -200,10 +182,9 @@ test('the automatic update throwing inside the cron is noted, and the rest of th
   const u = await readUpstream(env);
   assert.equal(u.up, true, 'one failed check is not yet an outage');
   assert.equal(u.failures, 1);
-  assert.match(u.auto, /the automatic update failed: KV write quota/);
+  assert.match(u.auto, /the automatic update failed: KV write quota/, 'NUS took the new version, but writing it to KV threw');
   assert.ok(!ae.named('error').some((r) => r.route === 'cron upstream'), 'the upstream step did not fail');
   assert.ok(await readPublicFeed(env), 'the next step ran');
-  // And checkUpstream on its own, with a fix that throws.
   const state = (
     await checkUpstream(env, FROZEN_NOW + 15 * 60_000, undefined, async () => {
       throw new Error('boom');
