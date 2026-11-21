@@ -59,6 +59,18 @@ const answerOf = ({ cands, options }, nowMs = NOW) =>
     nowMs,
   });
 
+test('a full route memo keeps the routes still being asked for', () => {
+  const graph = structuredClone(GRAPH);
+  const targets = targetsFor(idx, COM3_CG);
+  const other = (i) => targets.map((t) => ({ ...t, crossS: t.crossS + i + 1 }));
+  const hot = transferRoutes(graph, stop('COM3'), targets);
+  for (let i = 0; i < 498; i++) transferRoutes(graph, stop('COM3'), other(i));
+  assert.equal(transferRoutes(graph, stop('COM3'), targets), hot);
+  transferRoutes(graph, stop('COM3'), other(498));
+  transferRoutes(graph, stop('COM3'), other(499));
+  assert.equal(transferRoutes(graph, stop('COM3'), targets), hot, 'asked for a moment ago, so still remembered');
+});
+
 test('no single bus from COM3 to CG; one change of bus gets there, always onto P', () => {
   assert.ok(candidateStops(GRAPH, COM3_CG).every((c) => c.legs.length === 0));
   const routes = transferRoutes(GRAPH, stop('COM3'), targetsFor(idx, COM3_CG));

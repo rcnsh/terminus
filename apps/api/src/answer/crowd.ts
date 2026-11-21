@@ -1,6 +1,7 @@
 import type { StopArrivals } from '../types.ts';
 import { termDay, sgtDate } from '../timetable/calendar.ts';
 import { sgt } from '../config.ts';
+import { Lru, perScope } from '../memo.ts';
 
 export type DayType = 'term' | 'exam' | 'break' | 'sat' | 'sun';
 
@@ -21,15 +22,11 @@ export function dayType(nowMs: number): DayType {
 
 export const slotOf = (ms: number) => Math.floor(sgt(ms).minutes / 30);
 
-const sent = new Set<string>();
-const SENT_MAX = 5_000;
-
-export function forgetSent(): void {
-  sent.clear();
-}
+const sentFrom = perScope(() => new Lru<string, true>(5_000));
 
 export async function recordCrowds(db: D1Database, byStop: Map<string, StopArrivals>, nowMs: number): Promise<void> {
   try {
+    const sent = sentFrom(db);
     const daytype = dayType(nowMs);
     const stmts: D1PreparedStatement[] = [];
     const keys: string[] = [];
@@ -40,7 +37,7 @@ export async function recordCrowds(db: D1Database, byStop: Map<string, StopArriv
         const at = sa.fetchedAt + a.etaS * 1000;
         const slot = slotOf(at);
         const key = `${a.plate}|${stop}|${sgtDate(at)}|${slot}`;
-        if (sent.has(key) || keys.includes(key)) continue;
+        if (sent.get(key) || keys.includes(key)) continue;
         keys.push(key);
         stmts.push(
           db
@@ -57,8 +54,7 @@ export async function recordCrowds(db: D1Database, byStop: Map<string, StopArriv
     }
     if (!stmts.length) return;
     await db.batch(stmts);
-    if (sent.size + keys.length > SENT_MAX) sent.clear();
-    for (const k of keys) sent.add(k);
+    for (const k of keys) sent.set(k, true);
   } catch (err) {
     console.error('crowd tally failed', err instanceof Error ? err.name : typeof err);
   }
