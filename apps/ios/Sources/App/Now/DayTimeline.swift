@@ -79,23 +79,7 @@ private struct DayRow<End: View>: View {
         .frame(minHeight: 48)
     }
 
-    private var subline: String? {
-        if item.status == "done" { return nil }
-        if let line = item.line { return line }
-        if item.status == "skipped" { return L("Not going") }
-        if let b = item.onBus {
-            return
-                ([L("On the %@", b.svc)]
-                + [b.off.map { L("off at %@", $0) }, b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) }].compactMap {
-                    $0
-                }).joined(separator: " · ")
-        }
-        guard let leave = item.leave, let at = parseISODate(leave.at) else { return nil }
-        let time = leave.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)
-        var parts = [L("Leave by %@", time), leave.svc.map { L("%@ from %@", $0, leave.stop ?? item.fromName ?? "") } ?? L("walk")]
-        if item.timing?.status == "late", let t = item.timing?.text { parts.append(t) }
-        return parts.joined(separator: " · ")
-    }
+    private var subline: String? { item.status == "done" ? nil : item.line }
 }
 
 private struct RemovedRow: View {

@@ -158,10 +158,6 @@ enum BusLines {
         return min(pollS, max(0, pollS - now.timeIntervalSince(last)))
     }
 
-    static func name(_ r: BusCampus.Route, stopName: (String) -> String) -> String? {
-        r.name ?? BusWords.route(r, name: stopName)
-    }
-
     static func showsDot(_ c: LineCount) -> Bool { c.out > 0 && !c.stale }
 
     static func spoken(svc: String, name: String?, via: String?, count: LineCount?) -> String {
@@ -239,7 +235,7 @@ enum BusWords {
     static let thenMax = 2
 
     static func destination(_ r: BoardRow) -> String? {
-        r.towards.last ?? (r.endsHere ? L("Ends here") : r.toText)
+        r.towards.last ?? r.toText
     }
 
     static func nextStop(_ r: BoardRow) -> String? {
@@ -283,11 +279,6 @@ enum BusWords {
         let m = BusTimes.minutes(s)
         let mins = m == 1 ? L("1 minute") : L("%@ minutes", "\(m)")
         return quality == "live" ? mins : L("about %@", mins)
-    }
-
-    static func route(_ r: BusCampus.Route, name: (String) -> String) -> String? {
-        guard let first = r.seq.first, let last = r.seq.last else { return nil }
-        return r.loop ? L("Loop from %@", name(first)) : L("%@ to %@", name(first), name(last))
     }
 
     static func running(_ line: Line) -> String {

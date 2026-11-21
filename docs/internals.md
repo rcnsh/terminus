@@ -3554,8 +3554,7 @@ the server's clock: [ADR 0026](adr/0026-apple-apps-read-answers-leniently.md)):
   isn't cached, and a widget asks again in 5 minutes. A build without the
   group entitlement keeps the token in the app's own keychain, which the
   extensions can't read. The site's token is under the account `site`,
-  the stub's under its address; builds before 3.2.0 kept it under the
-  address it was saved on, and the first read moves it over once.
+  the stub's under its address.
 - **Sideloaded** (`scripts/sideload.sh`, `SIDELOAD.md`): the Sideload
   configuration has the stable servers, the signer's own bundle IDs and
   group (a free team can't use `sh.rcn.terminus`), and no push or Time

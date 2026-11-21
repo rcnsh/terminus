@@ -59,7 +59,7 @@ enum TokenStore {
 
     static func account(for base: String) -> String { Servers.isLocal(base) ? base : "site" }
 
-    private static func query(_ extra: [CFString: Any] = [:], account: String = Self.account) -> [CFString: Any] {
+    private static func query(_ extra: [CFString: Any] = [:]) -> [CFString: Any] {
         var q: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -102,24 +102,8 @@ enum TokenStore {
     }
 
     static func lookup() -> Lookup {
-        let mine = lookup(account: account)
-        if mine != .none { return mine }
-        guard account == "site" else { return .none }
-        for old in legacy {
-            guard case .found(let token) = lookup(account: old) else { continue }
-            save(token)
-            SecItemDelete(query(account: old) as CFDictionary)
-            return .found(token)
-        }
-        return .none
-    }
-
-    private static var legacy: [String] { [Servers.backupBase, Servers.defaultBase].compactMap { $0 } }
-
-    private static func lookup(account: String) -> Lookup {
         var out: CFTypeRef?
-        let status = SecItemCopyMatching(
-            query([kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne], account: account) as CFDictionary, &out)
+        let status = SecItemCopyMatching(query([kSecReturnData: true, kSecMatchLimit: kSecMatchLimitOne]) as CFDictionary, &out)
         return lookupAnswer(status, data: out as? Data)
     }
 
@@ -140,6 +124,5 @@ enum TokenStore {
 
     static func clear() {
         SecItemDelete(query() as CFDictionary)
-        if account == "site" { for old in legacy { SecItemDelete(query(account: old) as CFDictionary) } }
     }
 }

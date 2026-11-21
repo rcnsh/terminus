@@ -291,11 +291,8 @@ struct BusStrip: Equatable {
     var any: Bool { next != nil }
 
     static func of(_ bus: LiveBus, all: Bool = false) -> BusStrip {
-        let ahead = bus.upcoming.isEmpty ? (bus.nextStop.map { [$0] } ?? []) : bus.upcoming
-        let codes: [String?] =
-            bus.upcoming.isEmpty
-            ? (bus.nextStop == nil ? [] : [bus.nextStopCode])
-            : ahead.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil }
+        let ahead = bus.upcoming
+        let codes = ahead.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil }
         let rest = Array(ahead.dropFirst())
         let shown = all ? rest.count : min(rest.count, afterMax)
         return BusStrip(

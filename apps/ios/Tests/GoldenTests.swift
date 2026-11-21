@@ -108,27 +108,6 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(Countdown.words(left: -61) == "Left 2 min ago")
 }
 
-@Test func aOneOffTripSaysArriveByNotStarts() throws {
-    func untitled(_ name: String) throws -> NextAnswer {
-        let data = try Data(contentsOf: answers.appendingPathComponent("\(name).json"))
-        var json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        var card = try #require(json["card"] as? [String: Any])
-        var journey = try #require(card["journey"] as? [String: Any])
-        journey["title"] = nil
-        card["journey"] = journey
-        json["card"] = card
-        return try NextAnswer.decode(JSONSerialization.data(withJSONObject: json))
-    }
-    let once = try untitled("once-from-home")
-    #expect(once.dest?.place == true)
-    let title = JourneyText.to(once, try #require(once.card?.journey))
-    #expect(title.hasPrefix("To COM 3 · arrive by "), "\(title)")
-    let lesson = try untitled("class-bus")
-    #expect(lesson.dest?.place == nil)
-    let starts = JourneyText.to(lesson, try #require(lesson.card?.journey))
-    #expect(starts.hasPrefix("To GEA1000 @ UTown · starts "), "\(starts)")
-}
-
 @Test func theReportSheetOffersTheReasonsThatFit() throws {
     let offered = { (name: String) in
         ReportSheet.reasons(fitting: try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("\(name).json"))).card?.reasons)
@@ -137,16 +116,7 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(try offered("class-bus") == all)
     #expect(try offered("riding") == ["times-off", "wrong-stop", "walk-longer", "wrong-class"], "on the bus there's none to come")
     #expect(try offered("rest") == ["wrong-class"], "a day that's done has no bus or walk")
-
-    var json = try #require(
-        try JSONSerialization.jsonObject(with: Data(contentsOf: answers.appendingPathComponent("rest.json"))) as? [String: Any])
-    var card = try #require(json["card"] as? [String: Any])
-    card.removeValue(forKey: "reasons")
-    json["card"] = card
-    let older = try NextAnswer.decode(JSONSerialization.data(withJSONObject: json))
-    #expect(older.card != nil)
-    #expect(older.card?.reasons == nil)
-    #expect(ReportSheet.reasons(fitting: older.card?.reasons) == all)
+    #expect(ReportSheet.reasons(fitting: nil) == all, "with no card, every reason")
 }
 
 @Test func theReportSheetKnowsWhenTimesAreNUSs() throws {

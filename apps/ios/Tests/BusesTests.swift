@@ -263,10 +263,9 @@ final class BusesTests: XCTestCase {
                "K":{"seq":["PGP","COM3"],"loop":false,"via":null}}}
             """#
         let campus = try JSONDecoder().decode(BusCampus.self, from: Data(json.utf8))
-        let name = { (code: String) in campus.stop(code)?.fullName ?? code }
-        XCTAssertEqual(campus.routes["D1"].flatMap { BusLines.name($0, stopName: name) }, "Loop from COM 3")
+        XCTAssertEqual(campus.routes["D1"]?.name, "Loop from COM 3")
         XCTAssertEqual(campus.routes["D1"]?.via, "via UTown, CLB, AS 5")
-        XCTAssertEqual(campus.routes["K"].flatMap { BusLines.name($0, stopName: name) }, "PGP to COM 3")
+        XCTAssertNil(campus.routes["K"]?.name)
         XCTAssertNil(campus.routes["K"]?.via)
         struct R: Decodable { let lines: [String: Lossy<LineCount>] }
         let lines = try JSONDecoder().decode(
@@ -296,10 +295,6 @@ final class BusesTests: XCTestCase {
         let campus = try JSONDecoder().decode(BusCampus.self, from: Data(json.utf8))
         XCTAssertEqual(campus.services, ["D1", "K", "X"])
         XCTAssertEqual(campus.color("D1"), "#c1a6ff")
-        let name = { (code: String) in campus.stop(code)?.fullName ?? code }
-        XCTAssertEqual(campus.routes["D1"].flatMap { BusWords.route($0, name: name) }, "Loop from COM 3")
-        XCTAssertEqual(campus.routes["K"].flatMap { BusWords.route($0, name: name) }, "Prince George's Park to PGP Foyer")
-        XCTAssertNil(campus.routes["X"].flatMap { BusWords.route($0, name: name) })
     }
 
     func testSearchMatchesTheSharedCases() throws {
@@ -360,7 +355,7 @@ final class BusesTests: XCTestCase {
         let one = try row(#"{"svc":"A1","etaS":60,"towards":["Kent Ridge Bus Terminal"]}"#)
         XCTAssertEqual(BusWords.destination(one), "Kent Ridge Bus Terminal")
         XCTAssertNil(BusWords.nextStop(one))
-        let end = try row(#"{"svc":"A1","etaS":60,"towards":[],"endsHere":true}"#)
+        let end = try row(#"{"svc":"A1","etaS":60,"towards":[],"toText":"Ends here"}"#)
         XCTAssertEqual(BusWords.destination(end), "Ends here")
         XCTAssertNil(BusWords.nextStop(end))
         XCTAssertEqual(BusWords.destination(try row(#"{"svc":"A1","etaS":60,"toText":"to Central Library"}"#)), "to Central Library")

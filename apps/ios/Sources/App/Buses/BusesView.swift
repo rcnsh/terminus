@@ -432,7 +432,7 @@ private struct ServiceList: View {
                 ForEach(Array(campus.services.enumerated()), id: \.element) { i, svc in
                     if i > 0 { Divider().overlay(Color.line) }
                     let route = campus.routes[svc]
-                    let name = route.flatMap { BusLines.name($0, stopName: { campus.stop($0)?.fullName ?? $0 }) }
+                    let name = route?.name
                     let count = model.lineCounts[svc]
                     Button {
                         model.open(.line(svc: svc, from: nil))

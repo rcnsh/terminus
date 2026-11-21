@@ -211,7 +211,7 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(list.buses[0].slot == 1)
     #expect(list.buses[0].plate == "PD726D")
     #expect(list.buses[1].at == nil)
-    #expect(list.buses[1].plate == nil, "an older API: no plate")
+    #expect(list.buses[1].plate == nil, "no plate")
     #expect(list.buses[0].stretch == nil, "at a stop: no stretch")
     #expect(list.buses[1].stretch == Stretch(from: 812.5, to: 1100, last: "COM 3"))
     #expect(list.buses[0].upcoming == ["BIZ 2", "Prince George's Park"], "the stops ahead, next first; a nameless one dropped")
@@ -221,7 +221,7 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(list.buses[0].upcomingCodes == ["BIZ2", "PGP"], "in step with the names")
     #expect(list.buses[1].passedCode == "COM3", "the stop it passed")
     #expect(list.buses[1].upcomingCodes == [])
-    #expect(list.buses[1].upcoming == [], "an older API: no stops ahead")
+    #expect(list.buses[1].upcoming == [], "no stops ahead")
     #expect(list.buses[1].towards == nil)
     let end = try #require(
         BusList.parse(
@@ -377,10 +377,9 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
                    "towards": {"code": "UTOWN", "name": "UTown"}},
                   {"id": "b", "lat": 1.0, "lon": 103.0, "moving": false, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "stretch": null,
                    "nextStop": {"code": "BIZ2", "name": "BIZ 2"}, "upcoming": [{"code": "BIZ2", "name": "BIZ 2"}, {"code": "UTOWN", "name": "UTown"}], "towards": {"code": "UTOWN", "name": "UTown"}},
-                  {"id": "c", "lat": 1.0, "lon": 103.0, "moving": true, "crowd": null, "nextStop": {"code": "LT13", "name": "LT 13"}},
                   {"id": "d", "lat": 1.0, "lon": 103.0, "moving": false, "crowd": null, "at": {"code": "KR-MRT", "name": "KR MRT"}, "nextStop": null, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}
                 """.utf8)))
-    let (a, b, c, d) = (list.buses[0], list.buses[1], list.buses[2], list.buses[3])
+    let (a, b, d) = (list.buses[0], list.buses[1], list.buses[2])
     #expect(
         BusStrip.of(a)
             == BusStrip(
@@ -398,7 +397,6 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
                 passed: nil, here: "COM 3", next: "BIZ 2", after: ["UTown"], more: 0, hereCode: "COM3", nextCode: "BIZ2",
                 afterCodes: ["UTOWN"]))
     #expect(!BusStrip.of(b).between)
-    #expect(BusStrip.of(c) == BusStrip(passed: nil, here: nil, next: "LT 13", after: [], more: 0, nextCode: "LT13"))
     #expect(!BusStrip.of(d).any)
 }
 
@@ -412,11 +410,12 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
                   {"code": "UHALL-OPP", "name": "UHall", "lat": 1.2972, "lon": 103.7782, "services": ["A2"]}
                  ], "routes": {"A1": {"line": [[103.77, 1.29], [103.78, 1.30]]}}}
                 """.utf8)))
-    let bus = LiveBus(id: "a", lat: 1.2971, lon: 103.7781, heading: nil, at: "UHall")
-    #expect(BusSheet.stop(for: bus, svc: "A1", in: campus)?.code == "UHALL", "by name, the one on its own line")
-    var coded = bus
-    coded.atCode = "UHALL-OPP"
-    #expect(BusSheet.stop(for: coded, svc: "A1", in: campus)?.code == "UHALL-OPP", "the server's code first")
+    var bus = LiveBus(id: "a", lat: 1.2971, lon: 103.7781, heading: nil, at: "UHall")
+    bus.atCode = "UHALL-OPP"
+    #expect(BusSheet.stop(for: bus, in: campus)?.code == "UHALL-OPP", "by the server's code")
+    var between = LiveBus(id: "b", lat: 1.2971, lon: 103.7781, heading: nil)
+    between.nextStopCode = "UHALL"
+    #expect(BusSheet.stop(for: between, in: campus)?.code == "UHALL", "between stops: the next one")
 }
 
 @Test func aFavouritesKeyComesFromItsLabel() {

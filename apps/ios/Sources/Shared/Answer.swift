@@ -126,12 +126,7 @@ struct NextAnswer: Decodable, Sendable {
         return detail.localizedCaseInsensitiveContains(c) ? nil : c
     }
 
-    var title: String {
-        if let t = card?.title { return t }
-        guard let at = departure, quality != "unknown", quality != "ended" else { return label }
-        let svc = label.components(separatedBy: " · ").first ?? label
-        return "\(svc) · \(quality == "live" ? campusTime(at) : L("~%@", campusTime(at)))"
-    }
+    var title: String { card?.title ?? label }
 
     func isOld(at now: Date) -> Bool { staleAt.map { now >= $0 } ?? false }
 }
@@ -478,7 +473,7 @@ struct Journey: Decodable, Sendable {
 
     var boardDate: Date? { boardAt.flatMap(parseISODate) }
 
-    var place: String { placeText ?? to.components(separatedBy: " @ ").first ?? to }
+    var place: String { placeText ?? to }
 }
 
 struct DayPlan: Decodable, Sendable {
@@ -501,7 +496,7 @@ struct DayPlan: Decodable, Sendable {
         let kind: String
         let key: String
         let label: String
-        let serverTitle: String?
+        let title: String
         let line: String?
         let status: String
         let fromName: String?
@@ -514,8 +509,7 @@ struct DayPlan: Decodable, Sendable {
         var id: String { key }
 
         enum CodingKeys: String, CodingKey {
-            case kind, key, label, line, status, fromName, startsAt, endsAt, leave, timing, onBus, removable
-            case serverTitle = "title"
+            case kind, key, label, title, line, status, fromName, startsAt, endsAt, leave, timing, onBus, removable
         }
 
         init(from d: Decoder) throws {
@@ -523,7 +517,7 @@ struct DayPlan: Decodable, Sendable {
             kind = c.string(.kind) ?? "class"
             key = try c.decode(String.self, forKey: .key)
             label = c.string(.label) ?? ""
-            serverTitle = c.string(.serverTitle)
+            title = c.string(.title) ?? label
             line = c.string(.line)
             status = c.string(.status) ?? "later"
             fromName = c.string(.fromName)
@@ -535,9 +529,6 @@ struct DayPlan: Decodable, Sendable {
             removable = c.bool(.removable) ?? false
         }
 
-        var title: String {
-            serverTitle ?? (kind == "home" ? (fromName.map { L("Home, from %@", $0) } ?? L("Home after your last class")) : label)
-        }
         var starts: Date? { parseISODate(startsAt) }
     }
     var items: [Item]

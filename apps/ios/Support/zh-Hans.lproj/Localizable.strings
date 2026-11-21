@@ -5,7 +5,6 @@
 "%@ ride" = "乘车 %@";
 "%@ s" = "%@ 秒";
 "%@ walk" = "步行 %@";
-"%@ walk from %@" = "从 %2$@ 步行 %1$@";
 "%@, arrive by %@" = "%@，%@ 前到";
 "%@, leaves %@" = "%1$@，%2$@ 发车";
 "%@, live" = "%@，实时";
@@ -36,8 +35,6 @@
 "First bus tomorrow" = "明天首班车";
 "from %@" = "在 %@ 上车";
 "Getting off at %@" = "在 %@ 下车";
-"Home after your last class" = "下课后回家";
-"Home, from %@" = "回家，从 %@ 出发";
 "Imported %@ classes for %@." = "已导入 %2$@ 的 %1$@ 节课。";
 "Imported 1 class for %@." = "已导入 %@ 的 1 节课。";
 "in %@ min" = "%@ 分钟后";
@@ -62,7 +59,6 @@
 "Not running yet" = "尚未开始运行";
 "Now" = "现在";
 "NUSMods has no classes this semester for %@." = "NUSMods 上 %@ 本学期没有课。";
-"off at %@" = "在 %@ 下车";
 "Off at %@ %@" = "%2$@ 在 %1$@ 下车";
 "Off at %@ at %@" = "%2$@ 在 %1$@ 下车";
 "Off in %@" = "%@后下车";
@@ -71,7 +67,6 @@
 "On the %@, to %@" = "在 %@ 上，去 %@";
 "Open terminus to sign in" = "打开 terminus 登录";
 "Or %@ at %@ from %@" = "或在 %3$@ 搭 %2$@ 的 %1$@";
-"Or go now: %@ at %@ from %@" = "或现在走：在 %3$@ 搭 %2$@ 的 %1$@";
 "Pull to refresh" = "下拉刷新";
 "Sent. Open terminus on your watch." = "已发送。请在手表上打开 terminus。";
 "Settings" = "设置";

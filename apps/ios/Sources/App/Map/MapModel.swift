@@ -327,7 +327,7 @@ final class MapModel {
     }
 
     var placesFull: Bool {
-        let limit = ((profile?["limits"] as? [String: Any])?["places"] as? Int).flatMap { $0 > 0 ? $0 : nil } ?? 12
+        guard let limit = (profile?["limits"] as? [String: Any])?["places"] as? Int else { return false }
         return places.count >= limit
     }
 

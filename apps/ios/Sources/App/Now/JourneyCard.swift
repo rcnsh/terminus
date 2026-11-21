@@ -28,7 +28,7 @@ struct JourneyTop: View {
     var body: some View {
         let a = answer
         let j = journey
-        Text(JourneyText.to(a, j)).foregroundStyle(inks.muted).lineLimit(2)
+        Text(JourneyText.to(j)).foregroundStyle(inks.muted).lineLimit(2)
         switch shown(style, typeSize) {
         case .route:
             LeaveHead(answer: a, journey: j, now: now)
