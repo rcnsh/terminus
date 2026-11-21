@@ -3,10 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// What the widgets and the Live Activity decide by themselves: how often a
-/// widget asks to be reloaded, the countdown's range, when an activity no
-/// push can reach is over, and the Live Activity's updates one at a time.
-
 private func state(phase: String = "riding", leaveAt: Date? = nil, departAt: Date? = nil, arriveAt: Date? = nil)
     -> TripAttributes.ContentState
 {
@@ -18,17 +14,12 @@ private func state(phase: String = "riding", leaveAt: Date? = nil, departAt: Dat
 
 private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
-// MARK: the widgets' reloads
-
 @Test func widgetReloadsNoSoonerThanFiveMinutes() {
     #expect(WidgetTiming.reloadAt(t0.addingTimeInterval(60), now: t0) == t0.addingTimeInterval(WidgetTiming.minReload))
     #expect(WidgetTiming.reloadAt(t0, now: t0) == t0.addingTimeInterval(5 * 60))
-    // A later moment is kept as it is.
     let later = t0.addingTimeInterval(20 * 60)
     #expect(WidgetTiming.reloadAt(later, now: t0) == later)
 }
-
-// MARK: the Live Activity's countdown
 
 @Test func countdownRangeNeverRunsBackwards() throws {
     let s = state(departAt: t0, arriveAt: t0.addingTimeInterval(600))
@@ -36,20 +27,15 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     #expect(c.kind == "off")
     #expect(c.range.lowerBound == t0.addingTimeInterval(100))
     #expect(c.range.upperBound == t0.addingTimeInterval(600))
-    // Over by the server's clock: nothing to count.
     #expect(s.countdown(phoneNow: t0.addingTimeInterval(601), skew: 0) == nil)
 }
 
 @Test func countdownFollowsTheServersClock() throws {
     let s = state(departAt: t0, arriveAt: t0.addingTimeInterval(600))
-    // The phone is a minute slow: the server's 10:00 is the phone's 09:59.
     let c = try #require(s.countdown(phoneNow: t0.addingTimeInterval(100), skew: 60))
     #expect(c.range.upperBound == t0.addingTimeInterval(540))
-    // By the phone's clock it would still count; by the server's it's over.
     #expect(s.countdown(phoneNow: t0.addingTimeInterval(570), skew: 60) == nil)
 }
-
-// MARK: the Live Activity on the watch
 
 @Test func theWatchsCountdownSaysWhatItCountsTo() {
     Lang.pref = "en"
@@ -59,7 +45,6 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 }
 
 @Test func theWatchsCountdownKeepsChineseOrderWithSpaces() {
-    // The tables' Chinese for "Leave in %@" and "Bus in %@": the time first, or in the middle.
     #expect(TripAttributes.ContentState.around("%@后出发") == ("", " 后出发"))
     #expect(TripAttributes.ContentState.around("巴士 %@后开出") == ("巴士 ", " 后开出"))
     #expect(TripAttributes.ContentState.around("巴士%@") == ("巴士 ", ""))
@@ -80,9 +65,6 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     #expect(s.countdownPlace == "GEA1000")
 }
 
-// MARK: activities no push can end
-
-/// The app ends an arrived trip for as long as the server's push does (LIVE_DISMISS_S in apns.ts).
 @Test func anArrivedTripStaysAsLongAsTheServersEnd() {
     #expect(LiveTrip.lingerS == 600)
 }
@@ -105,8 +87,6 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     #expect(!LiveTrip.isOver(state(phase: "due"), now: .distantFuture))
 }
 
-// MARK: one step at a time
-
 @MainActor private final class StepLog {
     var lines: [String] = []
     var running = 0
@@ -119,7 +99,6 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
             log.running += 1
             #expect(log.running == 1)
             log.lines.append(name + ">")
-            // Suspends, as ActivityKit's calls do: the next step mustn't start here.
             try? await Task.sleep(nanoseconds: 20_000_000)
             log.lines.append("<" + name)
             log.running -= 1
@@ -130,7 +109,6 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     async let c: Void = LiveTrip.serially(step("c"))
     _ = await (a, b, c)
     #expect(log.lines.count == 6)
-    // Each step finished before the next began, whatever order they were queued in.
     for i in stride(from: 0, to: log.lines.count, by: 2) {
         #expect(log.lines[i].dropLast() == log.lines[i + 1].dropFirst())
     }

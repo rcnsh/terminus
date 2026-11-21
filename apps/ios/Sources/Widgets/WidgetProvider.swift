@@ -1,37 +1,23 @@
 import SwiftUI
 import WidgetKit
 
-/// One moment of a widget: everything it draws, read once from the app group.
 struct BusEntry: TimelineEntry {
     var date: Date
     var paired: Bool
     var plan: NextAnswer?
     var error: String?
-    /// This widget's own choice (a place, Nearby), for one with buttons.
     var slot: WidgetStore.Slot?
     var slotID: String?
     var day: DayPlan?
     var added: [(code: String, label: String)] = []
-    /// The shared board of buses near you (NearbyShared), for the Nearby chip
-    /// and the large widget's next buses; nil without one.
     var nearby: [NearbyStop]?
     var nearbyAt: Date?
-    /// A made-up trip for the widget gallery, before the app has been opened.
     var sample = false
 
-    /// The time on the server's clock at this entry, for the answer's times.
     var serverNow: Date { date.addingTimeInterval(ServerClock.skew) }
 }
 
-/// The widgets' timeline. Each time WidgetKit asks: a new answer if the one
-/// kept is due one (the moment the server gave, or past its staleAt), then
-/// an entry for now and for each moment the widget looks different by
-/// itself ("Leave by" turning into "Leave now", the bus leaving, each stop on
-/// the ride, the sky's hour), and the next ask at the answer's next moment.
-/// WidgetKit spaces the asks out as it sees fit; the app, a push and the
-/// background refresh redraw the widgets whenever the card changes.
 struct BusProvider: TimelineProvider {
-    /// next (the plain widget) or places (with buttons for your places).
     let kind: String
 
     func placeholder(in context: Context) -> BusEntry { Self.sampleEntry(kind: kind, family: context.family) }
@@ -52,9 +38,6 @@ struct BusProvider: TimelineProvider {
 
     private func entry(at date: Date, family: WidgetFamily) -> BusEntry { Self.entry(kind: kind, family: family, at: date) }
 
-    // MARK: building
-
-    /// The slot a widget of this kind and size keeps its choice in; none when it has no buttons.
     static func slotID(kind: String, family: WidgetFamily) -> String? {
         switch (kind, family) {
         case ("next", .systemLarge): "next.large"
@@ -81,9 +64,6 @@ struct BusProvider: TimelineProvider {
         )
     }
 
-    /// A new answer when the kept one is due one, and this widget's place or
-    /// Nearby when it's stale. The large widget's next buses: the shared board,
-    /// when it's due and the phone has a recent place (not the home stop).
     static func refreshIfDue(slot: String?) async {
         guard TokenStore.read() != nil, Date() >= Quiet.until(.app) else { return }
         let kept = WidgetStore.plan()
@@ -101,11 +81,8 @@ struct BusProvider: TimelineProvider {
         }
     }
 
-    /// The fetch in flight in this process, if any.
     private static let fetching = Mutex<Task<Void, Never>?>(nil)
 
-    /// One fetch of the plan shared by every widget asking at once: WidgetKit
-    /// asks for each widget's timeline together, and each would otherwise fetch.
     static func refreshPlanOnce() async {
         let task = fetching.withLock { t in
             if let t { return t }
@@ -119,7 +96,6 @@ struct BusProvider: TimelineProvider {
         await task.value
     }
 
-    /// A widget with no token: asked again soon if the keychain was only locked, else when signing in reloads it.
     static func unpairedPolicy(now: Date) -> TimelineReloadPolicy {
         WidgetTiming.signedOutReload(locked: TokenStore.lookup() == .locked, now: now).map { .after($0) } ?? .never
     }
@@ -139,8 +115,6 @@ struct BusProvider: TimelineProvider {
         if first.error != nil, let change = OfflineDay.nextChange(first.day, now: now.addingTimeInterval(skew)) {
             moments.append(change.addingTimeInterval(-skew))
         }
-        // The shared board's buses going, their minutes, and the times turning
-        // old: on Nearby, and under the large widget's trip.
         if let stops = first.nearby, let f = first.nearbyAt,
             first.slot?.chosen == .nearby || family == .systemLarge
         {
@@ -166,8 +140,6 @@ struct BusProvider: TimelineProvider {
                 e.date = Date(timeIntervalSince1970: t)
                 return e
             }
-        // Asked again at the answer's next moment, but no sooner than
-        // WidgetTiming.minReload; WidgetKit may make it later.
         var next = now.addingTimeInterval(WidgetTiming.fallback)
         if let plan = first.plan, let at = WidgetStore.answerAt {
             next = WidgetTiming.nextRefreshAt(plan, fetchedAt: at.addingTimeInterval(skew), now: now.addingTimeInterval(skew))
@@ -177,7 +149,6 @@ struct BusProvider: TimelineProvider {
         return Timeline(entries: entries, policy: .after(WidgetTiming.reloadAt(next, now: now)))
     }
 
-    /// When the sky's hour next changes, by the phone's clock: dawn, day, the golden hour, dusk, night.
     static func skyChanges(after now: Date, until: Date) -> [Date] {
         let cal = Calendar.current
         var out: [Date] = []
@@ -191,10 +162,6 @@ struct BusProvider: TimelineProvider {
         return out
     }
 
-    // MARK: the gallery's sample
-
-    /// A trip to show in the widget gallery before there's an answer: a bus
-    /// to a class, worded as the server words one.
     static func sampleEntry(kind: String, family: WidgetFamily) -> BusEntry {
         let now = Date()
         let iso = ISO8601DateFormatter()

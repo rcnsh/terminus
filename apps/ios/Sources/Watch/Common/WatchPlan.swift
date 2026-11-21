@@ -1,39 +1,23 @@
 import Foundation
 import WidgetKit
 
-/// The watch's plan: one answer from /api/me/next, kept in the app group
-/// (WidgetStore) for the app and its complications alike, and fetched by
-/// whichever of them needs it first, by the iPhone widget's rules
-/// (WidgetTiming): at the answer's next moment, else after 15 minutes,
-/// and a complication's timeline never reloaded sooner than 5 minutes
-/// apart. The open app also asks when it appears and at the next moment.
-/// Every request goes through the edge cache and the feed gate on the
-/// server (rule 2); nothing here polls.
 enum WatchPlan {
-    /// The plan as kept, with when it came on the server's clock.
     static func kept() -> (NextAnswer, Date)? {
         WidgetStore.plan().map { ($0.0, $0.1.addingTimeInterval(ServerClock.skew)) }
     }
 
-    /// Whether the kept plan is due a fetch now (WidgetTiming.due).
     static func due(now: Date = ServerClock.now) -> Bool {
         let k = kept()
         return WidgetTiming.due(k?.0, fetchedAt: k?.1, now: now)
     }
 
-    /// A fetch when the kept plan is due one, and not while the server has
-    /// asked for quiet: what a complication's timeline does each time.
     static func refreshIfDue() async {
         guard TokenStore.read() != nil, Date() >= Quiet.until(.app), due() else { return }
         await refresh()
     }
 
-    /// The fetch in flight in this process, if any: the app and a timeline
-    /// asking at once share it.
     private static let fetching = Mutex<Task<Void, Never>?>(nil)
 
-    /// Fetches the plan once, unless it came within `WidgetStore.recent`
-    /// (another process, a moment ago), and keeps it.
     static func refresh() async {
         if let (_, at) = WidgetStore.plan(), -at.timeIntervalSinceNow < WidgetStore.recent, WidgetStore.error == nil { return }
         let task = fetching.withLock { t in
@@ -70,10 +54,6 @@ enum WatchPlan {
         }
     }
 
-    /// The account's language, from the language an answer is written in
-    /// (`content-language`): the account's choice decides it over the one
-    /// asked in, so the watch's own few words follow the account's. True
-    /// when it changed.
     @discardableResult
     static func follow(_ contentLanguage: String?) -> Bool {
         guard let c = contentLanguage else { return false }
@@ -83,30 +63,21 @@ enum WatchPlan {
         return true
     }
 
-    /// The complications, drawn again from what's kept; asked after the app
-    /// fetched or signed in or out, never on a timer.
     static func redraw() {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    /// This runs in the complications' extension, which has seconds, not ten.
     static var inExtension: Bool { Bundle.main.bundlePath.hasSuffix(".appex") }
 }
 
-/// The watch's own sign-in: its token in its keychain (TokenStore), from a
-/// pairing code the iPhone sent. Signing out is the watch's alone: its Sign
-/// out, or the server refusing its token (removed in Devices, the account
-/// deleted). The phone signing out leaves it signed in.
 enum WatchSession {
     private static var d: UserDefaults { Shared.defaults }
 
-    /// Why the watch was signed out, said once on the setup screen; nil after its own Sign out.
     static var signedOutReason: String? {
         get { d.string(forKey: "watch.signedOutReason") }
         set { d.set(newValue, forKey: "watch.signedOutReason") }
     }
 
-    /// How it was last signed out, for the phone (WatchHandoff.State); nil while signed in or never.
     static var out: WatchHandoff.Out? {
         get { d.string(forKey: "watch.out").flatMap(WatchHandoff.Out.init) }
         set { d.set(newValue?.rawValue, forKey: "watch.out") }
@@ -114,7 +85,6 @@ enum WatchSession {
 
     static var state: WatchHandoff.State { WatchHandoff.State(signedIn: TokenStore.read() != nil, out: out) }
 
-    /// A token from a redeemed code: kept, with what the phone's settings were.
     static func signedIn(token: String, lang: String, clock: String) {
         clearLocal()
         TokenStore.save(token)
@@ -125,7 +95,6 @@ enum WatchSession {
         WatchPlan.redraw()
     }
 
-    /// The server refused `token` while it was still this watch's.
     static func rejected(_ token: String) {
         guard TokenStore.read() == token else { return }
         clearLocal()
@@ -134,7 +103,6 @@ enum WatchSession {
         WatchPlan.redraw()
     }
 
-    /// Its own Sign out: the server told when it can be.
     static func signOut() {
         let token = TokenStore.read()
         clearLocal()
@@ -144,7 +112,6 @@ enum WatchSession {
         if let token { Task.detached { try? await Api(token: token).logout() } }
     }
 
-    /// Everything the account left on the watch.
     private static func clearLocal() {
         TokenStore.clear()
         WidgetStore.forget()

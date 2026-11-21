@@ -1,11 +1,6 @@
 import AppIntents
 import WidgetKit
 
-// The intents' titles are looked up by the system in the phone's language,
-// from the extension's Widgets.strings (keyed by the English, as L's are),
-// not through L, which follows the app's own choice.
-
-/// ↻ on a widget: the plan (or the place it shows) asked for again now.
 struct RefreshIntent: AppIntent {
     static let title = LocalizedStringResource("Refresh", table: "Widgets")
     static let isDiscoverable = false
@@ -17,14 +12,12 @@ struct RefreshIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         if let slot, WidgetStore.nearbySlots.contains(slot) {
-            // Buses near you: the shared board, "Updating…" while it's on its way.
             NearbyShared.error = WidgetFace.updating
             WidgetCenter.shared.reloadAllTimelines()
             await NearbyShared.refresh(tapped: true)
         } else if let slot, WidgetStore.slot(slot).chosen != .timetable {
             await WidgetStore.fetch(slot: slot)
         } else {
-            // Shows the tap landed while the answer is on its way.
             WidgetStore.error = WidgetFace.updating
             WidgetCenter.shared.reloadAllTimelines()
             if await WidgetStore.refreshPlan(force: true) == nil, WidgetStore.error == WidgetFace.updating { WidgetStore.error = nil }
@@ -33,7 +26,6 @@ struct RefreshIntent: AppIntent {
     }
 }
 
-/// A button along the widget: Timetable, Nearby or one of your places, shown in place without opening the app.
 struct ModeIntent: AppIntent {
     static let title = LocalizedStringResource("Show", table: "Widgets")
     static let isDiscoverable = false
@@ -55,7 +47,6 @@ struct ModeIntent: AppIntent {
     }
 }
 
-/// The swap button on Nearby: the stop across the road first, or the nearest again.
 struct SwapIntent: AppIntent {
     static let title = LocalizedStringResource("Other side of the road", table: "Widgets")
     static let isDiscoverable = false

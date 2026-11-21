@@ -1,13 +1,10 @@
 import Foundation
 
-/// A service at a stop and its next bus, wherever a board appears
-/// (/arrivals, /me/nearby, /line). Every time shown is one the API gave.
 struct BoardRow: Decodable, Hashable, Sendable {
     struct Later: Decodable, Hashable, Sendable {
         var etaS: Int
         var quality: String
         var eta: String?
-        /// When it's due (ISO, to the minute); nil from an older server.
         var at: String?
         enum CodingKeys: String, CodingKey { case etaS, quality, eta, at }
         init(etaS: Int, quality: String, eta: String?, at: String? = nil) {
@@ -27,45 +24,28 @@ struct BoardRow: Decodable, Hashable, Sendable {
             at = c.string(.at).flatMap { $0.isEmpty ? nil : $0 }
         }
 
-        /// "14 min", "~20 min": the server's words, else worded here.
         var etaText: String { eta ?? BusTimes.words(etaS, quality: quality) }
     }
 
     let svc: String
     var etaS: Int?
     var quality: String
-    /// The service's colour ("#8e44c9").
     let color: String?
-    /// A public bus, with a fare.
     let paid: Bool
-    /// The buses after this one, soonest first.
     var later: [Later]
-    /// The next stop's name, then where the route ends.
     let towards: [String]
-    /// The well-known places it passes from here ("UTown", "Kent Ridge MRT"),
-    /// for someone new to NUS; empty from an older server.
     let via: [String]
     var crowd: String?
     let endsAt: String?
-    /// The route ends at this stop.
     let endsHere: Bool
-    /// False: calls here but isn't running now (asked for with `stopped=1`).
     var running: Bool
-    /// ended, notYet or noService.
     var stopped: String?
     var resumesAt: String?
-    /// "4 min", "now", "~6 min", worded on the server.
     var eta: String?
-    /// "then 12, ~20, 25 min".
     var laterText: String?
-    /// "to Central Library, Kent Vale", "Ends here".
     let toText: String?
-    /// When the next bus is due (ISO, to the minute); nil without one, or from an older server.
     let at: String?
-    /// Where it's going, worded and translated on the server ("to PGP Foyer",
-    /// "via UTown", "Ends here"); nil from an older server.
     var dest: String?
-    /// The place inside `dest`, set apart from the words around it; nil with none.
     var destPlace: String?
 
     enum CodingKeys: String, CodingKey {
@@ -98,10 +78,8 @@ struct BoardRow: Decodable, Hashable, Sendable {
         destPlace = c.string(.destPlace).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    /// "4 min", "Arriving", "~6 min": the server's words, else worded here from etaS.
     var etaText: String? { eta ?? etaS.map { BusTimes.words($0, quality: quality) } }
 
-    /// "then 12, 20 min", the server's or worded here.
     var thenText: String? {
         if let laterText { return laterText }
         let mins = later.sorted { $0.etaS < $1.etaS }.prefix(2).map { "\(BusTimes.minutes($0.etaS))" }
@@ -109,7 +87,6 @@ struct BoardRow: Decodable, Hashable, Sendable {
     }
 }
 
-/// A stop from /me/nearby, nearest first, or from /me/stops, as asked.
 struct NearbyStop: Decodable, Identifiable, Sendable {
     struct Stop: Decodable, Sendable {
         let code: String
@@ -119,25 +96,18 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         let oppositeName: String?
     }
     let stop: Stop
-    /// The walk there; nil from /me/stops without a location.
     let walkS: Int?
     var available: Bool
     var board: [BoardRow]
     let opposite: String?
-    /// Whether `opposite` is across the road (else only near), and its name:
-    /// sent beside `stop`, or inside it by an older server.
     let oppositeAcross: Bool
     let oppositeName: String?
     let distM: Int?
-    /// Which way its buses go, by places a newcomer knows ("to UTown, Science,
-    /// Kent Ridge MRT"); nil with none, or from an older server.
     let viaText: String?
     var id: String { stop.code }
 
     enum CodingKeys: String, CodingKey { case stop, walkS, available, board, opposite, oppositeAcross, oppositeName, distM, viaText }
 
-    /// The stop as it stands at `now`, got at `got`: its rows aged as a board's
-    /// are (BusTimes.aged), so a time is counted down and stops passing as live.
     func aged(got: Date?, now: Date) -> NearbyStop {
         guard let got else { return self }
         var s = self
@@ -145,7 +115,6 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         return s
     }
 
-    /// A stop not answered for yet: its plate, with nothing under it.
     init(placeholder code: String, name: String) {
         stop = Stop(code: code, name: name, longName: nil, oppositeAcross: nil, oppositeName: nil)
         walkS = nil
@@ -172,23 +141,18 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     }
 }
 
-/// A stop's board: `/api/arrivals`, or a stop from /me/nearby.
 struct Board: Sendable {
     let code: String
-    /// The full name, for the page's title.
     let name: String
     let opposite: String?
     let oppositeAcross: Bool
     let oppositeName: String?
-    /// False when the feed couldn't be reached: no times, which isn't "no buses".
     let available: Bool
     var rows: [BoardRow]
     let asOf: Date?
     var distM: Int? = nil
-    /// When this phone got it, on the server's clock (BusTimes.aged).
     var got: Date? = nil
 
-    /// The board as it stands at `now`: its rows aged.
     func aged(_ now: Date) -> Board {
         guard let got else { return self }
         var b = self
@@ -227,7 +191,6 @@ extension Board: Decodable {
     }
 }
 
-/// `/api/line`: one service's stops in route order and where its buses are.
 struct Line: Decodable, Sendable {
     struct Stop: Decodable, Sendable {
         let code: String
@@ -240,13 +203,10 @@ struct Line: Decodable, Sendable {
             name = Self.named(code, name: c.string(.name), longName: c.string(.longName))
             services = c.lenientList(String.self, forKey: .services) ?? []
         }
-        /// A stop's name on the line: its full one, then its short one, then its code. The
-        /// line page drawn from the campus data before the line comes names its stops by this too.
         static func named(_ code: String, name: String?, longName: String?) -> String {
             [longName, name].compactMap { $0 }.first { !$0.isEmpty } ?? code
         }
     }
-    /// At stop `at`, or between stop `after` and the next.
     struct Bus: Decodable, Identifiable, Sendable {
         let id: String
         let plate: String?
@@ -271,8 +231,6 @@ struct Line: Decodable, Sendable {
     let running: Bool
     let stopped: String?
     let resumesAt: String?
-    /// Its buses out, as /api/lines words them, for the list of lines (BusOuts);
-    /// nil from an older server or with no feed.
     let out: LineCount?
     var got: Date? = nil
 
@@ -311,18 +269,11 @@ struct Line: Decodable, Sendable {
     }
 }
 
-/// How the Stops tab shows one time.
 enum BusTimes {
-    /// Under this long away: "Arriving", not "0 min" (the server's own threshold, format.ts).
     static let arrivingS = 45
-    /// The tab refreshes the page in view this often (the API caches arrivals 15 s).
     static let refreshS: TimeInterval = 15
-    /// Times got longer ago than this have missed a refresh at least.
     static let oldS: TimeInterval = 2 * refreshS
 
-    /// Row `r` from an answer got at `got`, as it stands at `now`, as the web's
-    /// `aged()`: once it's old its times are counted down from when it came, a
-    /// bus over a minute past has no time, and a live time no longer passes as live.
     static func aged(_ r: BoardRow, got: Date, now: Date) -> BoardRow {
         let age = now.timeIntervalSince(got)
         guard let eta = r.etaS, age > oldS else { return r }
@@ -338,20 +289,15 @@ enum BusTimes {
         return out
     }
 
-    /// "4 min", "Arriving", "~6 min" for a bus `etaS` away, worded here as
-    /// the server words it: an estimate is never "Arriving", which would pass
-    /// for a bus at the stop, but "~1 min" under a minute.
     static func words(_ etaS: Int, quality: String) -> String {
         let m = "\(minutes(etaS))"
         guard quality == "live" else { return L("~%@ min", m) }
         return etaS < arrivingS ? L("Arriving") : L("%@ min", m)
     }
 
-    /// Rounded to the nearest minute, never below 1.
     static func minutes(_ etaS: Int) -> Int { max(1, (etaS + 30) / 60) }
 }
 
-/// What a service that isn't running says instead of a time: why, and when it's back.
 struct Stopped: Equatable {
     struct Back: Equatable {
         let at: Date
@@ -373,7 +319,6 @@ struct Stopped: Equatable {
         return Stopped(why: why ?? "ended", back: back)
     }
 
-    /// "Stopped for today", "Back tomorrow at 7:40 AM".
     var lines: (String, String?) {
         let first =
             switch why {
@@ -398,16 +343,11 @@ struct Destination: Decodable, Hashable, Sendable {
     let label: String
     let stopCode: String
     let kind: String
-    /// Metres on foot from the stop; nil for a stop.
     let walkM: Int?
-    /// Other names people search for, lower case ("soc", "mrt").
     let aliases: [String]
-    /// A landmark's every stop; the router takes the quicker.
     let stops: [String]
-    /// What a landmark is ("Food court").
     let detail: String?
 
-    /// Where a favourite or a class added here goes: a landmark itself, anything else its stop.
     var goesTo: String { kind == "landmark" ? code : stopCode }
 
     enum CodingKeys: String, CodingKey { case code, label, stopCode, kind, walkM, aliases, stops, detail }
@@ -425,11 +365,6 @@ struct Destination: Decodable, Hashable, Sendable {
     }
 }
 
-/// The destination search, with the rules and cases every client is held to
-/// (fixtures/search.json; the web's account/search.js is the
-/// reference): exact, then starts with, then a word starts with, then
-/// contains; then by kind, then the shorter label, then the list's own order.
-/// Rooms only once two characters say which.
 enum SearchRank {
     struct Key {
         let kind: String
@@ -447,7 +382,6 @@ enum SearchRank {
         let nq = norm(q)
         func kindRank(_ k: String) -> Int { kinds.firstIndex(of: k) ?? kinds.count }
         func words(_ s: String) -> [Substring] { s.split(whereSeparator: { $0.isWhitespace || "()·,/&-".contains($0) }) }
-        // Plain comparisons, as JavaScript makes them: by UTF-16 code units.
         func same(_ a: String, _ b: String) -> Bool { a.utf16.elementsEqual(b.utf16) }
         func starts(_ a: some StringProtocol, _ p: String) -> Bool { a.utf16.starts(with: p.utf16) }
         func contains(_ a: String, _ p: String) -> Bool { a.range(of: p, options: .literal) != nil }
@@ -484,8 +418,6 @@ func rankDestinations(_ all: [Destination], _ query: String, max: Int = 8) -> [D
     SearchRank.rank(all, query, max: max) { SearchRank.Key(kind: $0.kind, code: $0.code, label: $0.label, aliases: $0.aliases) }
 }
 
-/// `/api/campus`, as the pickers use it: every stop, the residences and the
-/// destinations. The map reads the same answer for its lines (CampusMap).
 struct Campus: Decodable, Sendable {
     struct Stop: Decodable, Hashable, Sendable {
         let code: String
@@ -506,7 +438,6 @@ struct Campus: Decodable, Sendable {
         }
         var fullName: String { longName.flatMap { $0.isEmpty ? nil : $0 } ?? name }
     }
-    /// `common`: where most students live, shown first. `walkMin`: minutes on foot to its stop.
     struct Residence: Decodable, Hashable, Sendable {
         let code: String
         let name: String
@@ -537,6 +468,5 @@ struct Campus: Decodable, Sendable {
     func stopName(_ code: String) -> String { stops.first { $0.code == code }?.name ?? code }
     func stop(_ code: String) -> Stop? { stops.first { $0.code == code } }
     func color(_ svc: String) -> String? { routes[svc]?.color }
-    /// Every shuttle service, in code order.
     var services: [String] { routes.keys.sorted() }
 }

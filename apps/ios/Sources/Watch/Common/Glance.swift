@@ -1,48 +1,27 @@
 import SwiftUI
 import WidgetKit
 
-/// What a complication says at one moment, worked out once from the plan
-/// kept in the app group, so every family says the same thing: the
-/// headline ("Leave in 9 min"), the bus, where it's from and how sure its
-/// time is. Every word is the card's or one the iPhone's widgets and Now
-/// already use (WidgetFace, JourneyText); only the countdown is worked out
-/// here, because it ticks.
 struct Glance: Equatable {
-    /// The bus to catch, as it's painted.
     var svc: String?
     var color: String?
     var paid = false
-    /// Over the headline: where it's for ("GEA1000").
     var heading: String?
-    /// "Leave in 9 min", "Leave now", "D2 at 09:41", "Off at UTown 09:52".
     var headline: String
-    /// The last two minutes before leaving, drawn as a timer that ticks by
-    /// itself ("Leave in 1:42"): the time it counts down to.
     var countdownTo: Date?
-    /// The circular face's figure: "9 min", or a clock time with no countdown.
     var big: String?
-    /// Under the headline: the bus's stop and time ("from PGP 09:42"), else the line under the card's headline.
     var under: String?
-    /// "Live", or "~" for a timetable guess.
     var sure: String?
-    /// The trip misses the class: the headline in the late colour.
     var late = false
-    /// Times that may be old: dimmed.
     var dim = false
 
-    /// The card's 12 characters for a glance ("Leave 09:38"), when it has them.
     var short: String?
-    /// Whether the headline counts down to leaving.
     var isCountdown = false
 
-    /// The inline face's one line: "Leave in 9 min · D2"; otherwise the
-    /// card's `glance`, as the iPhone's Lock Screen has it.
     var inline: String {
         if isCountdown { return svc.map { "\(headline) · \($0)" } ?? headline }
         return short ?? headline
     }
 
-    /// The glance for `answer` (nil before any) at `now`, on the server's clock.
     static func of(paired: Bool, answer: NextAnswer?, error: String?, now: Date) -> Glance {
         guard paired else { return Glance(headline: "terminus", under: L("Open terminus on your iPhone")) }
         let face = WidgetFace.of(paired: true, mode: .timetable, answer: answer, error: error, offline: nil, now: now)
@@ -78,14 +57,9 @@ struct Glance: Equatable {
             dim: face.dim, short: old ? nil : a.card?.glance)
     }
 
-    /// The moments the glance looks different with nothing new: each minute
-    /// the countdown's figure changes, the last two minutes' timer starting,
-    /// and leaving; with the iPhone widget's own (WidgetTiming.redraws).
     static func redraws(_ a: NextAnswer, now: Date, until: Date) -> [Date] {
         var out = WidgetTiming.redraws(a, now: now, until: until)
         if let j = a.card?.journey, a.phase != "waiting", j.leave != nil, let leave = a.leaveAt {
-            // The figure is rounded (JourneyText.leaveIn): it drops a minute half a minute before each whole one.
-            // Only while the card holds: past its staleAt the time to leave is shown, not counted.
             let holds = a.staleAt ?? until
             var count = (2...60).map { leave.addingTimeInterval(-(Double($0) * 60 + 29.5)) }
             count += [leave.addingTimeInterval(-119.5), leave]
@@ -94,8 +68,6 @@ struct Glance: Equatable {
         return Array(Set(out.filter { $0 > now && $0 < until })).sorted()
     }
 
-    /// How much the Smart Stack should want it: most on a trip and the hour
-    /// before leaving, a little otherwise, nothing signed out.
     static func relevance(paired: Bool, answer: NextAnswer?, now: Date) -> Double {
         guard paired, let a = answer, !WidgetFace.isOld(a, now: now) else { return 0 }
         if TripPrefs.tripPhases.contains(a.phase) { return 1 }
@@ -104,17 +76,13 @@ struct Glance: Equatable {
     }
 }
 
-/// The colours a complication draws in: full colour on a face that shows
-/// them, the face's tint otherwise (`widgetAccentable`).
 private let ink = Color(rgb: 0xF2EFEB)
 
-/// One line beside the clock: "Leave in 9 min · D2".
 struct InlineGlance: View {
     let g: Glance
 
     var body: some View {
         if let to = g.countdownTo {
-            // The timer can't go inside a phrase that's looked up: the phrase is split around its blank.
             let parts = L("Leave in %@", "\u{1}").components(separatedBy: "\u{1}")
             Text(verbatim: parts.first ?? "") + Text(timerInterval: Date.now...max(Date.now, to), countsDown: true)
                 + Text(verbatim: (parts.count > 1 ? parts[1] : "") + (g.svc.map { " · \($0)" } ?? ""))
@@ -128,7 +96,6 @@ struct InlineGlance: View {
     }
 }
 
-/// The bus over the minutes to leave (or the time that matters), in a circle.
 struct CircularGlance: View {
     let g: Glance
 
@@ -159,7 +126,6 @@ struct CircularGlance: View {
     }
 }
 
-/// Three lines: the bus and where it's for, the headline, and the stop with Live or "~".
 struct RectangularGlance: View {
     let g: Glance
 

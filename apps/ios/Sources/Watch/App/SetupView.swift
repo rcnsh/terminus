@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// A watch not signed in: where to set it up. The code comes from the
-/// iPhone (Settings › Devices › Set up your watch); nothing is typed here.
 struct SetupView: View {
     @Environment(WatchModel.self) private var model
 
