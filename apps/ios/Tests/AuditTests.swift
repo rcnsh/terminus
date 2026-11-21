@@ -35,6 +35,28 @@ import Testing
     #expect(!Locator.fresh(now.addingTimeInterval(-3 * 3600), maxAge: 60, now: now))
 }
 
+@MainActor @Test func askingForLocationWaitsForTheAnswerItself() async {
+    let l = Locator()
+    try? await Task.sleep(for: .milliseconds(300))
+    l.settle(.notDetermined)
+    var done = 0
+    let waits = (0..<2).map { _ in
+        Task { @MainActor in
+            await l.decide()
+            done += 1
+        }
+    }
+    for _ in 0..<20 { await Task.yield() }
+    l.settle(.notDetermined)
+    for _ in 0..<20 { await Task.yield() }
+    #expect(done == 0)
+    l.settle(.denied)
+    for w in waits { await w.value }
+    #expect(done == 2)
+    #expect(l.denied)
+    await l.decide()
+}
+
 private func fix(_ lat: Double, _ lon: Double = 103.776, acc: Double = 10, at: Date) -> CLLocation {
     CLLocation(
         coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon), altitude: 0, horizontalAccuracy: acc,
