@@ -19,7 +19,7 @@ function importsOf(file) {
   );
 }
 
-const SHELL_PIN = { shell: 'shell-v25', files: 'a8a12b8a77f02725' };
+const SHELL_PIN = { shell: 'shell-v26', files: 'e8bdaee95d15a39a' };
 
 test('the list of files kept for offline changes only with a new SHELL', () => {
   const shell = /const SHELL = '([^']+)'/.exec(read('sw.js'))[1];

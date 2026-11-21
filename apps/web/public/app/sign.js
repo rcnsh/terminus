@@ -2,6 +2,7 @@ import { Bar, Icon, Skeleton, html, store, useStore, widthOf } from '/assets/ui.
 import { PIN_COUNT_KEY, inkOn, t } from '/account/dom.js';
 import { togglePin } from '/account/profile.js';
 import { NEXT, Row, STAR, colorOf, etaText as minutesText, saidRow, svcVars } from '/app/board.js';
+import { local } from '/assets/storage.js';
 
 const BUS =
   '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
@@ -63,19 +64,13 @@ export const pinAccount = store(null);
 
 export function keptPinCount(account) {
   if (!account) return null;
-  try {
-    const kept = JSON.parse(localStorage.getItem(PIN_COUNT_KEY) ?? 'null');
-    return kept?.account === account && Number.isInteger(kept.n) && kept.n >= 0 ? kept.n : null;
-  } catch {
-    return null;
-  }
+  const kept = local.json(PIN_COUNT_KEY);
+  return kept?.account === account && Number.isInteger(kept.n) && kept.n >= 0 ? kept.n : null;
 }
 
 export function keepPinCount(account, n) {
   if (!account) return;
-  try {
-    localStorage.setItem(PIN_COUNT_KEY, JSON.stringify({ account, n }));
-  } catch {}
+  local.set(PIN_COUNT_KEY, JSON.stringify({ account, n }));
 }
 
 export const NoPins = () =>

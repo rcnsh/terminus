@@ -1,26 +1,18 @@
 import { Fill, MARK, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, sentences, serverNow, t } from './dom.js';
 import { Celestial, Horizon } from './sky.js';
+import { local } from '../assets/storage.js';
 
 const KEY = 'terminus-card-style';
 export const STYLES = ['steps', 'route'];
 const DEFAULT = 'steps';
 
-const saved = () => {
-  try {
-    const v = localStorage.getItem(KEY);
-    return STYLES.includes(v) ? v : DEFAULT;
-  } catch {
-    return DEFAULT;
-  }
-};
+const saved = local.get(KEY);
 
-export const cardStyle = store(saved());
+export const cardStyle = store(STYLES.includes(saved) ? saved : DEFAULT);
 
 export function setCardStyle(style) {
-  try {
-    localStorage.setItem(KEY, style);
-  } catch {}
+  local.set(KEY, style);
   cardStyle.set(style);
 }
 

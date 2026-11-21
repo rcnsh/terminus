@@ -1,3 +1,5 @@
+import { local } from '../assets/storage.js';
+
 export const t = (en, ...args) => (window.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
 export const locale = () => window.i18n?.locale;
 
@@ -47,9 +49,7 @@ export const PIN_COUNT_KEY = 'pinned-count';
 const LANG_APPLIED_KEY = 'terminus-lang-applied';
 
 export async function forgetAccountHere() {
-  try {
-    for (const k of [ADDED_PLACES_KEY, PIN_COUNT_KEY, LANG_APPLIED_KEY]) globalThis.localStorage?.removeItem(k);
-  } catch {}
+  for (const k of [ADDED_PLACES_KEY, PIN_COUNT_KEY, LANG_APPLIED_KEY]) local.remove(k);
   const unsubscribe = (async () => {
     const reg = await navigator.serviceWorker?.getRegistration('/app/');
     await (await reg?.pushManager?.getSubscription())?.unsubscribe();
@@ -104,16 +104,11 @@ function sentence(text) {
 }
 
 const CLOCK_KEY = 'terminus.clock';
-let clockPref = 'auto';
-try {
-  clockPref = globalThis.localStorage?.getItem(CLOCK_KEY) ?? 'auto';
-} catch {}
+let clockPref = local.get(CLOCK_KEY) ?? 'auto';
 
 export function setClockPref(v) {
   clockPref = v === '12' || v === '24' ? v : 'auto';
-  try {
-    globalThis.localStorage?.setItem(CLOCK_KEY, clockPref);
-  } catch {}
+  local.set(CLOCK_KEY, clockPref);
 }
 
 export const browserHour12 = () => new Intl.DateTimeFormat(locale() ?? [], { hour: 'numeric' }).resolvedOptions().hour12 === true;
