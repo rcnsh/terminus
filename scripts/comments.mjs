@@ -53,7 +53,7 @@ export const SYNTAX = {
     triple: true,
     swiftInterp: true,
     raw: true,
-    directive: /^\s*(swift-format-ignore|swiftlint:)/,
+    directive: /^\s*(swift-format-ignore|swiftlint:|swift-tools-version:)/,
   },
   css: { line: [], block: true, quotes: `'"` },
   sql: { line: ['--'], block: true, quotes: `'` },

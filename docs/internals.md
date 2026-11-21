@@ -1463,7 +1463,7 @@ map; and Settings. It uses the same routes as the account page, with the session
   the Map tab asks for `map.js` and MapLibre together (`app/map-files.js`,
   the one place MapLibre's and PMTiles' versions are written). How the
   files load, and why a failed one is asked for at a new address:
-  ADR 0000-web-app-loading. A store holds one value: it's set to a new
+  ADR 0021-web-app-loading. A store holds one value: it's set to a new
   object, never changed in place, and tells its subscribers from a copy of
   the list, since one may unsubscribe while told. Each page has one
   status line for screen readers (`announce` in `ui.js`), in the page from
@@ -3369,10 +3369,11 @@ How `apps/android` behaves where the code alone doesn't say why
   for the start after. A signed-out session is ended on the server by a
   `LogoutWorker` with up to ten tries, the token in the job, not the
   settings.
+
 ### The iPhone app
 
 `apps/ios/Sources/App`, by area; the controls it draws itself, and why, are
-in [ADR 0000](adr/0000-iphone-hand-made-controls.md).
+in [ADR 0024](adr/0024-iphone-hand-made-controls.md).
 
 - **Refreshing (rule 2).** Every loop runs only while its screen is on
   screen and the app active. Now's answer every 30 s (`AppModel.pollS`),
@@ -3502,9 +3503,10 @@ in [ADR 0000](adr/0000-iphone-hand-made-controls.md).
   `to/<code>?label=…` and the tabs, as Android's. `to` only from the
   app's own widgets, which carry `WidgetStore.linkKey`, so another app
   can't add places with names of its choosing.
-The iPhone app, in `apps/ios` (how its widgets reload: ADR
-0000-iphone-widgets-draw-ahead.md; how it reads answers and the server's
-clock: ADR 0000-iphone-reads-answers-leniently.md):
+
+Its shared code, widgets and watch (how the widgets reload:
+[ADR 0025](adr/0025-iphone-widgets-draw-ahead.md); how it reads answers and
+the server's clock: [ADR 0026](adr/0026-apple-apps-read-answers-leniently.md)):
 
 - **What its parts share.** The app, its widgets and Live Activity, and
   the notification service build `Sources/Shared` and share the latest
@@ -3606,9 +3608,12 @@ clock: ADR 0000-iphone-reads-answers-leniently.md):
   context stays until replaced and is read again at each start. A code that
   comes while another is being redeemed waits its turn: the server has
   already replaced the one in flight with it.
-The Mac app, beyond what the other clients share (why it lives in the menu
-bar and refreshes as it does: [ADR 0000-mac-menu-bar-app](adr/0000-mac-menu-bar-app.md);
-how it reads answers: [ADR 0000-mac-reads-answers-leniently](adr/0000-mac-reads-answers-leniently.md)):
+
+### The Mac app
+
+Beyond what the other clients share (why it lives in the menu bar and
+refreshes as it does: [ADR 0027](adr/0027-mac-menu-bar-app.md); how it reads
+answers: [ADR 0026](adr/0026-apple-apps-read-answers-leniently.md)):
 
 - **Waiting on the server** (`Quiet`, `Outdated` in `Api.swift`). A 429's
   `Retry-After` gates every request of its kind: sign-in and pairing

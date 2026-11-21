@@ -116,7 +116,7 @@ release.
     against the checksum in Sparkle's `Package.swift` first). The appcast
     itself is signed too, and nothing may edit it afterwards.
   - **How the scripts work.** Pinning and the clean install are ADR
-    `0000-outside-code-pinned-by-our-own-hashes.md`; the rest:
+    `0029-outside-code-pinned-by-our-own-hashes.md`; the rest:
     - `release.sh` takes `--dry-run` and nothing else, `release-beta.sh`
       one version and `--dry-run`: a mistyped flag (`--dryrun`) would
       otherwise publish, with no prompt. `release.sh` unsets `CHANNEL`,

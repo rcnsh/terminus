@@ -22,7 +22,9 @@ test('JS: line and block comments, not slashes inside strings, templates or rege
 test('Kotlin and Swift: nested blocks, string templates and raw strings', () => {
   const kt = ['/* a /* b */ still */', 'val s = "${x // no}" // yes', 'val t = """// no"""'].join('\n');
   assert.deepEqual(lines(kt, 'kotlin'), [1, 2]);
-  const swift = ['let a = "\\(x) // no" // yes', 'let r = #"// no"#', '#expect(a == b)', '/// doc'].join('\n');
+  const swift = ['let a = "\\(x) // no" // yes', 'let r = #"// no"#', '#expect(a == b)', '/// doc', '// swift-tools-version: 6.0'].join(
+    '\n',
+  );
   assert.deepEqual(lines(swift, 'swift'), [1, 4]);
 });
 

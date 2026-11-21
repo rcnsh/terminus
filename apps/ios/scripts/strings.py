@@ -11,7 +11,7 @@ anything else -> Localizable.strings).
                                 app's and the Mac app's translations (the same
                                 English, the same Chinese), sorted, and lists
                                 what's still missing, to translate by hand
-                                (the glossary is at the top of apps/api/src/i18n.ts)
+                                (the glossary is in docs/GLOSSARY.md, "In Chinese")
     scripts/strings.py --check  fails if any phrase has no Chinese, or two
                                 tables give one phrase different Chinese (CI)
 """

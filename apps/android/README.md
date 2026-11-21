@@ -106,7 +106,7 @@ the devices that registered.
 ## How it's built
 
 When the widgets and alerts refresh, and how often the app asks: ADR
-[0000-android-refresh-on-alarms](../../docs/adr/0000-android-refresh-on-alarms.md).
+[0023-android-refresh-on-alarms](../../docs/adr/0023-android-refresh-on-alarms.md).
 What else looks odd but is deliberate:
 
 - **The activity is never recreated for dark mode or the language**

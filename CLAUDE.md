@@ -188,10 +188,9 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   it with names and shape; put a deliberate odd choice in an ADR, how
   something works or what a feed was seen to do (with when) in
   internals.md, and a hack in an issue. History belongs in git log.
-  `pnpm lint` fails a file over its count in
-  `scripts/comments-baseline.json`; after deleting comments, run
-  `node scripts/comments.mjs --update`. To clear a slice, use the
-  `/delete-comment` skill.
+  `pnpm lint` fails on any comment (`scripts/comments.mjs`; tool
+  directives, shebangs and migrations aside). The `/delete-comment` skill
+  clears comments a file brings in.
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map", "your stop"),
   not internals.

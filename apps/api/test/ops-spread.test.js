@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const OPS = new URL('../src/ops/', import.meta.url);
 
-const KNOWN_SMALL = [{ file: 'etamodel.ts', spread: 'Math.min(...steps.map(earlyAt))', why: 'WEIGHT_STEPS + 1 weights' }];
+const KNOWN_SMALL = [];
 
 test('src/ops/ spreads a list into Math.min or Math.max only when the list is known to be small', () => {
   const out = [];

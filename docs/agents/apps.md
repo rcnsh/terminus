@@ -25,7 +25,7 @@ iPhone changes reach users only through a release
   keeps `~/.gradle/gradle.properties` (the signing keys) out of the build.
   It leaves the changes uncommitted and prints the commands that push them.
   How the workflow keeps Gradle away from its push token: ADR
-  `0000-ci-jobs-split-by-what-they-hold.md`.
+  `0028-ci-jobs-split-by-what-they-hold.md`.
   - `kotlin-stdlib-common` is excluded from every configuration: it's an
     empty module since Kotlin 1.9.20, and Gradle keeps it in the graph
     only while the lock pins `kotlin-stdlib`, so writing the locks drops it
