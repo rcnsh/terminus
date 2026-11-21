@@ -74,7 +74,7 @@ test('chosen is a rounded fill of the accent and nothing else, and only the trai
 test("Elsewhere sits at the trailing end of the chips' row, and the report's foot is placed beside, never moved", () => {
   const css = read('app/app.css');
   assert.match(css, /\.app-chips \.chip-search \{[^}]*margin-left: auto;/);
-  assert.match(wideRule(css, '.app-main.split .app-card > .card-foot.card-foot'), /position: absolute;/);
+  assert.match(wideRule(css, '.app-main.split .app-card > .card-foot'), /position: absolute;/);
   const app = read('app/app.js');
   assert.equal(app.match(/<\$\{CardFoot\} \/>/g).length, 1);
 });
@@ -234,7 +234,7 @@ test("wide Settings keeps the phone's grouped cards and chevrons, and Now's foot
   assert.equal(wideRule(account, '.set-item .chev'), null);
   assert.match(wideRule(account, '.set-item .row-text'), /display: grid;/);
   assert.match(account, /\n\.set-item\[data-page="feedback"\] \.row-sum \{ display: none; \}/);
-  assert.match(wideRule(read('app/app.css'), '.app-main.split .app-card > .card-foot.card-foot'), /left: calc\(50% \+ 24px\);/);
+  assert.match(wideRule(read('app/app.css'), '.app-main.split .app-card > .card-foot'), /left: calc\(50% \+ 24px\);/);
 });
 
 test("a kept older /app/ without the rail's place still starts: the app makes it, ahead of the header", () => {
