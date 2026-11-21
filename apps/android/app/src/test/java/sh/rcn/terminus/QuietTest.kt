@@ -1,80 +1,64 @@
 package sh.rcn.terminus
 
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 
 class QuietTest {
     private var now = 1_000_000L
-
-    @Before
-    fun clock() {
-        Quiet.elapsed = { now }
-        Quiet.wall = { now }
-        Quiet.reset()
-        Outdated.wall = { now }
-        Outdated.reset()
-    }
-
-    @After
-    fun done() {
-        Quiet.reset()
-        Outdated.reset()
-    }
+    private val quiet = QuietGate({ now }, { now })
+    private val outdated = OutdatedGate { now }
 
     @Test
     fun aSignInLimitHoldsBackOnlySignIn() {
-        Quiet.after("/api/auth/app/start", "60")
-        assertTrue(Quiet.blocked("/api/auth/app/poll"))
-        assertTrue(Quiet.blocked("/api/pair/check"))
-        assertFalse(Quiet.blocked("/api/me/next"))
-        assertEquals(0, Quiet.remainingMs())
+        quiet.after("/api/auth/app/start", "60")
+        assertTrue(quiet.blocked("/api/auth/app/poll"))
+        assertTrue(quiet.blocked("/api/pair/check"))
+        assertFalse(quiet.blocked("/api/me/next"))
+        assertEquals(0, quiet.remainingMs())
     }
 
     @Test
     fun anAppWideLimitHoldsEverythingUntilRetryAfter() {
-        Quiet.after("/api/me/next", "30")
-        assertTrue(Quiet.blocked("/api/me/next"))
-        assertTrue(Quiet.blocked("/api/auth/app/start"))
-        assertEquals(30_000, Quiet.remainingMs())
+        quiet.after("/api/me/next", "30")
+        assertTrue(quiet.blocked("/api/me/next"))
+        assertTrue(quiet.blocked("/api/auth/app/start"))
+        assertEquals(30_000, quiet.remainingMs())
         now += 30_000
-        assertFalse(Quiet.blocked("/api/me/next"))
+        assertFalse(quiet.blocked("/api/me/next"))
     }
 
     @Test
     fun waitsAreCappedAndDefaulted() {
-        Quiet.after("/api/me/next", "99999")
-        assertEquals(300_000, Quiet.remainingMs())
-        Quiet.reset()
-        Quiet.after("/api/me/next", null)
-        assertEquals(60_000, Quiet.remainingMs())
+        quiet.after("/api/me/next", "99999")
+        assertEquals(300_000, quiet.remainingMs())
+        quiet.after("/api/me/next", null)
+        assertEquals(60_000, quiet.remainingMs())
     }
 
     @Test
     fun a503sRetryAfterSlowsThePollingWithoutBlocking() {
-        Quiet.later("30")
-        assertFalse(Quiet.blocked("/api/me/next"))
-        assertEquals(30_000, Quiet.waitMs())
-        Quiet.reset()
-        Quiet.later(null)
-        assertEquals(0, Quiet.waitMs())
+        quiet.later("30")
+        assertFalse(quiet.blocked("/api/me/next"))
+        assertEquals(30_000, quiet.waitMs())
+        val fresh = QuietGate({ now }, { now })
+        fresh.later(null)
+        assertEquals(0, fresh.waitMs())
     }
 
     @Test
     fun refusedAsTooOldHoldsHalfAnHourThenTriesOnce() {
-        assertFalse(Outdated.holding())
-        Outdated.refused()
-        assertTrue(Outdated.required)
-        assertTrue(Outdated.holding())
+        assertFalse(outdated.holding())
+        outdated.refused()
+        assertTrue(outdated.required)
+        assertTrue(outdated.holding())
         now += 29 * 60_000L
-        assertTrue(Outdated.holding())
+        assertTrue(outdated.holding())
         now += 60_000L
-        assertFalse(Outdated.holding())
-        Outdated.served()
-        assertFalse(Outdated.required)
+        assertFalse(outdated.holding())
+        outdated.served()
+        assertFalse(outdated.required)
     }
 
     @Test

@@ -119,7 +119,6 @@ class WidgetModesTest {
 
     @Test
     fun aChosenWidgetIsRedrawnAsItsTimesAgeAndItsChoiceRunsOut() {
-        sh.rcn.terminus.ServerClock.reset()
         assertEquals(now + WidgetModes.NEARBY_OLD_MS, WidgetModes.redrawAt(Mode.Nearby, now, now, null, now))
         val leaveAt = now + 10 * 60_000
         val place = NextAnswer.parse(JSONObject(answer(leaveAt, "idle")))
