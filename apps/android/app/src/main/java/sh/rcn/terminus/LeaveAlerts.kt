@@ -283,7 +283,6 @@ object LeaveAlerts {
         )
 }
 
-@android.annotation.SuppressLint("MissingPermission")
 internal fun AlarmManager.setWhileIdle(at: Long, pi: PendingIntent, wake: Boolean = true) {
     val type = if (wake) AlarmManager.RTC_WAKEUP else AlarmManager.RTC
     if (canScheduleExactAlarms()) setExactAndAllowWhileIdle(type, at, pi) else setAndAllowWhileIdle(type, at, pi)
