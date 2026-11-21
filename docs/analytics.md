@@ -294,8 +294,11 @@ most 16: the arrival-time job's questions, at every stop anyone asks
 about rather than only the stops answers chose. It keeps the columns of
 an `arrival` row, so one query reads both: `blob2` the stop, `blob3` the
 service, `blob6` the plate, `blob7` the crowd, `blob9` the berth,
-`double1` the seconds to arrival from when the board was fetched; `blob4`
-is `''` and `blob5` `live`. No destination, request or location.
+`double1` the seconds to arrival from when the row is written (so the
+fetch and the switch's read don't make the bus look late); `blob4`
+is `''` and `blob5` `live`. No destination, request or location. Sixteen
+a board keeps eight boards (`/api/me/stops` at most) and an answer's rows
+under Analytics Engine's 250 writes per invocation.
 
 ```sql
 SELECT blob2 AS stop, blob3 AS svc, count() AS n, avg(double1) AS eta_s
@@ -314,7 +317,15 @@ and dropped.
 Analytics Engine can't delete a row, so a crash dealt with is dismissed
 on the dashboard instead (`POST /api/admin/crashes/dismiss`, KV
 `config:crashes:dismissed`, fingerprint to when): the stats leave it out
-until a report of it comes in after that.
+until a report of it comes in after that. A dismissal is kept 8 days, past
+the dashboard's week of reports. The fingerprint is the platform, type and
+top five frames without line numbers; with no stack, or a stack of bare
+MetricKit frames (a binary and an offset), the message with its numbers
+and addresses blanked tells crashes apart. Scrubbing keeps an Apple
+frame's trailing offset, which is what symbolicates it.
+
+The dashboard's days are Singapore's (`formatDateTime(timestamp, '%Y-%m-%d',
+'Asia/Singapore')`): Analytics Engine's `toDate()` gives the UTC day.
 
 ```sql
 SELECT blob4 AS fingerprint, blob5 AS type, blob3 AS version, SUM(_sample_interval) AS n

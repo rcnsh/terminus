@@ -55,7 +55,13 @@ beyond the language.
    the recorder's day, interpolated 25 m before the stop; or
    `passingsFromReadings` on the map's placed buses (a bus heading for S in
    one reading and at S, or past it, in the next), for data from the public
-   API.
+   API. `passingsOf` passes over a reading more than 500 m behind the last
+   good one (`BACK_M`: GPS error and A1 and A2 reversing out of KRB stay
+   inside it; further back is the far side of a road the line takes both
+   ways) or faster than 20 m/s, and wraps a loop's end to its start within
+   1,200 m of the two ends together. Readings over 2 minutes apart, and
+   segments over 20 minutes (a bus out of service), count for nothing; a
+   bus's last stop is its position for 20 minutes.
 2. **Segment times.** A bus's consecutive arrivals at adjacent stops of its
    route (`segmentsOf`). Their medians, and 10th and 90th percentiles (the
    quick and slow ends), by service and stop pair, and by weekday/weekend
@@ -88,7 +94,9 @@ beyond the language.
    minute early than the feed does, then the nearest one that doesn't.
    The bus usually comes later than the feed says, so the median moves
    every time later, the early buses' too, and someone who trusted the
-   time misses the bus. On the stable site's days almost no correction
+   time misses the bus. The smallest error is found with a loop, not
+   `Math.min(...)`: every service's group pools 28 days of rows, past what
+   spreading into arguments allows. On the stable site's days almost no correction
    passes (within 16 s either way): the gain is history's and the check's.
 7. **The check** (`checkS`, the `checked` method). For a plate whose bus
    was seen at a stop in the last 90 s, a time over 4 minutes sooner than
@@ -97,7 +105,9 @@ beyond the language.
    (gated), is wrong: history's median answers instead. Only on stop pairs
    driven 5 times or more: fewer give no real range. It catches the
    feed's worst errors, a time stuck while the bus is half a lap away, and
-   leaves the rest alone (about 1 question in 100).
+   leaves the rest alone (about 1 question in 100). On 19 October 2026 the
+   feed held a D2 at 3 minutes from PGP for many reads while the bus was
+   half a lap away; it came 25 to 30 minutes later.
 8. **The blend.** Per horizon (under 2 min, 2 to 5, 5 to 10, 10 to 30), a
    weight on gated history against the corrected feed, picked in tenths to
    minimise absolute error among the weights that leave no more buses
@@ -139,6 +149,10 @@ what `casesOf` keeps about the bus in `Case.why`):
    queue and an arrival is unclear.
 6. **Held**: the bus is far overdue on its current segment (`heldAfterS`).
 7. **Other.**
+
+A time given within a minute for 3 minutes is stuck (`STUCK_S`): a bus at
+lights can hold a minute for a minute, but three is the feed not counting
+down.
 
 `scoreCases` returns the misses by cause (`Misses`): how many, how many
 came later than said, and every method's summed error on them, so days

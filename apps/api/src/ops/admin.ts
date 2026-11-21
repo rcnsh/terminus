@@ -1,18 +1,3 @@
-/**
- * The operator dashboard's data (/api/admin/stats, shown by apps/web/public/admin).
- * Operator only: the x-health-token header holds HEALTH_TOKEN, or a session
- * from signing in with a passkey (passkey.ts).
- *
- * Counts come from D1 and KV. With ANALYTICS_TOKEN and CF_ACCOUNT_ID set it
- * also queries Analytics Engine for answers and errors per day, the daily
- * active counts and the apps' error reports; without them those parts are
- * null and the page says how to turn them on. `collect` is the switches for
- * what's collected (collect.ts), `eta` the arrival times scored (eta.ts),
- * `model` the arrival-time model's days in shadow (etashadow.ts).
- * `apiKeys.list` is every key with its owner's email, for the dashboard
- * to set beside the requests each made (`analytics.keys`).
- */
-
 import type { Env } from '../types.ts';
 import { answering, answeringSince, readIncidents, readUpstream } from './monitor.ts';
 import { BETTER_STOP, BETTER_STOP_TEXT, REASONS, summarize } from './feedback.ts';
@@ -26,52 +11,30 @@ import { shadowSummary } from './etashadow.ts';
 import { sgtDate } from '../timetable/calendar.ts';
 
 const DAY = 86_400_000;
-/** API keys the dashboard lists, most lately used first: five an account, so this is every key for a long while. */
 const KEYS_LISTED = 500;
-/** Rows of each per-key query: the 500 keys' two outcomes on 9 days is 9,000. */
 const KEY_ROWS = 10_000;
 
-/** HEALTH_TOKEN itself, or an operator session that hasn't run out. */
 export async function isOperator(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
   return holdsHealthToken(env, req) || (await sessionOk(env.HEALTH_TOKEN, req.headers.get('x-health-token'), nowMs));
 }
 
-/** HEALTH_TOKEN itself, which a session can't stand in for: adding a passkey needs it. */
 export function holdsHealthToken(env: Env, req: Request): boolean {
   return sentToken(req, env.HEALTH_TOKEN);
 }
 
-/**
- * Whoever may read the timelapse days: the operator, or a holder of
- * TIMELAPSE_TOKEN, sent in the same header. That token opens /api/timelapse/*
- * and nothing else, so a machine left to render the videos unattended never
- * holds the key to the dashboard, its reports and their emails.
- */
 export async function canReadTimelapse(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
   return sentToken(req, env.TIMELAPSE_TOKEN) || (await isOperator(env, req, nowMs));
 }
 
-/**
- * Whoever may read the uNivUS version the feed takes: the operator, or a
- * holder of SCRAPE_TOKEN (the weekly scrape, scrape_stops.py), in the same
- * header. That token opens /api/admin/appversion and nothing else, so the
- * scrape job never holds the key to the dashboard.
- */
 export async function canReadAppVersion(env: Env, req: Request, nowMs = Date.now()): Promise<boolean> {
   return sentToken(req, env.SCRAPE_TOKEN) || (await isOperator(env, req, nowMs));
 }
 
-/** The x-health-token header holds `token`; never true when the token is unset. */
 function sentToken(req: Request, token: string | undefined): boolean {
   const given = req.headers.get('x-health-token');
   return Boolean(token && given && timingSafeEqual(given, token));
 }
 
-/**
- * `given` against the secret, in a time that depends only on the secret's
- * length: a wrong length is folded into the result rather than returned
- * early, so timing doesn't say how long the token is.
- */
 export function timingSafeEqual(given: string, secret: string): boolean {
   let diff = given.length ^ secret.length;
   for (let i = 0; i < secret.length; i++) diff |= (given.charCodeAt(i) | 0) ^ secret.charCodeAt(i);
@@ -110,8 +73,6 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const d1 = nowMs - DAY;
   const d7 = nowMs - 7 * DAY;
   const d30 = nowMs - 30 * DAY;
-  // One pass over each table, and every query in one round trip: the counts read whole tables.
-  // SUM of a comparison counts the rows where it's true (NULL counts none).
   const [u, p, s, k, f, o, dev, cli, sign, fb, kl] = await db.batch([
     db
       .prepare(
@@ -126,7 +87,6 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
               SUM(json_array_length(json, '$.home.stops') > 0) AS withHome
          FROM profiles`,
     ),
-    // Active: an account with any session used in the window.
     db
       .prepare(
         `SELECT COUNT(DISTINCT CASE WHEN last_seen > ?1 THEN user_id END) AS active1,
@@ -137,7 +97,6 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       .bind(d1, d7),
     db.prepare('SELECT COUNT(*) AS total, SUM(last_used > ?) AS used7 FROM api_keys').bind(d7),
     db.prepare('SELECT COUNT(*) AS n FROM feedback WHERE created > ?').bind(d7),
-    // New installs (an app's first launch makes an account) that finished the in-app setup.
     db
       .prepare(
         `SELECT COUNT(*) AS n FROM users u JOIN profiles p ON p.user_id = u.id
@@ -153,17 +112,12 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       .bind(d7),
     db
       .prepare(
-        // App versions in use: the x-terminus-client header each device last
-        // sent, by when it was last used. A device unused for 90 days is
-        // signed out, so the 90 days are every device still paired: a
-        // version at none there is one nothing can still be running.
         `SELECT client, SUM(last_seen > ?1) AS n, SUM(last_seen > ?2) AS d30, SUM(last_seen > ?3) AS d90 FROM sessions
           WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ?3 GROUP BY 1 ORDER BY d90 DESC, n DESC LIMIT 40`,
       )
       .bind(d7, d30, nowMs - 90 * DAY),
     db
       .prepare(
-        // Per Singapore day, the last 30.
         `SELECT date((created + 8 * 3600000) / 1000, 'unixepoch') AS day, COUNT(*) AS n
            FROM users WHERE created > ? GROUP BY 1 ORDER BY 1`,
       )
@@ -172,7 +126,6 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       `SELECT f.id, f.created, f.kind, f.reason, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
     ),
-    // Every key and whose it is: the email, or none for an account without one.
     db.prepare(
       `SELECT k.id, k.name, k.hint, k.created, k.last_used AS lastUsed, k.user_id AS userId, u.email
          FROM api_keys k JOIN users u ON u.id = k.user_id ORDER BY k.last_used IS NULL, k.last_used DESC LIMIT ${KEYS_LISTED}`,
@@ -252,7 +205,6 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
         id: f.id,
         created: new Date(f.created).toISOString(),
         kind: f.kind,
-        // In words: the dashboard is the operator's, in English.
         reason: f.reason ? (f.reason === BETTER_STOP ? BETTER_STOP_TEXT : (REASONS[f.reason as keyof typeof REASONS] ?? f.reason)) : null,
         note: f.note,
         platform: f.platform,
@@ -266,27 +218,16 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   };
 }
 
-/** A row's Singapore day, "2026-10-24", in Analytics Engine's SQL (its toDate() gives the UTC day). */
 const SG_DAY = `formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Singapore')`;
 
-/** The dashboard's crashes: the commonest 25 not dismissed, from more rows than that, so dismissed ones don't leave it short. */
 const CRASHES_SHOWN = 25;
 const CRASH_ROWS = 100;
 
-/** Answers, their quality, and errors per day for 14 days, the timelapse
- *  recorder's polls by what each cost NUS (logPoll), the daily active counts
- *  (usage.ts), the apps' error reports (apperrors.ts), what still uses
- *  something on its way out (legacy.ts), the settings' counts
- *  (settings.ts), how long /api/me/next took in the last day and the
- *  requests made with each API key per day (keyuse.ts), from Analytics
- *  Engine's SQL API. */
 async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = (q: string) => aeSql(env, q, fetchImpl);
   const dataset = env.AE_DATASET || 'terminus';
-  // The per-key counts cover today and the 7 Singapore days before it, both queries alike.
   const keysFrom = sgtDate(nowMs - 7 * DAY);
-  // Each kind's columns from its declaration (analytics-rows.ts ROWS), so the SQL reads what was written.
   const { answer, error, timelapse: poll, active: act, apperror: crash, legacy: old, settings: set, next, apikey: key } = COL;
   try {
     const [
@@ -295,8 +236,6 @@ async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch):
     ] = await Promise.all([
       dismissedCrashes(env),
       Promise.all([
-        // _sample_interval: each row may stand for several, at high volume. Days are Singapore's, as the
-        // dashboard's are; 15 of them, so it can compare two full weeks and still chart today.
         sql(`SELECT ${SG_DAY} AS day, ${answer.kind} AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '15' DAY AND ${answer.kind} IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
@@ -306,7 +245,6 @@ async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch):
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND ${error.kind} = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
         sql(`SELECT ${SG_DAY} AS day, ${poll.outcome} AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND ${poll.kind} = 'timelapse' GROUP BY day, outcome ORDER BY day`),
-        // One row per day and name: max() in case a day was ever counted twice.
         sql(`SELECT ${act.day} AS day, ${act.scope} AS scope, ${act.name} AS name, max(${act.d1}) AS d1, max(${act.d7}) AS d7, max(${act.d30}) AS d30 FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND ${act.kind} = 'active' GROUP BY day, scope, name ORDER BY day`),
         sql(`SELECT ${crash.fingerprint} AS fingerprint, ${crash.platform} AS platform, ${crash.type} AS type, ${crash.message} AS message, ${crash.stack} AS stack,
@@ -316,23 +254,17 @@ async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch):
         sql(`SELECT ${crash.fingerprint} AS fingerprint, ${crash.version} AS version, ${crash.os} AS os, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND ${crash.kind} = 'apperror'
            GROUP BY fingerprint, version, os ORDER BY n DESC LIMIT ${CRASH_ROWS * 5}`),
-        // What still uses the old address, old paths or too old an app (legacy.ts), and when it last did.
         sql(`SELECT ${old.what} AS what, ${old.client} AS client, ${old.route} AS route, SUM(_sample_interval) AS n, max(timestamp) AS last FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '30' DAY AND ${old.kind} = 'legacy'
            GROUP BY what, client, route ORDER BY n DESC LIMIT 100`),
-        // Each setting's counts per day (settings.ts): max() in case a day was ever counted twice.
         sql(`SELECT ${set.day} AS day, ${set.setting} AS setting, ${set.value} AS value, max(${set.n}) AS n, max(${set.of}) AS of FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '31' DAY AND ${set.kind} = 'settings' GROUP BY day, setting, value ORDER BY day`),
-        // How long /api/me/next took over the last 24 hours (logNextTook).
         sql(`SELECT quantileExactWeighted(0.5)(${next.tookMs}, _sample_interval) AS p50,
                   quantileExactWeighted(0.95)(${next.tookMs}, _sample_interval) AS p95, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '1' DAY AND ${next.kind} = 'next'`),
-        // Requests made with each API key (keyuse.ts), per Singapore day and whether its limit turned them away,
-        // over today and the 7 days before (9 days back, then the Singapore days): at most two rows per key a day.
         sql(`SELECT ${key.keyId} AS keyId, ${SG_DAY} AS day, ${key.outcome} AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '9' DAY AND ${key.kind} = 'apikey' AND ${SG_DAY} >= '${keysFrom}'
            GROUP BY keyId, day, outcome ORDER BY day DESC LIMIT ${KEY_ROWS}`),
-        // And by route over the same days, for each key's commonest: one row per key and keyed route.
         sql(`SELECT ${key.keyId} AS keyId, ${key.route} AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '9' DAY AND ${key.kind} = 'apikey' AND ${SG_DAY} >= '${keysFrom}'
            GROUP BY keyId, route ORDER BY n DESC LIMIT ${KEY_ROWS}`),
@@ -350,7 +282,6 @@ async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch):
       next: nextTook(nextMs),
       keys: keyUse,
       keyRoutes,
-      // At the limit, the oldest days or the rarest routes were left out: the dashboard says its counts may be short.
       keysCut: keyUse.length >= KEY_ROWS || keyRoutes.length >= KEY_ROWS,
     };
   } catch (err) {
@@ -358,7 +289,6 @@ async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch):
   }
 }
 
-/** The day's /api/me/next times, in ms: null when none were logged. */
 export function nextTook(rows: Record<string, unknown>[]): { p50: number; p95: number; n: number } | null {
   const r = rows[0];
   const [p50, p95, n] = [r?.p50, r?.p95, r?.n].map(Number);
@@ -366,11 +296,6 @@ export function nextTook(rows: Record<string, unknown>[]): { p50: number; p95: n
   return { p50: Math.round(p50), p95: Math.round(p95), n };
 }
 
-/**
- * The week's error reports by fingerprint, most first: one message and
- * stack for each (the commonest, as reports of one crash vary in their
- * numbers), and the versions and systems it came from.
- */
 export function groupErrors(rows: Record<string, unknown>[], versions: Record<string, unknown>[]): Record<string, unknown>[] {
   const out = new Map<
     string,
@@ -417,10 +342,8 @@ export function groupErrors(rows: Record<string, unknown>[], versions: Record<st
 }
 
 const DISMISSED_KEY = 'config:crashes:dismissed';
-/** A dismissal outlives the dashboard's week of reports, then goes. */
 const DISMISSED_KEEP_MS = 8 * 86_400_000;
 
-/** Fingerprints the operator dismissed, each with when: { fingerprint: ms }. */
 export async function dismissedCrashes(env: Env): Promise<Record<string, number>> {
   try {
     const v = JSON.parse((await env.KV.get(DISMISSED_KEY)) ?? '{}');
@@ -430,18 +353,12 @@ export async function dismissedCrashes(env: Env): Promise<Record<string, number>
   }
 }
 
-/** Analytics Engine's `max(timestamp)`, "2026-10-22 07:43:55" in UTC, as ms. */
 const aeMs = (t: string) => Date.parse(`${t.replace(' ', 'T')}Z`);
 
-/**
- * The crashes still to look at: a dismissed one is hidden until a report
- * comes in after it was dismissed, since that means it wasn't fixed.
- */
 export function undismissed<T extends Record<string, unknown>>(crashes: T[], dismissed: Record<string, number>): T[] {
   return crashes.filter((e) => !(dismissed[String(e.fingerprint)] >= aeMs(String(e.last))));
 }
 
-/** POST /api/admin/reports/delete {id}: operator only. Deletes one user report from D1 for good; 204 whether or not it was still there. */
 export async function handleDeleteReport(req: Request, env: Env, nowMs: number): Promise<Response> {
   if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
@@ -452,7 +369,6 @@ export async function handleDeleteReport(req: Request, env: Env, nowMs: number):
   return new Response(null, { status: 204 });
 }
 
-/** POST /api/admin/crashes/dismiss {fingerprint}: operator only. Analytics Engine can't delete a row, so the dashboard hides it. */
 export async function handleDismissCrash(req: Request, env: Env, nowMs: number): Promise<Response> {
   if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
