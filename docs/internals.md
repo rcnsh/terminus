@@ -125,6 +125,16 @@ is set in `cloudflare.config.ts`: `ETA_MODEL`, `shadow` on the stable site
 "The operator's switches") and `off` on the beta. Unset is off too.
 Everything in [src/types.ts](../apps/api/src/types.ts)'s `Env`
 but KV is optional at run time: `/api/health` says what's missing.
+The bindings not named above: `DB` (D1, the accounts; the public API runs
+without it), `FILES` (R2, the app builds for `/download/*` and the map),
+`ASSETS` (the website, absent in tests), `AE` (Analytics Engine; without
+it logging does nothing) and `AE_DATASET` (the dataset the dashboard
+queries, `terminus` when unset), `TRIPS`, `TIMELAPSE` and `FEED_GATE` (the
+Durable Objects; without `FEED_GATE` the one-call-per-window limit holds
+per data centre only), `TURNSTILE_SITE_KEY` (public), `TIMELAPSE_ENABLED`
+(`on` lets the recorder poll; KV `config:timelapse` overrides it), and
+`PUBLIC_ORIGIN` (the site's own origin, set on the beta;
+`https://terminus.run` when unset).
 
 ## Endpoints
 
@@ -293,6 +303,12 @@ themselves, and drifted):
   `stale` one marked, "then 12, ~20 min" ("之后 12、约 20 分钟"); null with none;
 - `toText`: `towards` as "to A, B" ("经 A，开往 B"), "to A" ("开往 A"), or
   "Ends here" ("本站为终点站").
+
+An estimate is never "now", which would pass for a bus at the stop: under
+a minute it is "~1 min" (`etaText`). `laterText` isn't called `then`: an
+object with a `then` field looks like a promise to `await`. On Nearby, a
+place in `dest` of at most 12 characters (`ONE_LINE_PLACE`) has its spaces
+made non-breaking, so "via" wraps alone rather than splitting the name.
 
 ## Personalisation
 
@@ -1725,7 +1741,10 @@ home stops serve, the walk to the nearest of them is your own `homeWalkMin`
 (the lift, the stairs, the far block, which a phone indoors can't see), even
 with the fix within `WALK.atStopM` of the stop, and its other stops are as
 much further as the paths say. The same walk counts on
-the card, in walking the whole way, and on the Nearby tab.
+the card, in walking the whole way, and on the Nearby tab. Nothing about
+where someone lives is stored: home is still just stops, and you count as
+home when your location is inside a residence (OpenStreetMap's outline)
+that one of your home stops serves.
 
 **In a building, the walk is by the paths from it too.** Within
 `WALK.atVenueM` of a building's point on the room map, and nearer it than to
@@ -2021,6 +2040,138 @@ you are at it (`here`): no walk, no buffer, and a bus the feed had as
 arriving stays catchable for `WALK.dwellS` after the reading. Otherwise GPS
 drift plus the buffer plus a cached reading's age add up to most of a
 minute, and the bus pulling in is passed over for the one after it.
+
+**Some answer is always given.** A located request with no stop in range
+whose bus goes there gets the nearest shuttle stop, however far
+(`candidateStops`), and when no candidate reaches the destination the
+nearest one is kept, so the answer can still offer a walk rather than a
+blank card. The user's home stops (`preferStops`) join the candidates
+whenever they're within `WALK.maxRadiusM`, so a dense cluster of nearer
+stops can't push out the one they use. A destination code that is no stop
+(a food court's) is never asked of either feed, which would only refuse it
+and cost NUS a retry (`collectArrivals`); a stop whose fetch failed gets an
+entry marked `available: false`, so "the feed couldn't be reached" stays
+apart from "no bus is coming", which gets a headway guess. A request with
+no location and no origin is "Set up" (`needsSetupAnswer`), not "No buses
+running", which would be a claim about the network. At the destination
+(either side of its road, a food court's other stop, or in the room
+itself), the answer is "You're here", `quality: live` though no feed was
+read (`arrivedAnswer`); a room's other stops don't count, as one can be
+300 m from it. "Cross the road" is said whenever the stop to board isn't
+the nearest stop (`nearestStop`, any stop, one no bus there calls at
+included): that is the answer that saves the bus, and the one that looks
+wrong.
+
+**The ranking's two overrides.** `scoreOptions` sorts measured times before
+guesses, then by cost to the place itself. Two cases are then put back: a
+measured change of bus over a guessed single bus, and a live public bus
+over a guessed free one, each stand only when they beat it by what the
+change (`TRANSFER.worthS`) or the fare (`PUBLIC.fareWorthS`) is worth.
+Otherwise the single or free bus is the answer; one with no time at all
+(`unknown`) can't be compared, so it never takes the place back. The
+alternative (`pickAlt`) after a change is the single bus it beat, and
+after a single bus never a change. Changes are shuttle-only: a public
+bus's fare and its LTA feed would each need rules of their own.
+
+**How sure the stop is (`confidence`).** The margin, as the options are
+ranked, between the best option and the best at another stop: 0.5 plus
+the margin over 600 s, between 0.5 and a ceiling. The ceiling is 0.97,
+0.85 for a change of bus (two rides priced by `RIDE.secondsPerHop` and a
+wait that is a guess unless the second bus is in the feed), and 0.5 when
+the berth is ambiguous, which no margin earns back. Without coordinates
+it is at most 0.75 (the stop is exact, where you are an assumption), and
+with no option at another stop at most 0.9.
+
+**A bus often packed is a bus to leave earlier for**
+([`crowd.ts`](../apps/api/src/answer/crowd.ts)). At peak times a packed bus
+can pass a stop without room for you. Crowding is counted as the Worker
+answers, never by polling: a bus with a plate and a crowd level due at a
+stop someone asked about within 2 minutes (`NEAR_S`; its crowd is what
+you'd board into) is tallied once per stop and SGT half hour
+(`crowd_seen` stops repeats, pruned by the cron after `KEEP_SEEN_DAYS`),
+into `crowd_stats` by service, stop, kind of day and half hour. A group
+says nothing until it has `MIN_SAMPLES` (10) sightings; packed half the
+time or more (`OFTEN_PACKED`) is "often busy", and a class's leave-by
+takes the bus before unless `fullBusMargin` is off, when it only warns.
+The risk is read for up to 8 stops while the feeds are asked. A failed
+tally or lookup is logged and the answer goes on without it.
+
+**Small rules in `src/answer`, by name.**
+
+- `MAX_AGE_MS` (15 min): a card is dimmed from then even if nothing else
+  says so. `DEPARTED_GRACE_MS` (30 s): a bus shown leaving at 09:42 may
+  still be at the stop at 09:42:20. The journey's walk is left out under
+  45 s. With no bus the glance is the walk's own words, which a 12-character
+  cut of "No bus · walk 27 min" would garble. `shortClock` makes "9:38p",
+  and `clockAt` puts a no-break space before AM/PM so a line never ends
+  between them.
+- `LABEL_TARGET` (16): the answer's `label` is capped at 40 characters,
+  but a small home-screen widget shows about 12 to 16 (`fitsTile`).
+  `isoSeconds` writes whole-second ISO times: Swift's default
+  `ISO8601DateFormatter` rejects the `.000` `toISOString` adds. The whole
+  walk is worded "walking 18 min", since "walk" reads as the walk to a bus.
+  The answer is logged synchronously and swallows its own errors, so it
+  needs no `waitUntil`; answers nobody asked for (`log: false`: wakes,
+  `/api/me/day`'s leave-bys) aren't logged, as they would cost rows and
+  count as answers.
+- `phase.ts`: `AT_STOP_M` (80 m) is at the boarding stop; `CHANGE_GRACE_MS`
+  (30 s) after the second bus's time it has left with you on it; a guessed
+  second bus leaves within a headway of its time (`secondLeavesMs`), not
+  cut at the close, or a time `laterChange` pushed past it would wait for
+  the next morning. `changesOf` tries at most `MAX_MOMENTS` (64) moments,
+  far more than a day's trip has; a later moment that would need a feed
+  read this request didn't make throws `NotPlanned` and counts as a change,
+  and any other error fails the request rather than passing for one.
+- `next.ts`: `ON_CAMPUS_M` (500 m from a stop) is on campus in the evening,
+  when the answer is the way home; "Undo" stays `UNDO_MS` (10 min) after
+  "Not going"; the last-bus warning shows from `LAST_BUS_WARN_MS` (45 min)
+  before the last bus, and on a trip that changes buses counts whichever
+  bus stops first. A room's walk over `MAX_VENUE_WALK_S` is taken as no
+  walk. A ride on a public bus reads the alighting stop's arrivals from
+  LTA, so it never costs NUS a call that can't list it. Times are 12-hour
+  when the account chose so, else when the client asks (`?h12=1`).
+- `leave.ts`: a leave-by within `NOW_S` (60 s) is "now". A class's leave-by
+  looks at the two days before its latest board first (`LOOKBACK_MS`), as
+  only its last two buses matter, and the whole time only when they aren't
+  both there. `departures` counts at most `MAX_DEPARTURES` (150, a day's
+  worth) a service and stop, from `CLASS_LOOKBACK_MS` (3 h) before a
+  class's latest bus. `withSteps` looks `STEP_WALK_MS` (30 min, more than
+  any walk to a stop) past the latest leave-by.
+- `departures.ts`: no bus is looked for over a day ahead (`PROJECT_MS`)
+  unless asked up to a later time. A guess steps by at least a minute
+  (`headwayMs`), and the headway is read once an hour, since a class days
+  ahead asks for hundreds of windows; Singapore is a whole number of
+  hours ahead of UTC, so the hours line up. A chosen bus more than a day
+  ago lines up nothing. A departure's `id` is the live bus's plate
+  (`<plate>@2` for its pass after next when the feed lists both, its place
+  in the list without a plate), else the nth estimate after its anchor
+  (`<plate>+n`, `reach+n`, `opens@<ms>+n`), the same for every caller of
+  one board, so the card's bus is found among the steps.
+- `hours.ts`: in `data/service-hours.json` only a well-formed `[open,
+  close]` replaces the scrape's hours, `null` or `[null, null]` says "does
+  not run", and anything else (`["", ""]`, a typo) leaves the hours unset,
+  which counts as running: a half-filled template must not make a Worker
+  that reports no buses ever. A window that closes before it opens crosses
+  midnight, and its small hours belong to the next day.
+- `transfer.ts` times at most `ROUTES_MAX` (8) routes an answer. `trip.ts`
+  keeps a day that has only revisions left (a signal undone), since a plan
+  from revision 0 would be dropped against the stored one; a Trip object
+  that fails or is slow loses only the phase.
+- `residences.ts`: an outline counts `GPS_MARGIN_M` (30 m) around it, how
+  far off a phone's fix is indoors, measured on a flat earth (fine at this
+  scale); a residence whose first point is 1.5 km off is skipped unread.
+  `residenceList` sorts names by code unit, not `localeCompare`, which
+  starts ICU. `walk.ts`: the paces are 1.1 m/s slow, `WALK.speedMs`
+  normal, 1.5 m/s fast.
+- `graph.ts`: `data/opposites.json` pairs stops across a road the scrape
+  can't pair by name ("Opp NUSS" and "AS 5"); a listed pair unpairs each
+  stop's old opposite, so pairs stay mutual. Its `nearby` list is stops
+  close enough for a location to put you at the wrong one, offered by
+  Nearby in place of each other but kept apart for routing
+  (`oppositeOrPartner`; `oppositeOf` says `across` only for a real
+  opposite). `via.ts`: when a line passes more places than `VIA_MAX` (3)
+  holds, the higher `rank` is kept (an MRT, then where people live, then
+  the rest); a line's own list (`lineVia`) never names its ends.
 
 ## What the feed looks like
 

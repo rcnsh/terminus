@@ -1,9 +1,3 @@
-/**
- * The answer engine: stops near you (or your origin), their arrivals, the
- * best option and a worded Answer. Used by the public routes in index.ts and
- * by /api/me/next in next.ts (through MeDeps).
- */
-
 import type { Answer, Arrival, Env, FeedState, Graph, ResolveInput, ScoredOption, Stop, StopArrivals } from '../types.ts';
 import { STEP, WALK } from '../config.ts';
 import { getArrivals } from '../feeds/fms.ts';
@@ -29,25 +23,13 @@ import { planTransfers } from './transfer.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { m } from '../i18n.ts';
 
-/**
- * The engine's two calls that reach the feeds, passed in by whoever answers
- * (index.ts, the Trip object, which counts its own reads), so a test or a
- * wake can wrap them.
- */
 export interface MeDeps {
   answerFor: (env: Env, ctx: ExecutionContext, input: ResolveInput, label: string | null, nowMs: number) => Promise<Answer>;
   collectArrivals: (env: Env, ctx: ExecutionContext, codes: string[], nowMs: number, graph?: Graph) => Promise<Map<string, StopArrivals>>;
 }
 
-/** The feed could not be reached: no data, as opposed to no bus. */
 const unreached = (code: string, nowMs: number): StopArrivals => ({ code, arrivals: [], fetchedAt: nowMs, stale: false, available: false });
 
-/**
- * Arrivals at each stop. In the graph with public buses, a stop is asked of
- * the feeds that call there: the shuttle's, LTA's for its public code, or
- * both at a shelter they share, whose answers are merged (`feeds` keeps each
- * one's state, so one feed down doesn't read as the other saying "no bus").
- */
 export async function collectArrivals(
   env: Env,
   ctx: ExecutionContext,
@@ -59,14 +41,9 @@ export async function collectArrivals(
   const settled = await Promise.all(
     codes.map(async (code) => {
       const stop = idx.byCode.get(code);
-      // Not a stop (a food court's code, say): nothing to ask either feed,
-      // which would only refuse it, and a refusal costs NUS a retry.
       if (!stop) return unreached(code, nowMs);
       const pub = publicCodeOf(stop);
       const shuttle = shuttleCalls(stop);
-      // A failed stop still gets an entry, marked unavailable. Dropping it here
-      // would make "we could not reach the feed" indistinguishable from "the
-      // feed says no bus is coming", and the second one gets a headway guess.
       const [s, p] = await Promise.all([
         shuttle ? getArrivals(env, ctx, code, nowMs, (sa) => ctx.waitUntil(logBoard(env, sa))).catch(() => null) : undefined,
         pub ? getPublicArrivals(env, ctx, graph, code, pub, nowMs).catch(() => null) : undefined,
@@ -79,7 +56,6 @@ export async function collectArrivals(
   return new Map(codes.map((code, i) => [code, settled[i]]));
 }
 
-/** Two feeds' answers for one shelter as one board, each feed's state kept. */
 export function mergeFeeds(code: string, nowMs: number, shuttle: StopArrivals | null, pub: StopArrivals | null): StopArrivals {
   const state = (sa: StopArrivals | null): FeedState =>
     sa ? { fetchedAt: sa.fetchedAt, stale: sa.stale, available: sa.available } : { fetchedAt: nowMs, stale: false, available: false };
@@ -87,8 +63,6 @@ export function mergeFeeds(code: string, nowMs: number, shuttle: StopArrivals | 
   return {
     code,
     arrivals: [...(shuttle?.arrivals ?? []), ...(pub?.arrivals ?? [])],
-    // The times count from each feed's own fetch (see scoreOptions); the
-    // whole takes the older, the honest "as of".
     fetchedAt: up.length ? Math.min(...up.map((sa) => sa.fetchedAt)) : nowMs,
     stale: up.some((sa) => sa.stale),
     available: up.length > 0,
@@ -97,30 +71,21 @@ export function mergeFeeds(code: string, nowMs: number, shuttle: StopArrivals | 
   };
 }
 
-/** The one function that turns a request into an Answer. */
 export async function answerFor(
   env: Env,
   ctx: ExecutionContext,
   input: ResolveInput,
   destLabel: string | null,
   nowMs: number,
-  /** How to read the stops' arrivals; the Trip object passes one that notes how old they were. */
   collect: typeof collectArrivals = collectArrivals,
 ): Promise<Answer> {
-  // With public buses on, the graph that has them: more services at the same stops.
   const graph = input.publicBuses ? GRAPH_PUBLIC : GRAPH;
   const idx = indexGraph(graph);
   const cands = candidateStops(graph, input, { nowMs });
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;
 
-  // Already there: two classes in a row at the same stop, standing at it, or
-  // in the room itself (a lecture theatre can be 100 m from its stop).
-  // Without this the degrade ladder says "Walk · now" and marks it ended.
   const dest = input.to ? idx.byCode.get(input.to) : undefined;
-  // Either side of the road counts as there, same as for routing, and so does
-  // any other stop serving the same place: a food court's. A room's other
-  // stops don't: one can be 300 m from it, and in the room itself is there.
   const destSides = [input.to, ...(input.destAt ? [] : (input.toAlso ?? []))]
     .map((c) => (c ? idx.byCode.get(c) : undefined))
     .filter((s): s is Stop => Boolean(s))
@@ -128,26 +93,17 @@ export async function answerFor(
       const opp = s.opposite ? idx.byCode.get(s.opposite) : undefined;
       return opp ? [s, opp] : [s];
     });
-  // The nearest side, not the first: opposite stops stand within the 45 s of each other.
   const walkS = (d: Stop) =>
     input.lat != null ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs : input.originCode === d.code ? 0 : Infinity;
   const atDest = destSides.filter((d) => walkS(d) < 45).sort((a, b) => walkS(a) - walkS(b))[0];
   const atVenue =
     input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
-  // Named for the side of the road you stand on: across from it, that is the opposite stop.
   if (dest && (atDest || atVenue)) return arrivedAnswer(atDest ?? dest, destLabel, nowMs);
-  // No coordinates and no origin stop: nothing to resolve from. Saying
-  // "No buses running" here would be a claim about the network.
   if (!cands.length) {
     return { ...needsSetupAnswer(nowMs), label: m().noStartPoint, detail: m().noStartPointHint };
   }
 
-  // Where no single bus goes there, the trips with a change of bus: which
-  // change stops to ask about is settled before any fetch, so it all goes
-  // in one round, at most TRANSFER.maxFetch stops more.
   const transfers = planTransfers(graph, input, cands);
-  // The full-bus risk needs only the stops, so D1 is asked while the feeds
-  // are; it never throws (an empty table on failure).
   const crowdLoad =
     input.arriveBy && env.DB
       ? loadCrowdRisk(
@@ -158,14 +114,10 @@ export async function answerFor(
       : undefined;
   const byStop = await collect(env, ctx, [...cands.map((c) => c.stop.code), ...transfers.fetch], nowMs, graph);
 
-  // Tally who's packed for the full-bus risk, off the response path.
   if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
   const crowdRisk = await crowdLoad;
 
-  // On from where a bus gets you off to the place itself, from that stop: a
-  // food court's other stop can be further from it than its first.
   const endWalk = (o: ScoredOption) => endWalkFromS(input, o.to?.code);
-  // For a class, a service that starts before it is a way there, not "ended".
   const walkWeight = input.walkWeight ?? WALK.sunWeight;
   const options = scoreOptions(graph, cands, byStop, nowMs, endWalk, {
     walkWeight,
@@ -174,12 +126,10 @@ export async function answerFor(
   });
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
-  // As the buses are named: a two-way public route's key carries its direction.
   const arrivals: Arrival[] = (byStop.get(chosen)?.arrivals ?? []).map((a) =>
     a.svc === svcName(a.svc) ? a : { ...a, svc: svcName(a.svc) },
   );
 
-  // Without coordinates the walk starts where the trip does, whichever stop the bus would go from.
   const walk = wholeWalk(graph, input, originStop ?? fallbackStop);
   const walkAllS = walk?.s ?? null;
   const walkEndS = walk?.endS ?? endWalkFromS(input);
@@ -198,7 +148,6 @@ export async function answerFor(
     arrivals,
     nowMs,
   });
-  // departsAt null with an arrival time: the answer is to walk.
   const walking = answer.departsAt == null && answer.arriveAt != null;
   const leaveInput: LeaveInput = {
     options,
@@ -216,8 +165,6 @@ export async function answerFor(
   answer.leave = leaveBy(leaveInput);
   if (input.step) Object.assign(answer, withSteps(answer, leaveInput, input.step, walking, nowMs));
 
-  // Synchronous, non-blocking, and swallows its own errors. Deliberately not
-  // behind waitUntil: there is nothing to await.
   if (input.log !== false)
     logAnswer(env, {
       answer,
@@ -230,11 +177,6 @@ export async function answerFor(
   return answer;
 }
 
-/**
- * A trip's steps between buses (step.ts), and the bus the user chose in
- * place of the leave-by's. The server's own bus is the leave-by's; with
- * none (a trip whose bus goes within a minute), the headline bus.
- */
 export function withSteps(
   answer: Answer,
   f: LeaveInput,
@@ -244,16 +186,10 @@ export function withSteps(
 ): Pick<Answer, 'steps' | 'leave'> {
   const firstMs = answer.departsAt ? Date.parse(answer.departsAt) : nowMs;
   const lastArriveMs = f.arriveBy ? f.arriveBy.atMs + STEP.lateMaxS * 1000 : null;
-  // Far enough on for any bus "Later" may offer: a bus leaves a stop a walk after you set off.
   const until = lastArriveMs ?? Math.max(firstMs, nowMs) + STEP.laterMaxS * 1000 + STEP_WALK_MS;
   const all = departures(f, until, step.target);
   const best = f.options[0];
-  // The headline among them by which bus it is: with no live time its card
-  // shows the middle of its window, the departures its start.
   const headline = !walking && best && answer.departsAt ? departureOf(all, best) : null;
-  // Without a class the leave-by is for that same bus, so it's told from a
-  // chosen one by which bus it is: by time, a guess's card time (the middle
-  // of its window, from now) comes within SAME_BUS_MS of the next bus.
   const leave = answer.leave && !f.arriveBy && headline ? { ...answer.leave, bus: headline.bus } : answer.leave;
   const own = leave ? (leave.svc ? leave : null) : headline;
   const s = stepFrom({ trip: step.trip, own, all, target: step.target, lastArriveMs, nowMs });
@@ -261,24 +197,15 @@ export function withSteps(
   return s.steps.moved ? { steps: s.steps, leave: publicLeave(s.leave) } : { steps: s.steps };
 }
 
-/** More than any walk to a stop: how far past the latest leave-by a bus may leave. */
 const STEP_WALK_MS = 30 * 60_000;
 
-/**
- * The same deps, with answers that aren't logged (`log: false`): for the
- * answers the server works out for itself rather than for someone asking.
- */
 export function unlogged<D extends { answerFor: typeof answerFor }>(deps: D): D {
   return { ...deps, answerFor: (env, ctx, input, label, nowMs) => deps.answerFor(env, ctx, { ...input, log: false }, label, nowMs) };
 }
 
-/** You are at the destination's stop. `live` because it is a current,
- *  certain answer, even though no bus data was needed for it. */
 export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: number): Answer {
   return {
     label: m().youreHere,
-    // A place's stop is worth naming ("The Deck is at UTown"); a class's label
-    // already says where it is ("GEA1000 @ UTown is at UTown" said it twice).
     detail:
       destLabel && !destLabel.includes(' @ ') && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14)
         ? m().destIsAt(destLabel, stop.name)
@@ -293,8 +220,6 @@ export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: numbe
   };
 }
 
-/** Honest zero-config answer when we have no location or destination to
- *  resolve. Not an error, and not a fake bus. */
 export function needsSetupAnswer(nowMs: number): Answer {
   return {
     label: m().setUp,

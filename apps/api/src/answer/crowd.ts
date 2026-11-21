@@ -1,24 +1,11 @@
-/**
- * Full buses. At peak times a packed bus can pass a stop without room for
- * you, and the leave-by time should not bet on it.
- *
- * Counted as the Worker answers, never by polling: each time a bus is about
- * to reach a stop someone asked about, its crowd level is tallied once per
- * stop and half hour (crowd_seen stops repeats). Grouped by service, stop,
- * kind of day and half hour. A group says nothing until it has MIN_SAMPLES.
- */
-
 import type { StopArrivals } from '../types.ts';
 import { termDay, sgtDate } from '../timetable/calendar.ts';
 import { sgt } from '../config.ts';
 
 export type DayType = 'term' | 'exam' | 'break' | 'sat' | 'sun';
 
-/** Only a bus this close to the stop: its crowd is what you'd board into. */
 const NEAR_S = 120;
-/** Below this many sightings a group is noise. */
 export const MIN_SAMPLES = 10;
-/** Packed at least this often counts as "often packed". */
 export const OFTEN_PACKED = 0.5;
 const KEEP_SEEN_DAYS = 2;
 
@@ -32,24 +19,15 @@ export function dayType(nowMs: number): DayType {
   return 'break';
 }
 
-/** Half hours past midnight, SGT. */
 export const slotOf = (ms: number) => Math.floor(sgt(ms).minutes / 30);
 
-/**
- * Sightings this isolate has already sent, so an answer refreshed every 30 s
- * doesn't send the same ones to D1 again only to have them ignored. D1 still
- * decides (crowd_seen); this only saves the round trip. Bounded: cleared
- * when full.
- */
 const sent = new Set<string>();
 const SENT_MAX = 5_000;
 
-/** For tests: forget what was sent. */
 export function forgetSent(): void {
   sent.clear();
 }
 
-/** Tally the buses about to reach these stops. Never throws. */
 export async function recordCrowds(db: D1Database, byStop: Map<string, StopArrivals>, nowMs: number): Promise<void> {
   try {
     const daytype = dayType(nowMs);
@@ -68,8 +46,6 @@ export async function recordCrowds(db: D1Database, byStop: Map<string, StopArriv
           db
             .prepare('INSERT OR IGNORE INTO crowd_seen (plate, stop, day, slot) VALUES (?, ?, ?, ?)')
             .bind(a.plate, stop, sgtDate(at), slot),
-          // Counts only when the line above added a row: a bus already seen
-          // here this half hour is not a new sighting.
           db
             .prepare(
               `INSERT INTO crowd_stats (svc, stop, daytype, slot, n, packed) SELECT ?, ?, ?, ?, 1, ? WHERE changes() = 1
@@ -84,14 +60,12 @@ export async function recordCrowds(db: D1Database, byStop: Map<string, StopArriv
     if (sent.size + keys.length > SENT_MAX) sent.clear();
     for (const k of keys) sent.add(k);
   } catch (err) {
-    // A lost tally is nothing; a failed answer would be.
     console.error('crowd tally failed', err instanceof Error ? err.name : typeof err);
   }
 }
 
 export type CrowdRisk = (svc: string, stop: string, atMs: number) => number | null;
 
-/** Share of sightings that were packed, for today's kind of day; null when too few. */
 export async function loadCrowdRisk(db: D1Database, stops: string[], nowMs: number): Promise<CrowdRisk> {
   const table = new Map<string, number>();
   const unique = [...new Set(stops)].slice(0, 8);
@@ -111,7 +85,6 @@ export async function loadCrowdRisk(db: D1Database, stops: string[], nowMs: numb
   return (svc, stop, atMs) => table.get(`${svc}|${stop}|${slotOf(atMs)}`) ?? null;
 }
 
-/** Cron: drop sightings older than the dedupe window. */
 export async function pruneCrowdSeen(db: D1Database, nowMs: number): Promise<void> {
   await db
     .prepare('DELETE FROM crowd_seen WHERE day < ?')

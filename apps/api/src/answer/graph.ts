@@ -1,9 +1,3 @@
-/**
- * The stop graph: scraped stops and routes, with the hand-maintained
- * operating hours merged in once, at module scope. `pnpm scrape` can never
- * overwrite the hours, which live in their own file.
- */
-
 import graphJson from '../../data/stops.json' with { type: 'json' };
 import serviceHoursJson from '../../data/service-hours.json' with { type: 'json' };
 import oppositesJson from '../../data/opposites.json' with { type: 'json' };
@@ -13,12 +7,6 @@ import type { Graph, HeadwaysByTime, Stop } from '../types.ts';
 import { mergeServiceHours } from './hours.ts';
 import { type PublicData, withPublic } from './public.ts';
 
-/**
- * Hand-listed pairs over the scraped ones. The scrape can only pair stops by
- * name ("Opp X" and "X"); stops across a road from each other can have
- * unrelated names ("Opp NUSS" and "AS 5"). Pairs stay mutual: a listed pair
- * unpairs each stop's previous opposite.
- */
 export function mergeOpposites(stops: Stop[], pairs: string[][]): Stop[] {
   const out = stops.map((s) => ({ ...s }));
   const byCode = new Map(out.map((s) => [s.code, s]));
@@ -42,34 +30,18 @@ export const GRAPH = {
   ...SCRAPED,
   stops: mergeOpposites(SCRAPED.stops, oppositesJson.pairs),
   serviceHours: mergeServiceHours(SCRAPED.serviceHours, serviceHoursJson as Record<string, unknown>),
-  // Measured from the recorder's days (scripts/data/measure_headways.mjs): the feed gives no headways.
   headwayS: { ...SCRAPED.headwayS, ...headwaysJson.usualS },
   headwaysByTime: headwaysJson.byTime as Record<string, HeadwaysByTime>,
 } as Graph;
 
-/**
- * The same graph with the public buses in it (public.ts), for accounts that
- * turned them on. Everything built from GRAPH alone (the map, the search,
- * the stop pairs) stays as it is: public buses are an answer, not a layer.
- */
 export const GRAPH_PUBLIC: Graph = withPublic(GRAPH, publicJson as unknown as PublicData);
 
-/**
- * The stop Nearby offers in place of `stop`: its opposite stop, or a
- * stop listed only for Nearby (data/opposites.json `nearby`), near enough for
- * a location to put you at the wrong one but kept apart for routing.
- */
 export function oppositeOrPartner(stop: Stop): string | null {
   if (stop.opposite) return stop.opposite;
   const pair = oppositesJson.nearby.find((p) => p.includes(stop.code));
   return pair ? (pair[0] === stop.code ? pair[1] : pair[0]) : null;
 }
 
-/**
- * The opposite or partner stop as a stop page names it: `across` when it's on the other side of
- * the road ("Across the road"), false for a stop that's only near (PGP and
- * PGP Foyer), which goes by its own name.
- */
 export function oppositeOf(
   stop: Stop,
   byCode: Map<string, Stop>,
