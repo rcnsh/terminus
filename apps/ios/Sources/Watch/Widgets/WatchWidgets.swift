@@ -1,8 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// The watch's complications, one widget in three families: inline,
-/// circular and rectangular, the last also the Smart Stack's.
 @main
 struct TerminusWatchWidgets: WidgetBundle {
     var body: some Widget {
@@ -21,7 +19,6 @@ struct NextGlanceWidget: Widget {
     }
 }
 
-/// One moment of a complication: the plan as kept, read once.
 struct GlanceEntry: TimelineEntry {
     var date: Date
     var paired: Bool
@@ -32,10 +29,6 @@ struct GlanceEntry: TimelineEntry {
     var glance: Glance { Glance.of(paired: paired, answer: plan, error: error, now: date.addingTimeInterval(ServerClock.skew)) }
 }
 
-/// The complications' timeline: a new answer first if the kept one is due
-/// (WatchPlan, by the iPhone widget's rules), then an entry for now and for
-/// each moment it looks different by itself, and the next reload at the
-/// answer's next moment, never sooner than WidgetTiming.minReload.
 struct GlanceProvider: TimelineProvider {
     func placeholder(in context: Context) -> GlanceEntry { Self.sample() }
 
@@ -85,7 +78,6 @@ struct GlanceProvider: TimelineProvider {
         return Timeline(entries: entries, policy: .after(WidgetTiming.reloadAt(next, now: now)))
     }
 
-    /// A made-up trip for the face's gallery, before the app has signed in: a bus to a class.
     static func sample() -> GlanceEntry {
         let now = Date()
         let iso = ISO8601DateFormatter()
@@ -126,7 +118,6 @@ struct GlanceView: View {
         .accessibilityLabel(spoken(g))
     }
 
-    /// One sentence for VoiceOver, as the iPhone's widgets say it.
     private func spoken(_ g: Glance) -> String {
         let now = entry.date.addingTimeInterval(ServerClock.skew)
         if let a = entry.plan, entry.paired, !WidgetFace.isOld(a, now: now) { return Spoken.summary(a, now: now) }

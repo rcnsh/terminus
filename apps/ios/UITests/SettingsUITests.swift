@@ -1,12 +1,7 @@
 import XCTest
 
-/// Settings, every page, against the dev stub's test account: what each
-/// shows (screenshots in light and dark, English and Chinese), and that the
-/// edits made there reach the server.
 @MainActor
 final class SettingsUITests: XCTestCase {
-    /// The stub's test account is shared by every test and keeps what each
-    /// changes: its profile as it was, put back after each test.
     private var saved: Data?
 
     override func setUp() async throws {
@@ -52,11 +47,9 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["settings.account"].waitForExistence(timeout: 5))
     }
 
-    /// Every page, opened from the list, screenshotted, and back.
     private func walk(lang: String, theme: String) {
         let app = open(lang: lang, theme: theme)
         let tag = "\(lang)-\(theme)"
-        // The list waits for the profile's summaries.
         _ = app.staticTexts["PGP · \(lang == "zh" ? "步速：正常" : "Normal pace")"].waitForExistence(timeout: 8)
         shot("settings-\(tag)-00-list", app)
         for (i, page) in Self.pages.enumerated() {
@@ -90,7 +83,6 @@ final class SettingsUITests: XCTestCase {
     func testEveryPageChineseLight() { walk(lang: "zh", theme: "light") }
     func testEveryPageChineseDark() { walk(lang: "zh", theme: "dark") }
 
-    /// The largest text: one tile to a row, and every page still readable.
     func testLargeText() throws {
         let app = XCUIApplication.terminus(signedIn: true)
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
@@ -115,7 +107,6 @@ final class SettingsUITests: XCTestCase {
         }
     }
 
-    /// A switch, a stepper and a menu on Your trips are saved to the account.
     func testTripsSaves() throws {
         let app = open()
         tile(app, "trips").tap()
@@ -133,7 +124,6 @@ final class SettingsUITests: XCTestCase {
         shot("settings-trips-edited", app)
     }
 
-    /// A favourite added from the search, removed, and put back with Undo.
     func testFavourites() throws {
         let app = open()
         tile(app, "favourites").tap()
@@ -147,7 +137,6 @@ final class SettingsUITests: XCTestCase {
         let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'where.'")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 8))
         shot("settings-favourites-search", app)
-        // The stop comes first, before the building of the same code.
         result.tap()
         XCTAssertTrue(app.staticTexts["COM 3"].waitForExistence(timeout: 5))
         sleep(2)
@@ -165,7 +154,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(places().contains("Gym"))
     }
 
-    /// A class added by hand, then removed.
     func testAddClass() throws {
         let app = open()
         tile(app, "timetable").tap()
@@ -197,7 +185,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertFalse(classes().contains("Gym session"))
     }
 
-    /// A bad NUSMods link: the server's reason is shown.
     func testImportRefused() throws {
         let app = open()
         tile(app, "timetable").tap()
@@ -212,7 +199,6 @@ final class SettingsUITests: XCTestCase {
         shot("settings-timetable-import-refused", app)
     }
 
-    /// Add a device: the code and its QR.
     func testPairCode() throws {
         let app = open()
         tile(app, "devices").tap()
@@ -224,7 +210,6 @@ final class SettingsUITests: XCTestCase {
         app.buttons["settings.pairDone"].tap()
     }
 
-    /// Feedback: typed, sent, thanked.
     func testFeedback() throws {
         let app = open()
         tile(app, "feedback").tap()
@@ -234,14 +219,12 @@ final class SettingsUITests: XCTestCase {
         note.typeText("The map could show the bus number bigger.")
         shot("settings-feedback-typed", app)
         app.buttons["settings.feedbackSend"].tap()
-        // Sent and thanked; or, while the server doesn't take "ios" yet, its refusal said under the note.
         let thanks = app.staticTexts["Thanks. Your feedback was sent."]
         let refused = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Platform'")).firstMatch
         XCTAssertTrue(thanks.waitForExistence(timeout: 8) || refused.exists)
         shot("settings-feedback-sent", app)
     }
 
-    /// Language: Chinese from Settings, which stays open on the page.
     func testLanguageSwitch() throws {
         let app = open()
         tile(app, "language").tap()
@@ -258,7 +241,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Language and time"].waitForExistence(timeout: 5))
     }
 
-    /// The card styles, picked from segments, the chosen one drawn under them.
     func testCardStyle() throws {
         let app = open()
         tile(app, "appearance").tap()
@@ -271,7 +253,6 @@ final class SettingsUITests: XCTestCase {
         shot("settings-appearance-route", app)
     }
 
-    /// New to NUS, for the Buses near you widget: on, and the Appearance row says so.
     func testNewToNus() throws {
         let app = open()
         tile(app, "appearance").tap()
@@ -285,7 +266,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH 'New to NUS'")).firstMatch.waitForExistence(timeout: 5))
     }
 
-    /// The developer settings: seven taps on the version (shown already in a debug build).
     func testAboutDeveloper() throws {
         let app = open()
         app.swipeUp()
@@ -296,7 +276,6 @@ final class SettingsUITests: XCTestCase {
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["DEVELOPER"].waitForExistence(timeout: 3))
         shot("settings-about-developer", app)
-        // Diagnostics, then the requests this app made to get here.
         let copy = app.buttons["settings.diagnostics.copy"]
         while !copy.isHittable { app.swipeUp() }
         XCTAssertTrue(app.staticTexts["DIAGNOSTICS"].exists)
@@ -309,7 +288,6 @@ final class SettingsUITests: XCTestCase {
         shot("settings-about-requests", app)
     }
 
-    /// Sign out asks first, then the welcome screen.
     func testSignOut() throws {
         let app = open()
         app.buttons["settings.account"].tap()
@@ -319,7 +297,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertFalse(app.tabBars.firstMatch.waitForExistence(timeout: 3))
     }
 
-    /// An account without an email: Account offers to add one, and Delete this account asks first.
     func testAnonymous() throws {
         let token = anonToken()
         let app = XCUIApplication.terminus(signedIn: false, extra: ["TERMINUS_TOKEN": token])
@@ -341,8 +318,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["settings.addEmail"].waitForExistence(timeout: 5))
         shot("settings-anon-devices", app)
     }
-
-    // MARK: the stub's view of the account
 
     private var token: String?
 

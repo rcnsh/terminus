@@ -1,15 +1,7 @@
 import UserNotifications
 import WidgetKit
 
-/// Words a push's alert on the phone, so no words pass through Apple: the
-/// server sends only what kind it is (`kind: card` and the phase, or `term`)
-/// with a plain fallback, and this fetches the answer and says it as the
-/// leave reminder and Android's notification do. A card's answer is kept for
-/// the widgets too. Whatever can't be fetched in time keeps the fallback.
 final class NotificationService: UNNotificationServiceExtension, @unchecked Sendable {
-    /// The content handler, until it's called, and the work wording the
-    /// alert: behind a lock, as the work and the expiry race for it from two
-    /// threads and the handler must be called exactly once.
     private let state = Mutex<(handler: ((UNNotificationContent) -> Void)?, task: Task<Void, Never>?)>((nil, nil))
     private var fallback: UNNotificationContent?
 
@@ -26,7 +18,6 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         state.withLock { $0.task = task }
     }
 
-    /// Out of time: the server's fallback words.
     override func serviceExtensionTimeWillExpire() {
         state.withLock { $0.task }?.cancel()
         if let fallback { finish(fallback) }
@@ -40,10 +31,6 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         h?(content)
     }
 
-    /// A trip's alert with the leave alerts off on this phone (the server
-    /// sends one only to a build that didn't say so, or before it heard):
-    /// it can't be taken back here, so it comes quietly, with no sound and
-    /// only in Notification Centre, rather than as a heads-up.
     static func respectingAlerts(_ content: UNNotificationContent, kind: String?) -> UNNotificationContent {
         guard kind == "card", !TripPrefs.leaveAlerts else { return content }
         let c = content.mutableCopy() as! UNMutableNotificationContent
@@ -71,9 +58,6 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         }
     }
 
-    /// The alert for a card, as the reminder and Android's notification word
-    /// it: after the bus has gone (on it, missed, gone with nothing known) the
-    /// card's line and what to do; before, when to leave and the bus to catch.
     static func content(for a: NextAnswer, original: UNNotificationContent) -> UNNotificationContent? {
         let card = a.card
         let now = ServerClock.now
@@ -95,9 +79,6 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             info["trip"] = skip.trip
             c.userInfo = info
         }
-        // This push says it now: the local heads-up goes, shown or still to
-        // come, so there's one; and it's marked as gone for this trip, so the
-        // app's next answer doesn't schedule it again (Reminders' soonTrip, soonAt).
         let center = UNUserNotificationCenter.current()
         center.removeDeliveredNotifications(withIdentifiers: [TripReminders.soonID])
         center.removePendingNotificationRequests(

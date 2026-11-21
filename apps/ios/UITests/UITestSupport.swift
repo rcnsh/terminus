@@ -1,14 +1,8 @@
 import XCTest
 
-/// The dev stub the tests run against (node apps/api/scripts/dev/dev-stub.mjs):
-/// TERMINUS_STUB in the test runner's environment (TEST_RUNNER_TERMINUS_STUB
-/// on xcodebuild's command line), else http://localhost:8787.
 let stub = ProcessInfo.processInfo.environment["TERMINUS_STUB"] ?? "http://localhost:8787"
 
 extension XCUIApplication {
-    /// The app against the stub, starting afresh: signed out, or with
-    /// `signedIn`, signed in as the stub's test account (you@u.nus.edu, with
-    /// a home at PGP, three places and a class later today).
     static func terminus(signedIn: Bool = false, lang: String = "en", theme: String? = nil, extra: [String: String] = [:])
         -> XCUIApplication
     {
@@ -18,7 +12,6 @@ extension XCUIApplication {
         app.launchEnvironment["TERMINUS_LANG"] = lang
         if let theme { app.launchEnvironment["TERMINUS_THEME"] = theme }
         if signedIn {
-            // The class 50 minutes off, however long the run has gone on.
             stubPost("/__stub/class?in=50")
             let (token, email) = stubSession()
             app.launchEnvironment["TERMINUS_TOKEN"] = token
@@ -29,8 +22,6 @@ extension XCUIApplication {
     }
 }
 
-/// Says yes to the system's location question when it's up: the Nearby tab
-/// asks it as it opens, on a simulator that hasn't been asked. Nothing when it isn't.
 @MainActor func allowLocationIfAsked() {
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     for label in ["Allow While Using App", "使用 App 时允许"] {
@@ -42,7 +33,6 @@ extension XCUIApplication {
     }
 }
 
-/// The stub's answer to `req`, waited for (empty if it didn't answer).
 func stubFetch(_ req: URLRequest) -> Data {
     final class Box: @unchecked Sendable { var data = Data() }
     let box = Box()
@@ -55,7 +45,6 @@ func stubFetch(_ req: URLRequest) -> Data {
     return box.data
 }
 
-/// A fresh device session for the stub's test account.
 func stubSession() -> (String, String) {
     struct R: Decodable {
         let token: String
@@ -67,8 +56,6 @@ func stubSession() -> (String, String) {
     return (out.token, out.email)
 }
 
-/// A new account without an email, set up already (a home at PGP), so the
-/// tabs show rather than the onboarding: its token.
 func stubAnonToken() -> String {
     var req = URLRequest(url: URL(string: stub + "/api/auth/anon")!)
     req.httpMethod = "POST"
@@ -84,7 +71,6 @@ func stubAnonToken() -> String {
     return t
 }
 
-/// POSTs to one of the stub's own routes (/__stub/at?t=..., /__stub/freeze, /__stub/class?in=N).
 func stubPost(_ path: String) {
     var req = URLRequest(url: URL(string: stub + path)!)
     req.httpMethod = "POST"
@@ -92,8 +78,6 @@ func stubPost(_ path: String) {
 }
 
 extension XCTestCase {
-    /// A screenshot kept with the test's results, and written to
-    /// $TERMINUS_SHOTS/<name>.png when that's set, to look at.
     @MainActor func shot(_ name: String, _ app: XCUIApplication) {
         let s = app.screenshot()
         let a = XCTAttachment(screenshot: s)

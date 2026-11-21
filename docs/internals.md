@@ -3502,6 +3502,110 @@ in [ADR 0000](adr/0000-iphone-hand-made-controls.md).
   `to/<code>?label=…` and the tabs, as Android's. `to` only from the
   app's own widgets, which carry `WidgetStore.linkKey`, so another app
   can't add places with names of its choosing.
+The iPhone app, in `apps/ios` (how its widgets reload: ADR
+0000-iphone-widgets-draw-ahead.md; how it reads answers and the server's
+clock: ADR 0000-iphone-reads-answers-leniently.md):
+
+- **What its parts share.** The app, its widgets and Live Activity, and
+  the notification service build `Sources/Shared` and share the latest
+  answer, the day plan, the board of buses near you and the settings they
+  all read through the app group (`Shared`, `TerminusGroup` in Info.plist;
+  the beta has its own). The token is in the keychain with the group as
+  its access group, readable after the first unlock (so a widget or a push
+  in the night can use it) and never backed up to another phone
+  (`AfterFirstUnlockThisDeviceOnly`). Before that first unlock the
+  keychain answers nothing at all, which isn't "signed out": the answer
+  isn't cached, and a widget asks again in 5 minutes. A build without the
+  group entitlement keeps the token in the app's own keychain, which the
+  extensions can't read. The site's token is under the account `site`,
+  the stub's under its address; builds before 3.2.0 kept it under the
+  address it was saved on, and the first read moves it over once.
+- **Sideloaded** (`scripts/sideload.sh`, `SIDELOAD.md`): the Sideload
+  configuration has the stable servers, the signer's own bundle IDs and
+  group (a free team can't use `sh.rcn.terminus`), and no push or Time
+  Sensitive entitlement. For an .ipa the script builds it unsigned, then
+  signs it ad hoc, inside out (the frameworks, the extensions, the watch
+  app's complications and the watch app, then the app), with the group
+  alone, so the group rides in the binary for the installer to re-sign. AltStore and SideStore rename the group for
+  the installer's team ("group.sh.rcn.terminus.sideload.ABCDE12345") and
+  write the new name under `ALTAppGroups` in each Info.plist: the app
+  uses the built group unless it can't be opened and a renamed one can
+  (`Shared.chooseGroup`), and never another app's group that happens to
+  open.
+- **Deadlines.** A request has 15 s, 8 s from a widget or the
+  notification service (`Api(fast:)`), which have seconds, not ten; a
+  try at the backup address fits inside the same deadline. In a debug
+  build the app hands its `TERMINUS_*` overrides to its extensions
+  through the app group (`dev.` keys), since they aren't launched with
+  the app's environment; a release build reads none. After a 429 every
+  process of the app waits out `Retry-After` (`Quiet`, kept in the app
+  group by the wall clock, sign-in apart from the rest); a 503's
+  `Retry-After` only slows the polling loops. After a 426 nothing with a
+  token goes out for half an hour (`Outdated`), then one request asks
+  again in case the minimum came down. `RequestLog` is per
+  process: the widgets' and the notification service's requests aren't
+  in the app's.
+- **The notification service** words a push's alert on the phone, so no
+  words pass through Apple: it fetches `/api/me/next` (and the semester's
+  reminder from `/api/me/notice` for `kind: term`) and says it as the leave
+  reminder and Android's notification do, keeping the answer for the
+  widgets. Whatever can't be fetched in time keeps the server's fallback
+  words. A trip's alert that arrives while this phone's leave alerts are
+  off (the server hadn't heard yet) can't be taken back, so it comes
+  passive, with no sound. A push that says it's time removes the local
+  heads-up and marks it gone for the trip, so the next answer doesn't
+  schedule it again.
+- **Leave reminders** (`TripReminders`, acted on by `TripSync`) are local
+  notifications scheduled ahead from each answer, so they go on time with
+  the app closed: a heads-up at the card's `remindAt` and "Leave now" at
+  the leave-by. The server decides which trips get one. The heads-up goes
+  once per trip, keyed by the trip and the campus day it leaves (a weekly
+  class has the same key every week); one swiped away also cancels "Leave
+  now"; with the bus gone and nothing known, neither (you may be on it).
+  One that fires after its times went stale still goes, and says so. The
+  heads-up without the "Not going" button has a category of its own, so a
+  dismissal is still heard.
+- **The Live Activity**'s state is built from the answer rule for rule as
+  the server's `liveActivityState` builds it, since the app and the
+  server's pushes update the same activity in turn and any field built
+  differently would flip on the Lock Screen; `SystemTests` checks every
+  golden against `fixtures/live-activity.json` (written by apns.test.js).
+  With no push to end it (sideloaded, or APNs off), the app ends one an
+  arrived trip after `LIVE_DISMISS_S`, as the server does, and one nothing
+  has updated an hour after its bus or leave-by. Its Turn off is a
+  `LiveActivityIntent` built into the app as well as the widgets: it runs
+  in the app's process, the only one that can end the activity and tell
+  the server. Its background tint is a fixed colour per appearance, since
+  iOS resolves a light-or-dark tint as light even on a dark Lock Screen.
+- **Where the phone was**, rounded to about 11 m as sent, is kept in the
+  app group for a widget or a push to plan from, for two hours at most and
+  then deleted. A stop link from a widget (`terminus://to/<code>`) carries
+  this phone's widget key (`k`), so only its own widgets can add a place
+  to the app's tabs.
+- **Words.** The widget intents' titles are looked up by the system in
+  the phone's language, from `Widgets.strings` (`LocalizedStringResource`),
+  not through `L`, which follows the app's own choice. The destination
+  search ranks as `fixtures/search.json` holds every client to (the web's
+  `account/search.js` is the reference), comparing by UTF-16 code units as
+  JavaScript does; the profile's length limits are UTF-16 units too, so a
+  name is cut by units and a flag or emoji is kept whole or not at all.
+  "This iPad" against "this phone" goes by the model's name, which any
+  thread and the extensions can read.
+- **Colours** are the site's (`assets/site.css`), with `warn` a shade
+  darker than the web's so small text reads on its tint; a service's badge
+  takes white or the ink, whichever has more WCAG contrast on it. watchOS
+  has no colour that follows the appearance and a watch is always dark, so
+  there each colour is its dark one (`canImport(UIKit)` can't tell, as the
+  watch has a UIKit without dynamic colours). The sky (`SkyDraw`) is the
+  web's `sky.js` and `daylight.js` and Android's `NightSky.kt` scene, from
+  the same numbers: dawn from 6:30, day from 8:30, golden hour from 4:30 PM,
+  dusk from 6:45 PM, night from 7:40 PM, by the phone's clock.
+- **The watch's hand-off** (ADR 0016): a pairing code lives 10 minutes on
+  the server, so one older than that (a transfer that waited for a watch
+  left off) isn't tried, nor one tried already, since the application
+  context stays until replaced and is read again at each start. A code that
+  comes while another is being redeemed waits its turn: the server has
+  already replaced the one in flight with it.
 
 ### Live buses on the map
 

@@ -1,44 +1,3 @@
-// Frames the App Store screenshots as the Play set is framed
-// (apps/android/store/frame.mjs): each capture from the simulator
-// (captures/en, captures/zh, unchanged) inside an iPhone, under a headline.
-// The five are one picture cut in five, as the App Store shows them side by
-// side: the app's sky going from dawn to night along it, its hills, city and
-// road running through, and shuttles, the setting sun and Marina Bay Sands
-// crossing from one to the next. Writes screenshots/ and screenshots/zh/,
-// 1320×2868 like the captures (the App Store's 6.9" iPhone size, which it
-// scales for every smaller one).
-//
-// The landscape is the Play set's, drawn at the same scale across the width
-// and sat at the bottom; the sky fills the taller page above it.
-//
-// The home screen's capture is rebuilt around its own pixels: the widgets and
-// the app's icon as captured, on a wallpaper of the app's dusk, without the
-// test runner's icon, the search pill and the dock. Its status bar is redrawn
-// with the time the capture showed (2-widget.time, from capture.sh).
-//
-//   node apps/ios/store/frame.mjs            # all of them
-//   node apps/ios/store/frame.mjs 3-map      # one, both languages
-//   node apps/ios/store/frame.mjs header     # the product page's header and search results picture
-//   node apps/ios/store/frame.mjs --device ipad   # the iPad 13" set
-//   node apps/ios/store/frame.mjs --device duo    # the open iPhone Duo set
-//   node apps/ios/store/frame.mjs --device watch  # the Apple Watch set
-//
-// The other sets use the same strip, at App Store Connect's size for each:
-// - the iPad (capture.sh's DEVICE=ipad TURN=1) on its side, 2752×2064, the
-//   headline on one line and the device with no iPhone keys or Dynamic Island;
-// - the open iPhone Duo (DEVICE=duo PANES=1) on its inner display, 2853×2007,
-//   wide as it's held: the iPad's page, but the device drawn as a foldable
-//   iPhone, its titanium band and keys, round corners and the fold down the
-//   middle (the inner display is two outer ones side by side), so the two
-//   sets don't look alike;
-// - the watch (captures/watch, from the watch app on a simulator) at the
-//   Ultra's 422×514, in an Ultra's case under a headline with no line under it.
-// The iPad and the Duo show Nearby in place of the home screen, which only the
-// iPhone's capture has.
-//
-// Draws with Chromium, headless: CHROME if set, else Playwright's download
-// (~/Library/Caches/ms-playwright), else Google Chrome. The Chinese uses the
-// system's PingFang SC and the status bar SF Pro, so run it on a Mac.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -63,16 +22,10 @@ const H = DEV.h;
 const WIDE = W > H;
 const PHONE = DEVICE === 'iphone';
 const WATCH = DEVICE === 'watch';
-// A tall page's sizes against the iPhone's (1 on the iPhone itself).
 const U = WIDE ? 1 : W / 1320;
-// The Play set's landscape is drawn for 1080 wide: scaled to this width and
-// lowered to the bottom of the taller page.
 const S = W / 1080;
 const LAND_Y = H - 1920 * S;
 
-// The words, in the listing's order: the Play set's, so both stores say the
-// same. The headline is two lines, split at "|", so every phone sits at the
-// same height; its part in braces is in the accent colour.
 const IPHONE_SLIDES = [
   {
     file: '1-leave-by',
@@ -102,23 +55,18 @@ const IPHONE_SLIDES = [
   {
     file: '5-on-the-bus',
     sky: 'night',
-    // The card's "Updated" line under Today: it reads the phone's clock,
-    // which a simulator can't move to the trip's morning, so it's covered in
-    // the page's own colour (y and height in the capture's pixels).
     hide: { y: 2045, h: 70, colour: '#fafaf9' },
     en: { head: 'With you|{all the way}', sub: 'On the bus: the next stop, and when you’ll get there.' },
     zh: { head: '上车以后，|{一路}都在身边', sub: '在车上：下一站是哪里，什么时候到。' },
   },
 ];
 
-// On the big screens Nearby stands in for the home screen's widgets, in the day's sky.
 const NEARBY = {
   file: '2-nearby',
   sky: 'day',
   en: { head: 'Every bus near you,|{at a glance}', sub: 'The next buses at the stops around you, live.' },
   zh: { head: '{附近的巴士}，|一眼看清', sub: '你身边每个车站的下一班巴士，实时到站。' },
 };
-// The watch's own five, each a headline alone: there's no room for a line under it.
 const WATCH_SLIDES = [
   { file: '1-now', sky: 'dawn', en: { head: 'Know when to|{leave for class}' }, zh: { head: '{什么时候出发}，|一看就知道' } },
   { file: '2-steps', sky: 'day', en: { head: 'Every step,|{on your wrist}' }, zh: { head: '每一步，|{抬手就看到}' } },
@@ -128,9 +76,6 @@ const WATCH_SLIDES = [
 ];
 const SLIDES = PHONE ? IPHONE_SLIDES : WATCH ? WATCH_SLIDES : IPHONE_SLIDES.map((s) => (s.home ? NEARBY : s));
 
-// The skies of apps/web/public/assets/sky.css (light), and night's from the
-// dark one: top to horizon, the far hills, the trees, the city, the ground
-// and the road; `dark` puts the words in light ink.
 const SKIES = {
   dawn: {
     s: ['#8fc1e8', '#b7d6ee', '#f1d6c2', '#f7c9a4'],
@@ -176,10 +121,6 @@ const SKIES = {
   },
 };
 
-// Where the phones sit, and the iPhone's own proportions at this size: its
-// corners, its bezel and the Dynamic Island, which a simulator's screenshot
-// leaves out.
-// A wide page's device fills the height between the words and the road.
 const ROAD_Y = H - (1920 - 1866) * S;
 const DUO = DEVICE === 'duo';
 const BEZEL = PHONE ? 20 : DUO ? Math.round(W * 0.009) : WIDE ? Math.round(W * 0.014) : 16;
@@ -189,8 +130,6 @@ const SCREEN_W = PHONE ? 900 : Math.round((SCREEN_H * W) / H);
 const SCREEN_R = PHONE ? 118 : Math.round(SCREEN_W * (DUO ? 0.065 : WIDE ? 0.022 : 0.2));
 const K = SCREEN_W / W;
 
-// The home screen's capture (both languages lay it out alike): the two
-// widgets and the app's icon, in its own pixels.
 const HOME = {
   widgets: [
     { x: 95, y: 282, w: 1130, h: 530 },
@@ -200,12 +139,6 @@ const HOME = {
   icon: { x: 207, y: 1688, size: 196, r: 44 },
 };
 
-/**
- * The whole strip, five slides wide, drawn in the page with a canvas: each
- * slide's page shows its own fifth of it, so the hills, the road and the
- * shuttles carry on across the joins. The sky and the stars are drawn at this
- * page's size; the landscape is the Play set's drawing, scaled.
- */
 function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = true, span = null, land = null } = {}) {
   const phases = SLIDES.map((s) => (land ? { ...SKIES[s.sky], ...land } : SKIES[s.sky]));
   return `(() => {
@@ -316,10 +249,8 @@ function panoramaScript({ dw = W, dh = H, scale = S, landY = LAND_Y, clear = tru
 })();`;
 }
 
-/** The home screen, rebuilt: the capture's widgets and icon on the app's dusk, its status bar redrawn. */
 function homeScreen(shot, time) {
   const src = pathToFileURL(shot).href;
-  // Each piece is cut a few pixels inside its edge, so nothing of the old wallpaper comes with it.
   const crop = (x, y, w, h, r, extra = '') =>
     `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${r}px;background:url('${src}') -${x}px -${y}px / ${W}px ${H}px;${extra}"></div>`;
   const widgets = HOME.widgets.map((b) => crop(b.x + 3, b.y + 3, b.w - 6, b.h - 6, HOME.radius - 3)).join('');
@@ -335,7 +266,6 @@ function homeScreen(shot, time) {
     const y = 30 + ((n * 151) % 1100);
     return `<circle cx="${x}" cy="${y}" r="${n % 6 === 0 ? 2.6 : 1.5}" fill="#fff" opacity="${0.25 + (n % 5) * 0.12}"/>`;
   }).join('');
-  // The Play set's dusk wallpaper, drawn for 1080×1920 and filling this taller screen from the bottom.
   const wallpaper = `<svg width="${W}" height="${H}" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMax slice" style="position:absolute;inset:0">
     <defs>
       <linearGradient id="hs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1c3a"/><stop offset="0.38" stop-color="#3a3466"/><stop offset="0.62" stop-color="#7a4766"/><stop offset="0.78" stop-color="#e08a62"/></linearGradient>
@@ -349,7 +279,6 @@ function homeScreen(shot, time) {
     ${tree(120, 1612, 4, '#2c2440')}${tree(960, 1602, 3.4, '#2c2440')}
     <path d="M0 1790 C 260 1750, 520 1770, 760 1758 S 1000 1745, 1080 1760 V1920 H0Z" fill="#17121f"/>
   </svg>`;
-  // The status bar as the simulator draws it: the time, then signal, Wi-Fi and a full battery.
   const bars = [0, 1, 2, 3]
     .map((n) => `<rect x="${n * 15}" y="${34 - (n + 1) * 8.5}" width="11" height="${(n + 1) * 8.5}" rx="3" fill="#fff"/>`)
     .join('');
@@ -362,15 +291,11 @@ function homeScreen(shot, time) {
     <div class="pill"></div></div>`;
 }
 
-/** "Know when to|{leave for class}": two lines, the braces' part in the accent colour. */
 function head(text) {
-  return (
-    text
-      .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
-      .replace(/\{(.+?)\}/, '<em>$1</em>')
-      // On one line, the Chinese needs nothing after its full-width comma.
-      .replace('|', WIDE ? (/[，、]\|/.test(text) ? '' : ' ') : '<br>')
-  );
+  return text
+    .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
+    .replace(/\{(.+?)\}/, '<em>$1</em>')
+    .replace('|', WIDE ? (/[，、]\|/.test(text) ? '' : ' ') : '<br>');
 }
 
 function page(index, lang) {
@@ -383,18 +308,15 @@ function page(index, lang) {
   const zh = lang === 'zh';
   const face = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Space Grotesk', sans-serif`;
   const body = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Inter', sans-serif`;
-  // Every slide's phone, in the middle of its own fifth of the strip.
   const phones = SLIDES.map((s, i) => {
     const shot = join(here, 'captures', DEV.dir, lang, `${s.file}.png`);
     const time = s.home ? readFileSync(join(here, 'captures', lang, `${s.file}.time`), 'utf8').trim() : '';
-    // The cover is placed for the iPhone's capture.
     const cover =
       s.hide && PHONE
         ? `<div style="position:absolute;left:0;right:0;top:${s.hide.y * K}px;height:${s.hide.h * K}px;background:${s.hide.colour}"></div>`
         : '';
     const screen = s.home ? homeScreen(shot, time) : `<img src="${pathToFileURL(shot)}">${cover}`;
     const left = i * W + W / 2 - SCREEN_W / 2 - BEZEL;
-    // The watch's band, drawn first so the case sits on it.
     const band = WATCH
       ? `<i class="strap up" style="left:${left + BEZEL + SCREEN_W * 0.11}px"></i><i class="strap down" style="left:${left + BEZEL + SCREEN_W * 0.11}px"></i>`
       : '';
@@ -434,11 +356,6 @@ function page(index, lang) {
   </body></html>`;
 }
 
-/**
- * A wide page's differences: the headline on one line, smaller against the
- * width; the device with no iPhone keys or Dynamic Island, and its front
- * camera in the middle of the iPad's long edge (the Duo has hinges instead).
- */
 function wideStyle(zh) {
   const cam = `left: 50%; margin-left: -${Math.round(BEZEL * 0.17)}px;`;
   return `
@@ -449,12 +366,6 @@ function wideStyle(zh) {
     .phone .cam { position: absolute; top: ${Math.round(BEZEL * 0.42)}px; ${cam} width: ${Math.round(BEZEL * 0.34)}px; height: ${Math.round(BEZEL * 0.34)}px; border-radius: 50%; background: #0b0b12; box-shadow: 0 0 0 2px #2a2a30; }`;
 }
 
-/**
- * The open Duo over the wide page's plain device: the iPhone's titanium band
- * with its keys along the top edge, as an iPhone held on its side has them,
- * and the fold down the middle of the screen, with the hinge's notches in
- * the band above and below it. No camera dot: the status bar sits there.
- */
 function duoStyle() {
   const key = Math.round(BEZEL * 0.45);
   const band = Math.round(BEZEL * 0.18);
@@ -469,11 +380,6 @@ function duoStyle() {
     .phone .hinge.bottom { bottom: 0; }`;
 }
 
-/**
- * An Apple Watch Ultra: a dark titanium case, the Digital Crown and side
- * button on the right, the orange Action button on the left, and the band
- * fading into the page below, and just above, clear of the headline.
- */
 function watchStyle(zh) {
   const caseH = SCREEN_H + 2 * BEZEL;
   return `
@@ -489,14 +395,6 @@ function watchStyle(zh) {
     .strap.down { top: ${PHONE_TOP + caseH - 20}px; -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent); }`;
 }
 
-// The product page's header (App Store Connect's 3840×1646): the same strip
-// without the phones or words, since the App Store crops it to each screen
-// and sets the app's name beside it. The whole day would leave the land a
-// thin line at this shape, so it shows the strip from just past the
-// morning's shuttle, larger, with golden hour at its left edge, dusk in the
-// middle and night at its right edge: with no phone to cover a join, each
-// hour turns into the next over half the picture. The search results'
-// picture (3:2) is the same strip at the same scale with more sky above.
 const HEADER = { w: 3840, h: 1646, from: 2.15, file: 'header.png' };
 const SEARCH = { ...HEADER, h: 2560, file: 'search-results.png' };
 

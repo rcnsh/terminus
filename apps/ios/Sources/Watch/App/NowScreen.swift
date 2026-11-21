@@ -1,18 +1,11 @@
 import MapKit
 import SwiftUI
 
-/// Now on the wrist: the card for what's chosen, in the phone's words and
-/// order (NowShows): its head on a band of the hour's sky, the trip's steps
-/// under it, then Earlier and Later bus and Directions to the stop. Not
-/// going, Go later and Is this wrong? stay on the phone (ADR 0016).
 struct NowScreen: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.isLuminanceReduced) private var dimmed
-    /// How tall the band is and how far the page has scrolled: the sky behind
-    /// the clock fades out as the band's black ground comes up to the clock.
     @State private var band: CGFloat = 160
     @State private var down: CGFloat = 0
-    /// The room the clock takes at the top, where content fades out as it scrolls under it.
     @State private var clock: CGFloat = 0
 
     var body: some View {
@@ -45,7 +38,6 @@ struct NowScreen: View {
                         Color.clear.frame(height: 1).id("foot")
                     }
                     .padding(.horizontal, 6)
-                    // Clear of the fade under the clock at rest.
                     .padding(.top, 10)
                 }
                 .clearUnderClock()
@@ -66,8 +58,6 @@ struct NowScreen: View {
                 .onScrollGeometryChange(for: CGFloat.self) {
                     $0.contentInsets.top
                 } action: { _, top in
-                    // The bar shrinks as the page scrolls; the fade keeps to where the
-                    // page starts at rest, so rows fade before they reach the title.
                     clock = max(clock, top)
                 }
                 .onScrollGeometryChange(for: CGFloat.self) {
@@ -80,7 +70,6 @@ struct NowScreen: View {
                 }
                 #if DEBUG
                     .task {
-                        // For screenshots of the card's steps (TERMINUS_SCROLL=ground) or its foot (foot).
                         guard let to = ProcessInfo.processInfo.environment["TERMINUS_SCROLL"], ["ground", "foot"].contains(to) else {
                             return
                         }
@@ -92,22 +81,18 @@ struct NowScreen: View {
         }
     }
 
-    /// The sky behind the clock: whole while the band is under it, then fading
-    /// over the band's second half to none as its ground reaches the clock.
     private var skyLeft: Double {
         let gone = max(band - SkyBand<EmptyView>.strip, 1)
         let start = gone * 0.5
         return min(1, max(0, 1 - Double((down - start) / (gone - start))))
     }
 
-    /// Your bus on the road only when it stops for you, as on the phone's horizon.
     private func road(_ shows: NowShows, _ now: Date) -> Road {
         let r = shows.road(now: now)
         return r.stop ? r : Road(stop: false, bus: nil, shuttle: r.shuttle)
     }
 }
 
-/// The colours words take where they are: in the sky or on the ground.
 private struct InksKey: EnvironmentKey { static let defaultValue = Inks.page }
 
 extension EnvironmentValues {
@@ -116,8 +101,6 @@ extension EnvironmentValues {
         set { self[InksKey.self] = newValue }
     }
 }
-
-// MARK: the head, in the sky
 
 struct CardHead: View {
     let shows: NowShows
@@ -190,8 +173,6 @@ struct CardHead: View {
     }
 }
 
-/// What comes before any answer, as on the phone: NUS's live times being
-/// down, where the trip is, the ride's progress on the bus, and a warning.
 private struct Lead: View {
     let answer: NextAnswer
     let now: Date
@@ -209,8 +190,6 @@ private struct Lead: View {
     }
 }
 
-/// "Leave in 6 min" with only the time in the accent; "Leave now" all
-/// accent; too late to be on time, all red. As the phone's.
 private struct LeaveHead: View {
     let answer: NextAnswer
     let journey: Journey
@@ -237,7 +216,6 @@ private struct LeaveHead: View {
     }
 }
 
-/// A small coloured pill, on the sky's chip so it reads over any hour.
 struct SkyPill: View {
     let text: String
     let color: Color
@@ -251,8 +229,6 @@ struct SkyPill: View {
     }
 }
 
-// MARK: the ground
-
 struct CardGround: View {
     let shows: NowShows
     let now: Date
@@ -265,7 +241,6 @@ struct CardGround: View {
                 EmptyView()
             case .dayDone(let a):
                 if let u = a.card?.upcoming { UpcomingCard(upcoming: u) }
-                // Your favourites to plan a trip to instead, or where to look, as under the phone's.
                 if a.places.isEmpty {
                     Text(
                         a.mode == "rest"
@@ -330,7 +305,6 @@ struct CardGround: View {
     }
 }
 
-/// A busy bus and an estimate are small print, and how sure a bus's time is.
 private struct Small: View {
     let answer: NextAnswer
     let quality: Bool
@@ -342,7 +316,6 @@ private struct Small: View {
     }
 }
 
-/// The next class on a card of its own: when in the accent, what, then where.
 private struct UpcomingCard: View {
     let upcoming: Upcoming
 
@@ -359,9 +332,6 @@ private struct UpcomingCard: View {
     }
 }
 
-/// The trip as steps down the card, as the phone's default style: leave
-/// and the walk, the stop and its bus, a change, the walk at the far end,
-/// and where you get there; each with its time.
 private struct Steps: View {
     let answer: NextAnswer
     let journey: Journey
@@ -412,7 +382,6 @@ private struct Steps: View {
                 Text(j.bus == nil || j.walkEnd != nil ? j.place : j.toStop).font(.headline)
             }
         }
-        // Read as one sentence with the head.
         .accessibilityElement(children: .combine)
     }
 
@@ -422,8 +391,6 @@ private struct Steps: View {
         case ride(Color)
     }
 
-    /// A point on the line: its time over what's there, its dot, and beside
-    /// the line how long the stretch to the next point takes.
     struct Point<Title: View>: View {
         let time: String
         let dot: Dot
@@ -478,9 +445,6 @@ private struct Steps: View {
     }
 }
 
-/// "‹ Earlier bus" and "Later bus ›", and "Best bus" once you've moved, as
-/// on the phone; a way with no bus is greyed out, not hidden. Side by side
-/// when they fit, else one over the other.
 private struct StepButtons: View {
     let answer: NextAnswer
     @Environment(WatchModel.self) private var model
@@ -530,7 +494,6 @@ private struct StepButtons: View {
     }
 }
 
-/// Walking directions to the stop, in the watch's Maps.
 private struct Directions: View {
     let answer: NextAnswer
 
@@ -550,8 +513,6 @@ private struct Directions: View {
     }
 }
 
-/// Without the watch's location: what it's for, and Continue, which asks
-/// (worded as on the phone; the system's question is the one that asks).
 private struct LocationNotice: View {
     private var locator: Locator { Locator.shared }
 
@@ -574,7 +535,6 @@ private struct LocationNotice: View {
 }
 
 extension View {
-    /// No system blur under the clock (watchOS 26 and later): the content fades out there instead (NowScreen's mask).
     @ViewBuilder fileprivate func clearUnderClock() -> some View {
         if #available(watchOS 26, *) {
             scrollEdgeEffectHidden(true, for: .top)

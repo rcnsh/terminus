@@ -1,9 +1,4 @@
 #!/bin/sh
-# Builds the app and runs it on a simulator, against the dev stub by default.
-#   scripts/run.sh [simulator-udid] [server]
-# With no simulator, the booted one. The server defaults to the stub
-# (node apps/api/scripts/dev/dev-stub.mjs, on http://localhost:8787); pass
-# "default" for the build's own. Each checkout builds into its own build/dd.
 set -eu
 cd "$(dirname "$0")/.."
 SIM=${1:-booted}

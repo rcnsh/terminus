@@ -1,7 +1,5 @@
 import XCTest
 
-/// The terminus:// links widgets, notifications and the Live Activity open,
-/// each landing where it says: a tab (Nearby is one), the plan or a favourite on Now.
 @MainActor
 final class LinksUITests: XCTestCase {
     nonisolated override func setUp() {
@@ -10,7 +8,6 @@ final class LinksUITests: XCTestCase {
     }
 
     func testEachLinkLandsWhereItSays() {
-        // A system prompt left by a link opened from outside (simctl openurl) would cover the app.
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for _ in 0..<6 where springboard.buttons["Cancel"].exists { springboard.buttons["Cancel"].tap() }
         let app = XCUIApplication.terminus(signedIn: true, extra: ["TERMINUS_SKY": "day"])
@@ -23,12 +20,10 @@ final class LinksUITests: XCTestCase {
             app.open(URL(string: "terminus://\(link)")!)
             XCTAssertTrue(selected(tabs[tab]), "terminus://\(link) didn't open \(tab)")
         }
-        // A favourite's link: Now, on its chip.
         app.open(URL(string: "terminus://place/mrt")!)
         XCTAssertTrue(selected(app.buttons["chip.KR MRT"]))
         XCTAssertTrue(tabs["Now"].isSelected)
         shot("link-place", app)
-        // Nearby's tab, then back to the plan on Now.
         app.open(URL(string: "terminus://nearby")!)
         XCTAssertTrue(selected(tabs["Nearby"]), "terminus://nearby didn't open Nearby")
         allowLocationIfAsked()
@@ -37,13 +32,11 @@ final class LinksUITests: XCTestCase {
         app.open(URL(string: "terminus://plan")!)
         XCTAssertTrue(selected(app.buttons["chip.next"]))
         XCTAssertTrue(tabs["Now"].isSelected)
-        // A stop link without this phone's widget key is refused: nothing changes.
         app.open(URL(string: "terminus://to/COM3?label=Somewhere")!)
         sleep(2)
         XCTAssertFalse(app.buttons["chip.Somewhere"].exists)
     }
 
-    /// Whether `e` is selected within `timeout` seconds.
     private func selected(_ e: XCUIElement, timeout: TimeInterval = 10) -> Bool {
         let end = Date().addingTimeInterval(timeout)
         while Date() < end {

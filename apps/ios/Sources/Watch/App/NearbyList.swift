@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// The stops near you, as /me/nearby gives them to the phone: each stop's
-/// name over a row per line, with where it's going, its next bus large and
-/// the two after it, in the phone's words (NearbyCells). The times count
-/// down from when they came, as a stop's board does (BusTimes.aged).
 struct NearbyList: View {
     let now: Date
     @Environment(WatchModel.self) private var model
@@ -44,9 +40,6 @@ struct NearbyList: View {
         }
     }
 
-    /// One line at a stop: its badge, where it's going, then its next bus large and the two after it.
-    /// At the largest text sizes where it's going takes its own line under the times, as there's no
-    /// room beside them for more than a word.
     private struct Row: View {
         let row: BoardRow
         let cells: [NearbyCell]

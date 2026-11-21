@@ -3,13 +3,10 @@ import Testing
 
 @testable import TerminusWatch
 
-/// The watch on the API's golden answers (fixtures/answers), which the
-/// server's own tests pin word for word, as the phone's tests read them.
 let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("../../fixtures").standardized
 
-/// A golden answer and the moment it was made (its `asOf`).
 func golden(_ name: String) throws -> (NextAnswer, Date) {
     let data = try Data(contentsOf: fixtures.appendingPathComponent("answers/\(name).json"))
     let a = try NextAnswer.decode(data)
@@ -17,8 +14,6 @@ func golden(_ name: String) throws -> (NextAnswer, Date) {
     return (a, try #require((raw["asOf"] as? String).flatMap(parseISODate)))
 }
 
-/// A golden whose card holds until after its leave time, as one fetched
-/// a moment before leaving does: for the countdown's last minutes.
 func holding(_ name: String) throws -> (NextAnswer, Date) {
     let data = try Data(contentsOf: fixtures.appendingPathComponent("answers/\(name).json"))
     var raw = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -32,7 +27,6 @@ func holding(_ name: String) throws -> (NextAnswer, Date) {
     return (a, try #require((raw["asOf"] as? String).flatMap(parseISODate)))
 }
 
-/// Every /me/next golden, English and Chinese.
 func nextGoldens() -> [String] {
     let dir = fixtures.appendingPathComponent("answers")
     let names = { (sub: String) in
@@ -54,11 +48,9 @@ func nextGoldens() -> [String] {
         #expect(nextGoldens().count >= 40)
     }
 
-    /// A class by bus: when to leave counts down, the bus and its stop under it, "~" for a timetable time.
     @Test func aClassByBusCountsDownToLeaving() throws {
         let (a, now) = try golden("class-bus")
         let g = Glance.of(paired: true, answer: a, error: nil, now: now)
-        // 01:36:40 less 01:00:00 is 36 min 40 s, rounded as the phone's Now rounds it.
         #expect(g.headline == "Leave in 37 min")
         #expect(g.big == "37 min")
         #expect(g.svc == "R2")
@@ -69,7 +61,6 @@ func nextGoldens() -> [String] {
         #expect(g.countdownTo == nil)
     }
 
-    /// A live bus is "Live".
     @Test func aLiveBusSaysLive() throws {
         let (a, now) = try golden("place")
         let g = Glance.of(paired: true, answer: a, error: nil, now: now)
@@ -78,7 +69,6 @@ func nextGoldens() -> [String] {
         #expect(g.headline.hasPrefix("Leave in "))
     }
 
-    /// The last two minutes tick by themselves, to the leave time.
     @Test func theLastTwoMinutesAreATimer() throws {
         let (a, _) = try holding("class-bus")
         let leave = try #require(a.leaveAt)
@@ -90,7 +80,6 @@ func nextGoldens() -> [String] {
         #expect(after.countdownTo == nil)
     }
 
-    /// On foot: no bus, and when you get there under it.
     @Test func onFootSaysWhenYouGetThere() throws {
         let (a, now) = try golden("class-walk")
         let g = Glance.of(paired: true, answer: a, error: nil, now: now)
@@ -99,7 +88,6 @@ func nextGoldens() -> [String] {
         #expect(g.under == a.card?.journey.flatMap { JourneyText.arrive($0) })
     }
 
-    /// On the bus: where to get off, as the phone's widgets say it, and the next stop.
     @Test func onTheBusItSaysWhereToGetOff() throws {
         let (a, now) = try golden("riding")
         let g = Glance.of(paired: true, answer: a, error: nil, now: now)
@@ -109,7 +97,6 @@ func nextGoldens() -> [String] {
         #expect(g.inline == a.card?.glance)
     }
 
-    /// A day that's done: the card's own words, and its glance beside the clock.
     @Test func aDayThatsDoneSaysSo() throws {
         for name in ["rest", "free"] {
             let (a, now) = try golden(name)
@@ -126,8 +113,6 @@ func nextGoldens() -> [String] {
         #expect(g.under == "Open terminus on your iPhone")
     }
 
-    /// Every card state has a headline, the face's words when it isn't
-    /// counting down (nothing worded on the watch alone, rule 1).
     @Test(arguments: nextGoldens())
     func everyGoldenHasAHeadline(name: String) throws {
         Lang.pref = name.hasPrefix("zh/") ? "zh" : "en"
@@ -141,7 +126,6 @@ func nextGoldens() -> [String] {
         }
     }
 
-    /// Chinese from the Chinese golden: the countdown in the phone's Chinese.
     @Test func chineseCountsDownInChinese() throws {
         Lang.pref = "zh"
         defer { Lang.pref = "en" }
@@ -151,8 +135,6 @@ func nextGoldens() -> [String] {
         #expect(g.under?.hasPrefix(L("from %@", "PGP")) == true)
     }
 
-    /// One answer's timeline: a redraw each time the countdown's figure
-    /// changes, the timer's start and leaving, and each is a real change.
     @Test func oneAnswersTimelineRedrawsAsTheCountdownMoves() throws {
         let (a, now) = try holding("class-bus")
         let leave = try #require(a.leaveAt)
@@ -161,31 +143,25 @@ func nextGoldens() -> [String] {
         #expect(marks.contains(leave.addingTimeInterval(-119.5)))
         #expect(marks == marks.sorted())
         #expect(marks.allSatisfy { $0 > now })
-        // A minute's mark for every minute from 37 down to 2.
         #expect(marks.filter { $0 < leave.addingTimeInterval(-120) }.count >= 35)
-        // Past a card's staleAt the countdown isn't drawn, so neither are its marks.
         let (kept, keptNow) = try golden("class-bus")
         let stale = try #require(kept.staleAt)
         #expect(
             !Glance.redraws(kept, now: keptNow, until: keptNow.addingTimeInterval(3 * 3600)).contains {
                 $0 > stale && $0 < leave.addingTimeInterval(-120) && !WidgetTiming.redraws(kept, now: keptNow, until: leave).contains($0)
             })
-        // The iPhone widget's own moments too.
         for m in WidgetTiming.redraws(a, now: now, until: now.addingTimeInterval(3 * 3600)) { #expect(marks.contains(m)) }
-        // Just before and just after a minute's mark, the glance says something different.
         for m in marks where m < leave.addingTimeInterval(-120) {
             let before = Glance.of(paired: true, answer: a, error: nil, now: m.addingTimeInterval(-1))
             let after = Glance.of(paired: true, answer: a, error: nil, now: m.addingTimeInterval(1))
             if WidgetTiming.redraws(a, now: now, until: leave).contains(m) { continue }
             #expect(before.headline != after.headline, "at \(m)")
         }
-        // Between two marks it says the same thing throughout.
         let mid = Glance.of(paired: true, answer: a, error: nil, now: now.addingTimeInterval(5))
         let later = Glance.of(paired: true, answer: a, error: nil, now: now.addingTimeInterval(9))
         #expect(mid.headline == later.headline)
     }
 
-    /// The Smart Stack wants it most in the hour before leaving and on a trip.
     @Test func theSmartStackWantsItNearLeaving() throws {
         let (a, now) = try golden("class-bus")
         #expect(Glance.relevance(paired: true, answer: a, now: now) == 0.8)
@@ -196,8 +172,6 @@ func nextGoldens() -> [String] {
         #expect(Glance.relevance(paired: false, answer: a, now: now) == 0)
     }
 }
-
-// MARK: the hand-off from the phone
 
 @Test func aPairingCodeCrossesWithTheSettings() throws {
     let at = Date(timeIntervalSince1970: 1_800_000_000)
@@ -212,7 +186,6 @@ func nextGoldens() -> [String] {
     #expect(WatchHandoff.code(in: m, now: at.addingTimeInterval(WatchHandoff.codeLife)) == nil)
     #expect(WatchHandoff.code(in: ["pairCode": "", "sentAt": at.timeIntervalSince1970], now: at) == nil)
     #expect(WatchHandoff.code(in: [:], now: at) == nil)
-    // Read again when the app starts: a code tried already isn't tried twice.
     #expect(WatchHandoff.code(in: m, tried: "ABC234", now: at) == nil)
     #expect(WatchHandoff.code(in: m, tried: "XYZ789", now: at) != nil)
 }
@@ -224,12 +197,10 @@ func nextGoldens() -> [String] {
     #expect(WatchHandoff.state(in: [:]) == nil)
 }
 
-/// The server knows the watch by its client header: the iPhone app's platform, with its own flavour.
 @Test func theWatchSaysItsTheWatch() {
     #expect(Api.client == "ios-watch/\(Api.version)")
 }
 
-/// The account's language, from the language its answers come in.
 @Test func theWatchFollowsTheAccountsLanguage() {
     let before = Lang.pref
     defer { Lang.pref = before }

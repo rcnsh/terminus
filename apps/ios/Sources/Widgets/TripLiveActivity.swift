@@ -2,14 +2,6 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-/// The trip under way on the Lock Screen and in the Dynamic Island: the
-/// bus, the card's line, and a countdown that ticks by itself (to leaving,
-/// to the bus, or to getting off). On the bus, how far along the ride is.
-/// Past the card's staleAt with nothing newer, it says the times may have
-/// changed rather than counting down to a bus that may be gone. Turn off, by
-/// where it says terminus, ends it and turns it off, as on Android's live
-/// notification. On an Apple Watch's Smart Stack it has a layout of its own
-/// (WatchTrip), from iOS 18, where the watch can show one.
 struct TripLiveActivity: Widget {
     var body: some WidgetConfiguration {
         if #available(iOS 18.0, *) {
@@ -81,16 +73,13 @@ struct TripLiveActivity: Widget {
     }
 }
 
-/// The accent on the Dynamic Island's black: the dark theme's.
 private let islandAccent = Color(rgb: 0xFB923C)
 
-/// "On the bus · GEA1000": the phase, then where to.
 private func heading(_ s: TripAttributes.ContentState) -> String? {
     let h = [s.phaseText, s.to].compactMap { $0 }.joined(separator: " · ")
     return h.isEmpty ? nil : h
 }
 
-/// The bus as painted, or someone walking when there's none.
 private struct TripBadge: View {
     let state: TripAttributes.ContentState
     let size: CGFloat
@@ -107,8 +96,6 @@ private struct TripBadge: View {
     }
 }
 
-/// The banner outside the Dynamic Island: the Lock Screen's, or on iOS 18
-/// and later, the watch's when the system asks for the small family.
 private struct TripBanner: View {
     let state: TripAttributes.ContentState
     let stale: Bool
@@ -136,10 +123,6 @@ private struct FamilyTrip: View {
     }
 }
 
-/// On the wrist (the Smart Stack's small family): the bus, the countdown in
-/// words ("Leave in 4:12", "Bus in 1:58", "Off in 6:30") and the stop it's
-/// about under it. The same states as the Lock Screen's: no countdown when
-/// stale or with nothing ahead, the glance in its place, as the compact view.
 struct WatchTrip: View {
     let state: TripAttributes.ContentState
     let stale: Bool
@@ -147,7 +130,6 @@ struct WatchTrip: View {
 
     var body: some View {
         content
-            // As the Lock Screen's: fixed colours for the appearance it's drawn in.
             .activityBackgroundTint(Color(rgb: scheme == .dark ? 0x1A1816 : 0xFFFFFF))
             .activitySystemActionForegroundColor(Color(rgb: scheme == .dark ? 0xF2EFEB : 0x1C1917))
     }
@@ -169,8 +151,6 @@ struct WatchTrip: View {
                 .foregroundStyle(count == nil ? Color.ink : Color.brand)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 if stale {
-                    // The Lock Screen's sentence without "Open terminus", which
-                    // the wrist hasn't room for and can't do.
                     Text(verbatim: L("Times may have changed.")).font(.system(size: 13)).foregroundStyle(Color.warn).lineLimit(2)
                 } else if let place = s.countdownPlace {
                     Text(verbatim: place).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.muted).lineLimit(1)
@@ -183,16 +163,12 @@ struct WatchTrip: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// The phrase with the ticking time in it, split round its blank so each
-    /// language keeps its own order ("Leave in 4:12", "4:12 后出发").
     private func countdown(_ count: (range: ClosedRange<Date>, kind: String)) -> Text {
         let (before, after) = TripAttributes.ContentState.countdownWords(count.kind)
         return Text(verbatim: before) + Text(timerInterval: count.range, countsDown: true) + Text(verbatim: after)
     }
 }
 
-/// The Lock Screen's banner: where to and the phase, the card's line with
-/// the bus, the countdown big on the right, then the ride's progress.
 private struct LockScreenTrip: View {
     let state: TripAttributes.ContentState
     let stale: Bool
@@ -200,9 +176,6 @@ private struct LockScreenTrip: View {
 
     var body: some View {
         banner
-            // Fixed colours for the appearance it's drawn in: iOS resolves a
-            // light-or-dark tint as light even on a dark Lock Screen, where
-            // the text is dark mode's, light on light.
             .activityBackgroundTint(Color(rgb: scheme == .dark ? 0x1A1816 : 0xFFFFFF))
             .activitySystemActionForegroundColor(Color(rgb: scheme == .dark ? 0xF2EFEB : 0x1C1917))
     }
@@ -220,8 +193,6 @@ private struct LockScreenTrip: View {
                     }
                 }
                 Spacer(minLength: 0)
-                // Its room, kept here; the button itself is laid over it, outside the
-                // banner read as one by VoiceOver, so it can be pressed on its own.
                 if turnOff { TurnOffButton(ink: Color.ink, chip: Color.surface2).hidden() }
             }
             HStack(alignment: .center, spacing: 10) {
@@ -258,7 +229,6 @@ private struct LockScreenTrip: View {
         }
     }
 
-    /// What the countdown is to, under it.
     private func countWord(_ kind: String) -> String {
         switch kind {
         case "leave": L("to leave")
@@ -268,8 +238,6 @@ private struct LockScreenTrip: View {
     }
 }
 
-/// Turn off (TurnOffLiveIntent): a small chip, as the widgets' buttons are,
-/// so it reads as something to press rather than part of the trip.
 private struct TurnOffButton: View {
     let ink: Color
     let chip: Color
@@ -290,9 +258,6 @@ private struct TurnOffButton: View {
     }
 }
 
-/// On the bus: how far along the ride is, by the clock, ending at the stop
-/// you get off at. `from` and `to` are the server's times, as labelled; the
-/// bar runs on the phone's clock, so it's moved by the skew between them.
 private struct RideBar: View {
     let from: Date
     let to: Date

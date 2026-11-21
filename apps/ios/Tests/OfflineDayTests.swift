@@ -3,9 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// The offline fallback, against the cases the web, Android and the Mac are
-/// checked against too (fixtures/offline-day.json), on the
-/// API's own /me/day golden.
 let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("../../fixtures").standardized

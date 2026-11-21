@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// A trip's steps on the ground of the large widget, under the headline the
-/// sky already shows, in the card style chosen in Settings › Appearance:
-/// Steps down the side with the ride in its service's colour, or the Route
-/// across. As Android's WidgetJourney.
 struct JourneyView: View {
     let answer: NextAnswer
     let journey: Journey
@@ -12,10 +8,8 @@ struct JourneyView: View {
     let page: Color
     let now: Date
 
-    /// A step's height: its name and the line under it.
     static let step: CGFloat = 36
 
-    /// The room each style takes.
     static func height(_ j: Journey, style: String) -> CGFloat {
         switch style {
         case "route": 52
@@ -23,7 +17,6 @@ struct JourneyView: View {
         }
     }
 
-    /// Under the last step: "2 min walk from UTown", or a class's "9 min early".
     static func lastUnder(_ j: Journey) -> String? { j.walkEnd != nil ? JourneyText.arriveWhere(j) : j.slack }
 
     var body: some View {
@@ -32,8 +25,6 @@ struct JourneyView: View {
         default: steps
         }
     }
-
-    // MARK: Steps
 
     private enum Dot { case you, stop, there }
 
@@ -101,11 +92,8 @@ struct JourneyView: View {
         .frame(height: dot == .there && under == nil ? Self.step - 12 : Self.step, alignment: .top)
     }
 
-    // MARK: Route
-
     private var route: some View {
         let j = journey
-        // A change of bus takes the room of the walk to the stop.
         let change = j.bus == nil ? nil : j.change
         return HStack(alignment: .top, spacing: 0) {
             if change == nil, let walk = j.walk {
@@ -115,7 +103,6 @@ struct JourneyView: View {
             if let bus = j.bus {
                 point(bus.stop, bus.board, inks.ink)
                 stretch(change?.firstRide ?? j.ride ?? "", bus: bus, color: serviceColor(bus.color), thick: 4)
-                // The stop the second bus goes from, then its ride, as on the app's line.
                 if let c = change {
                     point(c.stop, c.bus.board, inks.ink)
                     stretch(c.ride ?? "", bus: c.bus, color: serviceColor(c.bus.color), thick: 4)

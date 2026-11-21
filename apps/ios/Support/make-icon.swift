@@ -1,12 +1,7 @@
-// Draws the terminus mark (../../web/public/assets/mark.svg) as the iPhone
-// app's icon: full-bleed on its dark square, which iOS rounds itself. With
-// "beta", a BETA band across the bottom, as the Mac's beta icon has.
-//   swift Support/make-icon.swift [beta]   (from apps/ios)
 import AppKit
 
 let beta = CommandLine.arguments.dropFirst().first == "beta"
 let px = 1024
-// Opaque, as the App Store wants: no alpha channel in the PNG.
 let rep = NSBitmapImageRep(
     bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8, samplesPerPixel: 3,
     hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 32)!
@@ -15,7 +10,6 @@ NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 func rgb(_ v: UInt32) -> NSColor {
     NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
 }
-// The SVG's 64-unit square, y down, scaled to the canvas.
 let u = CGFloat(px) / 64
 func box(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> NSRect {
     NSRect(x: x * u, y: CGFloat(px) - (y + h) * u, width: w * u, height: h * u)

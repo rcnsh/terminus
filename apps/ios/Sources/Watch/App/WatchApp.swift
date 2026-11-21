@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// terminus on the wrist: Now, Nearby and the headline in the phone's words
-/// (ADR 0016), set up from the iPhone, fetching on its own.
 @main
 struct TerminusWatchApp: App {
     @Environment(\.scenePhase) private var phase
@@ -18,7 +16,6 @@ struct TerminusWatchApp: App {
             WatchRoot()
                 .environment(WatchModel.shared)
         }
-        // A code from the phone, delivered while the app is in the background.
         .backgroundTask(.watchConnectivity) {
             try? await Task.sleep(for: .seconds(5))
         }
@@ -49,7 +46,6 @@ struct WatchRoot: View {
                             }
                         }
                         .sheet(isPresented: $choosing) { NavigationStack { TargetsList() } }
-                        // Fetched on appearing and at each next moment, while it's on screen and the app is in front.
                         .task(id: Run(view: model.view, active: phase == .active)) {
                             guard phase == .active else { return }
                             await model.follow()
@@ -59,7 +55,6 @@ struct WatchRoot: View {
                 }
             }
         }
-        // Every word drawn again in the account's language once it's known.
         .id(model.lang)
         .onChange(of: phase) { _, p in if p == .active { model.reopened() } }
         #if DEBUG
@@ -81,12 +76,6 @@ struct WatchRoot: View {
 }
 
 #if DEBUG
-    /// For screenshots and the UI test, in debug builds only, as the phone's
-    /// DevLaunch: TERMINUS_RESET=1 starts signed out with nothing kept,
-    /// TERMINUS_TOKEN signs in with that token, TERMINUS_LANG=en|zh sets
-    /// the language and TERMINUS_API_BASE the server. TERMINUS_VIEW=nearby
-    /// or place:<key>:<label> opens on that view, and TERMINUS_SHOW=targets
-    /// on the list, or complications on each complication drawn in the app.
     enum WatchDevLaunch {
         static var show: String? { ProcessInfo.processInfo.environment["TERMINUS_SHOW"] }
 
@@ -102,7 +91,6 @@ struct WatchRoot: View {
             let env = ProcessInfo.processInfo.environment
             if env["TERMINUS_RESET"] == "1" {
                 TokenStore.clear()
-                // Not the code last tried: the phone's context still holds it, spent, and it would be tried again.
                 for k in Shared.defaults.dictionaryRepresentation().keys where k != "watch.triedCode" {
                     Shared.defaults.removeObject(forKey: k)
                 }

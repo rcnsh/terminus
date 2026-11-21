@@ -4,10 +4,6 @@ import Testing
 
 @testable import Terminus
 
-/// The system side, on the API's golden answers: the Live Activity's state,
-/// the leave reminders, the widgets' words and timing, and the links a
-/// widget opens.
-
 private func answer(_ name: String) throws -> (NextAnswer, Date) {
     let data = try Data(contentsOf: fixtures.appendingPathComponent("answers/\(name).json"))
     let a = try NextAnswer.decode(data)
@@ -16,18 +12,12 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     return (a, asOf)
 }
 
-// MARK: the Live Activity
-
 @Test func noLiveActivityBeforeTheTripStarts() throws {
     let (a, _) = try answer("class-bus")
     #expect(a.phase == "idle")
     #expect(TripAttributes.ContentState.of(a) == nil)
 }
 
-/// Between the server's pushes the app updates the activity from each answer
-/// it fetches: any field the two build differently flips back and forth on
-/// the Lock Screen. fixtures/live-activity.json is the server's state for
-/// every golden answer under way (written by apns.test.js).
 @Test func theStateIsTheServersForEveryAnswer() throws {
     let server = try JSONDecoder().decode(
         [String: TripAttributes.ContentState].self, from: Data(contentsOf: fixtures.appendingPathComponent("live-activity.json")))
@@ -38,8 +28,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     }
 }
 
-/// A stale activity (the phone offline a few minutes) is still the trip's:
-/// updated, not ended and left unstarted in the background.
 @Test func aStaleActivityIsUpdatedNotEnded() {
     #expect(LiveTrip.onScreen(.active))
     #expect(LiveTrip.onScreen(.stale))
@@ -75,7 +63,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     if let count = s.countdown(now: now) { #expect(count.kind == "bus") }
 }
 
-/// The server pushes the same state: the keys must be exactly its, times in whole epoch seconds.
 @Test func theStateEncodesWithTheServersKeys() throws {
     let (a, _) = try answer("riding")
     let s = try #require(TripAttributes.ContentState.of(a))
@@ -86,7 +73,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     ]
     #expect(Set(json.keys).isSubset(of: allowed))
     #expect(json["arriveAt"] is Int)
-    // And the server's own, with nulls, decodes.
     let pushed =
         ##"{"phase":"due","phaseText":"Time to go","headline":"Leave now","line":"R2 09:42 at PGP","glance":"R2 09:42","to":null,"svc":"R2","color":"#34a853","stop":"PGP","off":null,"leaveAt":1788000000,"departAt":1788000300,"arriveAt":null,"estimated":false,"gone":false,"late":false,"staleAt":1788000400}"##
     let back = try JSONDecoder().decode(TripAttributes.ContentState.self, from: Data(pushed.utf8))
@@ -94,19 +80,15 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(back.countdown(now: Date(timeIntervalSince1970: 1_788_000_100))?.kind == "bus")
 }
 
-// MARK: the leave reminders
-
 @Test func aClassTripSchedulesTheHeadsUpAndLeaveNow() throws {
     let (a, now) = try answer("class-bus")
     let remindAt = try #require(a.card?.remindAt.flatMap(parseISODate))
     let leaveAt = try #require(a.leaveAt)
     let step = TripReminders.step(a, soonTrip: nil, soonAt: nil, now: now)
     #expect(step == .schedule(clearFirst: false, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))
-    // Once the heads-up has gone for this trip, it doesn't come back.
     let key = try #require(TripReminders.soonKey(a, now: now))
     let again = TripReminders.step(a, soonTrip: key, soonAt: now.addingTimeInterval(-60), now: now)
     #expect(again == .schedule(clearFirst: false, trip: "4:600:UTOWN", soon: nil, leaveAt: leaveAt))
-    // The same class a week before was another trip: its heads-up doesn't stop this week's.
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = .campus
     let week = cal.dateComponents([.year, .month, .day], from: leaveAt.addingTimeInterval(-7 * 86_400))
@@ -114,13 +96,10 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(key != lastWeek && key.hasPrefix("4:600:UTOWN@"))
     let nextWeek = TripReminders.step(a, soonTrip: lastWeek, soonAt: now.addingTimeInterval(-7 * 86_400), now: now)
     #expect(nextWeek == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))
-    // Another trip's are cleared first.
     let other = TripReminders.step(a, soonTrip: "4:500:COM3", soonAt: nil, now: now)
     #expect(other == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: remindAt, leaveAt: leaveAt))
-    // Its heads-up swiped away: no "Leave now" either, and nothing comes back; another trip's still does.
     #expect(TripReminders.step(a, soonTrip: key, soonAt: now.addingTimeInterval(-60), dismissed: key, now: now) == .clear)
     #expect(TripReminders.step(a, soonTrip: key, soonAt: nil, dismissed: lastWeek, now: now) != .clear)
-    // Past the leave-by, nothing to schedule.
     #expect(TripReminders.step(a, soonTrip: nil, soonAt: nil, now: leaveAt.addingTimeInterval(1)) == .clear)
 }
 
@@ -145,8 +124,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(late.body.contains("Last checked"))
 }
 
-// MARK: the widgets
-
 @Test func signedOutTheWidgetSaysSo() {
     let f = WidgetFace.of(paired: false, mode: .timetable, answer: nil, error: nil, offline: nil, now: Date())
     #expect(f.headline == "terminus")
@@ -158,7 +135,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     let f = WidgetFace.of(paired: true, mode: .timetable, answer: a, error: nil, offline: nil, now: now)
     #expect(f.headline == a.card?.leaveBy)
     #expect(f.leg?.svc == "R2")
-    // When to leave is in the headline: no countdown under it, as on Android, where "17:44" could be read as a time.
     #expect(f.sub == a.card?.journey.flatMap { JourneyText.arrive($0) })
 }
 
@@ -176,7 +152,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     if let server = WidgetTiming.serverRefreshAt(a, now: now) { #expect(next == server) }
     #expect(WidgetTiming.due(nil, fetchedAt: nil, now: now))
     #expect(!WidgetTiming.due(a, fetchedAt: now, now: now))
-    // Redrawn when "Leave by" turns into "Leave now".
     let leaveAt = try #require(a.leaveAt)
     #expect(WidgetTiming.redraws(a, now: now, until: now.addingTimeInterval(3600)).contains(leaveAt))
 }
@@ -189,20 +164,12 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(WidgetMode.effective(place, at: now, plan: a, rowShown: false, now: now) == .timetable)
 }
 
-/// The background refresh with the phone ten minutes fast: the kept answer
-/// came a day after its moments, so it's asked again the fallback's 15
-/// minutes after it came by the phone's clock, not 25.
 @Test func theBackgroundRefreshReadsBothClocksTheSameWay() throws {
     let (a, asOf) = try answer("riding")
     let fetched = asOf.addingTimeInterval(86_400)
     #expect(Background.refreshAt((a, fetched), now: fetched, skew: -600) == fetched.addingTimeInterval(15 * 60))
 }
 
-// MARK: the keychain
-
-/// Before the first unlock after a restart the keychain answers nothing:
-/// that isn't signed out, and a widget asks again in five minutes rather
-/// than never.
 @Test func aLockedKeychainIsNotSignedOut() {
     #expect(TokenStore.lookupAnswer(errSecInteractionNotAllowed, data: nil) == .locked)
     #expect(TokenStore.lookupAnswer(errSecItemNotFound, data: nil) == .none)
@@ -212,17 +179,13 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(WidgetTiming.signedOutReload(locked: false, now: now) == nil)
 }
 
-// MARK: links
-
 @Test func widgetLinksOpenTheRightPlace() {
     let key = "k1"
     #expect(Links.route(URL(string: "terminus://plan")!, key: key) == .plan)
-    // Nearby is a tab of its own (ADR 0017).
     #expect(Links.route(URL(string: "terminus://nearby")!, key: key) == .tab(.nearby))
     #expect(Links.route(URL(string: "terminus://place/home")!, key: key) == .place("home"))
     #expect(Links.route(URL(string: "terminus://to/COM3?label=COM3&k=k1")!, key: key) == .to("COM3", "COM3"))
     #expect(Links.route(URL(string: "terminus://buses")!, key: key) == .tab(.buses))
-    // Only this phone's own widgets can add a stop, and only with a short name.
     #expect(Links.route(URL(string: "terminus://to/COM3?label=COM3&k=other")!, key: key) == nil)
     let long = String(repeating: "x", count: 200)
     #expect(
@@ -237,8 +200,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(Links.route(WidgetMode.nearby.link, key: WidgetStore.linkKey) == .tab(.nearby))
 }
 
-// MARK: push
-
 @Test func pushTokensAreHexWithTheirKind() {
     let t = Api.apnsToken(Data([0x0a, 0xff, 0x00]))
     let la = Api.apnsToken(Data([0x01]), prefix: "apnsla")
@@ -249,7 +210,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(start == "apnsstart:02" + tail)
 }
 
-/// Turn off on the Live Activity turns the setting off, as Android's does, and leaves the leave alerts as they were.
 @MainActor @Test func turnOffOnTheLiveActivityTurnsItOff() async throws {
     let (live, alerts) = (TripPrefs.liveActivity, TripPrefs.leaveAlerts)
     defer { (TripPrefs.liveActivity, TripPrefs.leaveAlerts) = (live, alerts) }
@@ -264,10 +224,6 @@ private func answer(_ name: String) throws -> (NextAnswer, Date) {
     #expect(Links.route(WidgetMode.to(id: "place:home", label: "Home").link, key: "") == .place("home"))
 }
 
-// MARK: the privacy manifest
-
-/// The app reads its own UserDefaults.standard (crash reports, @AppStorage)
-/// as well as the app group's the widgets share: each needs its reason.
 @Test func thePrivacyManifestGivesEveryUserDefaultsReason() throws {
     let url = fixtures.deletingLastPathComponent().appendingPathComponent("apps/ios/Support/PrivacyInfo.xcprivacy")
     let plist = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])

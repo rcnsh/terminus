@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// What Now shows, chosen from a list in the phone's order: Next, Nearby,
-/// then your favourites. Sign out at the foot, the watch's only setting:
-/// it signs out this watch alone.
 struct TargetsList: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.dismiss) private var dismiss

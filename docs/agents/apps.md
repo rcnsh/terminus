@@ -90,6 +90,39 @@ iPhone changes reach users only through a release
     both at the stub, open the watch app, then Settings › Devices › Set up
     your watch on the phone. The simulators drop `transferUserInfo`, so
     the code goes as the phone's application context and a message.
+- iPhone scripts, in `apps/ios` (with no simulator given, each takes the
+  booted one):
+  - `scripts/run.sh [udid] [server]` builds into `build/dd` and runs the
+    app on a simulator against the dev stub (`http://localhost:8787`), or
+    `default` for the build's own server.
+  - `scripts/ui-tests.sh [udid] [suite]` starts a stub on `PORT` (8799
+    unless set), logging to `build/stub.log`, where the sign-in tests read
+    their codes (`TERMINUS_STUB_LOG`), stops it by its PID after, and
+    prints each test's result from `build/ui-tests.xcresult`. Each suite
+    sets the stub's clock and hours itself (`/__stub/reset`, `/__stub/at`,
+    `/__stub/freeze`, `/__stub/class?in=N`); `UITestSupport.swift` has the
+    helpers.
+  - `scripts/fetch-maplibre.sh` puts MapLibre's published iOS build (the
+    release the Mac's is built from) in `Vendor/`, after checking the zip
+    against the SHA-256 MapLibre publishes for SwiftPM.
+  - `scripts/sideload.sh [--ipa]` (`TEAM=`, `DEVICE=` when there are
+    several): `SIDELOAD.md`.
+  - `swift Support/make-icon.swift [beta]` draws the app icon from
+    `apps/web/public/assets/mark.svg`, opaque as the App Store wants, with
+    a BETA band for the beta as the Mac's has.
+  - `scripts/strings.py` reads every `L("…")` and
+    `LocalizedStringResource("…")`; an `L(` whose phrase isn't a literal
+    fails the check, since its Chinese could be missing unseen, so code
+    words a countdown with literal phrases rather than building one. A
+    phrase has one Chinese across all tables, and Chinese that takes the
+    blanks in another order numbers them (`%2$@ … %1$@`).
+- In `project.yml`, each target's `Support` source is the parent folder,
+  so XcodeGen makes each strings table a localised variant group; the
+  watch takes every table but the phone's `InfoPlist.strings`, and
+  `NearbyCells.swift` from the app. `Sources/Widgets/LiveIntents.swift`
+  is in the app target too (see internals.md, the iPhone app). The tests
+  read `fixtures/` where it is (`FIXTURES`). watchOS 11 is the oldest the
+  watch app supports.
 - The mac and ios jobs are skipped when a run with exactly the same inputs
   has already passed (`swift-changes` in `ci.yml` hashes them). A file
   either job reads from outside its own app needs adding to that hash.
