@@ -1,9 +1,3 @@
-/**
- * The words the server sends ready-made, so the clients show them instead of
- * building them (CLAUDE.md rule 1): a board row's times and direction, the
- * card's headline, heading and reminder time, the journey's lines, and a
- * Today row's second line. English and Chinese, from the same facts.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -47,8 +41,7 @@ test('"then" names up to two later buses, each timetable one marked', () => {
     '之后 12、约 20 分钟',
   );
   assert.equal(thenText([{ etaS: 720, quality: 'stale' }]), 'then ~12 min', 'an old reading is a guess too');
-  // Never "0": a bus under a minute away is still a minute.
-  assert.equal(thenText([{ etaS: 10, quality: 'live' }]), 'then 1 min');
+  assert.equal(thenText([{ etaS: 10, quality: 'live' }]), 'then 1 min', 'never "0": a bus under a minute away is still a minute');
 });
 
 test('"to" says where the service goes: the next stop, then its end, or that it ends here', () => {
@@ -78,21 +71,21 @@ test('the card title is the departure as a clock time, marked when it is an esti
     zh(() => titleOf({ ...place, quality: 'scheduled' }, false)),
     'A1 · 约 09:09',
   );
-  // An old reading aged to now is no more exact than a guess.
-  assert.equal(titleOf({ ...place, quality: 'stale' }, false), 'A1 · ~09:09');
-  // No time to count down to: the label as it is.
-  assert.equal(titleOf(await load('class-walk'), false), 'Walk · 3 min');
+  assert.equal(titleOf({ ...place, quality: 'stale' }, false), 'A1 · ~09:09', 'an old reading aged to now is no more exact than a guess');
+  assert.equal(titleOf(await load('class-walk'), false), 'Walk · 3 min', 'no time to count down to: the label as it is');
   assert.equal(titleOf({ ...place, quality: 'unknown' }, false), place.label);
   assert.equal(titleOf(await load('free'), false), 'No classes today');
 });
 
 test("the card's crowd word is the headline bus's, not the first of its service on the board", async () => {
   const a = await load('class-bus');
-  // An R2 pulling in now, packed, that the five-minute walk can't catch:
-  // the headline is the R2 in 6 min (departsAt), which is medium.
   const answer = { ...a, arrivals: [{ svc: 'R2', etaS: 60, crowd: 'high', plate: null, berth: null }, ...a.arrivals] };
   const card = cardFor(answer, false, { key: null, phase: 'idle' }, null, Date.parse(a.asOf));
-  assert.equal(card.crowd, 'Crowding: medium');
+  assert.equal(
+    card.crowd,
+    'Crowding: medium',
+    "the headline R2 in 6 min's crowding, not the packed one pulling in that the walk can't catch",
+  );
   assert.equal(cardFor(a, false, { key: null, phase: 'idle' }, null, Date.parse(a.asOf)).crowd, 'Crowding: medium');
 });
 
@@ -121,8 +114,7 @@ test('the reminder goes five minutes before the leave-by, only for a class with 
   assert.equal(remindAtOf({ ...cls, leave: null }, 'class', { key: null, phase: 'idle' }), null, 'no leave-by');
   assert.equal(cardFor(await load('place')).remindAt, null, 'a favourite is not a class');
   assert.equal(cardFor(await load('class-started')).remindAt, null, 'the class has started');
-  // On foot to a class there is still a time to leave by.
-  assert.ok(cardFor(await load('class-walk')).remindAt);
+  assert.ok(cardFor(await load('class-walk')).remindAt, 'on foot to a class there is still a time to leave by');
 });
 
 test('the journey comes worded: its title, the lines under each step, the backup and a one-liner', async () => {
@@ -143,30 +135,25 @@ test('the journey comes worded: its title, the lines under each step, the backup
   assert.equal(z.title, '去 GEA1000 @ UTown · 10:00 开始');
   assert.equal(z.backupText, '或现在走：在 PGP 搭 09:06 的 R2');
 
-  // A trip: no start time, and the other bus is just another way.
   const trip = cardFor(await load('place')).journey;
   assert.equal(trip.title, 'To KR MRT');
-  assert.equal(trip.backupText, 'Or D2 at 09:14 from PGP');
+  assert.equal(trip.backupText, 'Or D2 at 09:14 from PGP', 'a trip: the other bus is just another way');
   assert.equal(trip.arriveText, 'Arrive 09:10');
   assert.equal(trip.summary, 'Walk to PGP · A1 09:09');
-  // At the stop: no walk, no "by", and the one-liner is the bus there.
   const waiting = cardFor(await load('place'), false, { key: 'mrt', phase: 'waiting' }).journey;
   assert.equal(waiting.byText, null);
   assert.equal(waiting.walkText, null);
-  assert.equal(waiting.summary, 'A1 09:09 at PGP');
+  assert.equal(waiting.summary, 'A1 09:09 at PGP', 'at the stop: no walk, no "by", and the bus there');
 
-  // A room a walk from its stop: the walk on, under the stop and the arrival
-  // (as the server sent it: the walk on isn't in the answer's own fields).
   const { default: classRoom } = await import('../../../fixtures/answers/class-room.json', { with: { type: 'json' } });
   const room = classRoom.card.journey;
   assert.equal(room.walkEndText, '2 min walk');
-  assert.equal(room.arriveWhere, '2 min walk from UTown');
+  assert.equal(room.arriveWhere, '2 min walk from UTown', 'a room a walk from its stop: the walk on, under the arrival');
 
-  // On foot: the walk, and the bus it beats.
   const foot = cardFor(await load('class-walk')).journey;
   assert.equal(foot.rideText, null);
   assert.equal(foot.walkText, '3 min walk');
-  assert.equal(foot.backupText, 'D1 would be 13 min');
+  assert.equal(foot.backupText, 'D1 would be 13 min', 'on foot: the walk, and the bus it beats');
   assert.equal(foot.summary, 'arrive 09:57 · 3 min walk · D1 would be 13 min');
 });
 
@@ -235,10 +222,8 @@ test('outside a trip the glance is a clock time, never a minute count that a men
     'A1 约 09:09',
   );
   assert.equal(cardFor({ ...place, quality: 'stale' }).glance, 'A1 ~09:09');
-  // The same as the title, without the separator.
-  assert.equal(cardFor(place).glance, cardFor(place).title.replace(' · ', ' '));
-  // With no time to give, the label's own words.
-  assert.equal(cardFor({ ...place, quality: 'unknown' }).glance, 'A1 9 min'.slice(0, 12));
+  assert.equal(cardFor(place).glance, cardFor(place).title.replace(' · ', ' '), 'the title without the separator');
+  assert.equal(cardFor({ ...place, quality: 'unknown' }).glance, 'A1 9 min'.slice(0, 12), "with no time to give, the label's own words");
   assert.equal(cardFor(await load('class-walk')).glance, 'Walk 3 min');
   for (const name of ['class-bus', 'place', 'landmark', 'room', 'scheduled', 'evening-home'])
     assert.ok(cardFor(await load(name), true).glance.length <= 12, name);
@@ -249,15 +234,17 @@ test('the class card’s sooner bus says where to get off, when that isn’t the
   const plain = cardFor(cls);
   assert.equal(plain.goNow, 'Or go now: R2 at 09:06 · arrive 09:15');
   assert.equal(plain.journey.backupText, 'Or go now: R2 at 09:06 from PGP');
-  // The headline bus stops near the class's stop, not at it: both lines name where to get off.
   const off = { ...cls, bus: { ...cls.bus, off: 'Ventus', toStop: 'Ventus' } };
   const card = cardFor(off);
-  assert.equal(card.goNow, 'Or go now: R2 at 09:06, off at Ventus · arrive 09:15');
+  assert.equal(
+    card.goNow,
+    'Or go now: R2 at 09:06, off at Ventus · arrive 09:15',
+    "a bus stopping near the class's stop names where to get off",
+  );
   assert.equal(card.journey.backupText, 'Or go now: R2 at 09:06 from PGP, off at Ventus');
   const z = zh(() => cardFor(off));
   assert.equal(z.goNow, '或现在走：09:06 的 R2，在 Ventus 下车 · 09:15 到达');
   assert.equal(z.journey.backupText, '或现在走：在 PGP 搭 09:06 的 R2，在 Ventus 下车');
-  // With a change of bus, `off` is where the second bus drops you: not said of the first.
   const change = {
     svc: 'D2',
     from: 'Kent Vale',
@@ -270,6 +257,10 @@ test('the class card’s sooner bus says where to get off, when that isn’t the
     estimated: false,
   };
   const twoBuses = cardFor({ ...off, bus: { ...off.bus, change } });
-  assert.equal(twoBuses.goNow, 'Or go now: R2 at 09:06 · arrive 09:15');
+  assert.equal(
+    twoBuses.goNow,
+    'Or go now: R2 at 09:06 · arrive 09:15',
+    'with a change, off is where the second bus drops you: not said of the first',
+  );
   assert.equal(twoBuses.journey.backupText, 'Or go now: R2 at 09:06 from PGP');
 });

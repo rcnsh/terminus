@@ -3,9 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// Chinese: every string the app writes has a translation with the
-/// same blanks, none is left in the views, and the server's Chinese answers
-/// read like its English ones.
 private let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
 private func chinese() throws -> [String: String] {
@@ -20,7 +17,6 @@ private func sources() throws -> [(String, String)] {
     }
 }
 
-/// The string literals in `text` matched by `pattern`'s first group, unescaped.
 private func literals(_ pattern: String, in text: String) throws -> [String] {
     let re = try NSRegularExpression(pattern: pattern)
     return re.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { m in
@@ -53,7 +49,6 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
     }
 }
 
-/// A Text("Some words") in a view would be English in Chinese too.
 @Test func noWordsAreLeftInTheViews() throws {
     let allowed: Set = ["terminus", "termi", "nus", "you@u.nus.edu", "ABC 123", "https://nusmods.com/timetable/sem-1/share?…"]
     var found: [String] = []
@@ -68,9 +63,6 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
     #expect(found == [])
 }
 
-/// The API's Chinese answers (fixtures/answers/zh, every
-/// /api/me/next one) are in Chinese. Some headlines are only a bus and a time,
-/// so the line under it counts too.
 @Test(arguments: goldenNames().filter { $0.hasPrefix("zh/") })
 func chineseAnswersAreInChinese(name: String) throws {
     let url = root.appendingPathComponent("../../fixtures/answers/\(name).json").standardized

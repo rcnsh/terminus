@@ -3,9 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// The map window's data, from replies shaped like the API's (see its /api/campus
-/// and /api/buses tests). The same cases as the phone's MapDataTest.
-
 private let campusJson = Data(
     """
     {"stops": [
@@ -32,7 +29,6 @@ private func near(_ a: Double?, _ b: Double, _ tolerance: Double = 1e-9) -> Bool
     return abs(a - b) <= tolerance
 }
 
-/// A bus `m` metres along `path`.
 private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Double = 0) -> LiveBus {
     let p = path.point(at: m)
     return LiveBus(id: id, lat: p.lat, lon: p.lon, heading: heading, moving: true, along: m)
@@ -108,7 +104,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func busesSlideAlongTheirLineRoundACorner() throws {
-    // East, then north: an L with its corner at (103.001, 1.0).
     let path = RoutePath([[103.0, 1.0], [103.001, 1.0], [103.001, 1.001]])
     let leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
     var s = Slides(duration: { _ in 1 })
@@ -123,12 +118,10 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let end = try #require(s.at(1).first { $0.id == "b1" })
     #expect(near(end.along, leg + 50))
     #expect(near(end.heading, 0, 1e-6), "pointing along the road")
-    // Eased: slower at the ends than in the middle.
     #expect(try #require(s.at(0.1).first { $0.id == "b1" }?.along) - (leg - 50) < 10)
 }
 
 @Test func busesSlideBesideTheDotAtAStop() throws {
-    // A straight line east, about 1.1 km; a stop's dot 10 m north of it at 500 m.
     let path = RoutePath([[103.0, 1.0], [103.01, 1.0]])
     var between = bus(path, 300, heading: 90)
     between.nextStop = "COM 3"
@@ -146,20 +139,16 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let there = s.at(3)[0]
     #expect(near(there.lat, atStop.lat, 1e-12), "at the dot")
     #expect(there.ox == -LiveBus.atStopSide)
-    // Behind where it's drawn (the other side of the road, or put right): it jumps.
     s.update([between], path: path, now: 4)
     #expect(near(s.at(4)[0].along, 300))
     #expect(!s.moving(4))
-    // Reduce motion: it jumps.
     s.update([atStop], path: path, now: 5, still: true)
     #expect(near(s.at(5)[0].along, 500))
-    // No answer for 20 s (the Mac slept): it jumps.
     var later = atStop
     later.along = 700
     later.at = nil
     s.update([later], path: path, now: 25)
     #expect(near(s.at(25)[0].along, 700))
-    // A long way on (over 1.5 km), or on a line kept from before the route changed: it jumps.
     var far = atStop
     far.along = 2_000
     #expect(path.ahead(from: between, to: far) == nil)
@@ -168,9 +157,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() throws {
-    // Like A1 at KRB: out east about 1.1 km, then back west on the other
-    // side of the road, ending some 40 m from where it started. The loop
-    // comes from /api/campus, not from where the line ends.
     let campus = try #require(
         CampusMap.parse(
             Data(
@@ -191,7 +177,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     s.update([start], path: loop, now: 5)
     #expect(s.moving(5.5))
     #expect(near(s.at(5.5)[0].along, 5, 1e-6), "half way, at its start")
-    // A line that doesn't loop: back at the start, it jumps.
     let oneWay = try #require(campus.routes["K"]?.path)
     #expect(!oneWay.closed)
     #expect(oneWay.ahead(from: bus(oneWay, oneWay.total - 20), to: bus(oneWay, 30)) == nil)
@@ -244,7 +229,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func aClickedBusShowsTheStretchItIsOn() throws {
-    // East, then north: an L with its corner at (103.001, 1.0).
     let path = RoutePath([[103.0, 1.0], [103.001, 1.0], [103.001, 1.001]])
     let leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
     let line = try #require(path.slice(leg - 20, leg + 30))
@@ -317,8 +301,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(s.at(5).map(\.id) == ids.reversed(), "the latest answer's order")
 }
 
-/// The map plans its slides on every answer, the same or not: a bus that
-/// stood still for a while still slides when it moves off.
 @Test func aBusThatStoodStillStillSlides() {
     let path = RoutePath([[103.0, 1.0], [103.01, 1.0]])
     var s = Slides(duration: { _ in 1 })
@@ -354,25 +336,20 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(!MapFiles.isPMTiles(Data("PMTiles".utf8), size: 4_000_000), "no version byte")
 }
 
-/// Web Mercator's y, a fraction of the world from the top.
 private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 360)) / .pi) / 2 }
 
 @Test func panLimitKeepsTheWindowOnTheMap() {
     let e = PanLimit.extent
-    // 400 by 800 points: tall, so its height fills the map first.
     let min = PanLimit.minZoom(width: 400, height: 800)
     #expect(abs(512 * pow(2, min) * (merc(e[1]) - merc(e[3])) - 800) < 0.01)
-    // At zoom 17 the centre stays half a window in from each edge.
     let c = PanLimit.centre(width: 400, height: 800, zoom: 17)
     let half: Double = 200 / (512 * pow(2.0, 17.0)) * 360
     #expect(abs(c[0] - (e[0] + half)) < 1e-9)
     #expect(abs(c[2] - (e[2] - half)) < 1e-9)
     #expect(c[1] > e[1] && c[3] < e[3] && c[1] < c[3])
-    // Zoomed right out: mid-map up and down, still free side to side.
     let out = PanLimit.centre(width: 400, height: 800, zoom: min)
     #expect(abs(out[1] - out[3]) < 1e-9)
     #expect(out[0] < out[2])
-    // Wider than the map both ways (a zoom it can't reach): its middle.
     let tiny = PanLimit.centre(width: 400, height: 800, zoom: 10)
     #expect(abs(tiny[0] - (e[0] + e[2]) / 2) < 1e-9 && tiny[0] == tiny[2])
 }

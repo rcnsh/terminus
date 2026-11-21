@@ -8,7 +8,6 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same PR replaces its run; main keeps every run.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
@@ -19,15 +18,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The version comes from packageManager in package.json.
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Tests and typecheck, then a dry-run bundle: catches a module workerd
-      # would refuse to load, which the Node tests cannot see.
       - run: pnpm check
       - run: pnpm exec cf deploy --dry-run
         working-directory: apps/api
@@ -37,7 +33,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The version comes from packageManager in package.json.
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -45,7 +40,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      # Oxfmt, by .oxfmtrc.json: JS, TS and JSON.
       - run: pnpm format:check
 
   web:
@@ -56,7 +50,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
-      # No build step for the site: a syntax error would only show in a browser.
       - run: for f in $(find apps/web/public -name '*.js'); do node --check "$f" || exit 1; done
 
   android:
@@ -71,17 +64,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
-      # Lint and the JVM unit tests (which parse fixtures/answers).
-      # ktfmtCheck: the Kotlin is formatted (ktfmt, by apps/android/.editorconfig).
       - run: ./gradlew :app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin --console=plain
         working-directory: apps/android
 
-  # What release.sh and release-beta.sh ship: R8 and resource shrinking run
-  # only here, so a missing keep rule would otherwise first show in a released
-  # app. A job per flavour, beside the checks above: the release builds share
-  # no compiled code with them or each other, so running them one after
-  # another only added up the minutes. With no keystore on the runner, both
-  # come out unsigned; the beta takes the default version without -PbetaVersion.
   android-release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -101,11 +86,6 @@ jobs:
       - run: ./gradlew :app:assemble${{ matrix.flavour }}Release --console=plain
         working-directory: apps/android
 
-  # Gradle's build cache spares the android jobs a rebuild when nothing they
-  # read changed. Swift has no such cache, so the mac and ios jobs do it a
-  # level up: each is keyed on a hash of every file it builds, tests or
-  # checks, and skipped when a run with that key has passed. This job runs on
-  # Linux, so a skipped job never starts a macOS runner.
   swift-changes:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -116,11 +96,9 @@ jobs:
       ios-passed: ${{ steps.ios.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The mac job's format check covers every Swift file, the iPhone's too.
       - id: keys
         run: |
           echo "mac=mac-passed-${{ hashFiles('apps/macos/**', '**/*.swift', '.swift-format', 'scripts/format-swift.sh', 'fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
-          # The watch app's sources are under apps/ios (Sources/Watch, WatchTests, WatchUITests, Support/Watch).
           echo "ios=ios-passed-${{ hashFiles('apps/ios/**', 'apps/ios/Sources/Watch/**', 'apps/ios/WatchTests/**', 'fixtures/**', '.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
       - id: mac
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -142,12 +120,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # MapLibre is a committed binary, linked into the app: a changed zip
-      # must come with a changed hash, in the same reviewed diff.
       - run: shasum -a 256 -c MapLibre.xcframework.zip.sha256
         working-directory: apps/macos/Vendor
-      # And it links only macOS's own libraries: one from Homebrew loads on
-      # the Mac that built it and nowhere else (scripts/vendor/vendor-maplibre-mac.sh).
       - run: |
           dir=$(mktemp -d)
           ditto -x -k MapLibre.xcframework.zip "$dir"
@@ -155,17 +129,11 @@ jobs:
           otool -L "$bin"
           ! otool -L "$bin" | grep -v ':$' | awk '{ print $1 }' | grep -vE '^(/System/|/usr/lib/|@rpath/)'
         working-directory: apps/macos/Vendor
-      # The Swift is formatted (swift-format, by .swift-format).
       - run: scripts/format-swift.sh --check
-      # Exactly the versions in Package.resolved: a package that moved its
-      # tag, or a stale lock file, fails here rather than resolving afresh.
       - run: swift build --force-resolved-versions && swift test --force-resolved-versions
         working-directory: apps/macos
-      # The optimised build that build.sh (and so a release) makes, with its
-      # flags: the debug build can pass where it fails.
       - run: swift build -c release --arch arm64 --force-resolved-versions
         working-directory: apps/macos
-      # Every step above passed: this job's inputs need no second run.
       - run: touch .ci-passed
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -179,43 +147,29 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Every phrase the app writes has its Chinese.
       - run: python3 -I scripts/strings.py --check
         working-directory: apps/ios
-      # MapLibre's published iOS build, checked against its SHA-256 before it's unpacked.
       - run: scripts/fetch-maplibre.sh
         working-directory: apps/ios
       - run: brew install xcodegen && xcodegen generate
         working-directory: apps/ios
-      # The unit tests on the newest iPhone simulator the runner has (the UI
-      # tests need the dev stub and a person looking at their screenshots).
-      # Signed ad hoc, which needs no certificate: an unsigned app has no
-      # entitlements, so the simulator gives it no keychain at all.
       - name: unit tests
         working-directory: apps/ios
         run: |
           SIM=$(xcrun simctl list devices available -j | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k in sorted(d, reverse=True) if "iOS" in k for x in d[k] if x["name"].startswith("iPhone")))')
           xcodebuild test -project terminus.xcodeproj -scheme Terminus -destination "id=$SIM" -only-testing:TerminusTests CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -quiet
-      # The watch app's unit tests on the newest Apple Watch simulator the
-      # runner has (its UI test, like the iPhone's, needs the dev stub).
       - name: watch unit tests
         working-directory: apps/ios
         run: |
           WATCH=$(xcrun simctl list devices available -j | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k in sorted(d, reverse=True) if "watchOS" in k for x in d[k] if x["name"].startswith("Apple Watch")))')
           xcodebuild test -project terminus.xcodeproj -scheme "Terminus Watch" -destination "id=$WATCH" -only-testing:TerminusWatchTests CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -quiet
-      # The optimised build a release would make, for a device, unsigned:
-      # the watch app and its complications are built inside it.
       - run: xcodebuild build -project terminus.xcodeproj -scheme Terminus -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
         working-directory: apps/ios
-      # Every step above passed: this job's inputs need no second run.
       - run: touch .ci-passed
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-passed
           key: ${{ needs.swift-changes.outputs.ios-key }}
-      # What Xcode leaves running (the simulator, ibtoold), stopped here: left
-      # to the runner's own clean-up, the job can sit unfinished for 40 minutes
-      # after its last step.
       - name: stop the simulator and Xcode's helpers
         if: always()
         run: |

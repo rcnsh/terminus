@@ -41,8 +41,6 @@ def escape_text(s: str) -> str:
     def plain(p: str) -> str:
         p = p.replace('\\', '\\\\').replace('[', '\\[').replace(']', '\\]')
         return p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    # re.split puts the `code` spans it matched at the odd places; a lone
-    # backtick is plain text, escaped like the rest.
     parts = re.split(r'(`[^`]*`)', s)
     return ''.join(p if i % 2 else plain(p) for i, p in enumerate(parts))
 
@@ -90,15 +88,11 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
     else:
         changes = []
         for s in git('log', '--no-merges', '--reverse', '--format=%s', f'{prev}..{tag}').splitlines():
-            # Conventional Commits: "feat(map): stops easier to tap" reads as "Stops easier to tap".
             s = re.sub(r'^[a-z]+(\([^)]*\))?!?: ', '', s)
             if re.fullmatch(r'(terminus|nusbus) \d+\.\d+\.\d+(-[a-z]+(\.\d+)?)?', s, re.I):
-                continue  # the version bump itself
+                continue
             if s.startswith('[ImgBot]') or s == 'optimize images':
                 continue
-            # The first sentence of each commit subject ("e.g." and "i.e." end
-            # none), found before it's capitalised, so a subject starting
-            # "e.g." is still one.
             s = re.split(r'(?<=[a-z0-9)`"])(?<!\be\.g)(?<!\bi\.e)\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.')
             changes.append('- ' + escape_text(s[:1].upper() + s[1:]))
         if changes:
@@ -109,7 +103,6 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
                 out.append(f'## What changed\n\n{body}\n')
 
     a, m = os.path.basename(apk), os.path.basename(mac)
-    # One APK per CPU type beside the main (arm64) one.
     here = os.path.dirname(apk)
     others = [(kind, os.path.basename(p)) for kind, p in (
         ('older 32-bit phones', apk.replace('.apk', '-armv7.apk')),

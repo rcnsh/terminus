@@ -1,8 +1,5 @@
 import Foundation
 
-/// The profile as the server keeps it (apps/api's profile.ts), edited in
-/// place and sent back whole with PUT /api/me/profile. Kept as JSON so fields
-/// this version doesn't know about survive a save, as on Android (Profile.kt).
 struct ProfileDoc: @unchecked Sendable {
     var json: [String: Any]
 
@@ -15,7 +12,6 @@ struct ProfileDoc: @unchecked Sendable {
 
     var data: Data { (try? JSONSerialization.data(withJSONObject: json)) ?? Data("{}".utf8) }
 
-    /// What the server allows (its `limits`, which it ignores when sent back); today's values from an older server.
     struct Limits: Equatable {
         var label = 60
         var places = 12
@@ -38,24 +34,19 @@ struct ProfileDoc: @unchecked Sendable {
         return l
     }
 
-    // MARK: home and the day
-
     var homeStops: [String] { (json["home"] as? [String: Any])?["stops"] as? [String] ?? [] }
 
-    /// At most three, each once; none is no home.
     mutating func setHomeStops(_ stops: [String]) {
         var unique: [String] = []
         for s in stops where !unique.contains(s) { unique.append(s) }
         json["home"] = unique.isEmpty ? NSNull() : ["stops": Array(unique.prefix(3))]
     }
 
-    /// The account's language: auto, en or zh.
     var lang: String {
         get { json["lang"] as? String ?? "auto" }
         set { json["lang"] = newValue }
     }
 
-    /// The account's times: auto (each device's own), 12 or 24.
     var clock: String {
         get { json["clock"] as? String ?? "auto" }
         set { json["clock"] = newValue }
@@ -66,13 +57,11 @@ struct ProfileDoc: @unchecked Sendable {
         set { json["homeWalkMin"] = min(max(newValue, limits.homeWalkMin.lowerBound), limits.homeWalkMin.upperBound) }
     }
 
-    /// slow, normal or fast.
     var walkPace: String {
         get { json["walkPace"] as? String ?? "normal" }
         set { json["walkPace"] = newValue }
     }
 
-    /// A minute on foot counts for more than one at the stop when choosing; on unless turned off.
     var preferBus: Bool {
         get { json["preferBus"] as? Bool ?? true }
         set { json["preferBus"] = newValue }
@@ -83,13 +72,11 @@ struct ProfileDoc: @unchecked Sendable {
         set { json["fullBusMargin"] = newValue }
     }
 
-    /// Count the public buses (95, 151, ...) too. Off until asked for: they have a fare.
     var publicBuses: Bool {
         get { json["publicBuses"] as? Bool ?? false }
         set { json["publicBuses"] = newValue }
     }
 
-    /// Go home in gaps longer than this, in half hours from 0.5 to 12.
     var gapHours: Double {
         get { (json["gapHours"] as? NSNumber)?.doubleValue ?? 2 }
         set { json["gapHours"] = min(max(newValue, 0.5), 12) }
@@ -105,17 +92,11 @@ struct ProfileDoc: @unchecked Sendable {
         set { json["dayEndMin"] = newValue }
     }
 
-    /// The NUSMods link last imported.
     var share: String? { (json["share"] as? String).flatMap { $0.isEmpty ? nil : $0 } }
 
-    // MARK: classes
-
-    /// Imported from NUSMods.
     var trips: [ProfileTrip] { list("trips").map(ProfileTrip.init) }
-    /// Entered by hand; they survive a re-import.
     var manual: [ProfileTrip] { list("manual").map(ProfileTrip.init) }
 
-    /// Every class, imported or by hand, Monday first and by time; each knows its place in its own list.
     var classes: [ClassEntry] {
         let all =
             trips.enumerated().map { ClassEntry(imported: true, index: $0.offset, trip: $0.element) }
@@ -131,7 +112,6 @@ struct ProfileDoc: @unchecked Sendable {
         json["manual"] = list("manual") + [t.json]
     }
 
-    /// Sends one class to another stop, by its place in its own list.
     mutating func setClassStop(_ c: ClassEntry, to: String) {
         let key = c.imported ? "trips" : "manual"
         var l = list(key)
@@ -148,14 +128,8 @@ struct ProfileDoc: @unchecked Sendable {
         json[key] = l
     }
 
-    /// A change made to a class that isn't in this profile as it was seen:
-    /// another device removed or changed it. Set by [setClassStop] and
-    /// [removeClass] rather than changing a neighbour; never saved.
     private(set) var missed = false
 
-    /// Where [c] is in [l]: at its index if that's still it, else wherever it
-    /// moved to (another device removed one before it). The same class is the
-    /// same day, times, name and room; its stop is what changes.
     private mutating func find(_ c: ClassEntry, in l: [[String: Any]]) -> Int? {
         func same(_ o: [String: Any]) -> Bool {
             var t = ProfileTrip(o)
@@ -167,8 +141,6 @@ struct ProfileDoc: @unchecked Sendable {
         missed = true
         return nil
     }
-
-    // MARK: favourites
 
     var places: [SavedPlace] {
         list("places").compactMap { p in
@@ -183,7 +155,6 @@ struct ProfileDoc: @unchecked Sendable {
         json["places"] = list("places") + [p]
     }
 
-    /// Takes a favourite off, with its usual times; what's returned puts them back ([restorePlace]).
     mutating func removePlace(key: String) -> RemovedPlace? {
         let all = list("places")
         guard let i = all.firstIndex(where: { $0["key"] as? String == key }) else { return nil }
@@ -195,8 +166,6 @@ struct ProfileDoc: @unchecked Sendable {
         return RemovedPlace(index: i, place: all[i], usual: usual.filter { $0["place"] as? String == key })
     }
 
-    /// Undo for [removePlace]: back where it was, with its usual times. Not
-    /// when the list is full, or the stop is a favourite again.
     mutating func restorePlace(_ r: RemovedPlace) {
         let now = places
         let to = r.place["to"] as? String
@@ -208,7 +177,6 @@ struct ProfileDoc: @unchecked Sendable {
         if !r.usual.isEmpty { json["usual"] = list("usual") + r.usual }
     }
 
-    /// Favourites at a usual time each week: each a trip that day, like a class.
     var usual: [UsualTime] {
         list("usual").compactMap { u in
             guard let place = u["place"] as? String, let day = u["day"] as? Int, let at = u["atMin"] as? Int else { return nil }
@@ -225,7 +193,6 @@ struct ProfileDoc: @unchecked Sendable {
     private func list(_ key: String) -> [[String: Any]] { json[key] as? [[String: Any]] ?? [] }
 }
 
-/// A class or commitment. `day`: 0 is Sunday. Minutes past midnight, Singapore time.
 struct ProfileTrip: Hashable, Sendable {
     var day: Int
     var arriveByMin: Int
@@ -259,7 +226,6 @@ struct ProfileTrip: Hashable, Sendable {
     }
 }
 
-/// One class in the list, and where it is in the profile (imported or by hand, and its index there).
 struct ClassEntry: Identifiable, Hashable, Sendable {
     let imported: Bool
     let index: Int
@@ -274,14 +240,12 @@ struct SavedPlace: Hashable, Identifiable, Sendable {
     var id: String { key }
 }
 
-/// A favourite at its usual time each week: day 0 is Sunday, minutes past midnight.
 struct UsualTime: Hashable, Sendable {
     let place: String
     let day: Int
     let atMin: Int
 }
 
-/// A favourite just removed, kept for Undo: where it was in the list, and its usual times.
 struct RemovedPlace: @unchecked Sendable {
     let index: Int
     let place: [String: Any]
@@ -289,9 +253,6 @@ struct RemovedPlace: @unchecked Sendable {
     var label: String { place["label"] as? String ?? "" }
 }
 
-/// At most `limit` UTF-16 units, the length the server checks (JavaScript's),
-/// as the web and Android count it; whole characters only, so an emoji is
-/// kept or left out, never halved.
 func clippedUTF16(_ s: String, _ limit: Int) -> String {
     guard s.utf16.count > limit else { return s }
     var n = 0
@@ -302,7 +263,6 @@ func clippedUTF16(_ s: String, _ limit: Int) -> String {
         })
 }
 
-/// "gym", "gym-2": the same rule as the account page and Android.
 func placeKey(_ label: String, taken: [String]) -> String {
     let slug = label.lowercased()
         .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
@@ -318,7 +278,6 @@ func placeKey(_ label: String, taken: [String]) -> String {
     return key
 }
 
-/// Monday first, as a week reads; the profile's days are 0 for Sunday.
 let mondayFirst = [1, 2, 3, 4, 5, 6, 0]
 
 private func weekOrder(_ day: Int) -> Int { mondayFirst.firstIndex(of: day) ?? 7 }

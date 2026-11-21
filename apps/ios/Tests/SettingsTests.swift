@@ -2,8 +2,6 @@ import XCTest
 
 @testable import Terminus
 
-/// Settings' editing of the profile: what's sent back keeps what this
-/// version doesn't know, and the rules match Android's (Profile.kt).
 final class SettingsProfileTests: XCTestCase {
     private func doc(_ json: String) -> ProfileDoc {
         ProfileDoc(data: Data(json.utf8))!
@@ -76,17 +74,13 @@ final class SettingsProfileTests: XCTestCase {
     }
 
     func testLabelsAreCutAsTheServerCountsThem() {
-        // The server counts UTF-16 units: an emoji is two, so 23 letters and
-        // one would be 25, over the 24 a favourite's name may have, and refused.
         var p = doc(#"{"limits":{"placeLabel":24}}"#)
         p.addPlace(label: String(repeating: "b", count: 23) + "🚌", to: "KR-MRT")
         XCTAssertEqual(p.places.map(\.label), [String(repeating: "b", count: 23)])
 
-        // A class's name: 59 letters and an emoji is 61 of the 60.
         XCTAssertEqual(clippedUTF16(String(repeating: "a", count: 59) + "🚌", 60), String(repeating: "a", count: 59))
         XCTAssertEqual(clippedUTF16("ab🚌", 4), "ab🚌")
         XCTAssertEqual(clippedUTF16("Gym", 60), "Gym")
-        // A flag is one character of four units: whole or not at all.
         XCTAssertEqual(clippedUTF16("SG 🇸🇬", 5), "SG ")
     }
 
@@ -104,14 +98,11 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertFalse(p.missed)
     }
 
-    /// A change made again on a newer profile (after a 412) finds its class
-    /// where it moved to, and never changes the one now at its old place.
     func testClassChangesFollowTheClassNotItsPlace() {
         let seen = doc(
             #"{"trips":[{"day":1,"arriveByMin":500,"to":"A","label":"First"},{"day":1,"arriveByMin":600,"to":"B","label":"Second"},{"day":1,"arriveByMin":700,"to":"C","label":"Third"}]}"#
         )
         let second = seen.classes[1]
-        // Another device removed the first class meanwhile.
         var newer = doc(
             #"{"trips":[{"day":1,"arriveByMin":600,"to":"B","label":"Second"},{"day":1,"arriveByMin":700,"to":"C","label":"Third"}]}"#)
         newer.setClassStop(second, to: "Z")
@@ -159,7 +150,6 @@ final class SettingsProfileTests: XCTestCase {
         XCTAssertNotNil(pairingQR("https://terminus.rcn.sh/pair?code=ABC123"))
     }
 
-    /// The card styles' sample is the server's answer shape, so Now's card can draw it.
     @MainActor func testCardStyleSampleIsATripByBus() throws {
         let now = Date()
         let a = try XCTUnwrap(SettingsCardSample.answer(now))
@@ -172,21 +162,17 @@ final class SettingsProfileTests: XCTestCase {
     }
 }
 
-/// The where picker's results: a stop and a building may share a code.
 final class WherePickerTests: XCTestCase {
     func testAStopAndABuildingWithOneCodeAreTwoResults() {
         let stop = WhereItem(code: "COM3", label: "COM3", kind: "stop", detail: nil, goesTo: "COM3")
         let building = WhereItem(code: "COM3", label: "COM3", kind: "building", detail: nil, goesTo: "COM3")
         XCTAssertNotEqual(stop.id, building.id)
-        // A class at the COM3 stop: the stop is that row, the building isn't.
         let row = WhereItem(code: "COM3", label: "COM3", kind: "timetable", detail: "CS2030", goesTo: "COM3")
         XCTAssertTrue(stop.isPlace(of: row))
         XCTAssertFalse(building.isPlace(of: row))
     }
 }
 
-/// Settings › Devices names a watch from the server's `watch`, not its
-/// platform (which is "ios", as for an iPhone).
 final class SettingsDevicesTests: XCTestCase {
     private func device(_ json: String) -> Device {
         try! JSONDecoder().decode(Device.self, from: Data(json.utf8))
@@ -195,7 +181,6 @@ final class SettingsDevicesTests: XCTestCase {
     func testAWatchIsNamedAWatch() {
         XCTAssertEqual(settingsPlatformName(device(#"{"id":"a","platform":"ios","watch":true}"#)), "Apple Watch")
         XCTAssertEqual(settingsPlatformName(device(#"{"id":"b","platform":"ios","watch":false}"#)), "iPhone")
-        // An older server sends no `watch`.
         XCTAssertEqual(settingsPlatformName(device(#"{"id":"c","platform":"ios"}"#)), "iPhone")
         XCTAssertEqual(settingsPlatformName(device(#"{"id":"d","platform":"android","watch":false}"#)), "Android")
     }

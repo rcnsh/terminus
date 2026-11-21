@@ -16,8 +16,6 @@ import {
 import { appVersion, getSession } from '../src/feeds/auth.ts';
 import { checkUpstream, readUpstream } from '../src/ops/monitor.ts';
 
-// The shape of the real page, not a copy of it: on Play the app's version
-// sits before its SDK levels, and a review's version comes earlier.
 const playPage = (v) => `<script>AF_initDataCallback({data:[["review",null,"2.58.1",null],[[["${v}"]],[[[35]],[[[23,"6.0"]]]]]]})</script>`;
 
 const V = (name, code) => ({ name, code });
@@ -49,10 +47,6 @@ test('candidates: likeliest first, only newer than what we send', () => {
   assert.deepEqual(s(candidates(cur, { refusal: [V('2.61.0', 150)], play: '2.60.0' }))[0], '2.61.0_150', 'the refusal wins');
 });
 
-/**
- * Fake NUS plus the Play page. NUS accepts only `accepts` (null: nothing);
- * the refusal comes from the bus proxy, the way it would on the real feed.
- */
 function world({ accepts, play = '2.60.0' } = {}) {
   const hits = { play: 0, mint: 0, proxy: 0 };
   const versionsTried = [];

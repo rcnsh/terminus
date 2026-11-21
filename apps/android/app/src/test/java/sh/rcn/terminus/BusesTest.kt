@@ -8,7 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.ui.roadWords
 
-/** The Stops tab's data, from replies shaped like the API's (/api/arrivals, /api/me/nearby, /api/line). */
 class BusesTest {
     private val arrivals =
         JSONObject(
@@ -85,10 +84,8 @@ class BusesTest {
     fun aFreshBoardIsShownAsItCame() {
         val got = 1_000_000L
         val b = Board.parse(arrivals).copy(gotMs = got)
-        // Within two refreshes, as the server counted it: not counted again here.
         assertEquals(b, b.aged(got + BusTimes.OLD_MS))
         assertEquals("live", b.aged(got + 20_000).rows[0].quality)
-        // Not known when it came (an older caller): as it is.
         val unknown = Board.parse(arrivals)
         assertEquals(unknown, unknown.aged(got + 600_000))
     }
@@ -98,19 +95,15 @@ class BusesTest {
         val got = 1_000_000L
         val b = Board.parse(arrivals).copy(gotMs = got).aged(got + 40_000)
         val k = b.rows[0]
-        // K was 40 s away with buses 560 and 1260 s away: 40 s on, exactly 40 s less.
         assertEquals(0, k.etaS)
         assertEquals("stale", k.quality)
         assertNull("the server's words from then", k.eta)
         assertNull(k.laterText)
         assertEquals(listOf(520, 1220), k.later.map { it.etaS })
-        // The later buses too: a live one is no longer live, a timetabled one stays so.
         assertEquals(listOf("stale", "scheduled"), k.later.map { it.quality })
-        // A timetabled time stays timetabled, counted down too.
         val p = b.rows[2]
         assertEquals(260, p.etaS)
         assertEquals("scheduled", p.quality)
-        // No time to count: as it was.
         assertNull(b.rows[1].etaS)
         assertEquals("scheduled", b.rows[1].quality)
     }
@@ -119,12 +112,9 @@ class BusesTest {
     fun busesLongPastHaveNoTime() {
         val got = 1_000_000L
         val k = Board.parse(arrivals).copy(gotMs = got).aged(got + 101_000).rows[0]
-        // 40 s away 101 s ago: over a minute past, so no time; still not live.
         assertNull(k.etaS)
         assertEquals("stale", k.quality)
-        // 99 s ago, a minute past at most: "Arriving" at 0 rather than nothing.
         assertEquals(0, Board.parse(arrivals).copy(gotMs = got).aged(got + 99_000).rows[0].etaS)
-        // Later buses gone by are dropped.
         val far = Board.parse(arrivals).copy(gotMs = got).aged(got + 600_000).rows[0]
         assertEquals(listOf(660), far.later.map { it.etaS })
     }
@@ -168,7 +158,6 @@ class BusesTest {
                 BoardRow("D2", 60, "live"),
             )
         assertEquals(listOf("R1", "D1"), BusTimes.endingSoon(rows, now).map { it.first })
-        // A service on two rows says the sooner of its ends.
         assertEquals(now + 75 * 60_000, BusTimes.endingSoon(rows, now).last().second)
     }
 
@@ -219,7 +208,6 @@ class BusesTest {
                 is LineItem.Between -> "~${it.after}"
             }
         }
-        // The bus after the last stop is drawn after it.
         assertEquals(listOf("COM3", "~0", "IT", "YIH-OPP*!", "UTOWN", "~3"), shape)
     }
 
@@ -244,7 +232,6 @@ class BusesTest {
         val full = (1..8).map { "S$it" }
         assertEquals("a ninth isn't added", full, Pins.toggle(full, "S9"))
         assertEquals(full - "S3", Pins.toggle(full, "S3"))
-        // Made again on a profile where another device pinned it too: still pinned, not toggled off.
         assertEquals(listOf("A", "B"), Pins.set(listOf("A", "B"), "B", on = true))
         assertEquals(listOf("A"), Pins.set(listOf("A"), "B", on = false))
     }
@@ -252,7 +239,6 @@ class BusesTest {
     @Test
     fun theHomeShowsEachPinnedStopOnceUpToTheLimit() {
         assertEquals(listOf("CLB", "YIH", "COM3"), Pins.shown(listOf("CLB", "YIH", "CLB", "COM3")))
-        // A profile saved with more than the limit (an older one, a smaller limit) asks for no more boards than the limit.
         val many = (1..10).map { "S$it" }
         assertEquals(many.take(8), Pins.shown(many))
         assertEquals(many.take(2), Pins.shown(many, max = 2))
@@ -291,14 +277,12 @@ class BusesTest {
         assertEquals(listOf("B", "C", "D"), PinPages.around(pins, 2))
         assertEquals("on the last page, the last stop", listOf("D"), PinPages.around(pins, 4))
         assertEquals(emptyList<String>(), PinPages.around(emptyList(), 0))
-        // A swipe back and forth doesn't ask again for a stop asked for 4 s ago, only for one asked 12 s ago or never.
         val asked = mapOf("A" to 96_000L, "B" to 88_000L)
         assertEquals(listOf("B", "C"), PinPages.due(listOf("A", "B", "C", "C"), { asked[it] }, 100_000L, 10_000L))
     }
 
     @Test
     fun theStopOpenBesideTheHomeIsLeftToItsPage() {
-        // Wide, the stop whose page is open is asked for by the page; the home's pinned refresh asks only for the rest.
         assertEquals(listOf("A", "C"), PinPages.due(listOf("A", "B", "C"), { null }, 100_000L, 10_000L, open = "B"))
         assertEquals(listOf("A", "B", "C"), PinPages.due(listOf("A", "B", "C"), { null }, 100_000L, 10_000L, open = null))
     }
@@ -367,14 +351,11 @@ class BusesTest {
                 null,
                 gotMs = atMs,
             )
-        // A minute on: the card's own live "then" isn't carried (it's old); its guess is a minute nearer.
         val one = card.withBoard(board(60_000L, 240, 840))
         assertEquals(listOf(LaterBus(840, "live"), LaterBus(1_440, "scheduled")), one.stop.board[0].later)
         assertEquals("its own answer is still when it was got", 0L, one.answeredMs)
-        // Merged again 15 s later: counted down from the last merge, not frozen at the first.
         val two = one.withBoard(board(75_000L, 225, 825))
         assertEquals(listOf(LaterBus(825, "live"), LaterBus(1_425, "scheduled")), two.stop.board[0].later)
-        // Once the board shows as many buses as the card had, the guess goes: counted, whatever the times.
         val three =
             two.withBoard(
                 Board(
@@ -388,9 +369,7 @@ class BusesTest {
                 )
             )
         assertEquals(listOf(LaterBus(810, "live"), LaterBus(1_380, "live")), three.stop.board[0].later)
-        // And a guess already due is dropped.
         assertEquals(emptyList<LaterBus>(), PinnedStop.guessesAfter(listOf(LaterBus(30, "scheduled")), 60, 0))
-        // The merged times are what the card keeps: live, from the board, when its page closes.
         assertEquals("live", three.stop.board[0].quality)
         assertEquals(90_000L, three.gotMs)
     }
@@ -408,7 +387,6 @@ class BusesTest {
                 null,
                 gotMs = atMs,
             )
-        // The page's timetabled later bus moves from 900 s to 880 s: still one bus, not that one and the last board's guess for it.
         val one = card.withBoard(board(60_000L, 900))
         val two = one.withBoard(board(75_000L, 880))
         assertEquals(listOf(LaterBus(880, "scheduled")), two.stop.board[0].later)
@@ -416,7 +394,6 @@ class BusesTest {
 
     @Test
     fun anOpenPinnedCardDoesNotKeepItsGuessForABusTheBoardShowsAhead() {
-        // The card's answer: D1 in 100 s and 700 s (the feed's two), then its guess for the third, 1300 s.
         val card =
             PinnedStop(
                 NearbyStop(
@@ -428,7 +405,6 @@ class BusesTest {
                 ),
                 gotMs = 0L,
             )
-        // 100 s on the first has gone; the board gives the second and the third, which runs 50 s ahead of the card's guess for it.
         val board =
             Board(
                 "COM3",
@@ -448,7 +424,6 @@ class BusesTest {
 
     @Test
     fun aWayTheBoardLacksDoesNotTakeTheOtherWaysBus() {
-        // The card lists D1 towards B, then towards A; the board has only the bus towards A, due in 30 s.
         val card =
             PinnedStop(
                 NearbyStop(
@@ -493,7 +468,6 @@ class BusesTest {
         assertEquals(40_000L, LinesPoll.waitMs(1_000_000L, 1_020_000L))
         assertEquals("a minute on: now", 0L, LinesPoll.waitMs(1_000_000L, 1_060_000L))
         assertEquals("the clock put back: no more than a minute", 60_000L, LinesPoll.waitMs(1_000_000L, 900_000L))
-        // Asleep until it's due; a whole minute when it couldn't be asked (no account yet), not a busy loop.
         assertEquals(40_000L, LinesPoll.nextMs(1_000_000L, 1_020_000L))
         assertEquals(60_000L, LinesPoll.nextMs(null, 1_020_000L))
     }
@@ -518,19 +492,15 @@ class BusesTest {
     fun aServicesPageBringsTheListItsNewerCountAndAnOlderListKeepsIt() {
         val one = LineOut(1, "1 out", false)
         val none = LineOut(0, "None out", false)
-        // The page's own count, as /api/line gives it; none from an older server.
         val line =
             Line.parse(JSONObject("""{"svc": "K", "stops": [], "buses": [], "out": {"out": 0, "outText": "None out", "stale": false}}"""))
         assertEquals(none, line.out)
         assertNull(Line.parse(JSONObject("""{"svc": "K", "stops": [], "buses": []}""")).out)
-        // The list counted K's last bus a moment before it left the feed; K's page, later, has none out.
         var outs = Outs().listed(mapOf("K" to one, "D1" to one), 1_000L)
         outs = outs.paged("K", line.out, 31_000L)
         assertEquals(mapOf("K" to none, "D1" to one), outs.shown)
-        // A list counted before the page keeps the page's count; a newer one wins.
         assertEquals(mapOf("K" to none, "D1" to one), outs.listed(mapOf("K" to one, "D1" to one), 11_000L).shown)
         assertEquals(mapOf("K" to one, "D1" to none), outs.listed(mapOf("K" to one, "D1" to none), 51_000L).shown)
-        // An older answer for the page changes nothing; no count, nothing; no list, nothing shown.
         assertEquals(outs, outs.paged("K", one, 21_000L))
         assertEquals(outs, outs.paged("K", null, 41_000L))
         assertEquals(emptyMap<String, LineOut?>(), outs.listed(emptyMap(), 0).shown)
@@ -557,9 +527,7 @@ class BusesTest {
             assertFalse("none out: the words without the dot", r2.live)
             assertFalse("a count from last time isn't live: no dot", LineRow("K", "K", null, LineOut(2, "2 out", true)).live)
             assertEquals("Bus R2, PGP to Kent Vale, None out", r2.said())
-            // Unreachable: nothing said or shown for its buses.
             assertEquals("Bus A1, Loop from KR Bus Ter, via AS 5, PGP, KR MRT", LineRow.of(routes[0], null) { it }.said())
-            // A campus kept from an older server, without the name: worded here from its stops.
             val names = mapOf("COM3" to "COM 3")
             assertEquals("Loop from COM 3", LineRow.of(routes[2], null) { names[it] ?: it }.name)
             TestStrings.install("values-zh")
@@ -741,10 +709,8 @@ class BusesTest {
     @Test
     fun aStoppedServiceSaysWhenItsBackInSingaporeDays() {
         TestStrings.install()
-        // Wednesday 21:30 in Singapore.
         val now = at("2026-10-07T13:30:00Z")
         assertNull(Stopped.of(true, null, null, now))
-        // Thursday 07:40 in Singapore: tomorrow, though it's the same UTC day.
         assertEquals(
             "Stopped for today" to "Back tomorrow at 7:40 AM",
             Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(true),
@@ -753,13 +719,11 @@ class BusesTest {
             "Stopped for today" to "Back tomorrow at 07:40",
             Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false),
         )
-        // Saturday morning, back Monday.
         val sat = at("2026-10-10T02:00:00Z")
         assertEquals(
             "No service today" to "Back Monday at 7:40 AM",
             Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), sat)!!.lines(true),
         )
-        // 06:00 on a weekday: later today, so it starts, never "Back today".
         val early = at("2026-10-07T22:00:00Z")
         assertEquals("Not running yet" to "Starts at 7:04 AM", Stopped.of(false, "notYet", at("2026-10-07T23:04:00Z"), early)!!.lines(true))
         assertEquals("No time found: the first line only", "Stopped for today" to null, Stopped.of(false, "ended", null, now)!!.lines(true))

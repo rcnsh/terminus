@@ -1,81 +1,29 @@
-// Pull to refresh on Now and Buses (app.js): drag the page down from its top
-// and its sky stretches. The room above the card's words (a stop's name, a
-// line's title) grows with the finger, the sky's colours stretching down to
-// the horizon, so nothing opens above the page and there's no edge to see.
-// A pill in the sky says what letting go does, and the horizon on screen
-// plays it out: a bus in its service's colour drives to your stop as you
-// pull, and once it's there, let go and it honks and pulls away while the
-// tab fetches again, going round again until the answer is back.
-// Then the pill says how it went and the sky springs back. The Android app
-// does the same, by the same numbers.
-//
-// The bus that drives is the horizon's own (the card's bus, one parked or
-// passing), taken from where it stands: it's hidden while this one drives.
-// The sky closes a second after the pill says how it went, without waiting
-// for the bus, which comes back in from the left at its own pace to where
-// the answer puts the horizon's own, and hands over to it there.
-//
-// Touch only: with a mouse there's the timed refresh, and pulling is never
-// the only way to new times. One fetch per pull, of what the tab asks for
-// anyway, and none when its times are under PULL_FRESH_MS old (timing.js):
-// the API would answer from its cache, so the pill says "Up to date", and on
-// Buses when the timed refresh brings new times.
-//
-// The numbers are pure and tested (web-pull.test.js). The drawing moves a
-// few SVG nodes over the horizon each frame, only while the sky is pulled
-// or the bus is on its way back.
-
 import { announce, html, reducedMotion, useEffect, useRef } from '/assets/ui.js';
 import { t } from '/account/dom.js';
 import { BEAM, ROAD_SCALE, WHEELS, arch, busParts, nearY, signX } from '/account/sky.js';
 
-/**
- * In CSS px: how far the sky must stretch for a refresh (`arm`) and where it
- * waits meanwhile (`hold`), the most it stretches, and how much of the pull
- * the header and the chips follow (`lead`).
- */
 export const PULL = { arm: 84, hold: 40, max: 170, lead: 0.12 };
-/** The shortest a refresh shows for, from letting go: long enough to see the bus leave. */
 export const MIN_SHOW_MS = 700;
-/** How long the pill says how it went, before the sky closes. */
 const RESULT_MS = 1_000;
-/** Where a bus comes in from, off the horizon's left edge (its own numbers). */
 export const OFF_LEFT = -44;
 
 const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 
-/** The finger's travel to the sky's: it follows less the further it goes, and never past PULL.max. */
 export const rubber = (raw) => PULL.max * (1 - Math.exp(-Math.max(0, raw) / 200));
 
-/** Where a bus pulls up at your stop on a horizon `vw` wide: just short of the sign, as the horizon draws it. */
 export const stopAt = (vw) => signX(vw) - 44;
 
-/**
- * The bus along the horizon for a pull: from where it was (`from`), easing
- * into the stop as the pull nears `arm`, and never backwards (a bus already
- * past the stop waits there).
- */
 export const busAt = (pull, from, vw) => {
   const to = Math.max(from, stopAt(vw));
   return from + (to - from) * (1 - (1 - clamp(pull / PULL.arm)) ** 1.6);
 };
 
-/**
- * Where the ground is under `x` on a horizon: Now's road (y 70), or on a
- * low one (Buses, no road) the near hill's top, and how steep it is there
- * (degrees, for a bus 38 long standing on it).
- */
 export function groundAt(x, low) {
   if (!low) return { y: 70, tilt: 0 };
   const [a, b] = [nearY(x + 7.5), nearY(x + 26)];
   return { y: Math.max(a, b) - 2, tilt: (Math.atan2(b - a, 18.5) * 180) / Math.PI };
 }
 
-/**
- * The words in the pill: pulling, ready to let go, checking, or how it went
- * ('updated', 'fresh', 'failed'). `inS`, with 'fresh': the seconds until the
- * timed refresh brings new times, when the tab knows.
- */
 export function pullWords(state, inS = null) {
   switch (state) {
     case 'armed':
@@ -93,20 +41,17 @@ export function pullWords(state, inS = null) {
   }
 }
 
-/** A spring one step on: position, speed, towards `to`, stiffness `k`, damping `c`. */
 const spring = (x, v, to, k, c, dt) => {
   v += (k * (to - x) - c * v) * dt;
   return [x + v * dt, v];
 };
 
-/** Something a pull mustn't start on: a field, a dialog, or inside a list scrolled down. */
 function blocked(el) {
   if (!(el instanceof Element) || el.closest('input, textarea, select, dialog, [data-no-pull]')) return true;
   for (let n = el; n && n !== document.body; n = n.parentElement) if (n.scrollTop > 0) return true;
   return false;
 }
 
-/** The first of `sel` in the tab on screen that's on screen too. */
 function onScreen(sel) {
   for (const el of document.querySelectorAll(`#root > main:not([hidden]) ${sel}`)) {
     const r = el.getBoundingClientRect();
@@ -115,15 +60,8 @@ function onScreen(sel) {
   return null;
 }
 
-/** The horizon's own bus: the card's, one parked, or the shuttle going by. */
 const OWN = '.coming, .parked, .shuttle';
 
-/**
- * The horizon's own bus, if it shows one: where it is along the road and
- * its colour (null for the shuttle, dark with A1's red along the bottom).
- * Else the colour of the first service on the tab (a board's first row, a
- * line), or null: the shuttle's look.
- */
 function busOf(horizon) {
   const own = horizon?.querySelector(OWN);
   const at = own?.getAttribute('transform')?.match(/translate\(\s*(-?[\d.]+)/);
@@ -134,15 +72,8 @@ function busOf(horizon) {
   };
 }
 
-/**
- * The sky's stretch, the pill and the bus on the horizon. `enabled()`: the
- * tab on screen can be pulled. `refresh()`: fetches it again, resolving to
- * how it went ('updated', 'fresh' or 'failed', or { state, inS } as
- * pullWords takes them).
- */
 export function PullToRefresh({ enabled, refresh }) {
   const root = useRef(null);
-  // The latest props, for the listeners set up once.
   const props = useRef(null);
   props.current = { enabled, refresh };
 
@@ -164,11 +95,6 @@ export function PullToRefresh({ enabled, refresh }) {
     const wheels = [...el.querySelectorAll('.p-wheel')];
     const page = document.body;
 
-    // `page`: idle, drag (following the finger), cancel (springing back
-    // unarmed), hold (waiting at PULL.hold), closing (then the bus finishing
-    // its way back with the sky shut). `mode`: what the bus is doing: follow
-    // (the pull), board, go (pulling away), loop (round again), back
-    // (coming home).
     const st = {
       page: 'idle',
       mode: 'follow',
@@ -186,7 +112,6 @@ export function PullToRefresh({ enabled, refresh }) {
       wheel: 0,
       dist: 0,
     };
-    // The horizon on screen, and what's on it: its width in its own numbers, low or not, its own sign, where the bus came from.
     let hz = null;
     let calm = reducedMotion();
     let armed = false;
@@ -205,7 +130,6 @@ export function PullToRefresh({ enabled, refresh }) {
       hint.className = `pull-hint is-${state}`;
       const text = pullWords(state, inS);
       if (words.textContent !== text) words.textContent = text;
-      // Heard once each: checking, then how it went.
       if (state !== 'pull' && state !== 'armed' && said !== state) {
         said = state;
         announce(text, { again: true });
@@ -228,7 +152,6 @@ export function PullToRefresh({ enabled, refresh }) {
       const k = low ? 1 : ROAD_SCALE;
       const vw = Math.round(w / k);
       const { from, colour } = busOf(horizon);
-      // With less motion, Now's own bus stays where it is and only the sign lights; a horizon without one gets a bus standing at the stop.
       const own = Boolean(horizon?.querySelector(OWN));
       hz = { el: horizon, low, k, vw, from, colour, own, signed: Boolean(horizon?.querySelector('.sign')), drive: !calm || !own };
       scene.setAttribute('viewBox', low ? `0 6 ${vw} 52` : `0 0 ${vw} 92`);
@@ -253,7 +176,6 @@ export function PullToRefresh({ enabled, refresh }) {
       props.current.refresh().then(settle, () => settle('failed'));
     }
 
-    /** Where the bus comes back to: where the horizon has its own now (the answer may have moved it), else your stop. */
     function home() {
       if (!hz.own) return stopAt(hz.vw);
       const { from } = busOf(hz.el);
@@ -263,7 +185,6 @@ export function PullToRefresh({ enabled, refresh }) {
     function step(dt, now) {
       const { vw, low, from } = hz;
       const stop = stopAt(vw);
-      // The stretch: with the finger while dragging, else springing to where it waits or closed.
       if (st.page !== 'drag') {
         const to = st.page === 'hold' ? PULL.hold : 0;
         if (calm) [st.pull, st.v] = [st.pull + (to - st.pull) * Math.min(1, dt * 14), 0];
@@ -271,8 +192,6 @@ export function PullToRefresh({ enabled, refresh }) {
         if (st.page !== 'hold' && st.pull < 0.4 && Math.abs(st.v) < 5) {
           st.pull = 0;
           st.v = 0;
-          // The sky doesn't wait for the bus, nor the bus for the sky: it drives on home, unhurried.
-          // Without a bus of the horizon's own, it went with the sign as the sky closed.
           const back = calm || !hz.drive || !hz.own || st.page === 'cancel' || (st.mode === 'back' && Math.abs(st.x - home()) < 1);
           if (back) st.page = 'idle';
         }
@@ -286,7 +205,6 @@ export function PullToRefresh({ enabled, refresh }) {
         }
         say(armed ? 'armed' : 'pull');
       }
-      // The answer's back, and the bus has been seen leaving: say how it went, then close up.
       if (st.page === 'hold' && result && !shownAt && now - released >= MIN_SHOW_MS) {
         shownAt = now;
         say(result.state, result.inS);
@@ -302,7 +220,6 @@ export function PullToRefresh({ enabled, refresh }) {
       let honked = 0;
       const since = now - modeAt;
       if (calm) {
-        // Standing at the stop, its door open while it checks.
         st.x = stop;
         doorOpen = st.page === 'hold' ? 1 : 0;
       } else {
@@ -316,17 +233,14 @@ export function PullToRefresh({ enabled, refresh }) {
           if (st.mode === 'go') st.busV += 900 * dt;
           st.x += st.busV * dt;
           if (st.x > vw + 20) {
-            // Off the right edge: the same bus round again while it's still checking, else coming back to its place.
             if (st.page === 'hold' && !shownAt) Object.assign(st, { mode: 'loop', x: OFF_LEFT, lastX: OFF_LEFT, busV: 340 });
             else Object.assign(st, { mode: 'back', x: OFF_LEFT - 10, lastX: OFF_LEFT - 10, busV: 0 });
           }
         } else if (st.mode === 'back') {
-          // Eases in to its place, from off the left.
           const to = home();
           st.x += (to - st.x) * (1 - Math.exp(-dt * 6));
           if (Math.abs(st.x - to) < 0.05) st.x = to;
         }
-        // Suspension: the body pitches with its acceleration and settles on a spring; it kneels at the stop.
         const v = (st.x - st.lastX) / Math.max(dt, 1 / 240);
         const a = (v - st.smV) / Math.max(dt, 1 / 240);
         st.lastX = st.x;
@@ -354,13 +268,10 @@ export function PullToRefresh({ enabled, refresh }) {
       const { el: horizon, low, vw, own, signed, drive } = hz;
       page.style.setProperty('--stretch', `${Math.round(p)}px`);
       page.style.setProperty('--lead', `${Math.round(p * PULL.lead)}px`);
-      // Still over the horizon with the sky shut while the bus comes back.
       page.classList.toggle('pulled', p > 0.5 || st.page === 'closing');
-      // The scene over the horizon on screen, wherever the stretch has put it.
       const r = horizon?.getBoundingClientRect();
       if (r) Object.assign(scene.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
       const shown = clamp(p / PULL.arm);
-      // Your stop's sign: the horizon's own, drawn over; else it comes in with the pull (out of the hill, on a low one).
       const sx = signX(vw);
       const base = groundAt(sx - 3, low).y + (low ? 3 : 0);
       sign.setAttribute('transform', `translate(${sx} ${base.toFixed(2)})${signed ? '' : ` scale(1 ${(low ? shown : 1).toFixed(3)})`}`);
@@ -369,7 +280,6 @@ export function PullToRefresh({ enabled, refresh }) {
       const g = groundAt(st.x, low);
       const bob = calm ? 0 : st.kneel + 0.25 * Math.sin(st.dist / 5) * clamp(Math.abs(st.smV) / 200);
       bus.setAttribute('transform', `translate(${st.x.toFixed(2)} ${(g.y - 13.2).toFixed(2)}) rotate(${g.tilt.toFixed(2)} 19 13)`);
-      // Without a bus of the horizon's own, it sinks away with the sign as the sky closes.
       bus.style.opacity = !drive ? 0 : !own && calm ? shown.toFixed(3) : !own && st.page === 'closing' ? clamp((p - 6) / 34).toFixed(3) : 1;
       body.setAttribute('transform', `translate(0 ${bob.toFixed(3)}) rotate(${(calm ? 0 : st.tilt).toFixed(3)} 7.5 12)`);
       for (const [i, wh] of wheels.entries())
@@ -385,7 +295,6 @@ export function PullToRefresh({ enabled, refresh }) {
           return c;
         }),
       );
-      // The pill, in the middle of the room the stretch opened, once there's room for it.
       const head = onScreen('.sky-head');
       if (head) {
         const hr = head.getBoundingClientRect();
@@ -415,7 +324,6 @@ export function PullToRefresh({ enabled, refresh }) {
       frame = requestAnimationFrame(tick);
     }
 
-    // The gesture: a touch at the top of the page, moving down more than across.
     const onStart = (e) => {
       track = null;
       if (st.page !== 'idle' || e.touches.length !== 1 || window.scrollY > 0 || !props.current.enabled() || blocked(e.target)) return;
@@ -427,7 +335,6 @@ export function PullToRefresh({ enabled, refresh }) {
       if (!track.on) {
         const dx = p.clientX - track.x;
         const dy = p.clientY - track.y;
-        // Across (the Buses pages swipe), up, or the page scrolled after all: not a pull.
         if ((Math.abs(dx) > 10 && Math.abs(dx) > dy) || dy < -6 || window.scrollY > 0) return void (track = null);
         if (dy < 10) return;
         track.on = true;

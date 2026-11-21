@@ -45,18 +45,11 @@ REQUIRED = [
     "NEXTBUS_PROXY_API_KEY",
 ]
 
-# Mirrors src/feeds/auth.ts.
 AUTH_PATH = "/get-access-token"
 VERSION_FORMAT = re.compile(r"univus_android_\d+(?:\.\d+)+_\d+")
-# The Worker whose version the scrape takes; TERMINUS_ORIGIN points it at
-# another (the dev stub, say).
 TERMINUS_ORIGIN = "https://terminus.run"
-# The feed's replies are a few KB; anything near this is not the feed.
 MAX_BYTES = 5_000_000
 
-# ServiceDescription is not exposed on the bus proxy, so there is no call that
-# lists the services. Route codes come from the current graph plus this list;
-# a code that returns no pickup points is skipped, so extras cost one request.
 KNOWN_ROUTES = ["A1", "A2", "D1", "D2", "K", "P", "R1", "R2", "E", "L", "BTC1", "BTC2"]
 
 WRAPPER_KEYS = (
@@ -124,8 +117,6 @@ def first(d: dict, *keys, default=None):
 
 
 def app_headers() -> dict:
-    # No X-Forwarded-Proto: it makes the NUS load balancer intermittently
-    # answer 400 "Contradictory scheme headers". See src/feeds/auth.ts.
     h = {
         "X-HTD-API": os.environ["NEXTBUS_HTD_API"],
         "X-APP-API": os.environ["NEXTBUS_APP_API"],
@@ -161,7 +152,6 @@ def post_json(url: str, headers: dict, body: dict) -> dict:
         with OPENER.open(req, timeout=30) as res:
             raw = res.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as exc:
-        # Only the status: the redirect's target or the base URL may be private.
         refused = " (redirect refused)" if 300 <= exc.code < 400 else ""
         raise SystemExit(f"POST {path} -> HTTP {exc.code}{refused}") from exc
     except urllib.error.URLError as exc:
@@ -184,7 +174,6 @@ def use_live_version() -> None:
         say("no TERMINUS_SCRAPE_TOKEN; using NEXTBUS_APP_VERSION")
         return
     origin = (os.environ.get("TERMINUS_ORIGIN") or TERMINUS_ORIGIN).rstrip("/")
-    # The token may be the operator's, so never in the clear, except to this machine.
     parts = urllib.parse.urlsplit(origin)
     if not (parts.scheme == "https" or (parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1"))):
         say("TERMINUS_ORIGIN isn't https; using NEXTBUS_APP_VERSION")
@@ -332,11 +321,6 @@ def scrape(session: dict, route_codes: list) -> dict:
     for s in raw_stops:
         if not isinstance(s, dict):
             continue
-        # Confirmed shape: {"name": "COM3", "caption": "COM 3",
-        #  "ShortName": "COM 3", "latitude": ..., "longitude": ...}
-        # `name` is the CODE and `caption` is the human label -- not the other
-        # way round. ShortName is already abbreviated the way a widget wants
-        # ("Opp KR MRT"), so it is the display name.
         code = norm_code(first(s, "name", "busstopcode", "code", "BusStopCode", default=""))
         short = str(first(s, "ShortName", "shortname", "caption", default="")).strip()
         long_name = str(first(s, "caption", "LongName", "longname", "description", default="")).strip()
@@ -378,16 +362,12 @@ def scrape(session: dict, route_codes: list) -> dict:
             berth = norm_code(first(p, "busstopcode", "pickuppointname", "name", "code", default=""))
             if berth:
                 seq.append((first(p, "seq", "sequence", "order", "id", default=len(seq)), berth))
-        # seq is NOT a dense index. The last stop of a route is delivered with
-        # seq 32767 -- an int16 sentinel -- so sort numerically and never
-        # assume 1..N.
         try:
             seq.sort(key=lambda kv: float(kv[0]))
         except (TypeError, ValueError):
             pass
         ordered_berths = [b for _, b in seq]
         if not ordered_berths:
-            # Expected for speculative codes in KNOWN_ROUTES.
             continue
         ordered = [stop_of_berth(b, svc) for b in ordered_berths]
         loops[svc] = len(ordered) > 2 and ordered[0] == ordered[-1]
@@ -407,8 +387,6 @@ def scrape(session: dict, route_codes: list) -> dict:
         "routes": routes,
         "berths": berths,
         "loops": loops,
-        # The proxy publishes no hours. They are hand-maintained in
-        # data/service-hours.json and merged over this at load time.
         "serviceHours": hours,
     }
 
@@ -435,9 +413,6 @@ def main() -> int:
         return 0
 
     out = pathlib.Path(args.out)
-    # `generated` differs on every run, so comparing whole files would make the
-    # weekly workflow commit a timestamp-only "refresh" every time. Only write
-    # when something other than the timestamp actually changed.
     if out.exists():
         try:
             previous = json.loads(out.read_text())

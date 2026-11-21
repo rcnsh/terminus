@@ -1,8 +1,3 @@
-/**
- * Chinese: the language is picked per request, every message has
- * a translation, and every error the API can send is translated. The answers
- * themselves are checked word for word by the zh goldens (golden.test.js).
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -27,7 +22,6 @@ test('?lang= wins over the header; the profile wins over both', () => {
   const req = new Request('https://x.test/api/next?lang=en', { headers: { 'accept-language': 'zh-CN' } });
   assert.equal(langOfRequest(req), 'en');
   assert.equal(langOfRequest(new Request('https://x.test/api/next', { headers: { 'accept-language': 'zh-CN' } })), 'zh');
-  // The website's choice, for the pages the Worker serves itself.
   assert.equal(
     langOfRequest(new Request('https://x.test/auth/verify', { headers: { 'accept-language': 'en', cookie: 'a=1; terminus-lang=zh' } })),
     'zh',
@@ -41,23 +35,20 @@ test('?lang= wins over the header; the profile wins over both', () => {
   assert.equal(lang(), 'en', 'outside a request: English');
 });
 
-/** Calls a message with sample arguments, so functions can be compared too. */
 function say(v) {
   if (typeof v !== 'function') return Array.isArray(v) ? v.join('|') : v;
   const args = Array.from({ length: v.length }, (_, i) => [3, 'D2', 'COM3', '9:41', true][i % 5]);
   return v(...args);
 }
 
-// Kept as they are in Chinese: a number format, a holiday's own name or a
-// landmark's kind passed through when there's no translation for it.
-const SAME = new Set(['holiday', 'landmarkKind']);
+const PASSED_THROUGH_WHEN_UNTRANSLATED = new Set(['holiday', 'landmarkKind']);
 
 test('every message is translated, and reads as Chinese', () => {
   const en = msgsFor('en');
   const zh = msgsFor('zh');
   assert.deepEqual(Object.keys(zh).sort(), Object.keys(en).sort());
   for (const key of Object.keys(en)) {
-    if (SAME.has(key)) continue;
+    if (PASSED_THROUGH_WHEN_UNTRANSLATED.has(key)) continue;
     const e = say(en[key]);
     const z = say(zh[key]);
     assert.notEqual(z, e, `${key} is the same as the English`);
@@ -80,9 +71,7 @@ test('every public holiday in the calendar has a Chinese name', () => {
   for (const n of names) assert.match(msgsFor('zh').holiday(n), /[一-鿿]/, n);
 });
 
-// Errors worded with a value in them: developer-facing checks of a malformed
-// profile or request, which the apps never send. Kept English.
-const DEV_TEMPLATES = [/^\$\{field\}/, /^home\.stops must/, /^(once|usual|places)(\[|\s)/];
+const DEVELOPER_ONLY_ERRORS_KEPT_ENGLISH = [/^\$\{field\}/, /^home\.stops must/, /^(once|usual|places)(\[|\s)/];
 
 test('every error string in the API has a Chinese translation', () => {
   const dir = new URL('../src/', import.meta.url);
@@ -92,12 +81,11 @@ test('every error string in the API has a Chinese translation', () => {
     const src = fs.readFileSync(new URL(f, dir), 'utf8');
     for (const [, q, text] of src.matchAll(/error: (['"`])((?:\\.|(?!\1).)*)\1/g)) {
       if (q === '`') {
-        if (!DEV_TEMPLATES.some((re) => re.test(text))) missing.push(`${f}: a template; use m(): ${text}`);
+        if (!DEVELOPER_ONLY_ERRORS_KEPT_ENGLISH.some((re) => re.test(text))) missing.push(`${f}: a template; use m(): ${text}`);
         continue;
       }
       if (!(text in ERRORS_ZH)) missing.push(`${f}: ${text}`);
     }
-    // An error worded by an expression, like a ternary: each string in it.
     for (const [, expr] of src.matchAll(/error: (?!['"`])([^\n]*)/g)) {
       for (const text of literalsIn(expr)) {
         if (!(text in ERRORS_ZH)) missing.push(`${f}: ${text}`);
@@ -107,11 +95,6 @@ test('every error string in the API has a Chinese translation', () => {
   assert.deepEqual(missing, []);
 });
 
-/**
- * The strings an expression can give, up to the comma or bracket that ends
- * it: the branches of a ternary or `??` (a literal after `?`, `:` or `??`),
- * not the values it compares.
- */
 function literalsIn(expr) {
   const out = [];
   let depth = 0;

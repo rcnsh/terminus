@@ -2,10 +2,6 @@ import BackgroundTasks
 import UIKit
 import UserNotifications
 
-/// What the developer menu shows about the app's state, and the text it
-/// copies for a bug report: the version and phone, the server and its clock,
-/// what the alerts and push need, and the last answer. Nothing that
-/// identifies the account, and no place. As Android's Diagnostics.
 enum Diagnostics {
     struct Facts {
         var version: String
@@ -19,13 +15,10 @@ enum Diagnostics {
         var skewS: TimeInterval
         var signedIn: Bool
         var anonymous: Bool
-        /// Nil: not asked yet.
         var notifications: Bool?
         var leaveAlerts: Bool
         var liveActivity: Bool
-        /// Background App Refresh, in the phone's Settings.
         var backgroundRefresh: Bool
-        /// The phone has its APNs token (a sideloaded build never does).
         var pushToken: Bool
         var pushSentAt: Date?
         var pushHeardAt: Date?
@@ -38,7 +31,6 @@ enum Diagnostics {
         var lastError: String?
     }
 
-    /// [facts(_:notifications:nextRefresh:nextReminder:)], with what iOS says about notifications and the background refresh.
     @MainActor static func facts(_ app: AppModel) async -> Facts {
         let center = UNUserNotificationCenter.current()
         let status = await center.notificationSettings().authorizationStatus
@@ -51,7 +43,6 @@ enum Diagnostics {
         return facts(app, notifications: notifications, nextRefresh: refresh, nextReminder: reminder)
     }
 
-    /// What the app knows without asking iOS: shown at once, before its answers.
     @MainActor static func facts(_ app: AppModel, notifications: Bool?, nextRefresh: Date?, nextReminder: Date?) -> Facts {
         let d = Shared.defaults
         let last = WidgetStore.plan()
@@ -84,15 +75,12 @@ enum Diagnostics {
         )
     }
 
-    /// "iPhone17,1": the model, which says more than "iPhone" without naming anyone.
     private static var model: String {
         var info = utsname()
         uname(&info)
         return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
     }
 
-    /// The text Copy diagnostics puts on the clipboard: English, for the
-    /// operator, with times in Singapore's.
     static func report(_ f: Facts, requests: [RequestLog.Entry], now: Date) -> String {
         var out = ""
         func line(_ k: String, _ v: String?) { out += "\(k): \(v ?? "-")\n" }
@@ -125,19 +113,15 @@ enum Diagnostics {
         return out
     }
 
-    /// One request as a line: when, what, where, and how it went.
     static func entry(_ r: RequestLog.Entry) -> String { "\(time(r.at)) \(r.method) \(r.path) \(r.host) \(outcome(r)) \(r.tookMs) ms" }
 
-    /// The status, or why there was none.
     static func outcome(_ r: RequestLog.Entry) -> String { r.status.map(String.init) ?? r.failure ?? "no answer" }
 
-    /// "+42 s" when this phone is behind the server, "-42 s" ahead, "right" when it's within ServerClock's noise.
     static func skew(_ s: TimeInterval) -> String {
         let n = Int(s.rounded(.towardZero))
         return n == 0 ? "right" : "\(n > 0 ? "+" : "-")\(abs(n)) s"
     }
 
-    /// How long ago `at` was, as "3 min ago" (seconds under a minute, hours over an hour).
     static func ago(_ at: Date, now: Date) -> String? {
         let s = Swift.max(0, Int(now.timeIntervalSince(at)))
         if s < 60 { return "\(s) s ago" }

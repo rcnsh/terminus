@@ -1,11 +1,3 @@
-/**
- * Passkeys for the operator's dashboard (/admin/, its Timelapse too). Adding one
- * needs HEALTH_TOKEN itself; signing in with one gives an operator session in
- * the same x-health-token header for SESSION_MS, so the secret is typed once
- * per device and a leaked session dies on its own. See internals.md,
- * *Operator passkeys*.
- */
-
 import type { Env } from '../types.ts';
 import { json } from '../http.ts';
 import { b64url, fromB64url } from '../push/webpush.ts';
@@ -20,13 +12,11 @@ export interface Passkey {
   id: string;
   rpId: string;
   alg: number;
-  /** The public key, SPKI, base64url. */
   key: string;
   name: string;
   created: string;
 }
 
-/** The COSE algorithms offered, as WebCrypto names them. */
 type ImportAlg = Parameters<SubtleCrypto['importKey']>[2];
 type VerifyAlg = Parameters<SubtleCrypto['verify']>[0];
 const ALGS: Record<number, { key: ImportAlg; verify: VerifyAlg; der?: boolean }> = {
@@ -49,7 +39,6 @@ function hmacKey(token: string): Promise<CryptoKey> {
       false,
       ['sign', 'verify'],
     );
-    // A refused import isn't kept: the next call tries again.
     key.catch(() => {
       if (keyMemo?.key === key) keyMemo = null;
     });
@@ -58,12 +47,10 @@ function hmacKey(token: string): Promise<CryptoKey> {
   return keyMemo.key;
 }
 
-/** The label keeps a challenge from ever passing as a session, and back. */
 async function mac(token: string, label: string, data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.sign('HMAC', await hmacKey(token), concat(enc.encode(label), data)));
 }
 
-/** HMAC's own verify: compares in constant time. */
 async function macOk(token: string, label: string, data: Uint8Array, sig: Uint8Array): Promise<boolean> {
   return crypto.subtle.verify('HMAC', await hmacKey(token), sig, concat(enc.encode(label), data));
 }
@@ -74,7 +61,6 @@ function u64(n: number): Uint8Array {
   return b;
 }
 
-/** A challenge: when it runs out, 16 random bytes, and a MAC over both. */
 export async function newChallenge(token: string, nowMs: number): Promise<string> {
   const body = concat(u64(nowMs + CHALLENGE_MS), crypto.getRandomValues(new Uint8Array(16)));
   return b64url(concat(body, (await mac(token, 'challenge', body)).subarray(0, 16)));
@@ -85,13 +71,11 @@ export async function challengeOk(token: string, challenge: string, nowMs: numbe
   if (b?.length !== 40) return false;
   const body = b.subarray(0, 24);
   const want = (await mac(token, 'challenge', body)).subarray(0, 16);
-  // A truncated MAC can't use verify(); fold every byte in, as admin.ts does.
   let diff = 0;
   for (let i = 0; i < 16; i++) diff |= want[i] ^ b[24 + i];
   return diff === 0 && Number(new DataView(body.buffer, body.byteOffset).getBigUint64(0)) > nowMs;
 }
 
-/** A session: `op1.<expiry ms>.<mac>`. */
 export async function newSession(token: string, nowMs: number): Promise<{ session: string; expires: string }> {
   const exp = nowMs + SESSION_MS;
   return {
@@ -102,7 +86,6 @@ export async function newSession(token: string, nowMs: number): Promise<{ sessio
 
 export async function sessionOk(token: string | undefined, given: string | null, nowMs: number): Promise<boolean> {
   if (!token || !given?.startsWith(SESSION_PREFIX)) return false;
-  // Exactly two parts: `.junk` after the mac is no session, however well signed.
   const parts = given.slice(SESSION_PREFIX.length).split('.');
   if (parts.length !== 2) return false;
   const [exp, sig] = parts;
@@ -111,10 +94,6 @@ export async function sessionOk(token: string | undefined, given: string | null,
   return macOk(token, 'session', enc.encode(exp), sigBytes);
 }
 
-/**
- * clientDataJSON: the right ceremony, from this origin, not framed by
- * another site. Returns the challenge it signed, or null.
- */
 export function readClientData(bytes: Uint8Array, type: 'webauthn.create' | 'webauthn.get', origin: string): string | null {
   let c: { type?: unknown; challenge?: unknown; origin?: unknown; crossOrigin?: unknown };
   try {
@@ -126,11 +105,6 @@ export function readClientData(bytes: Uint8Array, type: 'webauthn.create' | 'web
   return c.challenge;
 }
 
-/**
- * authenticatorData: made for this host, with the user present and verified
- * (a fingerprint, a face or the device's PIN, not just a tap). With a new
- * passkey, also the credential id it holds.
- */
 export async function readAuthData(bytes: Uint8Array, rpId: string): Promise<{ credId: string | null } | null> {
   if (bytes.length < 37) return null;
   const rpHash = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(rpId)));
@@ -144,7 +118,6 @@ export async function readAuthData(bytes: Uint8Array, rpId: string): Promise<{ c
   return { credId: b64url(bytes.subarray(55, 55 + len)) };
 }
 
-/** ECDSA signatures come DER-wrapped; WebCrypto wants r and s side by side. */
 export function derToRaw(der: Uint8Array, size = 32): Uint8Array | null {
   if (der[0] !== 0x30 || der.length < 8) return null;
   let i = der[1] & 0x80 ? 2 + (der[1] & 0x7f) : 2;
@@ -169,7 +142,6 @@ async function importPasskey(key: string, alg: number): Promise<CryptoKey | null
   return crypto.subtle.importKey('spki', spki, a.key, false, ['verify']).catch(() => null);
 }
 
-/** The assertion's signature, over authenticatorData and the hash of clientDataJSON. */
 export async function signatureOk(
   pk: Pick<Passkey, 'key' | 'alg'>,
   authData: Uint8Array,
@@ -190,11 +162,6 @@ export async function readPasskeys(env: Env): Promise<Passkey[]> {
   return Array.isArray(list) ? list : [];
 }
 
-/**
- * /api/admin/passkey/*. `holdsToken`: the request carries HEALTH_TOKEN
- * itself (a session doesn't count: it can't add a passkey). Everything is
- * 404 while HEALTH_TOKEN is unset, as the other operator routes are.
- */
 export async function handlePasskey(req: Request, url: URL, env: Env, nowMs: number, holdsToken: boolean): Promise<Response> {
   const token = env.HEALTH_TOKEN;
   if (!token) return json({ error: 'not found' }, 404);
@@ -202,9 +169,6 @@ export async function handlePasskey(req: Request, url: URL, env: Env, nowMs: num
   const route = `${req.method} ${url.pathname}`;
 
   if (route === 'GET /api/admin/passkey/challenge') {
-    // ?register=1 checks the token before the browser makes a passkey, so
-    // a mistyped token never leaves one on the device the server won't
-    // know; and lists the ones kept here, so the device doesn't make a second.
     if (url.searchParams.get('register') === '1') {
       if (!holdsToken) return json({ error: 'not found' }, 404);
       const exclude = (await readPasskeys(env)).filter((p) => p.rpId === rpId).map((p) => p.id);

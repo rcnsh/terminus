@@ -1,42 +1,25 @@
 #!/usr/bin/env node
-/**
- * Records, from a live site's own API, what the arrival-time backtest
- * (scripts/probes/eta_backtest.mjs) needs when there's no recorder day to hand:
- * where each bus is (/api/buses, per service) and what the boards say
- * (/api/arrivals, per stop), timestamped, appended as JSON lines to a local
- * file. It's for a developer's machine, never the Worker: the Worker
- * already has both (the timelapse recorder's days in R2, the feed's
- * predictions in Analytics Engine; see src/ops/eta.ts).
- *
- * Polite by construction, and read-only:
- * - each service's buses at most once per --every seconds (20 at least),
- *   each through the Worker's 5 s cache and feed gate, as the map's are;
- * - one board per --board-every seconds, taking the stops in turn, so a
- *   stop is asked again only after every other stop has been;
- * - while no bus is out (overnight), one service is asked every 5 minutes
- *   and nothing else;
- * - a failed request backs the whole loop off, doubling to 5 minutes.
- *
- * It signs in as a throwaway anonymous account, deleted at the end, as
- * record_buses.mjs does. The site's /api/buses gives each bus where the map
- * draws it (at a stop, or between two), not its raw position, so arrivals
- * read from this are good to about half the polling interval.
- *
- *   node scripts/probes/record_eta.mjs [--site https://terminus.run] [--until 11:00] [--every 20] [--board-every 15]
- *                               [--out ../../dev/eta/<date>.jsonl] [A1 A2 D1 D2 K]
- *
- * --until is a Singapore clock time today (or tomorrow, if already past).
- */
 
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
+const USAGE = `usage: node scripts/probes/record_eta.mjs [--site https://terminus.run] [--until 11:00] [--every 20] [--board-every 15]
+         [--out ../../dev/eta/<date>.jsonl] [A1 A2 D1 D2 K]
+
+Records what eta_backtest.mjs needs from a live site's own API, as JSON lines:
+each service's buses (/api/buses) every --every seconds (20 at least) and one
+stop's board (/api/arrivals) every --board-every seconds, the stops in turn.
+--until is a Singapore clock time today, or tomorrow once it's past.`;
 const usage = (why) => {
-  console.error(`record_eta: ${why}`);
+  console.error(`record_eta: ${why}\n\n${USAGE}`);
   process.exit(2);
 };
+if (args.includes('--help')) {
+  console.log(USAGE);
+  process.exit(0);
+}
 const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   if (i < 0) return fallback;
@@ -59,7 +42,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(opt('out', resolve(here, `../../../../dev/eta/${sgtDate(Date.now())}.jsonl`)));
 const SERVICES = args.length ? args : ['A1', 'A2', 'D1', 'D2', 'K'];
 
-/** --until as epoch ms: today's in Singapore, or tomorrow's once that's past. */
 function untilMs(now) {
   const midnight = Date.parse(`${sgtDate(now)}T00:00:00Z`) - SGT_MS;
   const at = midnight + (Number(m[1]) * 60 + Number(m[2])) * 60_000;
@@ -97,7 +79,6 @@ async function main() {
       write({ k: 'fail', t, path, status: r.status });
       throw new Error(`${path}: HTTP ${r.status}`);
     }
-    // The middle of the round trip: when the Worker answered, give or take.
     return { t: Math.round((t0 + t) / 2), body: await r.json() };
   };
   try {
@@ -105,7 +86,6 @@ async function main() {
     const routes = Object.fromEntries(
       SERVICES.map((s) => [s, { seq: campus.routes?.[s]?.seq ?? [], loop: campus.routes?.[s]?.loop === true }]),
     );
-    // The boards to read: every stop these services call at, busiest first.
     const calls = new Map();
     for (const { seq } of Object.values(routes)) for (const code of new Set(seq)) calls.set(code, (calls.get(code) ?? 0) + 1);
     const stops = [...calls.keys()].sort((a, b) => calls.get(b) - calls.get(a) || a.localeCompare(b));
@@ -122,7 +102,6 @@ async function main() {
     while (!stopping && Date.now() < END) {
       try {
         if (!anyOut) {
-          // Nothing running: one service, then wait.
           const svc = SERVICES[idleSvc++ % SERVICES.length];
           const { t, body } = await get(`/api/buses?svc=${svc}`);
           const n = body.buses?.length ?? 0;
@@ -168,7 +147,6 @@ async function main() {
           await sleep(Math.max(50, Math.min(nextBoard, ...nextBuses.values()) - Date.now()));
           continue;
         }
-        // Every service quiet for 10 minutes: back to the idle check.
         if (Date.now() - lastOut > 10 * 60_000) {
           log('no buses for 10 minutes: idle');
           anyOut = false;

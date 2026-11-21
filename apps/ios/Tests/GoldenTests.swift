@@ -3,12 +3,8 @@ import Testing
 
 @testable import Terminus
 
-/// The API's golden answers, which its own tests pin word for word: a
-/// change in the response's shape fails here too, as on Android and the Mac.
 private let answers = fixtures.appendingPathComponent("answers")
 
-/// Every golden there is, English and Chinese ("zh/free"), found in the
-/// directory: a new one is read without being listed here.
 func goldenNames() -> [String] {
     let names = { (sub: String) in
         ((try? FileManager.default.contentsOfDirectory(atPath: answers.appendingPathComponent(sub).path)) ?? [])
@@ -18,7 +14,6 @@ func goldenNames() -> [String] {
     return (names("") + names("zh")).sorted()
 }
 
-/// The stop across the road (or only near), sent beside `stop`.
 @Test func aNearbyStopKnowsItsOpposite() throws {
     struct R: Decodable { let stops: [NearbyStop] }
     let data = try Data(contentsOf: answers.appendingPathComponent("nearby-list.json"))
@@ -28,8 +23,6 @@ func goldenNames() -> [String] {
     #expect(foyer.oppositeName == "Prince George's Park")
 }
 
-/// "Earlier bus" and "Later bus" on a trip by bus, each bus kept as it came
-/// to go back to /me/step; none on a card with nothing to step.
 @Test func theStepBetweenBusesDecodes() throws {
     let data = try Data(contentsOf: answers.appendingPathComponent("class-bus.json"))
     let s = try #require(try NextAnswer.decode(data).card?.step)
@@ -53,7 +46,6 @@ func goldenNames() -> [String] {
     #expect(arrived.card?.step == nil)
 }
 
-/// At the first bus there is, no earlier one: the button greys out rather than going.
 @Test func aStepWithNoBusThatWayIsNil() throws {
     let json = Data(
         #"{"trip":"t","earlier":null,"later":{"svc":"A1","stop":"COM3","board":"2026-10-07T01:00:00Z"},"moved":true,"earlierLabel":"E","laterLabel":"L","bestLabel":"B"}"#
@@ -68,10 +60,6 @@ func goldenNames() -> [String] {
     #expect(goldenNames().count >= 40)
 }
 
-/// By the endpoint each answers: /me/nearby has `stops`, /me/day `items`,
-/// the rest are /me/next with a card. The card's parts are read leniently,
-/// so one that no longer decodes would just vanish: each one sent must
-/// come through.
 @Test(arguments: goldenNames())
 func everyGoldenAnswerDecodes(name: String) throws {
     let data = try Data(contentsOf: answers.appendingPathComponent("\(name).json"))
@@ -103,8 +91,6 @@ func everyGoldenAnswerDecodes(name: String) throws {
     #expect(a.places.count == (json["places"] as? [Any])?.count ?? 0, "places")
 }
 
-/// What VoiceOver reads for each card: whole sentences, never the
-/// shorthand drawn on screen.
 @Test(arguments: goldenNames())
 func everyGoldenIsSpokenInSentences(name: String) throws {
     let data = try Data(contentsOf: answers.appendingPathComponent("\(name).json"))
@@ -114,8 +100,6 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(!said.contains(" · "), "\(name): \(said)")
 }
 
-/// The card's countdown, from the second the bus leaves: a minute ago at
-/// once, never "0 min ago", as the web, Android and the Mac say it.
 @Test func theCountdownSaysAMinuteAgoFromTheStart() {
     #expect(Countdown.words(left: 61) == "Leaves in 1 min 1 s")
     #expect(Countdown.words(left: 1) == "Leaves in 1 s")
@@ -124,9 +108,6 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(Countdown.words(left: -61) == "Left 2 min ago")
 }
 
-/// A one-off trip is planned like a class but isn't one: where the app
-/// words the title itself (an older server's card has none), it says
-/// "arrive by", and a class still says "starts".
 @Test func aOneOffTripSaysArriveByNotStarts() throws {
     func untitled(_ name: String) throws -> NextAnswer {
         let data = try Data(contentsOf: answers.appendingPathComponent("\(name).json"))
@@ -148,8 +129,6 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(starts.hasPrefix("To GEA1000 @ UTown · starts "), "\(starts)")
 }
 
-/// "Is this wrong?" offers only the reasons that fit the card, as the server lists them: no
-/// "Bus never came" with no bus to catch; every reason from a server that doesn't say.
 @Test func theReportSheetOffersTheReasonsThatFit() throws {
     let offered = { (name: String) in
         ReportSheet.reasons(fitting: try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("\(name).json"))).card?.reasons)
@@ -159,7 +138,6 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(try offered("riding") == ["times-off", "wrong-stop", "walk-longer", "wrong-class"], "on the bus there's none to come")
     #expect(try offered("rest") == ["wrong-class"], "a day that's done has no bus or walk")
 
-    // An older server sends no reasons: the card says nil, and the sheet offers them all.
     var json = try #require(
         try JSONSerialization.jsonObject(with: Data(contentsOf: answers.appendingPathComponent("rest.json"))) as? [String: Any])
     var card = try #require(json["card"] as? [String: Any])
@@ -171,7 +149,6 @@ func everyGoldenIsSpokenInSentences(name: String) throws {
     #expect(ReportSheet.reasons(fitting: older.card?.reasons) == all)
 }
 
-/// "Is this wrong?" says a missed or late bus is NUS's only for a shuttle's live time, which the server decides.
 @Test func theReportSheetKnowsWhenTimesAreNUSs() throws {
     let card = { (name: String) in try NextAnswer.decode(Data(contentsOf: answers.appendingPathComponent("\(name).json"))).card }
     #expect(try card("class-late")?.fromNus == true)

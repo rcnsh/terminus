@@ -1,50 +1,27 @@
 import Foundation
 
-/// Which server the app talks to. Only ever one built in: the site's own
-/// addresses, and in a debug build the local dev stub. The developer menu
-/// (Settings, About) picks one; nothing can add one, so it can't send the
-/// token anywhere but our own servers.
-///
-/// The default is the address people see (terminus.run), the one that goes
-/// with the project if someone else takes it over, and for now the only
-/// one. With a backup built in (TerminusBackup), a request that can't reach
-/// one at all goes to the other ([order]), so a network that refuses one of
-/// them doesn't stop the app. The old address, terminus.rcn.sh, isn't one:
-/// it's the owner's, so it doesn't go with the project.
 enum Servers {
-    /// The default: TerminusAPI in the build's Info.plist (the Beta configuration's own).
     static let defaultBase = Bundle.main.object(forInfoDictionaryKey: "TerminusAPI") as? String ?? "https://terminus.run"
-    /// A second address of the site's, the backup: TerminusBackup in Info.plist. Neither build has one.
     static let backupBase = (Bundle.main.object(forInfoDictionaryKey: "TerminusBackup") as? String).flatMap { $0.isEmpty ? nil : $0 }
     static let stub = "http://localhost:8787"
     private static let key = "server"
     private static let menuKey = "developerMenu"
 
-    /// [defaultBase] first, then the backup if there is one, then in a debug build the stub.
     static func all(default base: String, backup: String?, debug: Bool) -> [String] {
         var out: [String] = []
         for s in [base] + (backup.map { [$0] } ?? []) + (debug ? [stub] : []) where !out.contains(s) { out.append(s) }
         return out
     }
 
-    /// The site's other address, for when [base] can't be reached. None for the stub.
     static func backup(of base: String, in all: [String]) -> String? {
         isLocal(base) ? nil : all.first { $0 != base && !isLocal($0) }
     }
 
-    /// Where a request goes, in turn: [base], then its backup. While a
-    /// [detour] is on (the backup answered a moment ago when [base] didn't),
-    /// the backup first, so a refused address doesn't slow every request.
     static func order(_ base: String, in all: [String], detour: String?) -> [String] {
         guard let other = backup(of: base, in: all) else { return [base] }
         return detour == other ? [other, base] : [base, other]
     }
 
-    /// Whether [error] means the server was never reached, so the request can
-    /// go to the other address without arriving twice: no address for the
-    /// name, a connection refused, or a TLS handshake cut off (a firewall
-    /// resetting it). A connection lost otherwise only for a GET, which is
-    /// safe to repeat; never a timeout or no network at all.
     static func unreached(_ error: Error, method: String) -> Bool {
         guard let e = error as? URLError else { return false }
         switch e.code {
@@ -54,20 +31,15 @@ enum Servers {
         }
     }
 
-    /// How long requests go to the backup first, once it answered when the chosen address didn't.
     static let detourS: TimeInterval = 600
     private static let lock = NSLock()
     nonisolated(unsafe) private static var detour: (base: String, until: Date)?
 
-    /// Where a request to [base] goes now, in turn ([order]).
     static func tries(_ base: String, now: Date = Date()) -> [String] {
         let d = lock.withLock { detour }
         return order(base, in: choices, detour: d.flatMap { now < $0.until ? $0.base : nil })
     }
 
-    /// [at] answered a request meant for [base]. [base] ends a detour; the
-    /// backup starts one, which isn't stretched while it lasts, so [base] is
-    /// tried first again within [detourS].
     static func answered(_ at: String, base: String, now: Date = Date()) {
         lock.withLock {
             if at == base {
@@ -79,9 +51,6 @@ enum Servers {
         }
     }
 
-    /// [attempt] at each of [tries] in turn, until one is reached: the next
-    /// address only when the last was never reached ([unreached]). Returns
-    /// the address that answered with its result; the last error otherwise.
     static func first<T>(
         _ tries: [String], method: String, _ attempt: (String) async throws -> T
     ) async throws -> (at: String, result: T) {
@@ -93,9 +62,6 @@ enum Servers {
         throw URLError(.cannotConnectToHost)
     }
 
-    /// [attempt] at the chosen address, then the site's other one if it
-    /// couldn't be reached at all ([tries], [first]), noting which answered.
-    /// Every request to the server goes this way: the API's, the map's files.
     static func reach<T>(method: String, _ attempt: (String) async throws -> T) async throws -> T {
         let base = Api.base
         let (at, result) = try await first(tries(base), method: method, attempt)
@@ -103,20 +69,16 @@ enum Servers {
         return result
     }
 
-    /// The saved choice if it's still one of [all], else the default.
     static func pick(_ saved: String?, from all: [String]) -> String {
         if let saved, all.contains(saved) { return saved }
         return all[0]
     }
 
-    /// Plain HTTP to this Mac: the dev stub (apps/api/scripts/dev/dev-stub.mjs), from the simulator.
     static func isLocal(_ base: String) -> Bool {
         guard let u = URL(string: base), u.scheme == "http", let host = u.host?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1"
     }
 
-    /// The menu shows in debug and beta builds; in a stable release, once the
-    /// version in About is tapped [unlockTaps] times.
     static func menuAlways(debug: Bool, beta: Bool) -> Bool { debug || beta }
     static let unlockTaps = 7
 
@@ -133,7 +95,6 @@ enum Servers {
     static var menuShown: Bool { menuAlways(debug: isDebug, beta: Api.isBeta) || Shared.defaults.bool(forKey: menuKey) }
     static func unlockMenu() { Shared.defaults.set(true, forKey: menuKey) }
 
-    /// Saves [base]: the app starts again on it, with that server's own sign-in.
     static func choose(_ base: String) {
         guard choices.contains(base) else { return }
         Shared.defaults.set(base, forKey: key)
@@ -142,33 +103,25 @@ enum Servers {
 
 struct Api: Sendable {
     static let stableSite = "https://terminus.run"
-    /// The site this app belongs to, as people see it (TerminusSite in the build's Info.plist).
     static let site = Bundle.main.object(forInfoDictionaryKey: "TerminusSite") as? String ?? stableSite
     static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
-    /// Where links open (the account page, privacy, pairing): the site people
-    /// see, as the requests' default is.
     static let linkBase = site
     static var isBeta: Bool { site != stableSite }
-    /// Where requests go: the server chosen, or TERMINUS_API_BASE for the dev stub in a debug build.
     static var base: String { devOverride("TERMINUS_API_BASE") ?? Servers.current }
 
     static func devOverride(_ name: String) -> String? {
         #if DEBUG
-            // The widgets and the notification service aren't launched with the
-            // app's environment: the app hands its value on through the app group.
             let shared = "dev." + name
             if Bundle.main.bundlePath.hasSuffix(".appex") { return Shared.defaults.string(forKey: shared) }
             let value = ProcessInfo.processInfo.environment[name].flatMap { $0.isEmpty ? nil : $0 }
             if Shared.defaults.string(forKey: shared) != value { Shared.defaults.set(value, forKey: shared) }
             return value
         #else
-            // A release build only talks to its own servers.
             return nil
         #endif
     }
 
     let token: String?
-    /// Widgets and the notification service have a few seconds, not ten.
     var fast = false
 
     init(token: String?, fast: Bool = false) {
@@ -176,15 +129,10 @@ struct Api: Sendable {
         self.fast = fast
     }
 
-    /// The token this phone keeps for the current server.
     static var stored: Api { Api(token: TokenStore.read()) }
 
-    /// This build's version ("3.0.0").
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
-    /// `x-terminus-client`: platform and version. The watch is an iPhone app's
-    /// flavour ("ios-watch/3.11.0"): the same platform, minimum version and
-    /// push, told apart on the dashboard.
     static var client: String {
         #if os(watchOS)
             "ios-watch/\(version)"
@@ -192,8 +140,6 @@ struct Api: Sendable {
             "ios/\(version)"
         #endif
     }
-
-    // MARK: signing in
 
     func anon(name: String) async throws -> String {
         struct R: Decodable { let token: String }
@@ -207,7 +153,6 @@ struct Api: Sendable {
         return r.token
     }
 
-    /// Whose account a pairing code belongs to (masked), without spending it.
     func pairCheck(code: String) async throws -> String {
         struct R: Decodable { let account: String }
         let r: R = try await request("POST", "/api/pair/check", body: ["code": code])
@@ -226,7 +171,6 @@ struct Api: Sendable {
         try await request("POST", "/api/auth/app/code", body: ["request": r.request, "poll": r.poll, "code": code])
     }
 
-    /// After a "choose" outcome: keep the account's setup, or this phone's.
     func merge(anon: String, keepDevice: Bool) async throws {
         _ = try await send(
             "POST", "/api/auth/app/merge",
@@ -237,9 +181,6 @@ struct Api: Sendable {
         _ = try await send("POST", "/api/auth/logout", json: Data("{}".utf8))
     }
 
-    // MARK: answers
-
-    /// `seen` gets the response's headers: the watch keeps the language it's written in (WatchPlan).
     func next(
         _ target: Target, lat: Double?, lon: Double?, acc: Double? = nil, seen: ((HTTPURLResponse) -> Void)? = nil
     ) async throws -> NextAnswer {
@@ -252,7 +193,6 @@ struct Api: Sendable {
         return try NextAnswer.decode(try await send("GET", "/api/me/next", query: q + Self.h12, seen: seen))
     }
 
-    /// Something that happened on the trip; answers with the new planned answer.
     func signal(_ action: CardAction) async throws -> NextAnswer {
         try await signal(kind: action.id, trip: action.trip)
     }
@@ -264,8 +204,6 @@ struct Api: Sendable {
             try await send("POST", "/api/me/signal", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body)))
     }
 
-    /// "Earlier bus" or "Later bus" (`to`, as the card offered it, with its
-    /// direction), or "Best bus" (`to` nil); answers like a signal, for that trip.
     func step(trip: String, to: StepTarget?, dir: String?, lat: Double?, lon: Double?) async throws -> NextAnswer {
         var body: [String: Any] = ["trip": trip, "to": to?.fields ?? NSNull()]
         if let dir { body["dir"] = dir }
@@ -277,13 +215,11 @@ struct Api: Sendable {
             try await send("POST", "/api/me/step", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body)))
     }
 
-    /// A suggestion accepted or turned down.
     func choice(id: String, accept: Bool) async throws {
         _ = try await send(
             "POST", "/api/me/choice", json: try JSONSerialization.data(withJSONObject: ["id": id, "choice": accept ? "accept" : "dismiss"]))
     }
 
-    /// A class's "one bus earlier" or "no reminders" undone.
     func undoChoice(trip: String, pref: String) async throws {
         _ = try await send(
             "POST", "/api/me/choice", json: JSONSerialization.data(withJSONObject: ["choice": "undo", "trip": trip, "pref": pref]))
@@ -297,8 +233,6 @@ struct Api: Sendable {
         _ = try await send("DELETE", "/api/me/history")
     }
 
-    /// A one-off trip later today, planned like a class. Answers with the new
-    /// plan, from `lat` and `lon` when given, as `next` does.
     func once(_ target: Target, atMin: Int, lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> NextAnswer {
         var body: [String: Any] = ["atMin": atMin]
         switch target {
@@ -314,10 +248,6 @@ struct Api: Sendable {
             ))
     }
 
-    /// Today: each class with its leave-by, and the trips home. The JSON too,
-    /// kept for offline, and the language it's written in: the account's
-    /// choice wins over the one asked in, and a switch reaches the account a
-    /// moment after the app shows it. An older server doesn't say: the one asked in.
     func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> (DayPlan, Data, lang: String) {
         let asked = Lang.header
         let written = Mutex<String?>(nil)
@@ -328,8 +258,6 @@ struct Api: Sendable {
         return (try JSONDecoder().decode(DayPlan.self, from: data), data, lang)
     }
 
-    /// /me/nearby's stops, nearest first, and the JSON for the widget. With
-    /// `stopped`, the services not running now too (the Stops tab greys them).
     func nearby(lat: Double?, lon: Double?, acc: Double? = nil, stopped: Bool = false) async throws -> ([NearbyStop], Data) {
         struct R: Decodable { let stops: [NearbyStop] }
         let data = try await send(
@@ -337,7 +265,6 @@ struct Api: Sendable {
         return (try JSONDecoder().decode(R.self, from: data).stops, data)
     }
 
-    /// What's coming at one stop: every row, and the services not running now.
     func board(stop: String, publicBuses: Bool = false) async throws -> Board {
         var q = [URLQueryItem(name: "stop", value: stop), URLQueryItem(name: "stopped", value: "1")]
         if publicBuses { q.append(URLQueryItem(name: "public", value: "1")) }
@@ -346,7 +273,6 @@ struct Api: Sendable {
         return b
     }
 
-    /// One service's whole line; with `stop`, that stop's board row for it too.
     func line(svc: String, stop: String? = nil) async throws -> Line {
         var q = [URLQueryItem(name: "svc", value: svc)]
         if let stop { q.append(URLQueryItem(name: "stop", value: stop)) }
@@ -355,12 +281,10 @@ struct Api: Sendable {
         return l
     }
 
-    /// One service's live buses, for the map (BusList).
     func buses(svc: String) async throws -> Data {
         try await send("GET", "/api/buses", query: [URLQueryItem(name: "svc", value: svc)])
     }
 
-    /// `/api/campus` as it came, with its ETag; nil when `etag` says the kept copy is current.
     func campusJSON(etag: String? = nil) async throws -> (Data, String?)? {
         var tag: String?
         do {
@@ -371,28 +295,19 @@ struct Api: Sendable {
         }
     }
 
-    // MARK: the account
-
     func me() async throws -> Me {
         try JSONDecoder().decode(Me.self, from: await send("GET", "/api/me"))
     }
 
-    /// The profile as the server keeps it, as JSON so fields this version doesn't know survive a save.
     func profile() async throws -> [String: Any] {
         try JSONSerialization.jsonObject(with: await send("GET", "/api/me/profile")) as? [String: Any] ?? [:]
     }
 
-    /// Saves the whole profile; answers with it as saved.
     func saveProfile(_ profile: [String: Any]) async throws -> [String: Any] {
         let data = try await send("PUT", "/api/me/profile", json: JSONSerialization.data(withJSONObject: profile))
         return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
 
-    /// Reads the profile, makes `change` to it and saves it, only if nothing
-    /// else saved it in between (If-Match with the ETag it was read with);
-    /// if something did (412), reads it again and makes the change again. So
-    /// a pin added on Buses never undoes a favourite added on the map, or
-    /// another device's change. Answers with the profile as saved.
     func changeProfile(_ change: @Sendable (inout [String: Any]) -> Void) async throws -> [String: Any] {
         var attempt = 0
         while true {
@@ -409,7 +324,6 @@ struct Api: Sendable {
         }
     }
 
-    /// A request's body and its ETag, the profile's version for a later If-Match.
     func tagged(_ method: String, _ path: String, json: Data? = nil, ifMatch: String? = nil) async throws -> (Data, String?) {
         let tag = Mutex<String?>(nil)
         let data = try await send(method, path, json: json, ifMatch: ifMatch) { http in
@@ -419,13 +333,11 @@ struct Api: Sendable {
         return (data, tag.withLock { $0 })
     }
 
-    /// Imports a NUSMods share link; the server replaces the imported classes only if it all worked.
     func importTimetable(_ share: String) async throws -> ImportResult {
         let data = try await send("POST", "/api/me/import", json: JSONSerialization.data(withJSONObject: ["share": share]))
         return ImportResult(try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:])
     }
 
-    /// A pairing code for another device: the Mac, another phone, or this phone's watch.
     func pairCode() async throws -> String {
         struct R: Decodable { let code: String }
         return try JSONDecoder().decode(R.self, from: await send("POST", "/api/me/pair-code", json: Data("{}".utf8))).code
@@ -441,7 +353,6 @@ struct Api: Sendable {
         _ = try await send("DELETE", "/api/me/devices/\(safe)")
     }
 
-    /// An account without an email: everything goes.
     func deleteAccount() async throws {
         _ = try await send("DELETE", "/api/me")
     }
@@ -450,8 +361,6 @@ struct Api: Sendable {
         try await send("GET", "/api/me/export")
     }
 
-    /// This phone's push token, so the server can say when the card changes:
-    /// `apns:` and the token in hex, with `sandbox` for a development build.
     func registerPush(_ token: String) async throws {
         _ = try await send("POST", "/api/me/push", json: JSONSerialization.data(withJSONObject: ["token": token]))
     }
@@ -460,7 +369,6 @@ struct Api: Sendable {
         _ = try await send("DELETE", "/api/me/push")
     }
 
-    /// The new semester's reminder, worded on the server, for a push that says only `kind: term`.
     func notice() async throws -> (title: String, body: String)? {
         struct N: Decodable {
             let title: String?
@@ -472,13 +380,11 @@ struct Api: Sendable {
         return (t, b)
     }
 
-    /// "Is this wrong?": the answer as it came, with a reason, a note, or both.
     func report(reason: String?, note: String, answer: Data?) async throws {
         try await feedback(
             kind: "wrong", note: note, reason: reason, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
     }
 
-    /// Send feedback: a note about anything, emailed to the operator.
     func feedback(note: String) async throws {
         try await feedback(kind: "other", note: note)
     }
@@ -490,16 +396,12 @@ struct Api: Sendable {
         _ = try await send("POST", "/api/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
     }
 
-    /// The released version, from /download/latest.json.
     func latestVersion() async throws -> String {
         struct R: Decodable { let version: String }
         let r: R = try await request("GET", "/download/latest.json")
         return r.version
     }
 
-    /// Four decimals is about 11 m: enough to tell PGP from PGP Foyer, and no
-    /// more precise than that in URLs that pass through logs. `acc` is how far
-    /// out the fix may be: the server treats one past 200 m as no location.
     static func coords(_ lat: Double?, _ lon: Double?, _ acc: Double? = nil) -> [URLQueryItem] {
         guard let lat, let lon else { return [] }
         let f = { (v: Double) in String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"), v) }
@@ -508,7 +410,6 @@ struct Api: Sendable {
         return q
     }
 
-    /// The card's clock times in this phone's 12- or 24-hour style.
     static var h12: [URLQueryItem] { Clock.hour12 ? [URLQueryItem(name: "h12", value: "1")] : [] }
 
     private func request<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: String]? = nil)
@@ -518,7 +419,6 @@ struct Api: Sendable {
         return try JSONDecoder().decode(T.self, from: try await send(method, path, query: query, json: json))
     }
 
-    /// The response body of a 2xx; anything else throws with the server's message.
     func send(
         _ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil, ifNoneMatch: String? = nil, ifMatch: String? = nil,
         seen: ((HTTPURLResponse) -> Void)? = nil
@@ -548,14 +448,10 @@ struct Api: Sendable {
             }
             return req
         }
-        // The chosen address, then the site's other one if it couldn't be
-        // reached at all (Servers.order), inside the same deadline: widgets
-        // and the notification service have no time for a second full wait.
         let started = Date()
         let deadline = started.addingTimeInterval(fast ? 8 : 15)
         var sent = started
         func logged(_ status: Int?, _ error: Error?) {
-            // For the developer menu: an error status is an answer, not a failure.
             RequestLog.record(
                 method, path, base: Api.base, status: status, tookMs: Int(Date().timeIntervalSince(started) * 1000), failure: error)
         }
@@ -598,7 +494,6 @@ struct Api: Sendable {
         return data
     }
 
-    /// No cache of its own: every answer is fresh, and the edge caches what can be.
     private static let session: URLSession = {
         let c = URLSessionConfiguration.default
         c.requestCachePolicy = .reloadIgnoringLocalCacheData

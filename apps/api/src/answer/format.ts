@@ -1,29 +1,10 @@
-/**
- * The server returns a pre-rendered string and clients render it without
- * computing anything. The Android app and its widgets, the Mac menu bar app,
- * the web app and push notifications all show the same `label` and `detail`.
- * The moment a client starts formatting for itself, the clients begin to
- * drift apart and there are four places to fix every bug.
- *
- * So: user-visible strings are produced on the server, never in a client.
- * The answer's `label`, `detail` and `alt` are built here; the class card and
- * the other per-client lines in card.ts; clock times and lateness in
- * clock.ts; rest and timing text in profile.ts.
- */
-
 import type { Answer, Arrival, BusLeg, BusChange, Quality, ScoredOption, Stop } from '../types.ts';
 import { LABEL_MAX, PUBLIC, WALK, isMeasured } from '../config.ts';
 import { svcName } from './public.ts';
 import { m } from '../i18n.ts';
 
-/**
- * The contract caps `label` at 40 chars, but a small home-screen widget cuts
- * it far shorter than that -- roughly 12-16 glyphs are actually visible on
- * most launchers. 40 is the hard limit; this is the one that matters.
- */
 export const LABEL_TARGET = 16;
 
-/** Does this label survive a small widget, not just the contract? */
 export function fitsTile(label: string): boolean {
   return label.length <= LABEL_TARGET;
 }
@@ -56,10 +37,6 @@ export function clampLabel(s: string): string {
   return s.length <= LABEL_MAX ? s : s.slice(0, LABEL_MAX - 1).trimEnd() + '…';
 }
 
-/**
- * Whole-second ISO, "2026-09-28T01:14:02Z". Clients parse these, and a
- * default Swift ISO8601DateFormatter rejects the ".000" toISOString adds.
- */
 export const isoSeconds = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 const iso = isoSeconds;
 
@@ -71,36 +48,21 @@ function ageMin(nowMs: number, fetchedAt: number): number {
   return Math.max(0, Math.round((nowMs - fetchedAt) / 60_000));
 }
 
-/**
- * How long until you can board, in words.
- *
- * An 'unknown' option carries a boardS, but it is a sort key derived from a
- * default headway, not a prediction. It never becomes a number on screen.
- */
 export function etaPhrase(o: ScoredOption): string {
   if (o.quality === 'unknown') return m().noTimes;
-  // An old reading, aged to now, is no more exact than a guess.
   return o.quality === 'scheduled' || o.quality === 'stale' ? m().approx(mins(o.boardS)) : mins(o.boardS);
 }
 
 export interface FormatInput {
   options: ScoredOption[];
   alt: ScoredOption | null;
-  /** Stop we would report when there is nothing to board (ended case). */
   fallbackStop: Stop | null;
-  /** Nearest stop of any kind, or null when we have no coordinates. */
   nearestStop: Stop | null;
-  /** Without coordinates, the stop the trip is assumed to start from. */
   origin?: Stop | null;
-  /** Short destination name, e.g. "UTown". Null for a bare /api/next. */
   destLabel: string | null;
-  /** Seconds to walk the entire way, when known. */
   walkAllS: number | null;
-  /** Seconds on foot from where a bus gets you off to the destination itself (a room, a food court). */
   endWalk?: (o: ScoredOption) => number;
-  /** The same from the stop the whole walk (`walkAllS`) ends at. */
   walkEndS?: number;
-  /** What a second on foot costs against one waiting or riding (walkVerdict). */
   walkWeight?: number;
   confidence: number;
   arrivals: Arrival[];
@@ -109,20 +71,10 @@ export interface FormatInput {
 
 export type WalkVerdict = 'win' | 'close' | 'lose';
 
-/** Seconds on foot in an option: to its stop, across the road at a change, and on from where it drops you (`endS`). */
 export function footS(o: ScoredOption, endS = 0): number {
   return o.walkS + (o.change?.crossS ?? 0) + endS;
 }
 
-/**
- * Several trips on this campus are beaten outright on foot. Say so.
- *
- * No safety margin is required to beat a guess: if the best we have is a
- * headway estimate or no data at all, a known walking time is the better
- * answer the moment it is shorter -- shorter once every second on foot, the
- * whole walk's and the bus's own walks', counts `walkWeight` times
- * (WALK.sunWeight): a wait at the stop beats a walk in the heat.
- */
 export function walkVerdict(
   walkAllS: number | null,
   best: ScoredOption | undefined,
@@ -131,17 +83,12 @@ export function walkVerdict(
 ): WalkVerdict {
   if (walkAllS == null || !best) return 'lose';
   const margin = isMeasured(best.quality) ? WALK.beatsBusByS : 0;
-  // Both the whole way: `walkAllS` and the bus's `bestEndS` include the walk
-  // on to a room or food court. Not the wait for a service to start, which
-  // the walk would wait out too; and a fare, as when ranking buses: walking
-  // is free.
   const busS = best.totalS - (best.opensInS ?? 0) + bestEndS + (best.paid ? PUBLIC.fareWorthS : 0);
   if (walkAllS * walkWeight + margin < busS + (walkWeight - 1) * footS(best, bestEndS)) return 'win';
   if (walkAllS < busS + WALK.mentionWithinS) return 'close';
   return 'lose';
 }
 
-/** An option as a leg, for the card's journey. An 'unknown' option's times are sort keys, so it has none. */
 export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
   const timed = o.quality !== 'unknown';
   return {
@@ -152,7 +99,6 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
     rideS: o.rideS,
     board: timed ? iso(o.fromMs + o.boardS * 1000) : null,
     arrive: timed ? iso(o.fromMs + o.totalS * 1000) : null,
-    // An old reading counted down to now is no more exact than a guess (etaPhrase).
     estimated: o.quality === 'scheduled' || o.quality === 'stale',
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
@@ -162,7 +108,6 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
   };
 }
 
-/** An option's second bus, for its leg and its leave-by. Its times are the trip's: none when the trip has none. */
 export function busChange(o: ScoredOption): BusChange | undefined {
   const t = o.change;
   if (!t) return undefined;
@@ -181,7 +126,6 @@ export function busChange(o: ScoredOption): BusChange | undefined {
   };
 }
 
-/** Where a change of bus is, and to which: "change at KV to P". */
 export function changeWords(o: ScoredOption): string | null {
   const t = o.change;
   if (!t) return null;
@@ -189,10 +133,8 @@ export function changeWords(o: ScoredOption): string | null {
   return t.crossS > 0 ? m().changeAcross(at, named(t)) : m().changeTo(at, named(t));
 }
 
-/** The bus as it's named in text: "95 ($)" for a public bus, so the fare shows wherever the badge doesn't. */
 export const named = (o: { svc: string; paid?: true }): string => (o.paid ? `${svcName(o.svc)} ($)` : svcName(o.svc));
 
-/** One option rendered standalone, for the `alt` field. */
 export function renderAlt(o: ScoredOption): string {
   return `${named(o)}${o.change ? ` → ${named(o.change)}` : ''} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
 }
@@ -209,22 +151,16 @@ function buildLabel(best: ScoredOption, nowMs: number): string {
 function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): string {
   const parts: string[] = [shortStop(best.stop.name)];
 
-  // Being sent to the stop you are NOT standing at is the answer that saves
-  // the bus, and it is also the one that looks wrong. Say it out loud.
   const elsewhere = Boolean(f.nearestStop && f.nearestStop.code !== best.stop.code);
   if (elsewhere && f.nearestStop?.opposite === best.stop.code) parts.push(m().crossRoad);
-  // No coordinates, but the bus goes from across the road from where the trip starts.
   else if (!f.nearestStop && f.origin && f.origin.opposite === best.stop.code) parts.push(m().crossRoad);
   else if (best.walkS >= 60) parts.push(m().walkToStop(mins(best.walkS)));
   else if (elsewhere) parts.push(m().shortWalk);
-  // No nearestStop means no coordinates, so we cannot claim you are anywhere.
   else if (f.nearestStop) parts.push(m().rightHere);
 
   const change = changeWords(best);
   if (change) parts.push(change);
 
-  // The bus only stops across the road from the destination: say where to
-  // get off, or you ride on waiting for a stop it never calls at.
   if (best.off && best.hops > 0) parts.push(m().offAt(shortStop(best.off.name)));
 
   if (f.destLabel && best.hops > 0) {
@@ -237,17 +173,13 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     parts.push(m().atDest(f.destLabel));
   }
 
-  // The whole way on foot, for comparison: "walking 18 min", not "walk", which reads as a walk to the bus.
   if (verdict === 'close' && f.walkAllS != null) parts.push(m().walkingAll(mins(f.walkAllS + (f.walkEndS ?? 0))));
 
   const crowd = crowdWord(best.arrival?.crowd ?? null);
   if (crowd) parts.push(crowd);
 
-  // A public bus has a fare, which the shuttle doesn't: say which this is.
   if (best.paid) parts.push(m().publicBus);
 
-  // Degrade in public: an unresolvable direction is worse than a stale time,
-  // because it is the failure that walks you onto the wrong bus.
   if (best.ambiguousBerth) parts.push(m().directionUnconfirmed);
 
   if (best.quality === 'stale') parts.push(m().minOld(ageMin(f.nowMs, best.fetchedAt)));
@@ -255,13 +187,9 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   else if (best.quality === 'unknown') parts.push(m().liveUnavailable);
 
   if (f.alt) {
-    // Same service off a different stop: naming the service alone reads as
-    // "another D2 is coming here", which is not what it means.
-    // "or A1 in 14 min": when it comes, not how long it takes.
     const raw = etaPhrase(f.alt);
     const plain = raw === m().now || raw === m().noTimes;
     const altName = f.alt.change ? `${named(f.alt)} → ${named(f.alt.change)}` : named(f.alt);
-    // As the buses are named: a two-way public route's directions are one service ("151/1", "151/2").
     const sameSvc = svcName(f.alt.svc) === svcName(best.svc) && !f.alt.change && !best.change;
     parts.push(m().orAlt(sameSvc ? shortStop(f.alt.stop.name) : altName, raw, plain));
   }
@@ -269,25 +197,13 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   return parts.join(' · ');
 }
 
-/**
- * The degrade ladder. Measured times (live, or stale: a real arrival aged
- * to now) rank above guesses (scheduled: a timetable or headway; unknown:
- * the feed wasn't reached, so no time is printed), whatever the times
- * (isMeasured, scoreOptions). Within a tier the sooner arrival wins. With
- * no option left, the answer is ended.
- *
- * A three-minute-old answer honestly labelled beats a spinner, and beats an
- * empty card that reads as "no buses".
- */
 export function buildAnswer(f: FormatInput): Answer {
   const best = f.options[0];
 
   if (!best) {
     const stop = f.fallbackStop;
     const walk = f.walkAllS;
-    // What's said is the whole way, on to a room or food court; arriveAt stays at the stop, as a bus's does.
     const said = walk != null ? walk + (f.walkEndS ?? 0) : null;
-    // A short walk with nothing to board is not an outage, it is an answer.
     const trivial = said != null && said <= WALK.mentionWithinS;
     const label = clampLabel(said == null ? m().noBuses : trivial ? m().walkLabel(mins(said)) : m().noBusWalk(mins(said)));
     const detail =
@@ -295,7 +211,6 @@ export function buildAnswer(f: FormatInput): Answer {
     return {
       label,
       detail,
-      // The label already says to walk; repeating it as the alternative is noise.
       alt: null,
       stop: { code: stop?.code ?? '', name: stop?.name ?? '', confidence: f.confidence },
       quality: 'ended' as Quality,
@@ -311,26 +226,18 @@ export function buildAnswer(f: FormatInput): Answer {
   const walkThereS = f.walkAllS != null ? f.walkAllS + (f.walkEndS ?? 0) : null;
   const verdict = walkVerdict(walkThereS, best, bestEndS, f.walkWeight);
 
-  // `quality` still describes the bus data, because `asOf` and `arrivals`
-  // still describe the feed. When it is 'unknown', that is precisely why
-  // walking won.
   const common = {
     stop: { code: best.stop.code, name: best.stop.name, confidence: f.confidence },
     quality: best.quality,
-    // A stale answer keeps its ORIGINAL fetch time. Lying about this is worse
-    // than being stale.
     asOf: new Date(best.quality === 'stale' ? best.fetchedAt : f.nowMs).toISOString(),
     arrivals: f.arrivals,
   };
 
-  // Board and ride times count from now (scoreOptions). An 'unknown'
-  // option's times are sort keys, never clock times.
   const timed = best.quality !== 'unknown';
   const departsAt = timed ? iso(best.fromMs + best.boardS * 1000) : null;
   const arriveAt = timed ? iso(best.fromMs + best.totalS * 1000) : null;
 
   if (verdict === 'win' && f.walkAllS != null) {
-    // As compared: the trip itself, not the wait for the service to start.
     const busPhrase =
       best.quality === 'unknown'
         ? m().busNoLive(svcName(best.svc))

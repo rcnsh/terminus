@@ -115,7 +115,6 @@ import sh.rcn.terminus.id
 import sh.rcn.terminus.widget.NearbyShared
 import sh.rcn.terminus.widget.redrawWidgets
 
-/** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
     Trips(R.string.heading_your_trips),
     Timetable(R.string.heading_timetable),
@@ -125,16 +124,10 @@ internal enum class SettingsPage(val title: Int) {
     Language(R.string.heading_language),
     Appearance(R.string.heading_appearance),
     Account(R.string.heading_account),
-    // Feedback is a row of its own in the list; About is a link under it.
     About(R.string.about),
     Feedback(R.string.send_feedback),
 }
 
-/**
- * Everything the account page has, so the website is optional for daily use: a list of groups, each with a line saying what's set, opening
- * a page that slides in. Back (and the back gesture, which the page follows) returns to the list, as does tapping the Settings tab again
- * ([toList]).
- */
 @Composable
 internal fun SettingsScreen(
     state: AccountState,
@@ -146,8 +139,6 @@ internal fun SettingsScreen(
     onSignedOut: () -> Unit,
     onClose: () -> Unit,
 ) {
-    // On opening, and again each time the app comes back while Settings is
-    // open: a device added or a change made on another one shows here.
     LifecycleResumeEffect(Unit) {
         account.refresh()
         onPauseOrDispose {}
@@ -160,19 +151,13 @@ internal fun SettingsScreen(
     LaunchedEffect(Unit) { account.loadCampus() }
 
     var open by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
-    // A NUSMods link shared into the app: straight to Timetable, to import it.
     LaunchedEffect(state.sharedLink) { if (state.sharedLink != null) open = SettingsPage.Timetable }
     LaunchedEffect(Unit) { toList.collect { open = null } }
-    // Wide, the list and a page side by side, the first page in the list open until another is.
     val wide = windowWidth() == Width.Wide
-    // A page's own back is PageStack's, which a back gesture can seek; the list's leaves Settings, as does the wide layout's.
     BackHandler(enabled = wide || open == null, onBack = onClose)
 
-    // Edge to edge, the insets inside, so the list's sky can reach the top.
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
-    // What happened (a save that failed, an export made) floats in the bar at
-    // the foot, as Undo does, rather than pushing the page down under it.
     val notices = LocalNotices.current
     LaunchedEffect(state.message) {
         val said = state.message ?: return@LaunchedEffect
@@ -184,14 +169,10 @@ internal fun SettingsScreen(
             SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
         }
     }
-    // The list and each page keep where they were scrolled to under their own key, as the window goes from one pane to two and back.
     val scrolls = rememberPaneScrolls()
-    // The list, and the page open: one closed, or another opened in its place, starts at the top next time.
     scrolls.keep(setOfNotNull(LIST, (if (wide) open ?: SettingsPage.Trips else open)?.name))
     if (wide) {
-        // Your trips, not the account: a first look shouldn't land on Sign out.
         val shown = open ?: SettingsPage.Trips
-        // The two bands of the sky end at the same height, and only the page's has the moon.
         val skies = remember { PaneSkies() }
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.width(Widths.PANE.dp).fillMaxHeight()) {
@@ -216,13 +197,8 @@ internal fun SettingsScreen(
     }
 }
 
-/** The list's key in Settings' [PaneScrolls]. */
 private const val LIST = "list"
 
-/**
- * One page of Settings, [content] under its title in a slim band of the list's sky, scrolling away with the page; the page itself plain, in
- * the column. With [back], a back arrow before the title; wide, the page is beside the list and has none.
- */
 @Composable
 private fun SettingsPagePane(page: SettingsPage, top: Dp, bottom: Dp, back: (() -> Unit)?, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().padding(bottom = bottom)) {
@@ -242,12 +218,6 @@ private fun SettingsPagePane(page: SettingsPage, top: Dp, bottom: Dp, back: (() 
     }
 }
 
-/**
- * Settings at a glance: who you are, then the rest as rows in groups, each saying what's set. What isn't set yet (a home stop, classes)
- * says what to do, in the accent; notifications all off shows in amber: it's the setting that changes the most. About is under them. The
- * title is in the same slim band of the sky as each page's, so opening one doesn't change the top; the list is plain under it and scrolls,
- * as a page does. [top] and [bottom]: the status bar's and the tab bar's room.
- */
 @Composable
 private fun SettingsList(
     state: AccountState,
@@ -274,7 +244,6 @@ private fun SettingsList(
     }
 }
 
-/** Who you are: your email (or that you're not signed in) and your devices, opening Account. */
 @Composable
 private fun AccountTile(state: AccountState, ui: UiState, chosen: Boolean, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -304,7 +273,6 @@ private fun AccountTile(state: AccountState, ui: UiState, chosen: Boolean, onOpe
     }
 }
 
-/** The email's first letter on a disc in the accent, for the account. */
 @Composable
 private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
     val c = MaterialTheme.colorScheme
@@ -313,7 +281,6 @@ private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
     }
 }
 
-/** The pages in the list, with their icons: three groups (what your trips use, this device, then feedback), as the website lists them. */
 private val GROUPS =
     listOf(
         listOf(
@@ -330,15 +297,11 @@ private val GROUPS =
         listOf(SettingsPage.Feedback to R.drawable.ic_chat),
     )
 
-/** Under the horizon: the groups of pages, and About. */
 @Composable
 private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, chosen: SettingsPage?, onOpen: (SettingsPage) -> Unit) {
-    // Wide (a page chosen beside the list), the list is a narrow pane.
     val stacked = chosen != null
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
-    // What isn't set yet says what to do, in the accent: no home stop, no
-    // classes, or a link for a semester that's over.
     val todo = { page: SettingsPage ->
         profile != null &&
             when (page) {
@@ -352,7 +315,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
             Group(null) {
                 group.forEachIndexed { i, (page, icon) ->
                     if (i > 0) RowDivider()
-                    // Wide, the page open beside the list is marked as chosen.
                     val on = page == chosen
                     Row(
                         Modifier.fillMaxWidth()
@@ -369,7 +331,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                             Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(14.dp))
-                        // Send feedback says what it's for on its page: beside it there's no room.
                         val said =
                             when (page) {
                                 SettingsPage.Feedback -> null
@@ -392,7 +353,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                             )
                         }
                         if (stacked) {
-                            // In the narrow list pane, the value on a line under the name, so neither is cut off.
                             Column(Modifier.weight(1f)) {
                                 Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                                 if (!said.isNullOrEmpty()) value(Modifier, TextAlign.Start)
@@ -414,7 +374,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
             }
         }
     }
-    // About, as a link under the groups.
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
         val on = chosen == SettingsPage.About
         TextButton(onClick = { onOpen(SettingsPage.About) }, modifier = Modifier.chosen(on)) {
@@ -424,7 +383,6 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     Spacer(Modifier.height(16.dp))
 }
 
-/** What's set on a page, in a line: the same words the list had. */
 @Composable
 private fun summary(page: SettingsPage, state: AccountState, ui: UiState): String? {
     val profile = state.profile
@@ -463,7 +421,6 @@ private fun summary(page: SettingsPage, state: AccountState, ui: UiState): Strin
     }
 }
 
-/** "No classes yet", "1 class", "12 classes". */
 @Composable
 private fun classCount(n: Int): String =
     when (n) {
@@ -475,7 +432,6 @@ private fun classCount(n: Int): String =
 @Composable
 private fun deviceCount(n: Int): String = if (n == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, n)
 
-/** Language and time, and Appearance: what each is set to. */
 @Composable
 private fun displaySummary(page: SettingsPage, state: AccountState): String {
     val ctx = LocalContext.current
@@ -503,7 +459,6 @@ private fun displaySummary(page: SettingsPage, state: AccountState): String {
     }
 }
 
-/** "Follow this phone", or "Follow this tablet" on a tablet ([DeviceKind.word], as every string that names the device). */
 private fun themeName(theme: String) =
     when (theme) {
         Theme.LIGHT -> R.string.theme_light
@@ -518,7 +473,6 @@ private fun paceName(pace: String) =
         else -> R.string.pace_normal
     }
 
-/** A page waiting for the profile: a group of rows in Settings' shape (a name and a line under it), with no controls to press. */
 @Composable
 private fun SettingsSkeleton() {
     Skeleton(stringResource(R.string.checking)) {
@@ -539,7 +493,6 @@ private fun SettingsSkeleton() {
     }
 }
 
-/** One page of Settings: that group's controls. */
 @Composable
 private fun SettingsPageContent(
     page: SettingsPage,
@@ -564,7 +517,6 @@ private fun SettingsPageContent(
             Groups {
                 if (profile == null) return@Groups
                 var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
-                // The semester the link is for has ended: say so above everything else.
                 if (state.needsReimport) {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
@@ -610,15 +562,12 @@ private fun SettingsPageContent(
     }
 }
 
-/** The app's mark, name and version; what it is, that it isn't NUS's, and where its data comes from; then its links. */
 @Composable
 private fun AboutPage() {
     val ctx = LocalContext.current
     var developer by remember { mutableStateOf(Servers.menuUnlocked(ctx)) }
     var taps by remember { mutableIntStateOf(0) }
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
-    // Each link's name, where it goes (LINK_BASE), and that
-    // place as shown under the name (the address people know).
     val links =
         listOf(
             Triple(R.string.get_apps, BuildConfig.LINK_BASE, host),
@@ -634,7 +583,6 @@ private fun AboutPage() {
             BrandMark(Modifier.size(44.dp))
             Column(Modifier.padding(start = 12.dp)) {
                 Text("terminus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                // Tapped seven times, it shows the developer menu, as Android's own build number does.
                 Hint(
                     stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
                     Modifier.clickable(interactionSource = null, indication = null) {
@@ -652,7 +600,6 @@ private fun AboutPage() {
         Text(stringResource(R.string.about_what), modifier = Modifier.padding(top = 14.dp))
         Hint(stringResource(R.string.about_independent), Modifier.padding(top = 10.dp))
     }
-    // Every one opens in the browser, out of the app.
     Group(stringResource(R.string.heading_more), stringResource(R.string.about_aup)) {
         links.forEachIndexed { i, (title, url, where) ->
             if (i > 0) RowDivider()
@@ -662,15 +609,9 @@ private fun AboutPage() {
     if (developer) DeveloperGroups()
 }
 
-/** The longest note the server takes; the counter turns amber from [FEEDBACK_NEAR]. */
 private const val FEEDBACK_MAX = 1000
 private const val FEEDBACK_NEAR = 900
 
-/**
- * A note to the operator about anything, laid out as a message: who it's from, the note, then a counter and Send. Only an account with an
- * email can send one, so there's someone to reply to; without one, the page asks for an email instead. A wrong answer is better sent from
- * under the card, so the card below says so.
- */
 @Composable
 private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEmail: () -> Unit) {
     val email = state.email
@@ -697,7 +638,6 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
                 )
             }
             RowDivider()
-            // The note is the card's body: no box of its own, and it scrolls inside past ten lines.
             TextField(
                 value = note,
                 onValueChange = { note = it.take(FEEDBACK_MAX) },
@@ -754,20 +694,12 @@ private fun FeedbackPage(state: AccountState, account: AccountViewModel, onAddEm
     }
 }
 
-/**
- * Leave alerts and the live notification: on this phone only, in two groups (before class, during a trip), each row with a short line and
- * the details under the group. Exact alarms are asked for when either notification is on, or a widget shows buses near you (its minutes
- * need them too).
- */
 @Composable
 private fun NotificationSettings(main: MainViewModel) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val ui by main.state.collectAsStateWithLifecycle()
-    // "Alarms & reminders" is allowed in system settings; check again on return.
     var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
-    // Turned on here, but off in the phone's settings (all of the app's
-    // notifications, or the one's channel): said, with the way there.
     val blocked = {
         val store = Store(ctx)
         (store.leaveAlerts && !LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) ||
@@ -816,7 +748,6 @@ private fun NotificationSettings(main: MainViewModel) {
     }
 }
 
-/** What you chose for particular classes, each undoable. */
 @Composable
 internal fun TripChoices(state: AccountState, account: AccountViewModel) {
     if (state.choices.isEmpty()) return
@@ -837,7 +768,6 @@ internal fun TripChoices(state: AccountState, account: AccountViewModel) {
     }
 }
 
-/** How each trip went, kept 35 days for the suggestions; cleared here without touching the rest. */
 @Composable
 internal fun TripHistory(state: AccountState, account: AccountViewModel) {
     if (state.history == 0) return
@@ -875,10 +805,6 @@ internal fun TripHistory(state: AccountState, account: AccountViewModel) {
     }
 }
 
-/**
- * Who you're signed in as, with Sign out; your data; the account page for API keys and signing out everywhere (the web's alone); then
- * Delete account on its own at the foot, the only red on any page.
- */
 @Composable
 private fun AccountSection(
     state: AccountState,
@@ -927,7 +853,6 @@ private fun AccountSection(
             )
         }
         RowDivider()
-        // Kept on this phone, not in the account: it's about this app's crashes.
         var crashReports by remember { mutableStateOf(CrashReports.enabled(ctx)) }
         FieldRow(
             stringResource(R.string.crash_reports),
@@ -940,7 +865,6 @@ private fun AccountSection(
             Switch(checked = crashReports, onCheckedChange = null)
         }
     }
-    // An account with an email is deleted from the account page, signed in on the web (the server insists).
     Group(null) {
         if (email == null) {
             LinkRow(stringResource(R.string.delete_account), { confirm = "delete" }, color = c.error)
@@ -996,7 +920,6 @@ private fun AccountSection(
     }
 }
 
-/** Each device's kind, as the other apps draw it: a watch, a Mac, else a phone. */
 internal fun deviceIcon(d: Device): Int =
     when {
         d.watch -> R.drawable.ic_device_watch
@@ -1004,7 +927,6 @@ internal fun deviceIcon(d: Device): Int =
         else -> R.drawable.ic_device_phone
     }
 
-/** Your devices, each removable (this phone signs out), then Add a device. */
 @Composable
 private fun Devices(state: AccountState, account: AccountViewModel, main: MainViewModel, onSignedOut: () -> Unit) {
     var removing by remember { mutableStateOf<Device?>(null) }
@@ -1084,7 +1006,6 @@ private fun Devices(state: AccountState, account: AccountViewModel, main: MainVi
     state.pairCode?.let { code -> PairCodeDialog(code, account::closePairCode) }
 }
 
-/** A small grey label beside a name: "This phone". */
 @Composable
 private fun Tag(text: String) {
     Text(
@@ -1099,7 +1020,6 @@ private fun Tag(text: String) {
     )
 }
 
-/** The code to type on a Mac, and a QR code another phone's camera opens. */
 @Composable
 private fun PairCodeDialog(code: String, onClose: () -> Unit) {
     val ctx = LocalContext.current
@@ -1142,7 +1062,6 @@ private fun PairCodeDialog(code: String, onClose: () -> Unit) {
     )
 }
 
-/** Black on white with a quiet zone, whatever the theme: cameras read it best. */
 private fun qrBitmap(text: String, size: Int): Bitmap {
     val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 2))
     val bmp = createBitmap(m.width, m.height)
@@ -1151,17 +1070,12 @@ private fun qrBitmap(text: String, size: Int): Bitmap {
     return bmp
 }
 
-/**
- * Every class, imported or added by hand, by day and time, each with Remove, in one card ending in "+ Add a class or commitment by hand";
- * then any favourites at their usual time each week.
- */
 @Composable
 private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
     val ctx = LocalContext.current
     val h12 = hour12(ctx)
     val time = { m: Int -> minuteClock(m, h12) }
     val destinations = campus?.destinations.orEmpty()
-    // Monday first, as the week reads; the index is the class's place in its own list.
     val order = WEEKDAYS.map { it.first }
     var changing by rememberSaveable { mutableStateOf<String?>(null) }
     var open by rememberSaveable { mutableStateOf(false) }
@@ -1171,9 +1085,7 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
         )
     Group(classCount(all.size)) {
         for ((imported, i, t) in all) {
-            // Tapped, a class opens to change its stop, as on the web.
             val key = "${if (imported) "t" else "m"}$i"
-            // The class as this list shows it, every field: a change made again on a newer profile finds it, or no class at all.
             val seen = profile.classAt(imported, i)
             val expanded = changing == key
             val state = stringResource(if (expanded) R.string.a11y_expanded else R.string.a11y_collapsed)
@@ -1195,7 +1107,6 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
                         )
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
-                // This class, found where it is now: a second tap before the list redraws mustn't take the next one.
                 RemoveButton({ if (seen != null) account.edit { it.removeClass(imported, i, seen) } })
             }
             if (changing == key) {
@@ -1219,7 +1130,6 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
             AddClass(destinations, account, profile.limits.label) { open = false }
         }
     }
-    // A favourite at its usual time each week: removable here with the classes.
     val usual =
         profile.usual
             .mapNotNull { u -> profile.places.firstOrNull { it.key == u.place }?.let { u to it } }
@@ -1243,7 +1153,6 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     }
 }
 
-/** A class or commitment by hand: its day, times, name and where, under the classes. */
 @Composable
 private fun AddClass(destinations: List<Destination>, account: AccountViewModel, maxLabel: Int, onDone: () -> Unit) {
     var day by rememberSaveable { mutableIntStateOf(1) }
@@ -1251,8 +1160,6 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
     var end by rememberSaveable { mutableStateOf<Int?>(null) }
     var label by rememberSaveable { mutableStateOf("") }
     var where by remember { mutableStateOf<Destination?>(null) }
-    // It opens below the list, often off the screen: scroll just far enough to
-    // show all of it, so opening it visibly does something. After a frame, once it's laid out.
     val reveal = remember { BringIntoViewRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos {}
@@ -1302,18 +1209,14 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
     }
 }
 
-/** Your favourites in one card, each with Remove, ending in the search to add one. */
 @Composable
 private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
-    // A stop's name, or a food court's (favourites and classes can go to one).
     val stopName = { code: String ->
         campus?.stops?.firstOrNull { it.code == code }?.name
             ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label
             ?: code
     }
     var note by remember { mutableStateOf<String?>(null) }
-    // Rows fold away before they go and unfold as they come (FoldRow), so
-    // adding or removing is seen happening rather than the list jumping.
     val drawn = rememberDrawn()
     var leaving by remember { mutableStateOf(setOf<String>()) }
     var picked by remember { mutableStateOf<String?>(null) }
@@ -1330,7 +1233,6 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(p.label, style = MaterialTheme.typography.bodyLarge)
-                                // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
                                 if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
                             }
                             RemoveButton({
@@ -1340,7 +1242,6 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                                     var removed: RemovedPlace? = null
                                     account.edit { removed = it.removePlaceAt(p.to) }
                                     leaving = leaving - p.key
-                                    // Undo in the bar at the foot, as for a class swiped off Today.
                                     val r = removed ?: return@afterFold
                                     scope.launch {
                                         val undo =
@@ -1358,7 +1259,6 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
             }
         }
         if (profile.places.size < profile.limits.places) {
-            // The stops your classes go to come first, each saying which classes use it.
             val favourite = profile.places.map { it.to }.toSet()
             val timetable =
                 (profile.trips + profile.manual)
@@ -1378,7 +1278,6 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                 WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable, leaving = picked) { d
                     ->
                     if (d == null || picked != null) return@WherePicker
-                    // No name to type: it's called what was picked, short, as it reads on a button.
                     val to = if (d.kind == "landmark") d.code else d.stopCode
                     val same = profile.places.firstOrNull { it.to == to }
                     if (same != null) {
@@ -1387,7 +1286,6 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                     }
                     note = null
                     val add = { account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) } }
-                    // One of your timetable's stops folds out of that list first; a searched one has gone with the search.
                     if (timetable.none { it.id == d.id }) return@WherePicker add()
                     picked = d.id
                     scope.afterFold {
@@ -1401,16 +1299,11 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
     LaunchedEffect(Unit) { account.loadCampus() }
 }
 
-/**
- * The Nearby widget, on this phone only: New to NUS, where it explains the buses ([NewToNus]); and its minutes until each bus, which need
- * "Alarms & reminders", allowed on a system page (the row goes there, either way).
- */
 @Composable
 private fun NearbyWidgetSettings() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val on = NewToNus.on(ctx)
-    // Checked again on coming back from the system page; the widget follows by itself (Refresher hears the change).
     var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
     LifecycleResumeEffect(Unit) {
         exact = LeaveAlerts.canBeExact(ctx)
@@ -1422,7 +1315,6 @@ private fun NearbyWidgetSettings() {
             Modifier.clickable { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } },
             sub = stringResource(if (exact) R.string.widget_minutes_on else R.string.widget_minutes_off),
         ) {
-            // Allowed, the line under it says so; there's nothing to do here.
             if (!exact)
                 OutlinedButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) {
                     Text(stringResource(R.string.allow))
@@ -1442,11 +1334,9 @@ private fun NearbyWidgetSettings() {
     }
 }
 
-/** Auto, light or dark, on this phone only. */
 @Composable
 private fun ThemePicker() {
     val ctx = LocalContext.current
-    // Read again when it changes, so the pill moves before the theme does.
     var pref by remember { mutableStateOf(Theme.pref(ctx)) }
     Group(stringResource(R.string.theme), stringResource(DeviceKind.word(R.string.theme_hint))) {
         Pills(
@@ -1465,7 +1355,6 @@ private fun ThemePicker() {
     }
 }
 
-/** Auto (the phone's own), 12- or 24-hour, for the account. */
 @Composable
 private fun ClockPills(profile: ProfileDoc?, account: AccountViewModel) {
     Pills(
@@ -1480,7 +1369,6 @@ private fun ClockPills(profile: ProfileDoc?, account: AccountViewModel) {
     )
 }
 
-/** Auto (the phone's), English or 中文. The languages are named in themselves. */
 @Composable
 private fun LanguagePicker(account: AccountViewModel) {
     val ctx = LocalContext.current

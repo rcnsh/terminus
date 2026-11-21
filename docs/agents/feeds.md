@@ -23,7 +23,30 @@ one call per stop per 15 s, through the same cache
 (`src/feeds/edgecache.ts`).
 
 On failure the cache serves a stale answer if one exists (up to
-`staleMaxS`), and a failed stop isn't asked again for `failMemoS`. The uNivUS version string must track the Play Store; KV
+`staleMaxS`), and a failed stop isn't asked again for `failMemoS`.
+
+Why each `TTL` value is what it is:
+- `arrivalsMs` (15 s): NUS works a stop's times out only every 35 to 40 s
+  (`scripts/probes/probe_arrivals.py`), so a shorter window adds calls and
+  no fresher times.
+- `busesMs` (5 s): the feed moves a bus every 15 to 20 s
+  (`scripts/probes/probe_buses.py`); asking every 5 s sees each move
+  within 5 s, and the map glides between them.
+- `staleMaxS` (300 s): past it the edge cache entry expires and a dead
+  upstream is an error, not an old answer.
+- `failMemoS` (20 s) covers a stop, a service's buses, a public stop and a
+  token mint, so an outage never turns every request into another call.
+  `breakerS` (60 s) quiets the whole feed after a refused version or key,
+  a 429, a 5xx or no answer.
+- `remintGapS` (60 s): at most one fresh token per data centre after a
+  refusal. `versionMemoMs` (60 s): a version written to
+  `config:appVersion` or `config:minClient` is live everywhere within it.
+- `upstreamTimeoutMs` (5 s) per call, so a hung NUS can't hang a widget;
+  `staleRaceMs` (2.5 s), how long to wait for a fresh answer when a stale
+  one is ready.
+- `tokenSkewS` (60 s) comes off a token's lifetime, so it is refreshed
+  before it expires rather than racing it; `tokenDefaultS` (1 hour) is the
+  lifetime of a token whose JWT carries no `exp`. The uNivUS version string must track the Play Store; KV
 `config:appVersion` overrides the secret.
 
 ## The timelapse recorder, the one poller
@@ -69,3 +92,14 @@ refused for its version or key (`auth:renewRefused`): at most two a day
 (`auth:renewed`). Each push
 user's Trip object (`src/push/tripdo.ts`) wakes at most every 30 s to
 recompute the card, asking for its stops through the cache.
+
+## The probes, by hand only
+
+The probes enforce their limits in code. `probe_buses.py` polls at most 6
+services (`MAX_SERVICES`), none faster than every 5 s (`MIN_EVERY_S`, the
+map's `TTL.busesMs`), for at most 10 minutes; after an error it backs off
+10, 20, 40 s (at most 60) before a fresh token, and stops after 5 errors.
+`probe_arrivals.py` polls at most 4 stops (`MAX_STOPS`) every 5 s for at
+most 15 minutes, ends on any refusal, 429, 5xx or timeout, and sends a fresh
+random device id, never the Worker's, as each uNivUS install has its own.
+Both take their feed client from `scrape_stops.py`.

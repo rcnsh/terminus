@@ -1,22 +1,3 @@
-/**
- * Public / guest access token for the uNivUS API.
- *
- * NO NUSNET CREDENTIALS ARE INVOLVED ANYWHERE. The flow is the one that lets
- * uNivUS show Bus Arrival without signing in: post a device id and get back a
- * 24-hour JWT scoped to domain PUBLIC. If you ever find yourself adding a
- * username field here, stop.
- *
- * Confirmed against a real capture (2026-08-27):
- *
- *   POST {NEXTBUS_AUTH_BASE}/get-access-token
- *   headers: X-HTD-API, X-APP-API          <- the ONLY captured secrets
- *   body:    { deviceid, ipaddr, version } <- JSON, not headers
- *   ->       { code: "00000", data: { token, userid, domain, username } }
- *
- * Without the two API key headers the endpoint answers
- * `{"code":"10000","msg":"Invalid API KEY"}`, so they are not optional.
- */
-
 import type { Env } from '../types.ts';
 import { TTL } from '../config.ts';
 import { timedFetch } from '../http.ts';
@@ -24,50 +5,25 @@ import { cacheBase, flag, flagged } from './edgecache.ts';
 
 const KV_TOKEN = 'auth:session';
 const KV_DEVICE = 'auth:deviceid';
-/** Overrides the NEXTBUS_APP_VERSION secret when set: the fix for a new
- *  uNivUS release is one KV write, live within TTL.versionMemoMs. */
 export const KV_APP_VERSION = 'config:appVersion';
-/** What uNivUS sends, e.g. univus_android_2.59.2_140. Anything else in KV is a
- *  typo, and sending it would fail every call, so it is ignored. */
 const VERSION_FORMAT = /^univus_android_\d+(?:\.\d+)+_\d+$/;
 
-/** The mint's path: appended to NEXTBUS_AUTH_BASE unless it already ends with it. */
 const DEFAULT_AUTH_PATH = '/get-access-token';
 
-/**
- * The app sends its LAN address here (an emulator reports 10.0.2.15). A Worker
- * has no such thing. Probing showed the field is not what the endpoint
- * validates: omitting it entirely produces the same "Invalid API KEY".
- */
 const PLACEHOLDER_IP = '127.0.0.1';
 
 export interface Session {
   token: string;
-  /** Reissued on EVERY mint, even for the same device id, so it must travel
-   *  with the token rather than being pinned in config. */
   userid: string;
   domain: string;
   expMs: number;
-  /** The version string it was minted with. A token from another version is
-   *  not reused, so changing the version takes effect on the next call. */
   version?: string;
 }
 
-/**
- * In-memory memo: the common case costs neither a KV read nor a round trip.
- * Kept per KV binding, so a token never outlives the store it came from (and
- * each test's fresh KV starts with an empty memo).
- */
 const memos = new WeakMap<object, Session>();
 const versionMemos = new WeakMap<object, { value: string; atMs: number }>();
-/** The mints under way in this isolate, by the version they mint with (getSession). */
 const inflight = new Map<string, Promise<Session>>();
 
-/**
- * The uNivUS version string to send: `config:appVersion` in KV when it holds a
- * well-formed one, otherwise the NEXTBUS_APP_VERSION secret. Remembered per
- * isolate for TTL.versionMemoMs, so it costs a KV read about once a minute.
- */
 export async function appVersion(env: Env, nowMs: number = Date.now()): Promise<string> {
   const memo = versionMemos.get(env.KV);
   if (memo && nowMs - memo.atMs < TTL.versionMemoMs) return memo.value;
@@ -78,19 +34,10 @@ export async function appVersion(env: Env, nowMs: number = Date.now()): Promise<
   return value;
 }
 
-/** The version string to send, given what `config:appVersion` holds. */
 function chosenVersion(env: Env, stored: string | null | undefined): string {
   return stored && VERSION_FORMAT.test(stored) ? stored : (env.NEXTBUS_APP_VERSION ?? '');
 }
 
-/**
- * Marks a refused version (10009) as `outdated` when it is no longer the
- * version to send, read past this isolate's memo, and forgets the memo.
- * After an automatic switch the other isolates go on sending the old one
- * for up to versionMemoMs; their refusals say nothing about the new one,
- * and must not open the breaker on the isolates already sending it. A
- * failed read leaves the refusal as it is: backing off is the safe side.
- */
 export async function markIfOutdated(env: Env, err: unknown): Promise<void> {
   if (!(err instanceof UpstreamRejected) || err.code !== '10009' || err.version === undefined || err.outdated) return;
   let stored: string | null;
@@ -108,49 +55,27 @@ export function authConfigured(env: Env): boolean {
   return Boolean(env.NEXTBUS_AUTH_BASE && env.NEXTBUS_HTD_API && env.NEXTBUS_APP_API);
 }
 
-/**
- * The real base carries a path PREFIX (`/univus-public/mobile`), so "has a
- * path means use it verbatim" silently posts to the directory instead of
- * the endpoint. Append unless the endpoint is already there.
- */
 export function authUrl(env: Env): string {
   const base = (env.NEXTBUS_AUTH_BASE ?? '').replace(/\/+$/, '');
   return base.endsWith(DEFAULT_AUTH_PATH) ? base : base + DEFAULT_AUTH_PATH;
 }
 
-/** The two captured API keys. The "secure" Dio headers stay optional -- the
- *  server does not require them and there is no request signing to defeat. */
 export function apiKeyHeaders(env: Env): Record<string, string> {
   const h: Record<string, string> = {
     'X-HTD-API': env.NEXTBUS_HTD_API ?? '',
     'X-APP-API': env.NEXTBUS_APP_API ?? '',
     'content-type': 'application/json',
     accept: 'application/json',
-    // Do NOT add X-Forwarded-Proto. Sending it makes the NUS load balancer
-    // intermittently answer 400 "Contradictory scheme headers" (2 of 6 mints
-    // in a direct A/B, 0 of 6 without). Cloudflare strips it from Worker
-    // subrequests anyway, so it never helped there either.
   };
   if (env.NEXTBUS_REQUESTED_BY) h['X-Requested-By'] = env.NEXTBUS_REQUESTED_BY;
   if (env.NEXTBUS_SECURED_REQUEST) h['X-Secured-Request'] = env.NEXTBUS_SECURED_REQUEST;
   return h;
 }
 
-/**
- * Read `exp` out of the JWT payload.
- *
- * The response carries no `expires_in`, so the lifetime is only knowable from
- * the token itself. This decodes, it does not verify -- we are the bearer, not
- * the audience, and a forged expiry would only cost us an early refresh.
- */
 export function jwtExpMs(token: string): number | null {
   return timeMs(jwtClaims(token)?.exp);
 }
 
-/**
- * The token's whole lifetime, `exp` less `iat`: NUS's guest tokens carry
- * both, 24 hours apart. Null when either is missing.
- */
 export function jwtLifeMs(token: string): number | null {
   const claims = jwtClaims(token);
   const exp = timeMs(claims?.exp);
@@ -158,7 +83,6 @@ export function jwtLifeMs(token: string): number | null {
   return exp !== null && iat !== null && exp > iat ? exp - iat : null;
 }
 
-/** The JWT's payload, or null when it isn't one. */
 function jwtClaims(token: string): Record<string, unknown> | null {
   const part = token.split('.')[1];
   if (!part) return null;
@@ -171,10 +95,8 @@ function jwtClaims(token: string): Record<string, unknown> | null {
   }
 }
 
-/** A time claim, in seconds since the epoch, as ms. */
 const timeMs = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value * 1000 : null);
 
-/** Pull the session out of the response envelope, tolerating a reshape. */
 export function extractSession(body: unknown, nowMs: number): Session | null {
   const root = body as Record<string, unknown> | null;
   const data = (root?.data ?? root) as Record<string, unknown> | undefined;
@@ -186,67 +108,35 @@ export function extractSession(body: unknown, nowMs: number): Session | null {
     token,
     userid: typeof data?.userid === 'string' ? data.userid : '',
     domain: typeof data?.domain === 'string' ? data.domain : 'PUBLIC',
-    // Refresh a little early rather than racing the expiry.
     expMs: expMs - TTL.tokenSkewS * 1000,
   };
 }
 
-/**
- * The device id once read from KV, per namespace: it never changes there, so
- * every NUS call needn't read it again. A freshly made one isn't kept, so an
- * isolate that lost a race to write the first id picks up the winner's.
- */
 const deviceIds = new WeakMap<object, string>();
 
-/**
- * A stable device id. Any 16 hex characters are accepted -- it is an Android
- * ID, not a secret -- but it should stay stable so we look like one install
- * rather than a new device on every cold start.
- */
 export async function deviceId(env: Env): Promise<string> {
   if (env.NEXTBUS_DEVICE_ID) return env.NEXTBUS_DEVICE_ID;
   const known = deviceIds.get(env.KV);
   if (known) return known;
-  // A failed read throws rather than making up an id: a new one each call
-  // would mint a token for one device and call with another, and overwrite
-  // the stored id with each.
   const stored = await env.KV.get(KV_DEVICE);
   if (stored) {
     deviceIds.set(env.KV, stored);
     return stored;
   }
-  // Made here, it isn't remembered: two isolates that both found none each
-  // make one and only the last write is kept, so the next call reads back
-  // whichever won rather than holding on to one that lost.
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   const id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
   await env.KV.put(KV_DEVICE, id).catch(() => {});
   return id;
 }
 
-/** Forget this isolate's remembered version, after writing a new one. */
 export function forgetAppVersion(env: Env): void {
   versionMemos.delete(env.KV);
 }
 
-/**
- * Mint a token for a given version string, bypassing the caches: how a
- * candidate version is tried. The token is kept, marked with its version, so
- * if the candidate becomes the version it is used straight away.
- */
 export function mintWith(env: Env, version: string, nowMs: number = Date.now()): Promise<Session> {
   return mint(env, nowMs, version);
 }
 
-/**
- * `force` skips BOTH caches and mints. Clearing only the in-memory memo is not
- * enough: the next call would read the same rejected token straight back out
- * of KV, so a "retry with a fresh token" would silently reuse the stale one.
- *
- * [onMint] is told when this call itself asks NUS for a token: not for a
- * token from the memo or KV, nor one another call is already minting, nor
- * while a failed mint keeps the auth host quiet.
- */
 export async function getSession(
   env: Env,
   nowMs: number = Date.now(),
@@ -265,25 +155,12 @@ export async function getSession(
     }
   }
 
-  // One mint per isolate at a time. On a cold cache /api/trip fetches several
-  // stops in parallel; without this each one minted its own token, and a
-  // single failed mint degraded that stop to "unknown". A forced caller that
-  // joins an in-flight mint still gets a freshly minted token.
-  //
-  // A mint that failed a moment ago isn't tried again for failMemoS, here
-  // or in any isolate in this data centre: without the memo every stop and
-  // service asked for would mint its own while the auth host is down.
-  //
-  // Keyed by version: a caller after a switch to a new version doesn't take
-  // a token being minted with the old one.
   let minting = inflight.get(version);
   if (!minting) {
     minting = (async () => {
       if (await flagged(mintFailedKey())) throw new MintQuiet('token mint failed a moment ago');
       onMint?.();
       return mint(env, nowMs, version).catch(async (err) => {
-        // A version refused after the switch away from it is this isolate's
-        // alone: the others, minting with the new one, needn't wait.
         await markIfOutdated(env, err);
         if (!(err instanceof UpstreamRejected && err.outdated))
           await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
@@ -297,44 +174,12 @@ export async function getSession(
   return minting;
 }
 
-/** Set for RENEW_GAP_S after a renewal: at most two a day, whatever the token's lifetime. */
 const KV_RENEWED = 'auth:renewed';
 const RENEW_GAP_S = 12 * 3_600;
-/**
- * The kept token (by its expMs) whose renewal NUS refused with a code a new
- * token can't cure: a refused version or key (NO_REMINT_CODES). No renewal
- * tries again while it lasts, which is until that token runs out: the kept
- * token still works, and once it's gone the next request mints, or the
- * version search finds the new version.
- */
 const KV_RENEW_REFUSED = 'auth:renewRefused';
 
-/**
- * Codes a fresh token cannot fix: a refused app version (10009) and refused
- * API keys (10000). Re-minting on these only adds load while NUS is unhappy.
- */
 export const NO_REMINT_CODES = new Set(['10009', '10000']);
 
-/**
- * Mints a new token when the kept one is still good but has less than
- * TTL.tokenRenewShare of its lifetime left. True when it minted. The cron
- * calls it (fms.ts renewToken), so the first request after a quiet spell
- * finds a token ready instead of minting one, and a mint that fails fails
- * for the cron, not for someone waiting for a bus.
- *
- * Starting at half the lifetime (12 hours of a 24-hour token) gives the
- * cron many runs to try before the token runs out, so a spell of refused
- * mints doesn't leave the site without one. NUS's auth host answers
- * HTTP 400 to every mint for a while at times (about an hour on
- * 2026-11-03, while calls with a token already held kept working).
- *
- * Bounded so it can't grow into a poller: no kept token, one already run
- * out, one for another version or a KV it can't read, and it leaves the
- * mint to the next request, as without it. A mint that keeps failing is
- * tried once a cron run until the token runs out, unless NUS refused its
- * version or key (KV_RENEW_REFUSED), and a renewal that worked waits
- * RENEW_GAP_S before the next.
- */
 export async function renewAhead(env: Env, nowMs: number): Promise<boolean> {
   if (!authConfigured(env)) return false;
   let kept: Session | null;
@@ -346,41 +191,25 @@ export async function renewAhead(env: Env, nowMs: number): Promise<boolean> {
   }
   if (!kept) return false;
   const leftMs = kept.expMs - nowMs;
-  // A token without iat counts as the default lifetime, as extractSession does without exp.
   const aheadMs = (jwtLifeMs(kept.token) ?? TTL.tokenDefaultS * 1000) * TTL.tokenRenewShare;
   if (renewed || leftMs <= 0 || leftMs > aheadMs || kept.version !== (await appVersion(env, nowMs))) return false;
   const keptId = String(kept.expMs);
   if ((await env.KV.get(KV_RENEW_REFUSED).catch(() => keptId)) === keptId) return false;
-  // getSession's own path: a mint already under way here is shared, and a
-  // failed one waits failMemoS. The kept token is still good, so a
-  // request that sees that memo uses it rather than minting.
   const fresh = await getSession(env, nowMs, { force: true }).catch(async (err) => {
-    // A refusal of a version already switched away from says nothing of the new one (markIfOutdated).
     if (err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code) && !err.outdated)
       await env.KV.put(KV_RENEW_REFUSED, keptId, { expirationTtl: Math.max(60, Math.ceil(leftMs / 1000)) }).catch(() => {});
     throw err;
   });
-  // mint ignores a failed write, and a token only this isolate holds isn't
-  // a renewal: the next run tries again.
   const saved = (await env.KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
   if (saved?.token === fresh.token) await env.KV.put(KV_RENEWED, String(nowMs), { expirationTtl: RENEW_GAP_S }).catch(() => {});
   return true;
 }
 
-/** A mint wasn't tried: one failed a moment ago (failMemoS). No call was made. */
 export class MintQuiet extends Error {}
 
 const mintFailedKey = () => `${cacheBase()}/mint-failed`;
 const remintedKey = () => `${cacheBase()}/reminted`;
 
-/**
- * A session to retry with after NUS refused [rejected], or null for none.
- * Another isolate's newer token, from its memo or KV, comes first. Failing
- * that, a fresh mint, but at most one per remintGapS in this data centre: a
- * refusal that a new token didn't cure won't be cured by another, and a
- * mint per refused call would multiply the load just when NUS is unhappy.
- * [onMint] is told when it asks NUS for a token (getSession).
- */
 export async function renewSession(env: Env, nowMs: number, rejected: Session, onMint?: () => void): Promise<Session | null> {
   const version = await appVersion(env, nowMs);
   const usable = (s: Session | null | undefined): s is Session =>
@@ -409,8 +238,6 @@ async function mint(env: Env, nowMs: number, version: string): Promise<Session> 
   });
   if (!res.ok) throw new UpstreamHttpError('auth', res.status);
 
-  // A wrong path returns HTML with a 200, and a bare SyntaxError from deep in
-  // the stack is a miserable thing to debug at 08:39.
   const text = await res.text();
   let body: { code?: string; msg?: string };
   try {
@@ -420,8 +247,6 @@ async function mint(env: Env, nowMs: number, version: string): Promise<Session> 
   }
   const extracted = extractSession(body, nowMs);
   if (!extracted) {
-    // "Invalid API KEY" arrives as HTTP 200 with code 10000, so the status
-    // line alone will happily tell you everything is fine.
     const err = new UpstreamRejected(String(body?.code ?? '?'), `auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`, text);
     err.version = version;
     throw err;
@@ -434,10 +259,6 @@ async function mint(env: Env, nowMs: number, version: string): Promise<Session> 
   return session;
 }
 
-/**
- * The body envelope every bus-proxy call carries, alongside the Bearer header.
- * Confirmed from a capture of uNivUS 2.59.2: the JWT rides in both places.
- */
 export async function proxyEnvelope(env: Env, session: Session): Promise<Record<string, string>> {
   return {
     token: session.token,
@@ -449,18 +270,10 @@ export async function proxyEnvelope(env: Env, session: Session): Promise<Record<
   };
 }
 
-/**
- * NUS said no, at HTTP 200, with a code. `detail` keeps the whole response
- * (up to 2 KB): when a new uNivUS release refuses our version (10009), what
- * the refusal says is the best clue to what changed. It goes to the logs and
- * the operator's email, so any credential in it is blanked first.
- */
 export class UpstreamRejected extends Error {
   readonly code: string;
   readonly detail: string;
-  /** The version string the refused request carried, when known. */
   version?: string;
-  /** That version is no longer the one to send (markIfOutdated). */
   outdated = false;
   constructor(code: string, message: string, detail = '') {
     super(message);
@@ -472,27 +285,14 @@ export class UpstreamRejected extends Error {
 const SECRET_FIELD =
   '"(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"';
 
-/**
- * Blanks what could let someone call the feed as us, should a refusal echo
- * our request back: the envelope's token, user and device ids, any JWT, and
- * any field named like a key or password. The rest is kept as the clue.
- */
 export function redactDetail(detail: string): string {
-  return (
-    detail
-      .replace(new RegExp(`(${SECRET_FIELD}\\s*:\\s*)(?:"(?:\\\\.|[^"\\\\])*"|-?\\d[\\d.eE+-]*)`, 'gi'), '$1"[redacted]"')
-      // A value cut short before its closing quote.
-      .replace(new RegExp(`(${SECRET_FIELD}\\s*:\\s*")(?:\\\\.|[^"\\\\])*$`, 'i'), '$1[redacted]')
-      .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
-      .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]')
-  );
+  return detail
+    .replace(new RegExp(`(${SECRET_FIELD}\\s*:\\s*)(?:"(?:\\\\.|[^"\\\\])*"|-?\\d[\\d.eE+-]*)`, 'gi'), '$1"[redacted]"')
+    .replace(new RegExp(`(${SECRET_FIELD}\\s*:\\s*")(?:\\\\.|[^"\\\\])*$`, 'i'), '$1[redacted]')
+    .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
+    .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]');
 }
 
-/**
- * A NUS host answered with an HTTP error status, not its usual 200 and a
- * code: a gateway or the host itself saying no. 429 and 5xx trip the
- * feed's breaker (fms.ts opensBreaker).
- */
 export class UpstreamHttpError extends Error {
   readonly status: number;
   constructor(what: string, status: number) {
@@ -501,14 +301,6 @@ export class UpstreamHttpError extends Error {
   }
 }
 
-/**
- * Headers for a bus-proxy call.
- *
- * Since 2026-09-05 uNivUS no longer calls ConnectX directly: it POSTs to a
- * proxy on inetapps.nus.edu.sg with this header set. `x-api-key` is a fixed
- * app constant (it sits in libapp.so); the Bearer is the same PUBLIC guest JWT
- * get-access-token mints, so no captured seed token is needed.
- */
 export function proxyHeaders(env: Env, token: string): Record<string, string> {
   return {
     'x-api-key': env.NEXTBUS_PROXY_API_KEY ?? '',

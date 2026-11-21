@@ -1,57 +1,29 @@
 import SwiftUI
 import UIKit
 
-/*
- * Pull to refresh, drawn: "the sky stretches". Pulled down at the top of its
- * content, the screen's own sky grows: the room above the card's words (or
- * the stop's name) opens by the pull (`PullRoom`), the header comes down a
- * little with it (`pullLead`), and the sky's gradient runs on down to the
- * horizon's new place, so the top of the screen is the sky's own colour
- * throughout and there is no edge anywhere. A pill in the sky's ink in the
- * middle of the room says what's happening. The horizon is the animation: on
- * Now a bus drives along its road to your stop's sign (`PullDraw.road`); on
- * Buses a sign grows out of the near hill and the bus drives along the
- * hilltop to it (`PullDraw.hill`). The motion and its rules are PullMotion
- * (Pull.swift), as on Android and the web.
- *
- * The page doesn't bounce while the sky stretches: the scroll view is held at
- * its top and the finger's travel goes to the sky instead. With VoiceOver on,
- * the system's own pull to refresh, which VoiceOver can drive, stands in.
- */
-
-/// The sign lit while letting go would ask and while it asks; green once the answer's in.
 private let lit = Color(rgb: 0xFB923C)
 private let goodGreen = Color(rgb: 0x22C55E)
 
-/// A screen's pull to refresh: the motion, moved on each frame while it
-/// moves, and what's drawn and laid out with it reads `read()`.
 @MainActor @Observable
 final class SkyPull {
     @ObservationIgnored let motion = PullMotion(scene: .hill(1))
     private var frame = 0
-    /// The pill's words; nil at rest, so it's only there while pulling.
     private(set) var hint: PullHint?
 
-    /// Asks again (or not, inside `Pull.freshS`) and says how it went.
     @ObservationIgnored var refresh: @MainActor () async -> PullOutcome = { .failed }
-    /// The horizon's places for the scroll view's width in points.
     @ObservationIgnored var scene: @MainActor (CGFloat) -> PullScene = { .hill($0) }
-    /// The bus's paint; nil: the horizon's shuttle.
     @ObservationIgnored var livery: UInt32?
     @ObservationIgnored var enabled = true
     @ObservationIgnored var width: CGFloat = 393
     @ObservationIgnored private lazy var ticker = FrameTicker { [weak self] dt in self?.step(dt) ?? false }
 
-    /// The motion, read so that whatever reads it redraws each frame.
     func read() -> PullMotion {
         _ = frame
         return motion
     }
 
-    /// This frame of it, to draw: a value, so the drawing follows it.
     func picture() -> PullFrame { read().frame }
 
-    /// The motion changed: drawn again, and moved on each frame while it moves.
     func kick() {
         motion.scene = scene(width)
         frame &+= 1
@@ -60,7 +32,6 @@ final class SkyPull {
         if motion.moving { ticker.start() }
     }
 
-    /// The finger's let go: asked again if it was far enough.
     func released() {
         if motion.release() {
             Task {
@@ -73,20 +44,17 @@ final class SkyPull {
     }
 
     private func step(_ dt: CGFloat) -> Bool {
-        // The card's bus may have moved with the answer: it comes back to where it is now.
         motion.step(dt)
         kick()
         return motion.moving
     }
 
-    /// The bus's body, and the stripe along its bottom: white on a service's colour, red on the shuttle.
     var paint: (Color, Color) {
         guard let livery else { return (shuttlePaint, shuttleBand) }
         return (Color(rgb: livery), .white.opacity(0.85))
     }
 }
 
-/// Calls `tick` with the seconds since the last frame, every frame, until it says stop.
 @MainActor
 private final class FrameTicker: NSObject {
     private var link: CADisplayLink?
@@ -116,7 +84,6 @@ private final class FrameTicker: NSObject {
 private struct SkyPullKey: EnvironmentKey { static let defaultValue: SkyPull? = nil }
 
 extension EnvironmentValues {
-    /// The screen's pull, for its room, its header and its horizon; nil where there's none.
     var skyPull: SkyPull? {
         get { self[SkyPullKey.self] }
         set { self[SkyPullKey.self] = newValue }
@@ -124,9 +91,6 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// On a scroll view: pulled down at its top, `pull` stretches the sky and
-    /// `refresh` asks again. Its room is a `PullRoom` in the content. With
-    /// VoiceOver, the system's pull, saying how it went.
     func skyPull(
         _ pull: SkyPull, enabled: Bool = true, livery: UInt32? = nil, scene: @escaping @MainActor (CGFloat) -> PullScene,
         refresh: @escaping @MainActor () async -> PullOutcome
@@ -134,7 +98,6 @@ extension View {
         modifier(SkyPullModifier(pull: pull, enabled: enabled, livery: livery, scene: scene, refresh: refresh))
     }
 
-    /// What's above the room comes down a little with the pull (`Pull.leadShare`).
     func pullLead() -> some View { modifier(PullLead()) }
 }
 
@@ -148,7 +111,6 @@ private struct SkyPullModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var still
 
     func body(content: Content) -> some View {
-        // Kept up to date as the screen's data changes; none of it is drawn from here.
         pull.refresh = refresh
         pull.scene = scene
         pull.livery = livery
@@ -174,10 +136,6 @@ private struct PullLead: ViewModifier {
     }
 }
 
-/// The room in the sky above the words: `base` tall at rest, and taller by
-/// the pull, with the pill in the middle of what opened, between what's
-/// `above` it (its gap over the room) and the words `below`. In the sky's
-/// ink. It's where the screen's scroll view is watched for the pull.
 struct PullRoom: View {
     var base: CGFloat = 0
     var above: CGFloat = 0
@@ -197,7 +155,6 @@ struct PullRoom: View {
                         PullPill(hint: hint, calm: m.calm)
                             .opacity(show)
                             .scaleEffect(0.92 + 0.08 * show)
-                            // Its middle at `centre`, however tall the words make it.
                             .frame(height: 0)
                             .offset(y: centre)
                     }
@@ -209,9 +166,6 @@ struct PullRoom: View {
     }
 }
 
-/// The pill: "Pull to refresh" with an arrow down, "Let go to refresh" with
-/// it up, "Checking…" turning, then how it went with a dot: green, or amber
-/// for "Couldn't update".
 private struct PullPill: View {
     let hint: PullHint
     let calm: Bool
@@ -245,11 +199,6 @@ private struct PullPill: View {
     }
 }
 
-// MARK: the gesture
-
-/// Finds the scroll view it's in and follows the finger on it: past the
-/// top, from a touch that began there, the sky takes the finger's travel and
-/// the page stays where it is.
 private struct PullHook: UIViewRepresentable {
     let pull: SkyPull
 
@@ -270,7 +219,6 @@ private final class PullHookView: UIView {
     private weak var scroll: UIScrollView?
     private var watch: NSKeyValueObservation?
     private var lastT: CGFloat = 0
-    /// Let go from a pull: the fling that follows doesn't bounce the page.
     private var holdTop = false
     private var pinning = false
     private let haptic = UIImpactFeedbackGenerator(style: .light)
@@ -296,7 +244,6 @@ private final class PullHookView: UIView {
         scroll = nil
     }
 
-    /// How far the page is pulled down past its top (negative: scrolled into it).
     private func over(_ sv: UIScrollView) -> CGFloat { -sv.adjustedContentInset.top - sv.contentOffset.y }
 
     private func pin(_ sv: UIScrollView) {
@@ -310,8 +257,6 @@ private final class PullHookView: UIView {
         pin(sv)
     }
 
-    // The scroll view's own handler has moved the page for this event by the
-    // time this runs (it was added first), so it's put back here.
     @objc private func panned(_ r: UIPanGestureRecognizer) {
         guard let pull, let sv = scroll else { return }
         let m = pull.motion
@@ -331,11 +276,9 @@ private final class PullHookView: UIView {
             let o = over(sv)
             var armed = false
             if m.phase == .drag {
-                // Back up, the sky closes first, then the page scrolls.
                 if dy >= 0 { armed = m.drag(dy) } else { _ = m.takeBack(dy) }
                 if m.phase == .drag { pin(sv) }
             } else if o > 0.5 {
-                // Past the top: the sky stretches, if this touch began at the top.
                 armed = m.drag(o)
                 if m.phase == .drag { pin(sv) }
             } else if o < -0.5 {
@@ -355,14 +298,7 @@ private final class PullHookView: UIView {
     }
 }
 
-// MARK: on the horizon
-
 enum PullDraw {
-    /// The pull on Now's horizon (`m`, the bus in `paint`), in place of the road's own sign and bus:
-    /// the sign at `sign` (faded in by the pull when the road has none,
-    /// `ownSign`), the puffs, and the bus on the road. `top` is the horizon's
-    /// top and `d` its points a unit; an estimate's bus stays an
-    /// outline (not `live`). `lights`: after dark, its headlight on as it drives.
     static func road(
         _ g: inout GraphicsContext, _ m: PullFrame, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, sign: CGFloat,
         ownSign: Bool, live: Bool, lights: Bool
@@ -371,9 +307,6 @@ enum PullDraw {
         bus(&g, m, paint: paint, p: p, top: top, d: d, ground: { _ in 70 }, slope: false, band: live, lights: lights)
     }
 
-    /// The pull on the low horizon (Buses), from its strip's `top`, `d`
-    /// points a unit, `width` units across: a sign growing out of the near
-    /// hill, and the bus along the hilltop to it, tilting with the slope.
     static func hill(
         _ g: inout GraphicsContext, _ m: PullFrame, paint: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat, width: CGFloat,
         lights: Bool
@@ -384,10 +317,6 @@ enum PullDraw {
         bus(&g, m, paint: paint, p: p, top: top, d: d, ground: ground, slope: true, band: true, lights: lights)
     }
 
-    /// The stop's sign, its foot at `o`, `u` points a unit, its post `post`
-    /// tall: lit in the accent with a ring going out from it while letting go
-    /// would ask and while it asks, green once the answer's in. `grow` (0–1)
-    /// fades it in, or with `rise` grows it up out of the ground.
     private static func stopSign(
         _ g: inout GraphicsContext, _ m: PullFrame, p: SkyPalette, foot o: CGPoint, u: CGFloat, post: CGFloat, grow: CGFloat, rise: Bool
     ) {
@@ -424,11 +353,6 @@ enum PullDraw {
         box(-2.5, plate + 3.5, 5, 3, face, 0.5)
     }
 
-    /// The bus at the motion's place on `ground` (units down the strip at x),
-    /// its puffs behind it: the body bobbing and pitching on its suspension
-    /// over wheels that turn, along the `slope` of the hill, the door lit as
-    /// it opens, and a honk. Without a `band` it's an outline, as a timetable
-    /// guess is on the horizon.
     private static func bus(
         _ g: inout GraphicsContext, _ m: PullFrame, paint livery: (Color, Color), p: SkyPalette, top: CGFloat, d: CGFloat,
         ground: (CGFloat) -> CGFloat, slope: Bool, band: Bool, lights: Bool

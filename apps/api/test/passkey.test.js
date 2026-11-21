@@ -1,8 +1,3 @@
-/**
- * Passkeys for the operator's pages (src/accounts/passkey.ts): adding one needs
- * HEALTH_TOKEN itself; signing in with one gives a session that opens the
- * dashboard and the timelapse days as the token does, and nothing more.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -157,7 +152,6 @@ test('the timelapse days open with a session too', async () => {
 test('DER signatures come out as r and s, padded and trimmed', () => {
   const r = new Uint8Array(32).fill(1);
   const s = Uint8Array.from({ length: 32 }, (_, i) => (i === 0 ? 0x80 : i));
-  // r with a leading zero dropped (31 bytes), s with one added (its top bit is set).
   const der = Uint8Array.from([0x30, 2 + 31 + 2 + 33, 0x02, 31, ...r.subarray(1), 0x02, 33, 0, ...s]);
   const raw = derToRaw(der);
   assert.deepEqual([...raw.subarray(0, 32)], [0, ...r.subarray(1)]);

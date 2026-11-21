@@ -1,4 +1,3 @@
-// The operator dashboard (admin/): what its pages work out from /api/admin/stats.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
@@ -8,9 +7,7 @@ const { derive, keyRows } = await web('admin/views.js');
 const { render } = await web('assets/ui.js');
 
 test("the dashboard's days are Singapore days, and the week leaves today's few hours out", () => {
-  // 06:00 on Fri 24 Oct in Singapore, 22:00 UTC on the 23rd.
   const now = '2026-10-23T22:00:00Z';
-  // The server sends a row per Singapore day: 100 a day for 14 full days, then 10 so far today.
   const days = Array.from({ length: 15 }, (_, i) => new Date(Date.UTC(2026, 9, 10 + i)).toISOString().slice(0, 10));
   const daily = days.map((day, i) => ({ day, kind: 'answer', n: i === 14 ? 10 : 100 }));
   const d = derive({ now, accounts: { total: 0 }, analytics: { daily } });
@@ -18,7 +15,6 @@ test("the dashboard's days are Singapore days, and the week leaves today's few h
   assert.equal(d.d14.length, 14);
   assert.equal(d.answers.at(-1), 10, "today's bar holds this morning's answers");
   assert.equal(d.answers.at(-2), 100);
-  // Seven full days against the seven before: the same, not down by today's missing hours.
   assert.equal(d.answers7, 700);
   assert.equal(d.answersChange, 0);
 });
@@ -61,7 +57,6 @@ test("each API key's requests: today and the 7 full days before it, what was tur
   assert.equal(keyRows({ apiKeys: s.apiKeys, analytics: { error: 'x' } }, d14).rows[0].n7, 0, 'Analytics Engine failing: no counts');
 });
 
-/** A fetch whose /api/admin/stats answers wait for the test: `asked[i].answer(status, body)`. */
 const asked = [];
 const deferred = () => {
   const d = {};
@@ -71,7 +66,6 @@ const deferred = () => {
 const STATS = { now: '2026-10-23T02:00:00Z', accounts: { total: 3 } };
 
 test('the dashboard: a failed first load can be tried again, and Lock wins over a reply still on its way', async (t) => {
-  // A page without charts: happy-dom has no layout for them to measure.
   page({ url: 'https://terminus.run/admin/#/reports', html: '<div id="admin"></div>' });
   globalThis.ResizeObserver ??= class {
     observe() {}
@@ -99,7 +93,6 @@ test('the dashboard: a failed first load can be tried again, and Lock wins over 
   await settle();
   assert.ok(button('Lock'), 'the dashboard is up');
 
-  // A refresh on its way when Lock is pressed: its reply is dropped, not shown with the session gone.
   button('Refresh').click();
   await settle();
   assert.equal(asked.length, 3);
@@ -122,7 +115,6 @@ test('the timelapse token opens the Timelapse alone: no stats asked for, no othe
     if (String(url) === '/api/timelapse/days') return Response.json({ days: [], recording: null }, { status: days });
     return Response.json({}, { status: 404 });
   };
-  // A fresh copy: the test above has its own, signed out.
   await web('admin/admin.js?timelapse');
   const root = document.getElementById('admin');
   t.after(() => render(null, root));
@@ -138,14 +130,12 @@ test('the timelapse token opens the Timelapse alone: no stats asked for, no othe
     await settle(10);
   };
 
-  // A refused token stays at the gate, with why, and keeps nothing.
   await submit('wrong');
   assert.match(root.querySelector('.gate-msg')?.textContent ?? '', /timelapse token was not accepted/);
   assert.equal(sessionStorage.getItem('terminus-operator-token'), null);
 
   days = 200;
   await submit('tl-token');
-  // The section's module loads with import(): wait for it, briefly.
   for (let i = 0; i < 100 && !/No days recorded yet/.test(root.textContent); i++) await settle();
   assert.match(root.textContent.slice(-200), /No days recorded yet/);
   assert.deepEqual(
@@ -158,7 +148,6 @@ test('the timelapse token opens the Timelapse alone: no stats asked for, no othe
   );
   assert.equal(sessionStorage.getItem('terminus-timelapse-only'), '1');
 
-  // Another section's address still shows the Timelapse: the token opens nothing else.
   location.hash = '#/reports';
   await settle(10);
   assert.equal(root.querySelector('.dash-h h1')?.textContent, 'Timelapse');
@@ -181,7 +170,6 @@ test('the operator reaches the Timelapse when the stats fail: it needs none of t
   t.after(() => render(null, root));
   for (let i = 0; i < 100 && !/No days recorded yet/.test(root.textContent); i++) await settle();
   assert.match(root.textContent.slice(-200), /No days recorded yet/);
-  // Every other section needs the stats: it says why, with a way to try again.
   location.hash = '#/reports';
   await settle(10);
   assert.match(root.textContent, /The stats answered 500\./);

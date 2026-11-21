@@ -60,20 +60,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.R
 
-/*
- * The pieces the screens borrow from NUS's own buses and stops: a stop's
- * sign (its name on a plate, the services under it), and a tile to choose
- * one thing from several. Drawn in the theme's colours, so they work in
- * light and dark; a service's colour is only ever that service's.
- */
-
-/**
- * A stop's name plate, as on the pole: a shade off the card with a hairline under it, the bus mark in the accent, the name, and anything to
- * say about it at the end (the walk there, a button), quieter. Not inverted: in the dark a near-white plate would glare off every stop.
- * [onName] is on the mark and the name alone (a tap there), so a button at the end isn't inside it; with [opens], a chevron right after the
- * name's last word says the tap opens the stop. A long name, or large text, takes the name to a second line rather than cutting it; the
- * mark and what's at the end stay with its first line.
- */
 @Composable
 internal fun StopPlate(
     name: String,
@@ -87,13 +73,10 @@ internal fun StopPlate(
     val style = TextStyle(color = c.onSurface, fontWeight = FontWeight.Bold, fontSize = if (big) 17.sp else 15.sp)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    // The band the name's first line is centred in, with the mark and the end's things: the plate's height, or a line's and its margin
-    // where the text is large.
     val line = remember(style, density) { with(density) { measurer.measure("Ag", style).size.height.toDp() } }
     val band = maxOf(if (big) 54.dp else 38.dp, line + 12.dp)
     val top = (band - line) / 2
     val middle = with(density) { (band / 2).roundToPx() }
-    // The chevron as a glyph after the name, joined to its last word by a no-break space, so it wraps with it.
     val chevron =
         mapOf(
             CHEVRON to
@@ -102,7 +85,6 @@ internal fun StopPlate(
                         painterResource(R.drawable.ic_chevron),
                         contentDescription = null,
                         tint = c.onSurfaceVariant,
-                        // The glyph sits inside its box: centred over the narrower slot, so it reads as part of the name.
                         modifier = Modifier.requiredSize(with(density) { (style.fontSize * 1.2f).toDp() }),
                     )
                 }
@@ -117,7 +99,6 @@ internal fun StopPlate(
             .padding(end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // The name's first line and the end's things share a middle, whichever is taller (a 48 dp button).
         Row(
             Modifier.weight(1f).alignBy { middle }.then(onName).padding(start = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -142,7 +123,6 @@ internal fun StopPlate(
                 inlineContent = chevron,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                // Said as the name alone, without the chevron's stand-in character.
                 modifier = Modifier.weight(1f).clearAndSetSemantics { text = AnnotatedString(name) }.padding(top = top, bottom = top),
             )
         }
@@ -158,9 +138,6 @@ internal fun StopPlate(
 
 private const val CHEVRON = "chevron"
 
-/**
- * A stop's sign: the plate ([plate] on its name alone: a tap on the name), then what's under it. Rounded, with a hairline round the lot.
- */
 @Composable
 internal fun StopSign(
     name: String,
@@ -180,7 +157,6 @@ internal fun StopSign(
     }
 }
 
-/** The services that call at a stop, as badges, in their own colours. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ServiceBadges(services: List<String>, colors: Map<String, Long>, modifier: Modifier = Modifier) {
@@ -189,10 +165,6 @@ internal fun ServiceBadges(services: List<String>, colors: Map<String, Long>, mo
     }
 }
 
-/**
- * One choice of several, as a tile: outlined, or filled with the accent's soft colour and edged in it when chosen, with a tick in the
- * corner.
- */
 @Composable
 internal fun ChoiceTile(
     selected: Boolean,
@@ -220,7 +192,6 @@ internal fun ChoiceTile(
     }
 }
 
-/** A tile that opens something (Settings' pages), or just says something with no [onClick]. */
 @Composable
 internal fun LinkTile(onClick: (() -> Unit)?, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -236,7 +207,6 @@ internal fun LinkTile(onClick: (() -> Unit)?, modifier: Modifier = Modifier, con
     )
 }
 
-/** Laid out two to a row, the last one alone if it's odd. */
 @Composable
 internal fun <T> TwoColumns(items: List<T>, modifier: Modifier = Modifier, gap: Dp = 8.dp, cell: @Composable (T, Modifier) -> Unit) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -249,7 +219,6 @@ internal fun <T> TwoColumns(items: List<T>, modifier: Modifier = Modifier, gap: 
     }
 }
 
-/** A small heading over a group, in capitals: "YOUR STOPS". Said as written ("Your stops"), not spelt out as capitals. */
 @Composable
 internal fun Label(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     Text(

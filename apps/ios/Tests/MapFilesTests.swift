@@ -3,7 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// The map file kept on the phone: `MapFiles.keepTiles(in:now:fetch:)`.
 private let day: TimeInterval = 24 * 3600
 private let now: TimeInterval = 1_790_000_000
 
@@ -13,14 +12,12 @@ private func scratch() throws -> URL {
     return d
 }
 
-/// A map file whose contents say `label`: a PMTiles v3 header, the label, then padding to a map's size.
 private func map(_ label: String) -> Data {
     var d = Data("PMTiles".utf8) + Data([3]) + Data(label.utf8)
     d.append(Data(count: MapFiles.minTilesBytes - d.count))
     return d
 }
 
-/// A server answering `code` with `body`; `length` is its Content-Length. Notes what it was asked.
 private final class Server: @unchecked Sendable {
     let code: Int, body: Data, etag: String?, length: Int?
     var asked: [URLRequest] = []
@@ -45,14 +42,12 @@ private func keep(_ dir: URL, _ s: Server, at t: TimeInterval = now) async throw
     try await MapFiles.keepTiles(in: dir, now: t) { try s.fetch($0) }
 }
 
-/// A map file kept before files had names of their own: `campus.pmtiles`.
 private func kept(_ dir: URL, checked: TimeInterval, etag: String = "\"v1\"") throws {
     try map("old map").write(to: dir.appendingPathComponent("campus.pmtiles"))
     try JSONSerialization.data(withJSONObject: ["etag": etag, "checked": checked]).write(
         to: dir.appendingPathComponent("campus.pmtiles.json"))
 }
 
-/// The label of the map file in use, or nil with none.
 private func read(_ dir: URL) -> String? {
     guard let file = MapFiles.currentTiles(in: dir), let d = try? Data(contentsOf: file) else { return nil }
     return String(decoding: d.dropFirst(8).prefix { $0 != 0 }, as: UTF8.self)
@@ -108,7 +103,6 @@ private func meta(_ dir: URL) -> [String: Any] {
 }
 
 @Test func aPageThatIsntAMapKeepsTheOldOne() async throws {
-    // A Wi-Fi sign-in page in front of the server, answered with a 200.
     let dir = try scratch()
     try kept(dir, checked: now - 8 * day)
     await #expect(throws: ApiError.self) { try await keep(dir, Server(200, Data("<!DOCTYPE html><title>Sign in</title>".utf8))) }
@@ -121,7 +115,6 @@ private func meta(_ dir: URL) -> [String: Any] {
     #expect(try await keep(dir, Server(200, map("new map"))))
     #expect(read(dir) == "new map")
     #expect(MapFiles.currentTiles(in: dir)?.lastPathComponent != "campus.pmtiles")
-    // The old one stays until a style reading the new one has loaded.
     #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("campus.pmtiles").path))
 }
 

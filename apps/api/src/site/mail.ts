@@ -1,14 +1,3 @@
-/**
- * Every email's HTML, built with react-email: the sign-in codes, a device
- * added, and the operator's alerts. Each still goes with its plain text,
- * written where it's sent; this only dresses it.
- *
- * Mail clients keep little CSS (Gmail drops <style> in places, Outlook
- * renders with Word), so the components inline every style and lay out with
- * tables, and the look is the site's: its warm off-white page, white card,
- * ink and orange (site.css). Written with htm rather than JSX, so the
- * sources stay erasable TypeScript that Node runs as is.
- */
 import { Children, createElement, type ReactElement, type ReactNode } from 'react';
 import htm from 'htm';
 import { Body, Button, Container, Head, Heading, Hr, Html, Img, Link, Preview, Section, Text, render } from 'react-email';
@@ -17,7 +6,6 @@ import { lang, m } from '../i18n.ts';
 
 const html = htm.bind(createElement) as (strings: TemplateStringsArray, ...values: unknown[]) => ReactElement;
 
-/** site.css's light colours: mail is read on white more often than not. */
 const C = {
   bg: '#fafaf9',
   surface: '#ffffff',
@@ -111,15 +99,12 @@ const s = {
 };
 
 interface Frame {
-  /** Where the site is, for the logo, its fonts and the links. */
   origin: string;
   beta: boolean;
-  /** The line an inbox shows after the subject. */
   preview: string;
   children: ReactNode;
 }
 
-/** The page every email shares: the wordmark, a white card, a footer. */
 function Layout({ origin, beta, preview, children }: Frame): ReactElement {
   const zh = lang() === 'zh';
   return html`<${Html} lang=${zh ? 'zh-Hans' : 'en'}>
@@ -149,7 +134,6 @@ function Layout({ origin, beta, preview, children }: Frame): ReactElement {
 const cta = (href: string, label: string) =>
   html`<${Section} style=${{ margin: '0 0 16px' }}><${Button} href=${href} style=${s.button}>${label}<//><//>`;
 
-/** Plain-text paragraphs, blank-line separated, as cards' paragraphs. */
 const paragraphs = (text: string) => text.split(/\n{2,}/).map((p, i) => html`<${Text} key=${i} style=${s.p}>${p}<//>`);
 
 export interface SignIn {
@@ -157,13 +141,10 @@ export interface SignIn {
   beta: boolean;
   code: string;
   link: string;
-  /** The device an app asked from; none for the website. */
   device?: string;
-  /** Why they got it, already worded. */
   why: string;
 }
 
-/** The sign-in email: the code, big; the link as a second way in. */
 export function signInHtml(p: SignIn): Promise<string> {
   const t = m();
   const app = p.device !== undefined;
@@ -178,7 +159,6 @@ export function signInHtml(p: SignIn): Promise<string> {
   <//>`);
 }
 
-/** "terminus was added to MacBook Air", with the way to undo it. */
 export function deviceAddedHtml(p: { origin: string; beta: boolean; device: string; when: string; site: string }): Promise<string> {
   const t = m();
   const subject = t.deviceAddedSubject(p.device);
@@ -190,26 +170,19 @@ export function deviceAddedHtml(p: { origin: string; beta: boolean; device: stri
   <//>`);
 }
 
-/** The text's indent marks it as a command; the box says that already. */
 const dedent = (text: string) => {
   const lines = text.split('\n');
   const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => /^ */.exec(l)![0].length));
   return lines.map((l) => l.slice(indent)).join('\n');
 };
 
-/** "terminus: NUS bus feed is down" -> "NUS bus feed is down": the wordmark is above it. */
 const heading = (subject: string) => subject.replace(/^terminus:?\s*/, '').replace(/^./, (c) => c.toUpperCase());
 
-/**
- * An email to the operator, from its plain text: a paragraph that's code
- * (indented lines, JSON, a response body) keeps its spacing in a box.
- */
 export function operatorHtml(p: { origin: string; beta: boolean; subject: string; text: string }): Promise<string> {
   const prose = (b: string, i: number | string) => html`<${Text} key=${i} style=${{ ...s.p, whiteSpace: 'pre-wrap' }}>${b}<//>`;
   const blocks = p.text.split(/\n{2,}/).map((b, i) => {
     const at = b.search(/^( {2}|[{["<])/m);
     if (at < 0) return prose(b, i);
-    // "To undo it, from apps/api:" stays a sentence; only what follows is code.
     const code = html`<pre key=${`${i}c`} style=${s.pre}>${dedent(b.slice(at))}</pre>`;
     return at === 0 ? code : [prose(b.slice(0, at).trimEnd(), i), code];
   });
@@ -223,18 +196,13 @@ export interface Report {
   origin: string;
   beta: boolean;
   id: string;
-  /** "A wrong answer", "Feedback", "A better stop for a building". */
   what: string;
-  /** "android 3.1.0". */
   from: string;
   at: number;
-  /** The reason they picked, in words. */
   reason: string | null;
   note: string;
-  /** A stop suggestion's lines, label and value, and the entry to paste. */
   details: [string, string][];
   entry: string | null;
-  /** Whether the dashboard has the answer they saw. */
   withAnswer: boolean;
 }
 
@@ -261,14 +229,12 @@ const quote = {
 const label = { fontSize: '13px', color: C.muted, padding: '6px 12px 6px 0', verticalAlign: 'top', whiteSpace: 'nowrap' as const };
 const value = { fontSize: '14px', color: C.ink, padding: '6px 0', verticalAlign: 'top' };
 
-/** "11 Oct 2026, 09:30 Singapore time": where the operator and the riders are. */
 const sgTime = (ms: number) => {
   const d = new Date(ms + 8 * 3_600_000);
   const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
   return `${d.getUTCDate()} ${month} ${d.getUTCFullYear()}, ${d.toISOString().slice(11, 16)} Singapore time`;
 };
 
-/** A report from a rider ("This was wrong", feedback, a better stop), for the operator. */
 export function feedbackHtml(r: Report): Promise<string> {
   const when = `${r.from} · ${sgTime(r.at)}`;
   return render(html`<${Layout} origin=${r.origin} beta=${r.beta} preview=${r.note || r.reason || r.what}>

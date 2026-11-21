@@ -47,11 +47,6 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
 
-/**
- * Today at a glance, from /api/me/day: each class with its leave-by, and the trips home. What's done is dimmed. Anything still to come has
- * an × to take it off today, whether it's timetabled or one you added (a swipe does the same); it goes at once, and its row says so with
- * Undo for [UNDO_MS], as on the web app.
- */
 @Composable
 internal fun DayTimeline(
     day: DayPlan,
@@ -63,7 +58,6 @@ internal fun DayTimeline(
     if (day.items.isEmpty() && removed == null) return
     val ctx = LocalContext.current
     val fmt = { ms: Long -> clock(ctx, ms) }
-    // Above the entry that followed it, else where it was.
     val noteAt = removed?.let { n ->
         day.items.indexOfFirst { it.key == n.before }.takeIf { n.before != null && it >= 0 } ?: minOf(n.at, day.items.size)
     }
@@ -76,7 +70,6 @@ internal fun DayTimeline(
         )
         for ((i, item) in day.items.withIndex()) {
             if (i == noteAt && removed != null) RemovedRow(removed, fmt, onUndo, onDismiss)
-            // Keyed, so a swiped row's state doesn't pass to the one moving up.
             key(item.key) {
                 if (item.removable) Swipeable(item, onRemove) { DayRow(item, fmt) { RemoveButton(item, onRemove) } } else DayRow(item, fmt)
             }
@@ -85,13 +78,10 @@ internal fun DayTimeline(
     }
 }
 
-/** How long a removed entry's Undo stays: as long as the web app's. */
 private const val UNDO_MS = 20_000L
 
-/** What a removed entry is called in its row: the trip home, or the class without its venue. */
 internal fun DayItem.shortName(): String = if (kind == "home") L.s(R.string.trip_home) else label.substringBefore(" @ ")
 
-/** The × at the end of a row that can be taken off today. */
 @Composable
 private fun RemoveButton(item: DayItem, onRemove: (DayItem) -> Unit) {
     IconButton(onClick = { onRemove(item) }) {
@@ -104,10 +94,6 @@ private fun RemoveButton(item: DayItem, onRemove: (DayItem) -> Unit) {
     }
 }
 
-/**
- * Where an entry was, just taken off: "GEA1000 removed from today · Undo", or why it couldn't be (the entry is back, just below). Said
- * aloud as it appears, and gone after [UNDO_MS].
- */
 @Composable
 private fun RemovedRow(note: TodayNote, fmt: (Long) -> String, onUndo: () -> Unit, onDismiss: (String) -> Unit) {
     LaunchedEffect(note) {
@@ -115,7 +101,6 @@ private fun RemovedRow(note: TodayNote, fmt: (Long) -> String, onUndo: () -> Uni
         onDismiss(note.item.key)
     }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    // Laid out as the entry was, so the time stays in its column when the words wrap.
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
@@ -132,7 +117,6 @@ private fun RemovedRow(note: TodayNote, fmt: (Long) -> String, onUndo: () -> Uni
                 color = if (note.failed) MaterialTheme.colorScheme.error else muted,
             )
         }
-        // Its word ends where the ×s do, past the button's own padding.
         if (!note.failed)
             TextButton(onClick = onUndo, modifier = Modifier.offset(x = 6.dp)) {
                 Text(stringResource(R.string.undo), fontWeight = FontWeight.SemiBold)
@@ -140,10 +124,6 @@ private fun RemovedRow(note: TodayNote, fmt: (Long) -> String, onUndo: () -> Uni
     }
 }
 
-/**
- * Swipe either way to take it off today, a shortcut for the ×. The row lifts onto a card as it moves; behind it a bin, grey until it's far
- * enough to let go, then red.
- */
 @Composable
 private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Composable () -> Unit) {
     val state = rememberSwipeToDismissBoxState()
@@ -158,7 +138,6 @@ private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Comp
     val shape = RoundedCornerShape(12.dp)
     SwipeToDismissBox(
         state = state,
-        // A little wider than the page's column, so the card has room round the words, which stay in line with the other rows.
         modifier =
             Modifier.layout { m, k ->
                 val out = 8.dp.roundToPx()
@@ -166,7 +145,6 @@ private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Comp
                 layout(p.width - 2 * out, p.height) { p.place(-out, 0) }
             },
         backgroundContent = {
-            // Only while swiping: otherwise it's hidden under the row, and screen readers would read it.
             if (!moving) return@SwipeToDismissBox
             Box(
                 Modifier.fillMaxSize().background(behind, shape).padding(horizontal = 20.dp),
@@ -191,13 +169,11 @@ private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Comp
     }
 }
 
-/** One entry of the day: its time, what it is, and how you get there (or that it's off). */
 @Composable
 private fun DayRow(item: DayItem, fmt: (Long) -> String, end: (@Composable () -> Unit)? = null) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val past = item.status == "done" || item.status == "skipped"
     val current = item.status == "next" || item.status == "now"
-    // Every row as tall as the × at least, so the list keeps one rhythm; the × centred on the row, as Material lists have it.
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
             Text(
@@ -208,7 +184,6 @@ private fun DayRow(item: DayItem, fmt: (Long) -> String, end: (@Composable () ->
                 modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp),
             )
             Column(Modifier.weight(1f)) {
-                // The server's words (`title`, `line`); worked out here for an older server.
                 val title =
                     item.title
                         ?: if (item.kind == "home")

@@ -1,9 +1,3 @@
-/**
- * The "Is this wrong?" sheet's chips (apps/web/public/account/preview.js):
- * the reasons the server says fit the card (card.reasons), on real answers
- * from fixtures/answers, and every reason for a card from a server that
- * doesn't say.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import classBus from '../../../fixtures/answers/class-bus.json' with { type: 'json' };
@@ -14,7 +8,6 @@ import { useLang, web } from './_web.mjs';
 
 useLang('en');
 page({ url: 'https://terminus.run/app/', html: '<div id="root"></div>' });
-// happy-dom has no modal dialogs.
 HTMLElement.prototype.showModal ??= function () {
   this.setAttribute('open', '');
 };
@@ -63,7 +56,6 @@ test('a reason picked on an earlier opening is not sent once the answer no longe
   await click('.report-open');
   await click('.report-chip', 'Bus never came');
   await click('.report-cancel');
-  // The card moves on: now on the bus, where it did come.
   await draw(riding);
   await click('.report-open');
   assert.ok(![...root.querySelectorAll('.report-chip')].some((b) => b.textContent === 'Bus never came'));

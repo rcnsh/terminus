@@ -23,53 +23,29 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/**
- * What the Map tab keeps on the phone so the campus map works offline after the first look: the stops and routes (`/api/campus`), the map's
- * style in each theme and language used, and the whole campus map file (about 3 MB). MapLibre doesn't cache PMTiles it streams, so the file
- * is downloaded once, checked weekly for a newer one, and read from storage (`pmtiles://file://…`); until then the map is plain. Fonts and
- * icons go through MapLibre's own cache.
- *
- * Each version of the map file has a name of its own: MapLibre keeps a file's header and directories by its URL, so a newer one written
- * over the same path could be read with the old one's. Older versions go at the next check, once no map shows them.
- */
-/** A newer `/api/campus`, in [lang] ("en" or "zh"), found and kept. */
 class CampusChange(val lang: String, val json: JSONObject)
 
 object MapFiles {
     private const val TILES = "campus.pmtiles"
-    /** What the kept map file is: its name, size, ETag and when it was last checked. */
     private const val META = "$TILES.json"
     private const val CHECK_MS = 7 * 24 * 3_600_000L
-    /** `/api/campus` and the style say `max-age=3600`: a copy that young isn't asked about again. */
     private const val FRESH_MS = 3_600_000L
-    /** The campus file is about 3 MB: anything under this is not the map. */
     internal const val MIN_TILES_BYTES = 64 * 1024L
-    /** Room left over after the download, so the map doesn't fill the phone. */
     private const val SPARE_BYTES = 16 * 1024 * 1024L
-    /** A temporary file this old is left over from a write that never finished. */
     private const val STALE_TEMP_MS = 10 * 60_000L
 
-    /** One download at a time in this process: a second would write the same file. */
     private val tilesLock = Mutex()
 
     private fun dir(ctx: Context) = File(ctx.filesDir, "map").apply { mkdirs() }
 
     private fun fresh(file: File) = file.exists() && System.currentTimeMillis() - file.lastModified() in 0 until FRESH_MS
 
-    /** What [campusStep] says to do with `/api/campus`. */
     internal enum class CampusStep {
-        /** The kept copy, young enough not to ask about. */
         KEPT,
-        /** The kept copy now, and a check in the background. */
         KEPT_THEN_CHECK,
-        /** Nothing kept: wait for the network. */
         FETCH,
     }
 
-    /**
-     * With a copy kept, it's used at once whatever its age; one [ageMs] old past an hour (or from the future, the clock moved) is checked
-     * too.
-     */
     internal fun campusStep(kept: Boolean, ageMs: Long): CampusStep =
         when {
             !kept -> CampusStep.FETCH
@@ -77,21 +53,14 @@ object MapFiles {
             else -> CampusStep.KEPT_THEN_CHECK
         }
 
-    /** The background checks of `/api/campus` under way, by language: one at a time. */
     private val checking = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-    /** Outlives the screen that asked: a check started as one closes still saves what it gets. */
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val changed = MutableSharedFlow<CampusChange>(extraBufferCapacity = 4)
 
-    /** A newer `/api/campus` found by a background check and saved: what's on screen in its language takes it in place. */
     val campusChanged: SharedFlow<CampusChange> = changed
 
-    /**
-     * Each newer campus in the language shown now, while [shown] (a screen with campus data on it), read by [read] off the main thread and
-     * handed to [use]. One that can't be read is left: the copy shown stays.
-     */
     suspend fun <T> onCampusChange(shown: () -> Boolean, read: (JSONObject) -> T, use: (T) -> Unit) {
         campusChanged.collect { change ->
             if (!shown() || change.lang != campusLang()) return@collect
@@ -107,14 +76,8 @@ object MapFiles {
         }
     }
 
-    /** The campus data's language now: the server words lines' names and stops in the language asked in, and a copy is kept for each. */
     fun campusLang(): String = if (L.zh) "zh" else "en"
 
-    /**
-     * `/api/campus`: the kept copy at once, whatever its age, so nothing that only needs names waits on the network; one over an hour old
-     * is then checked in the background with its ETag ([campusChanged] says when it changed). With no copy, from the network, its errors
-     * thrown to the caller.
-     */
     suspend fun campus(ctx: Context, api: Api): JSONObject? =
         withContext(Dispatchers.IO) {
             val lang = campusLang()
@@ -130,8 +93,6 @@ object MapFiles {
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                // Refused found here is acted on as it is when nothing's kept: a 401 signs the phone out (a 426 was
-                                // already noted by the request itself); anything else waits for the next look.
                                 if (e is ApiError && e.status == 401) Session.rejected(ctx, api.token)
                             } finally {
                                 checking.remove(lang)
@@ -139,13 +100,10 @@ object MapFiles {
                         }
                     kept
                 }
-                // Nothing kept to fall back on: whatever goes wrong (offline, signed out, a reply this version can't read) is the caller's
-                // to say.
                 CampusStep.FETCH -> fetchCampus(ctx, api, lang, withTag = false)
             }
         }
 
-    /** Asks for `/api/campus` and keeps it; with [withTag], the kept copy's ETag, and null when the server says it's unchanged. */
     private suspend fun fetchCampus(ctx: Context, api: Api, lang: String, withTag: Boolean): JSONObject? {
         val file = File(dir(ctx), "campus-$lang.json")
         val tagFile = File(dir(ctx), "campus-$lang.etag")
@@ -155,24 +113,17 @@ object MapFiles {
             file.setLastModified(System.currentTimeMillis())
             return null
         }
-        // The Map and Stops tabs can both be writing it: each write whole, or not at all.
         writeWhole(file, got.first.toString())
         if (got.second != null) writeWhole(tagFile, got.second!!) else tagFile.delete()
         return got.first
     }
 
-    /**
-     * The style for [dark] and [zh]: the street map from the downloaded file, or, until it's downloaded, the routes and stops on a plain
-     * map. Never streamed: MapLibre Native fails the whole style when one fetch of a streamed map file fails, which would blank the routes
-     * too. Null with no connection and nothing kept (or nothing readable).
-     */
     suspend fun style(ctx: Context, dark: Boolean, zh: Boolean): String? =
         withContext(Dispatchers.IO) {
             val theme = if (dark) "dark" else "light"
             val lang = if (zh) "zh" else "en"
             val dir = dir(ctx)
             val file = File(dir, "style-$theme-$lang.json")
-            // A copy cut short (the app killed mid-write) is no copy.
             val kept = runCatching { file.readText() }.getOrNull()?.takeIf(::isJson)
             val text =
                 kept?.takeIf { fresh(file) }
@@ -196,14 +147,12 @@ object MapFiles {
             null
         }
 
-    /** Where the map file is on the phone, if a whole one is. */
     suspend fun tilesPath(ctx: Context): String? =
         withContext(Dispatchers.IO) {
             val dir = dir(ctx)
             current(dir, readMeta(dir))?.absolutePath
         }
 
-    /** The style with only its background: no map file, no street layers. */
     fun withoutBaseMap(style: String): String {
         val json = JSONObject(style)
         json.put("sources", JSONObject())
@@ -215,7 +164,6 @@ object MapFiles {
         return json.toString()
     }
 
-    /** The style with its map file read from [path] instead of the network. */
     fun localTiles(style: String, path: String): String {
         val json = JSONObject(style)
         val sources = json.optJSONObject("sources") ?: return style
@@ -226,11 +174,6 @@ object MapFiles {
         return json.toString()
     }
 
-    /**
-     * Downloads the map file if it isn't here or wasn't checked this week (only when it changed: by its ETag). Quiet on failure: the map
-     * stays on the file it had, or plain (routes and stops, [withoutBaseMap]), and the next visit tries again. Returns where the map file
-     * is now, if one is.
-     */
     suspend fun keepTiles(ctx: Context): String? =
         withContext(Dispatchers.IO) {
             val job = currentCoroutineContext()[Job]
@@ -240,47 +183,35 @@ object MapFiles {
             }
         }
 
-    /** What the map file's URL answered: its status, ETag and Content-Length. */
     data class Fetched(val code: Int, val etag: String?, val length: Long?)
 
-    /**
-     * [keepTiles] in [dir] at [now], under [tilesLock]. [fetch] asks for the map file (with the kept ETag, if any) and, on a 200, writes
-     * the body to its second argument. Returns where the map file is now, if one is.
-     */
     internal fun keepTiles(dir: File, now: Long, metered: () -> Boolean, fetch: (etag: String?, into: File) -> Fetched): String? {
         val tiles = checked(dir)
         tidy(dir, tiles)
         val meta = readMeta(dir)
         val due = tiles == null || meta == null || now - meta.optLong("checked") !in 0 until CHECK_MS
-        // A newer map (twice a year) can wait for Wi-Fi; the first one can't, or there's no map.
         if (due && !(tiles != null && metered())) {
             try {
                 download(dir, tiles, meta, now, fetch)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                // Quiet: tried again next time.
-            }
+            } catch (e: Exception) {}
         }
         return current(dir, readMeta(dir))?.absolutePath
     }
 
     private fun download(dir: File, tiles: File?, meta: JSONObject?, now: Long, fetch: (String?, File) -> Fetched) {
         val keptTag = meta?.optString("etag")?.takeIf { it.isNotEmpty() }
-        // A file of its own for each try: nothing else writes to it.
         val part = File.createTempFile("campus", ".part", dir)
         var kept = false
         try {
-            // Only with a whole file here: a 304 then means that file is current.
             val got = fetch(if (tiles != null) keptTag else null, part)
             when (got.code) {
                 304 -> {
                     if (tiles == null || meta == null) error("not modified, with nothing kept")
-                    // A file kept before versions had names gets its name and size written down.
                     writeMeta(dir, meta.put("file", tiles.name).put("size", tiles.length()).put("checked", now))
                 }
                 200 -> {
-                    // A cut-off download, or something that isn't the map, must not replace a good file.
                     if (got.length != null && part.length() != got.length) error("short download")
                     if (!isPmTiles(head(part), part.length())) error("not a map file")
                     val target = File(dir, tilesName(got.etag, now))
@@ -302,7 +233,6 @@ object MapFiles {
         }
     }
 
-    /** Asks for the map file; on a 200 with room for it, copies it into [into], stopping if [job] is cancelled. */
     private fun fetchTiles(ctx: Context, dir: File, job: Job?, etag: String?, into: File): Fetched {
         val conn =
             connect("/map/$TILES") { c ->
@@ -324,7 +254,6 @@ object MapFiles {
         }
     }
 
-    /** Copies in pieces, stopping when the caller is cancelled (the app closed) rather than at the end. */
     private fun copy(input: InputStream, output: OutputStream, job: Job?) {
         val buf = ByteArray(64 * 1024)
         while (true) {
@@ -335,10 +264,6 @@ object MapFiles {
         }
     }
 
-    /**
-     * The kept map file, checked: a missing, cut-short or unreadable one is deleted and its ETag dropped, so the next download asks for it
-     * whole rather than being told it's unchanged. Only under [tilesLock].
-     */
     private fun checked(dir: File): File? {
         val meta = readMeta(dir)
         current(dir, meta)?.let {
@@ -349,9 +274,7 @@ object MapFiles {
         return null
     }
 
-    /** The kept map file, if it's whole: the size it was kept at, and a PMTiles header. */
     private fun current(dir: File, meta: JSONObject?): File? {
-        // Before files had a version of their own, the one file was campus.pmtiles.
         val file = File(dir, meta?.optString("file")?.takeIf { it.isNotEmpty() } ?: TILES)
         if (!file.isFile) return null
         val size = meta?.optLong("size", -1) ?: -1
@@ -359,7 +282,6 @@ object MapFiles {
         return file.takeIf { isPmTiles(head(it), it.length()) }
     }
 
-    /** Older map files and temporary files left behind, all but [keep]. Only under [tilesLock]. */
     private fun tidy(dir: File, keep: File?) {
         val now = System.currentTimeMillis()
         dir.listFiles()?.forEach { f ->
@@ -367,7 +289,6 @@ object MapFiles {
                 when {
                     f.name.endsWith(".pmtiles") -> f != keep
                     f.name.endsWith(".part") -> true
-                    // Another tab may be writing a campus file right now: only ones long left.
                     f.name.endsWith(".tmp") -> now - f.lastModified() > STALE_TEMP_MS
                     else -> false
                 }
@@ -393,11 +314,9 @@ object MapFiles {
     }
         .getOrDefault(ByteArray(0))
 
-    /** A PMTiles version 3 file: "PMTiles", then the version byte, and big enough to be a map. */
     internal fun isPmTiles(head: ByteArray, size: Long): Boolean =
         size >= MIN_TILES_BYTES && head.size >= 8 && String(head, 0, 7, Charsets.US_ASCII) == "PMTiles" && head[7].toInt() == 3
 
-    /** The name for a map file: one per version (its ETag), and per download, so it never replaces one in use. */
     internal fun tilesName(etag: String?, now: Long): String {
         val digest = MessageDigest.getInstance("SHA-256").digest("${etag.orEmpty()}|$now".toByteArray())
         return "campus-" + digest.take(6).joinToString("") { "%02x".format(it) } + ".pmtiles"
@@ -411,7 +330,6 @@ object MapFiles {
             false
         }
 
-    /** Written to a temporary file, then renamed over [file]: a reader sees the old text or the new, never half. */
     private fun writeWhole(file: File, text: String) {
         val tmp = File.createTempFile(file.name, ".tmp", file.parentFile)
         try {
@@ -422,7 +340,6 @@ object MapFiles {
         }
     }
 
-    /** Bytes the app can still write where [dir] is (cache the system may clear counted in); unknown: no limit. */
     private fun room(ctx: Context, dir: File): Long =
         try {
             val storage = ctx.getSystemService(android.os.storage.StorageManager::class.java)
@@ -434,7 +351,6 @@ object MapFiles {
     private fun metered(ctx: Context): Boolean =
         ctx.getSystemService(android.net.ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
 
-    /** [path] on our server ([connect]). Any status is an answer; only a 200 is the file. */
     private fun get(path: String): String {
         val conn =
             connect(path) { c ->
@@ -451,11 +367,6 @@ object MapFiles {
         }
     }
 
-    /**
-     * [path] asked of our server until its status arrives: the chosen address, then the backup only if it couldn't be reached at all
-     * ([Servers.through]), and the one that answered noted then, as Api's requests do. The body is read from that connection by the caller:
-     * a failure there (a reset mid-download) isn't tried elsewhere, so megabytes aren't fetched twice.
-     */
     private fun connect(path: String, setup: (HttpURLConnection) -> Unit): HttpURLConnection =
         Servers.through("GET", path, { it.responseCode }) { base ->
             val conn = URL(base + path).openConnection() as HttpURLConnection

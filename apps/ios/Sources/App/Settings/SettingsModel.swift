@@ -1,7 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// Settings' pages, in the order the list shows them.
 enum SettingsPage: Hashable {
     case trips, timetable, favourites, notifications, language, appearance, devices, account, feedback, about, licences
 
@@ -22,37 +21,23 @@ enum SettingsPage: Hashable {
     }
 }
 
-/// Everything Settings shows about the account rather than the answer: the
-/// profile, devices, trip choices, the campus for the pickers. One for the
-/// app, so a page stays open and filled in when the language changes and
-/// the app redraws. Every edit is shown at once and saved a moment later, so
-/// a run of taps is one save, as on Android (AccountViewModel); a refusal
-/// puts back what the server has, with its reason.
 @MainActor @Observable
 final class SettingsModel {
     static let shared = SettingsModel()
 
-    /// The pages open, on top of the list. When wide, the first is the one
-    /// open beside the list, the rest pushed over it.
     var path: [SettingsPage] = []
-    /// Wide: the list and a page side by side, so the list opens a page in place of the one open.
     var split = false
 
-    /// Wide, the list's first page is open until another is picked, so the pane beside it is never empty.
     static let firstPage = SettingsPage.trips
 
-    /// The page open beside the list.
     var shown: SettingsPage { path.first ?? Self.firstPage }
 
-    /// The page whose row is marked as chosen; none when the list has the screen.
     var chosen: SettingsPage? { split ? shown : nil }
 
-    /// The pages pushed over the first in the wide detail pane.
     var pagesOver: Binding<[SettingsPage]> {
         Binding(get: { Array(self.path.dropFirst()) }, set: { self.path = [self.shown] + $0 })
     }
 
-    /// A page picked in the list: over it, or wide, beside it in place of the one open.
     func open(_ page: SettingsPage) {
         if split { path = [page] } else { path.append(page) }
     }
@@ -63,29 +48,19 @@ final class SettingsModel {
     private(set) var devices: [Device]?
     private(set) var choices: [TripChoice] = []
     private(set) var history = 0
-    /// Something to say once, at the foot: a save that failed, data exported.
     private(set) var message: String?
-    /// With `message`, Undo beside it.
     private(set) var undo: (() -> Void)?
     private(set) var busy = false
 
-    // MARK: the timetable
-
     private(set) var importing = false
     private(set) var imported: ImportResult?
-    /// Imported classes whose room couldn't be placed, until each gets a stop or is skipped.
     private(set) var unplaced: [Unplaced] = []
-    /// A NUSMods link shared into the app, waiting in Timetable's field.
     var sharedLink: String?
 
-    /// The pairing code on screen, for another device.
     var pairCode: String?
 
     private var app: AppModel { AppModel.shared }
 
-    // MARK: loading
-
-    /// Who this phone is, the profile and the rest: on opening Settings, and on coming back to it.
     func refresh() async {
         guard let token = app.token else { return }
         let api = Api(token: token)
@@ -101,7 +76,6 @@ final class SettingsModel {
         do {
             let (data, tag) = try await api.profileData()
             guard token == app.token, let p = ProfileDoc(data: data) else { return }
-            // A change still being saved stays on screen.
             if !saving {
                 profile = p
                 version = tag
@@ -127,7 +101,6 @@ final class SettingsModel {
         } catch is DecodingError {
             say(L("terminus sent something this version can't read."))
         } catch {
-            // Offline: the pickers try again when they open.
         }
     }
 
@@ -156,11 +129,9 @@ final class SettingsModel {
         }
     }
 
-    /// Signed out: nothing of the account stays.
     func reset() {
         saveTask?.cancel()
         saveTask = nil
-        // Its answer is dropped; the request itself goes on, as it may have saved.
         sending = nil
         epoch += 1
         path = []
@@ -179,26 +150,14 @@ final class SettingsModel {
         busy = false
     }
 
-    // MARK: editing the profile
-
-    /// The 0.4 s wait before a save, so a run of taps goes as one.
     private var saveTask: Task<Void, Never>?
-    /// The save on its way to the server. Never cancelled: whether it saved
-    /// is only known from its answer, and a change sent must not be made twice.
     private var sending: Task<Void, Never>?
-    /// The profile as the server last had it, to go back to if a save fails.
     private var confirmed: ProfileDoc?
-    /// Its version (the ETag): a save is refused (412) if the profile was saved
-    /// elsewhere since, a pin on Buses, a favourite from the map, another device.
     private var version: String?
-    /// The changes made since the last save was sent, shown already, to send next.
     private var pending: [(inout ProfileDoc) -> Void] = []
-    /// Moves on with each sign-out: a save's answer from before one is dropped.
     private var epoch = 0
-    /// Whether a change is waiting or on its way: the profile shown is ahead of the server's.
     private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
 
-    /// Changes the profile: shown now, saved 0.4 s later with any taps since.
     func edit(_ change: @escaping (inout ProfileDoc) -> Void) {
         guard var next = profile, app.token != nil else { return }
         if !saving { confirmed = profile }
@@ -214,9 +173,6 @@ final class SettingsModel {
         }
     }
 
-    /// Sends the changes waiting, made on the profile as the server last had
-    /// it. One save at a time: changes made meanwhile wait for its answer and
-    /// go next, on what it saved. None while an import runs: they go on top of its answer.
     private func send() {
         guard sending == nil, !importing, !pending.isEmpty, let token = app.token, let base = confirmed else { return }
         let changes = pending
@@ -233,13 +189,10 @@ final class SettingsModel {
                 do {
                     (data, tag) = try await api.saveProfileData(body, ifMatch: from)
                 } catch let e as ApiError where e.status == 412 {
-                    // Saved elsewhere meanwhile, and so not by this request:
-                    // its changes, made again on that.
                     let (fresh, freshTag) = try await api.profileData()
                     guard mine == epoch else { return }
                     guard var latest = ProfileDoc(data: fresh) else { throw URLError(.cannotParseResponse) }
                     for change in changes { change(&latest) }
-                    // A class changed elsewhere isn't changed here instead of its neighbour.
                     if latest.missed { say(L("A class was changed on another device. Check it and try again.")) }
                     (data, tag) = try await api.saveProfileData(latest.data, ifMatch: freshTag)
                 }
@@ -247,11 +200,8 @@ final class SettingsModel {
                 sending = nil
                 guard let saved = ProfileDoc(data: data) else { return }
                 version = tag
-                // The server writes the card and the day in the account's language,
-                // not the one asked in: what came between the switch and now is in the old one.
                 let langSaved = saved.lang != confirmed?.lang
                 confirmed = saved
-                // Changes made since this was sent stay on screen, on top of what it saved.
                 var shown = saved
                 for change in pending { change(&shown) }
                 profile = shown
@@ -275,9 +225,6 @@ final class SettingsModel {
         }
     }
 
-    // MARK: language and time
-
-    /// Settings › Language: this phone, and the account, so the Mac, the web and emails follow.
     func setLang(_ pref: String) {
         guard pref != Prefs.shared.lang else { return }
         Shared.defaults.set(pref, forKey: Self.langNoted)
@@ -285,7 +232,6 @@ final class SettingsModel {
         Prefs.shared.lang = pref
     }
 
-    /// 12- or 24-hour times on every device; the card and widgets redraw in it.
     func setClock(_ pref: String) {
         Prefs.shared.clock = pref
         edit { $0.clock = pref }
@@ -293,18 +239,13 @@ final class SettingsModel {
         Task { await app.load(restart: true) }
     }
 
-    /// The account's language as this phone last saw it, to tell a change made elsewhere.
     private static let langNoted = "settings.langAccount"
 
-    /// The account's language and clock on this phone: a language picked here
-    /// before the account had one goes to the account; one chosen on another
-    /// device since is applied here.
     private func followAccount(_ p: ProfileDoc) {
         if Prefs.shared.clock != p.clock { Prefs.shared.clock = p.clock }
         let noted = Shared.defaults.string(forKey: Self.langNoted)
         let local = Prefs.shared.lang
         #if DEBUG
-            // A test's TERMINUS_LANG is what it's testing: it goes to the account, not the other way.
             if DevLaunch.langPinned, p.lang != local {
                 Shared.defaults.set(local, forKey: Self.langNoted)
                 edit { $0.lang = local }
@@ -320,12 +261,9 @@ final class SettingsModel {
         }
     }
 
-    // MARK: the timetable
-
     func importTimetable(_ link: String) {
         let share = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !share.isEmpty, !importing, let token = app.token else { return }
-        // A change still waiting goes first, so it isn't saved over the import.
         if saveTask != nil {
             saveTask?.cancel()
             saveTask = nil
@@ -335,12 +273,10 @@ final class SettingsModel {
         imported = nil
         let session = app.session
         Task {
-            // Changes made from here wait for the import's answer, then go on top of it.
             while let s = sending { await s.value }
             do {
                 let r = try await Api(token: token).importTimetable(share)
                 importing = false
-                // Signed out or into another account meanwhile: not this one's timetable.
                 guard app.session == session else { return }
                 imported = r
                 unplaced = r.unplaced
@@ -349,7 +285,6 @@ final class SettingsModel {
                 var shown = saved
                 for change in pending { change(&shown) }
                 profile = shown
-                // The import saved a new version; the next save fetches it on a clash.
                 if saveTask == nil { send() }
                 sharedLink = nil
                 if let m = me {
@@ -366,7 +301,6 @@ final class SettingsModel {
         }
     }
 
-    /// An unplaced class given a stop: added by hand there, as the account page does.
     func place(_ u: Unplaced, to: String) {
         let room = u.venue.split(separator: "-", maxSplits: 1).first.map(String.init) ?? u.venue
         edit {
@@ -379,9 +313,6 @@ final class SettingsModel {
 
     func skip(_ u: Unplaced) { unplaced.removeAll { $0 == u } }
 
-    // MARK: favourites
-
-    /// Off the list, with Undo at the foot.
     func removePlace(_ key: String) {
         var removed: RemovedPlace?
         edit { removed = $0.removePlace(key: key) }
@@ -390,8 +321,6 @@ final class SettingsModel {
             self?.edit { $0.restorePlace(r) }
         }
     }
-
-    // MARK: trips
 
     func undoChoice(_ c: TripChoice) {
         guard let token = app.token else { return }
@@ -423,8 +352,6 @@ final class SettingsModel {
         }
     }
 
-    // MARK: devices
-
     func newPairCode() {
         guard let token = app.token, !busy else { return }
         busy = true
@@ -454,7 +381,6 @@ final class SettingsModel {
                 try await Api(token: token).removeDevice(d.id)
                 guard app.session == session else { return }
                 if d.current == true {
-                    // This phone's session went with it: signed out here too.
                     signedOut()
                 } else {
                     await loadDevices()
@@ -465,14 +391,11 @@ final class SettingsModel {
         }
     }
 
-    // MARK: the account
-
     func signOut() {
         reset()
         app.signOut()
     }
 
-    /// For an account with no email: everything goes, then the app starts over.
     func deleteAccount() {
         guard let token = app.token, !busy else { return }
         busy = true
@@ -489,7 +412,6 @@ final class SettingsModel {
         }
     }
 
-    /// "Download my data": the export, pretty-printed as Android saves it, so it reads in any text editor.
     func export() async -> Data? {
         guard let token = app.token else { return nil }
         do {
@@ -502,9 +424,6 @@ final class SettingsModel {
         }
     }
 
-    // MARK: feedback
-
-    /// Sends a note; nil once it's gone, else what went wrong.
     func sendFeedback(_ note: String) async -> String? {
         guard let token = app.token else { return nil }
         do {
@@ -515,8 +434,6 @@ final class SettingsModel {
             return failureMessage(error, otherwise: L("Couldn't send. Try again."))
         }
     }
-
-    // MARK: saying things
 
     func say(_ text: String, undo: (() -> Void)? = nil) {
         message = text
@@ -540,10 +457,8 @@ final class SettingsModel {
         app.clearLocal()
     }
 
-    /// A 401 for this phone's own token signs it out, and the welcome screen says why. True when it did.
     private func rejected(_ error: Error, _ token: String) -> Bool {
         guard let e = error as? ApiError, e.status == 401 else { return false }
-        // Another account's token by now: this one's settings stay.
         guard token == app.token else { return true }
         reset()
         app.rejected(token, reason: signedOutHere)

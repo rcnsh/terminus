@@ -8,13 +8,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Versioned profile saves: If-Match, and on a clash (412) only this phone's changes made again on the server's profile. */
 class ProfileSaveTest {
     init {
         TestStrings.install()
     }
 
-    /** The server's profile and its version, refusing a save from an older one as /api/me/profile does. */
     private class Server(json: String, var version: Int = 1) {
         var profile = JSONObject(json)
         val saves = mutableListOf<String?>()
@@ -33,7 +31,6 @@ class ProfileSaveTest {
             return Tagged(JSONObject(profile.toString()), "\"$version\"")
         }
 
-        /** Another device saving meanwhile. */
         fun elsewhere(change: (JSONObject) -> Unit) {
             change(profile)
             version++
@@ -59,7 +56,6 @@ class ProfileSaveTest {
     fun `saved elsewhere meanwhile, only this phone's changes go on top of it`() {
         val server = Server("""{"walkPace":"normal","pinnedStops":["COM3"],"places":[]}""")
         val base = ProfileDoc(server.load().json)
-        // A pin from the Stops tab on another device, after this phone loaded the profile.
         server.elsewhere { it.put("pinnedStops", org.json.JSONArray(listOf("COM3", "PGP"))) }
         val r = save(server, base, "\"1\"", listOf({ it.walkPace = "fast" }, { it.addPlace("Gym", "UTOWN") }))
         assertEquals(listOf<String?>("\"1\"", "\"2\""), server.saves)
@@ -73,7 +69,6 @@ class ProfileSaveTest {
     fun `a pin and a favourite made again on a newer profile aren't undone or doubled`() {
         val server = Server("""{"pinnedStops":["PGP"],"places":[]}""")
         val base = ProfileDoc(server.load().json)
-        // Another device pins COM3 and adds the same favourite first.
         server.elsewhere {
             it.put("pinnedStops", org.json.JSONArray(listOf("PGP", "COM3")))
             it.put("places", org.json.JSONArray().put(JSONObject().put("key", "gym").put("label", "Gym").put("to", "UTOWN")))
@@ -94,7 +89,6 @@ class ProfileSaveTest {
     fun `a favourite removed is the one at its stop, whatever key it was given`() {
         val server = Server("""{"places":[]}""")
         val base = ProfileDoc(server.load().json)
-        // Another device saves a different stop under the key this phone's add would take.
         server.elsewhere {
             it.put("places", org.json.JSONArray().put(JSONObject().put("key", "com3").put("label", "COM3").put("to", "KR-MRT")))
         }
@@ -120,7 +114,6 @@ class ProfileSaveTest {
             object : (ProfileDoc) -> Unit {
                 override fun invoke(p: ProfileDoc) {
                     p.walkPace = "fast"
-                    // Someone else saves between each read and each save.
                     server.elsewhere {}
                 }
             }
@@ -159,7 +152,6 @@ class ProfileSaveTest {
         val server = Server("""{"trips":$trips}""")
         val base = ProfileDoc(server.load().json)
         val gea = base.classAt(imported = true, 1)!!
-        // Another device removes the first class: GEA1000 is now at index 0.
         server.elsewhere { it.getJSONArray("trips").remove(0) }
         val r = save(server, base, "\"1\"", listOf { it.setClassStop(imported = true, 1, gea, "KR-MRT") })
         assertEquals(listOf("GEA1000"), r.doc.trips.map { it.label })
@@ -182,7 +174,6 @@ class ProfileSaveTest {
 
     @Test
     fun `an imported class is told from another row of it by its weeks`() {
-        // One module's two rows, the same but for their weeks: the one removed elsewhere isn't found in the other.
         val trips =
             """[{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":"COM1-0204","weeks":[1,3,5]},{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":"COM1-0204","weeks":[2,4,6]}]"""
         val server = Server("""{"trips":$trips}""")
@@ -209,7 +200,6 @@ class ProfileSaveTest {
 
     @Test
     fun `an edit to a class the base no longer has is said too`() {
-        // Made during an import whose timetable doesn't have it: saved first time, still missed.
         val server = Server("""{"trips":[]}""")
         val gone = JSONObject("""{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":""}""")
         val r = save(server, ProfileDoc(server.load().json), "\"1\"", listOf { it.removeClass(imported = true, 0, gone) })

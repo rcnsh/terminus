@@ -1,44 +1,22 @@
 import SwiftUI
 import UIKit
 
-// The sheets over the bottom of the map: a tapped stop's times, and a tapped
-// bus's card. As Android's StopSheet and BusSheet, which share a frame so the
-// two read alike.
-
-/// The rows a stop's sheet shows before "Show more", so the map stays in view.
 private let peekRows = 3
 
-/// How wide the map is before its sheet floats in a corner, and how wide the
-/// sheet is then: the web app's.
 let mapSheetFloatsFrom: CGFloat = 700
 let mapSheetWidth: CGFloat = 360
 
 extension EnvironmentValues {
-    /// The sheet floats in the map's corner (a wide screen), rounded all
-    /// round, rather than lying across its bottom.
     @Entry var mapSheetFloats = false
-    /// How tall a floating sheet may be, footer and all: the map's height
-    /// under the pills and their status lines, less a margin.
     @Entry var mapSheetRoom: CGFloat = 600
 }
 
-/// The frame a stop's sheet and a bus's share: a grab handle; a `lead` tile
-/// beside the title, `sub` and close; a line of `facts`; then `content` (a
-/// SectionBand and its rows), edge to edge; then the `footer`'s buttons under
-/// a divider, which stay in view while the rows scroll.
-///
-/// The grab handle does what it promises: dragged down, the sheet follows
-/// the finger and closes. `handle`, when set, comes first: a drag up or a tap
-/// on the handle opens what it holds (true, or nil to toggle), and a drag
-/// down closes that (false) before the sheet, returning whether it changed anything.
 private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>: View {
     let title: String
     let sub: String?
     let close: () -> Void
-    /// Back to the bus this stop was opened from; nil when it wasn't.
     var back: (() -> Void)? = nil
     var handle: ((Bool?) -> Bool)? = nil
-    /// Buttons under the rows; without them the rows end the sheet.
     var footerShown = true
     @ViewBuilder let lead: () -> Lead
     @ViewBuilder let facts: () -> Facts
@@ -46,21 +24,14 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
     @ViewBuilder let footer: () -> Footer
 
     @State private var dragged: CGFloat = 0
-    /// How tall the whole sheet is, for a fling to carry it off the bottom.
     @State private var sheetHeight: CGFloat = 400
-    /// Taken off the screen, or replaced by another stop's or bus's sheet:
-    /// a fling still on its way out then closes nothing.
     @State private var gone = false
-    /// Bumped by each fling and each touch: a fling's close runs only if nothing came after it.
     @State private var flight = 0
-    /// How far an upward drag can lift the sheet, however far the finger goes.
     private let lift: CGFloat = 22
-    /// How tall the header and rows are, for the sheet to be no taller.
     @State private var contentHeight: CGFloat = 200
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.mapSheetFloats) private var floats
     @Environment(\.mapSheetRoom) private var room
-    /// How tall the footer's buttons are, for a floating sheet to fit its room.
     @State private var footerHeight: CGFloat = 69
     @AccessibilityFocusState private var titleFocused: Bool
 
@@ -72,8 +43,6 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
 
     var body: some View {
         VStack(spacing: 0) {
-            // Taller than the room it has, the header and rows scroll; the
-            // footer's buttons stay in view under them.
             ScrollView(.vertical) {
                 scrolled.onGeometryChange(for: CGFloat.self) {
                     $0.size.height
@@ -97,8 +66,6 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
             }
         }
         .clipShape(shape)
-        // The shadow is the sheet's own, not cast by each band and row inside it.
-        // Pulled up, it runs on below the sheet, so no gap opens under it.
         .background {
             shape
                 .fill(Color.surface)
@@ -113,10 +80,7 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
         } action: {
             sheetHeight = $0
         }
-        // Floating, it has no room above it to lift into.
         .offset(y: floats ? max(0, dragged) : Fling.rubber(dragged, limit: lift))
-        // VoiceOver moves to its title when it opens, or shows another stop or bus.
-        // Back from another tab mid-fling, it's in place again rather than parked off the screen.
         .onAppear {
             titleFocused = true
             gone = false
@@ -125,9 +89,6 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
         .onDisappear { gone = true }
     }
 
-    /// Across the bottom, no taller than about half the window, so the map
-    /// stays in view above it; floating beside the map, the room it has
-    /// under the pills, less the footer.
     private var maxHeight: CGFloat {
         if floats { return max(80, room - (footerShown ? footerHeight : 0)) }
         let h = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.bounds.height ?? 800
@@ -189,7 +150,6 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
         }
     }
 
-    /// The grab handle; with `handle`, a tap on it opens or closes what it holds.
     private var grabber: some View {
         Capsule()
             .fill(Color.lineStrong.opacity(0.5))
@@ -200,10 +160,6 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
             .accessibilityHidden(true)
     }
 
-    /// Up past a few points, `handle` opens; down far enough or flung,
-    /// `handle` closes, else the sheet does. Down, the sheet follows the
-    /// finger; up, it gives a little and resists. Let go, it moves on at the
-    /// finger's speed: back into place, or off the bottom and then closed.
     private var drag: some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged {
@@ -227,12 +183,10 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
                     withAnimation(Fling.spring(speed: speed, from: dragged, to: off)) {
                         dragged = off
                     } completion: {
-                        // Caught again on its way out, or gone already: it stays.
                         if mine == flight && !gone { close() }
                     }
                     return
                 }
-                // What springs back is where the sheet is drawn, at the speed it was moving there.
                 let shownSpeed = Fling.rubberSpeed(speed, at: dragged, limit: lift)
                 withAnimation(reduceMotion ? nil : Fling.spring(speed: shownSpeed, from: Fling.rubber(dragged, limit: lift), to: 0)) {
                     dragged = 0
@@ -242,8 +196,6 @@ private struct SheetFrame<Lead: View, Facts: View, Content: View, Footer: View>:
 }
 
 extension View {
-    /// The sheet is its own surface: no fade where its rows scroll under the
-    /// header and footer (iOS 26 draws one by default).
     @ViewBuilder fileprivate func noScrollEdgeEffect() -> some View {
         if #available(iOS 26.0, *) {
             scrollEdgeEffectHidden(true, for: .all)
@@ -253,8 +205,6 @@ extension View {
     }
 }
 
-/// The sheet's buttons: filled in the brand colour for the one thing it's
-/// for ("Go there"), outlined for anything else; as wide as they can be.
 private struct SheetButtonStyle: ButtonStyle {
     var filled = false
     @Environment(\.isEnabled) private var enabled
@@ -274,7 +224,6 @@ private struct SheetButtonStyle: ButtonStyle {
     }
 }
 
-/// The tile that leads a sheet's header, the same size for a stop as for a bus.
 private struct SheetTile<Content: View>: View {
     let fill: Color
     @ViewBuilder let content: () -> Content
@@ -286,9 +235,6 @@ private struct SheetTile<Content: View>: View {
     }
 }
 
-/// A grey band naming what's under it, the same on a stop's sheet ("Buses
-/// here") as on a bus's ("Stops ahead"). With `toggle`, it opens and closes
-/// what's under it, and a chevron says so.
 private struct SectionBand: View {
     let text: String
     var open = true
@@ -324,13 +270,11 @@ private struct SectionBand: View {
     }
 }
 
-/// A service's code on its colour, as on the bus.
 private struct SvcChip: View {
     let svc: String
     let hex: String?
     var paid = false
     var faded = false
-    /// Grows with the phone's text size, as the times beside it and the Stops tab's chips do.
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     var body: some View {
@@ -348,16 +292,10 @@ private struct SvcChip: View {
     }
 }
 
-// MARK: - A stop
-
-/// A tapped stop: its board as the Stops tab has it, the first few rows
-/// until asked for the rest, and ways to go there. A row tapped shows its
-/// service on the map, and again hides it.
 struct StopSheet: View {
     let stop: MapStop
     let map: MapModel
     let campus: CampusMap
-    /// It was opened from a bus's sheet, which is still there to go back to.
     let back: Bool
     @State private var all = false
     @Environment(\.openURL) private var openURL
@@ -369,7 +307,6 @@ struct StopSheet: View {
             close: { [shown = map.sheet] in map.closeSheet(ifShowing: shown) },
             back: back ? { map.back() } : nil
         ) {
-            // A stop's tile, where a bus's has its service: the two headers line up.
             SheetTile(fill: Color.surface2) {
                 Image(systemName: "mappin.and.ellipse")
                     .font(.system(size: 20, weight: .medium))
@@ -392,7 +329,6 @@ struct StopSheet: View {
         if let note {
             VStack(alignment: .leading, spacing: 12) {
                 Text(note).font(.subheadline).foregroundStyle(Color.muted)
-                // No times to list them by: the services here, each showing its line.
                 if note != L("Refreshing") {
                     HStack(spacing: 6) {
                         ForEach(stop.services, id: \.self) { svc in
@@ -410,7 +346,6 @@ struct StopSheet: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if map.board != nil {
-            // Counted down every second, as the Stops tab's board is, between the 15 s refreshes.
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 if let board = map.board?.aged(ServerClock.now) {
                     let sorted = board.rows.filter(\.running) + board.rows.filter { !$0.running }
@@ -420,7 +355,6 @@ struct StopSheet: View {
                         ForEach(Array(shown.enumerated()), id: \.offset) { i, r in
                             if i > 0 { Divider().overlay(Color.line) }
                             StopRow(row: r, hex: r.color ?? campus.color(r.svc), picked: map.selected == r.svc) {
-                                // A row picks its line here, as the pills do, and again unpicks it.
                                 map.choose(r.svc)
                             }
                         }
@@ -441,10 +375,8 @@ struct StopSheet: View {
         }
     }
 
-    /// What's said where the rows would be, if there are none to show.
     private var note: String? {
         if map.boardFailed { return L("Live times need a connection.") }
-        // Down or busy: not "no times", which would say no buses are coming.
         if map.boardError { return L("Couldn't load the times. Trying again.") }
         guard let board = map.board else { return L("Refreshing") }
         if board.rows.isEmpty { return board.available ? L("No buses due") : L("No times right now") }
@@ -459,10 +391,8 @@ struct StopSheet: View {
         .buttonStyle(SheetButtonStyle(filled: true))
         .accessibilityIdentifier("map.sheet.go")
         IconCircle(symbol: "figure.walk", label: L("Walking directions")) {
-            // Apple Maps, the phone's own, as the web app does on Apple devices.
             if let u = URL(string: "https://maps.apple.com/?daddr=\(stop.lat),\(stop.lon)&dirflg=w") { openURL(u) }
         }
-        // Tapped again, the star takes the favourite off, with Undo.
         let savedKey = map.savedAs(stop.code)
         let saved = savedKey != nil
         let full = !saved && map.placesFull
@@ -479,7 +409,6 @@ struct StopSheet: View {
     }
 }
 
-/// An outlined round button with an icon, beside a sheet's main button.
 private struct IconCircle: View {
     let symbol: String
     let label: String
@@ -502,13 +431,8 @@ private struct IconCircle: View {
     }
 }
 
-/// One row of a stop's board, as the Stops tab's, smaller: the service, where
-/// it goes and its next stop, how sure the time is when it isn't live and how
-/// full, and the minutes, a green dot beside a live one. Tapped, it shows
-/// its line on the map; the line picked there has its row washed in its colour.
 private struct StopRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// Follows the text size the phone is set to, as the rest of the card does.
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let row: BoardRow
     let hex: String
@@ -544,7 +468,6 @@ private struct StopRow: View {
                 if let to = BusWords.destination(row) {
                     Text(verbatim: to).font(.body).bold().foregroundStyle(Color.ink).lineLimit(1)
                 }
-                // The next stop and the tags on one line when they fit, the tags under it when not.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         nextStop.fixedSize()
@@ -589,7 +512,6 @@ private struct StopRow: View {
         if let next = BusWords.nextStop(row) { Text(verbatim: next).font(.footnote).foregroundStyle(Color.muted) }
     }
 
-    /// How sure the time is, only when it isn't live (the dot says that), and how full the bus is.
     @ViewBuilder private var tags: some View {
         if row.etaS == nil {
             Text(row.quality == "unknown" ? L("No live times") : L("No time yet"))
@@ -611,10 +533,6 @@ private struct StopRow: View {
         }
     }
 
-    /// "4 min" with the number large, or "Arriving"; a dash without a time
-    /// (the tag says why). The words are the server's ("4 min", "~6 min",
-    /// "约 6 分钟"), worded here only for an older server. One without a
-    /// number ("now") is as large as a number, so the column reads as one.
     @ViewBuilder private var bigTime: some View {
         let arriving = (row.etaS ?? .max) < BusTimes.arrivingS && row.quality == "live"
         let color: Color = arriving ? .brand : row.quality == "live" ? .ink : .muted
@@ -667,23 +585,13 @@ private struct CrowdPill: View {
     }
 }
 
-// MARK: - A bus
-
-/// A tapped bus: where its line ends and where it is or is going next; its
-/// plate, whether it's moving and how full it is; and, dragged or tapped
-/// open, the stops ahead of it on a strip of its line. What's ahead is the
-/// server's (`upcoming`): the app doesn't walk the route. Its button opens
-/// the sheet of the stop it's at or coming to, as each stop's row does; back
-/// comes here from it.
 struct BusSheet: View {
     let bus: LiveBus
     let svc: String
-    /// The service's colour, as on its line.
     let hex: String
     let campus: CampusMap
     let map: MapModel
     @State var open: Bool
-    /// Every stop to where its line ends, not just the first few.
     @State var all: Bool
 
     init(bus: LiveBus, svc: String, hex: String, campus: CampusMap, map: MapModel, open: Bool, all: Bool) {
@@ -696,11 +604,8 @@ struct BusSheet: View {
         _all = State(initialValue: all)
     }
 
-    /// This sheet as it is now, for back to come to from a stop's sheet.
     private var now: MapModel.Sheet.Bus { MapModel.Sheet.Bus(id: bus.id, stops: open, all: all) }
 
-    /// How many stops the short list leaves out: what "Show more" adds and
-    /// "Show fewer" takes away. One alone is just shown, as on a stop's sheet.
     private var hidden: Int {
         let m = BusStrip.of(bus).more
         return m > 1 ? m : 0
@@ -711,7 +616,6 @@ struct BusSheet: View {
         let rgb = hexRGB(hex) ?? 0x8A939C
         let tint = Color(rgb: rgb)
         let where_ = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next: %@", $0) }
-        // Where its line ends leads, as a stop's name does; where it is comes under.
         let title = bus.towards.map { L("Towards %@", $0) } ?? where_ ?? L("Bus %@", svc)
         let strip = strip
         let stop = Self.stop(for: bus, svc: svc, in: campus)
@@ -769,7 +673,6 @@ struct BusSheet: View {
             }
         } footer: {
             if let stop {
-                // Secondary: "Go there" on a stop's sheet is the one prominent button.
                 Button(L("Show %@", stop.name)) { map.showStop(stop.code, from: now) }
                     .buttonStyle(SheetButtonStyle())
                     .accessibilityIdentifier("map.sheet.showStop")
@@ -777,15 +680,12 @@ struct BusSheet: View {
         }
     }
 
-    /// The stop a bus is at or coming to.
     static func stop(for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
         bus.at != nil
             ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
             : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
     }
 
-    /// A stop on a bus's line: by its code; from an older API, by name: the
-    /// one on its own line nearest the bus (one name can be either side of a road).
     static func stop(code: String?, name: String?, for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
         if let code, let s = campus.stop(code) { return s }
         guard let name else { return nil }
@@ -794,10 +694,8 @@ struct BusSheet: View {
         return campus.nearest(codes, lat: bus.lat, lon: bus.lon).flatMap(campus.stop)
     }
 
-    /// The bus's plate, whether it's moving, and how full it is.
     private var facts: some View {
         HStack(spacing: 12) {
-            // The number plate, like the one on the bus.
             if let plate = bus.plate {
                 Text(verbatim: plate)
                     .font(.system(.footnote, design: .monospaced).weight(.medium))
@@ -814,7 +712,6 @@ struct BusSheet: View {
             }
             if let (filled, color, word) = crowd {
                 HStack(alignment: .center, spacing: 6) {
-                    // Three rising bars, as many filled as it's full; the word says it.
                     HStack(alignment: .bottom, spacing: 2) {
                         ForEach(0..<3, id: \.self) { i in
                             RoundedRectangle(cornerRadius: 1)
@@ -844,7 +741,6 @@ struct BusSheet: View {
 
     private enum Mark { case passed, bus, here, next, ahead }
 
-    /// The stops ahead of the bus as a strip of its line, the bus on it.
     private func stripList(_ strip: BusStrip, _ tint: Color) -> some View {
         var rows: [(mark: Mark, name: String?, code: String?)] = []
         if let p = strip.passed { rows.append((.passed, p, strip.passedCode)) }
@@ -857,8 +753,6 @@ struct BusSheet: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 let first = i == 0
                 let last = i == rows.count - 1 && strip.more == 0
-                // A stop's row opens its sheet, and its chevron says so: only
-                // one found on the map, and not the bus's own row.
                 let stop = row.mark == .bus ? nil : Self.stop(code: row.code, name: row.name, for: bus, svc: svc, in: campus)
                 if let stop {
                     Button {
@@ -873,7 +767,6 @@ struct BusSheet: View {
                 }
             }
             if strip.more > 0 {
-                // The line fading out: it goes on, and the button under it shows the rest.
                 LinearGradient(colors: [tint.opacity(0.35), tint.opacity(0)], startPoint: .top, endPoint: .bottom)
                     .frame(width: 3, height: 16)
                     .frame(width: 20)
@@ -882,11 +775,8 @@ struct BusSheet: View {
         }
     }
 
-    /// One row of the strip: its piece of the line with the stop's dot or
-    /// the bus, the name, and a chevron when it opens the stop's sheet.
     private func line(_ mark: Mark, _ name: String?, _ tint: Color, first: Bool, last: Bool, chevron: Bool) -> some View {
         let bold = mark == .next || mark == .here
-        // Above the bus (the passed stop's row, and the bus's own top half) is grey.
         let above: Color = mark == .passed || mark == .bus || mark == .here ? Color.line : tint
         let below: Color = mark == .passed ? Color.line : tint
         return HStack(spacing: 10) {
@@ -900,8 +790,6 @@ struct BusSheet: View {
             }
             .frame(width: 20)
             .accessibilityHidden(true)
-            // Passed, here and next are drawn on the line (grey, the bus,
-            // bold), not written beside it; VoiceOver hears the word.
             Group {
                 if mark == .bus {
                     Text(L("On its way")).font(.subheadline).foregroundStyle(Color.muted)
@@ -938,7 +826,6 @@ struct BusSheet: View {
     @ViewBuilder private func marker(_ mark: Mark, _ tint: Color) -> some View {
         switch mark {
         case .bus, .here:
-            // The bus: its colour in a ring of the sheet's own.
             Circle().fill(tint).frame(width: 14, height: 14)
                 .padding(2)
                 .background(Circle().fill(Color.surface))

@@ -14,7 +14,6 @@ import json, re, sys, urllib.request
 
 
 def fetch(url):
-    # Past any cache: this is about what's deployed now.
     req = urllib.request.Request(url, headers={'Cache-Control': 'no-cache', 'User-Agent': 'terminus-release'})
     with urllib.request.urlopen(req, timeout=20) as r:
         return r.read().decode('utf-8')

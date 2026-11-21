@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-// Runs first in `pnpm run deploy` and `deploy:beta` (package.json): a deploy
-// ships the files on disk, not the commit, so it refuses a tree that isn't
-// what's committed, and runs the checks CI runs (`pnpm check`). Fails before
-// the migrations are applied, so a refused deploy changes nothing.
-//
-// What a deploy ships: the Worker (apps/api) and the website it serves
-// (apps/web/public). Files git ignores (.dev.vars, dev/) don't count.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -14,7 +7,6 @@ import { dirname, join } from 'node:path';
 
 const SHIPPED = ['apps/api', 'apps/web/public'];
 
-/** Lines of `text` that are a merge's conflict markers, as "line: text". */
 export function conflictMarkers(text) {
   return text
     .split('\n')
@@ -23,11 +15,6 @@ export function conflictMarkers(text) {
     .map(([n, line]) => `${n}: ${line}`);
 }
 
-/**
- * What stops a deploy, as sentences: files left unmerged, changes not
- * committed (or not yet added) where a deploy reads, conflict markers in a
- * committed file. `git` runs a git command and returns its output.
- */
 export function problems(git, readFile) {
   const out = [];
   const unmerged = git(['diff', '--name-only', '--diff-filter=U']).split('\n').filter(Boolean);
@@ -36,8 +23,6 @@ export function problems(git, readFile) {
     .split('\n')
     .filter(Boolean);
   if (dirty.length) out.push(`changes not committed in ${SHIPPED.join(' or ')}:\n  ${dirty.join('\n  ')}`);
-  // Markdown's setext headings use =======, so a hit is read again to make
-  // sure it sits between the other two markers' kinds of line.
   const hits = git(['grep', '-l', '-I', '-E', '^(<{7}|>{7})( |$)', '--', ...SHIPPED, ':(exclude,glob)**/vendor/**'], true)
     .split('\n')
     .filter(Boolean);
@@ -52,7 +37,6 @@ export function problems(git, readFile) {
 function main() {
   const api = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: api, encoding: 'utf8' }).trim();
-  // `git grep` exits 1 when nothing matches: that's the good case.
   const git = (args, noneOk = false) => {
     try {
       return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });

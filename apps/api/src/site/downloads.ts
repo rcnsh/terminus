@@ -1,31 +1,6 @@
-/**
- * App downloads, served from R2 on our own domain, so a download link stays
- * the same from one release to the next.
- *
- * scripts/release/release.sh uploads the APKs and the Mac DMG, each under its
- * version, and then latest.json, which names the
- * current files. /download/android and /download/mac always serve whatever
- * latest.json points at.
- *
- * Android comes as one APK per CPU type. `android` in latest.json is the
- * arm64 one, which suits nearly every phone (and is all an older app or link
- * knows about); `androidAbis` lists every type, and /download/android?abi=
- * serves the one asked for, as the app's update button does.
- *
- * The Mac app updates itself with Sparkle from /download/appcast.xml, which
- * scripts/release/release.sh writes alongside latest.json and which points at the
- * DMG by its versioned path, /download/releases/<version>/<file>.
- */
-
 import type { Env } from '../types.ts';
 import { json } from '../http.ts';
 
-/**
- * The Android app's Google Play page, once it's published there; null until
- * then. While null, the landing page offers the APK (/download/android);
- * once set, its Android buttons become Google Play's badge and its links go
- * to Play (fillLanding in landing.ts). The APK stays served either way.
- */
 export const PLAY_URL: string | null = null;
 
 interface ReleaseFile {
@@ -38,17 +13,13 @@ export interface Latest {
   version: string;
   released: string;
   android: ReleaseFile;
-  /** By Android ABI name (arm64-v8a, armeabi-v7a, x86_64). */
   androidAbis?: Record<string, ReleaseFile>;
   mac: ReleaseFile;
 }
 
 const LATEST = 'latest.json';
 const APPCAST = 'appcast.xml';
-/** A release version as release.sh writes it. It may carry a pre-release
- *  tag: 2.0.0-beta, 2.0.0-beta.2. */
 export const RELEASE_VERSION = String.raw`\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?`;
-/** A versioned release file, as /download/releases/<version>/<file>. */
 const RELEASE_FILE = new RegExp(
   String.raw`^\/download\/(releases\/${RELEASE_VERSION}\/terminus-${RELEASE_VERSION}(?:-armv7|-x86_64)?\.(?:apk|dmg|zip))$`,
 );
@@ -59,18 +30,11 @@ const TYPES: Record<string, string> = {
   zip: 'application/zip',
 };
 
-/**
- * A small release file's text, or null when there is none. Read from R2
- * every time, not remembered: a release must show on the landing page and
- * in the download links the moment release.sh uploads it, and one small
- * read per request costs next to nothing.
- */
 async function releaseText(bucket: R2Bucket, key: string): Promise<string | null> {
   const obj = await bucket.get(key);
   return obj ? obj.text() : null;
 }
 
-/** The current release as latest.json names it, or null before the first. */
 export async function latestRelease(bucket: R2Bucket): Promise<Latest | null> {
   const text = await releaseText(bucket, LATEST);
   return text === null ? null : (JSON.parse(text) as Latest);

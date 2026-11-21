@@ -1,15 +1,3 @@
-# The street map's files onto R2 (scripts/map-tiles.sh). What goes up is
-# pinned in scripts/map-tiles.lock, which only a commit changes.
-#
-# - Run by hand (Actions tab, Run workflow): builds exactly what the lock
-#   pins, refuses if a hash differs, and uploads. Runs in the `release`
-#   environment, which waits for a reviewer. The CLOUDFLARE_API_TOKEN secret
-#   is meant to live in that environment, not the repository;
-#   CLOUDFLARE_ACCOUNT_ID is a variable and not secret.
-# - The schedule, twice a year, only checks for a newer Protomaps build and
-#   fails if there is one, as a reminder: run `scripts/map-tiles.sh --update`
-#   on a Mac, commit the lock, then run this by hand within a few days (a
-#   build is kept about a week). It has no token and uploads nothing.
 name: map tiles
 
 on:
@@ -42,9 +30,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # The R2 token should be a secret of this environment: only jobs that
-    # name it, and a reviewer approves, can read it. As a repository secret
-    # every workflow could.
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,12 +40,8 @@ jobs:
         with:
           node-version: "24"
       - run: pnpm install --frozen-lockfile
-      # Downloads and cuts the map without the token, and stops here unless
-      # every file matches the lock.
       - name: Build and check against the lock
         run: scripts/map-tiles.sh --dry-run
-      # The token only in this step, which downloads nothing: it checks the
-      # built files against the lock again and uploads them.
       - name: Upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

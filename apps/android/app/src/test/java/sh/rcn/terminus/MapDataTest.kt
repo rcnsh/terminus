@@ -8,7 +8,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The Map tab's data, from replies shaped like the API's (see its /api/campus and /api/buses tests). */
 class MapDataTest {
     private val campusJson =
         JSONObject(
@@ -28,7 +27,6 @@ class MapDataTest {
     @Test
     fun campusKeepsEveryServicesStopsForTheStopsTab() {
         val (campus, _) = CampusMap.parse(campusJson)
-        // Every service, drawn or not (X has no line): the Stops tab lists them all.
         assertEquals(setOf("D2", "A1", "X"), campus.lines.map { it.svc }.toSet())
         assertEquals(ServiceRoute("D2", listOf("COM3"), loop = true), campus.lines.first { it.svc == "D2" })
         assertEquals(ServiceRoute("X", emptyList(), loop = false), campus.lines.first { it.svc == "X" })
@@ -105,7 +103,6 @@ class MapDataTest {
 
     @Test
     fun busesSlideAlongTheirLineRoundACorner() {
-        // East, then north: an L with its corner at (103.001, 1.0).
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
         val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
         fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
@@ -120,13 +117,11 @@ class MapDataTest {
         assertFalse(s.moving(1_000))
         assertEquals(leg + 50, s.at(1_000)[0].along!!, 1e-9)
         assertEquals("pointing along the road", 0.0, s.at(1_000)[0].heading!!, 1e-6)
-        // Eased: slower at the ends than in the middle.
         assertTrue(s.at(100)[0].along!! - (leg - 50) < 10)
     }
 
     @Test
     fun busesSlideBesideTheDotAtAStop() {
-        // A straight line east, about 1.1 km; a stop's dot 10 m north of it at 500 m.
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
         val between = path.pointAt(300.0).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, "COM 3", along = 300.0) }
         val (dotLat, dotLon) = path.pointAt(500.0).let { (lat, lon) -> lat + 10 / 110_574.0 to lon }
@@ -140,26 +135,19 @@ class MapDataTest {
         val there = s.at(3_000)[0]
         assertEquals("at the dot", dotLat, there.lat, 1e-12)
         assertEquals(-LiveBus.AT_STOP_SIDE_DP, there.ox, 0.0)
-        // Behind where it's drawn (the other side of the road, or put right): it jumps.
         s.update(listOf(between), path, 4_000)
         assertEquals(300.0, s.at(4_000)[0].along!!, 1e-9)
         assertFalse(s.moving(4_000))
-        // Animations off: it jumps.
         s.update(listOf(atStop), path, 5_000, still = true)
         assertEquals(500.0, s.at(5_000)[0].along!!, 1e-9)
-        // No answer for 20 s (the screen was off): it jumps.
         s.update(listOf(atStop.copy(along = 700.0, at = null)), path, 25_000)
         assertEquals(700.0, s.at(25_000)[0].along!!, 1e-9)
-        // A long way on (over 1.5 km), or on a line kept from before the route changed: it jumps.
         assertNull(path.aheadBy(between, atStop.copy(along = 2_000.0)))
         assertNull(path.aheadBy(between, atStop.copy(along = 5_000.0)))
     }
 
     @Test
     fun aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() {
-        // Like A1 at KRB: out east about 1.1 km, then back west on the other
-        // side of the road, ending some 40 m from where it started. The loop
-        // comes from /api/campus, not from where the line ends.
         val campus =
             JSONObject(
                 """{"stops": [], "routes": {
@@ -181,7 +169,6 @@ class MapDataTest {
         s.update(listOf(start), loop, 5_000)
         assertTrue(s.moving(5_500))
         assertEquals("half way, at its start", 5.0, s.at(5_500)[0].along!!, 1e-6)
-        // A line that doesn't loop: back at the start, it jumps.
         val oneWay = map.routes.getValue("K").path
         assertFalse(oneWay.closed)
         assertNull(oneWay.aheadBy(at(oneWay, oneWay.total - 20), at(oneWay, 30.0)))
@@ -189,8 +176,6 @@ class MapDataTest {
 
     @Test
     fun theSameAnswerOverAndOverKeepsTheMapFresh() {
-        // A bus waiting at a stop for 30 s: the same answer every 5 s. Then it
-        // moves, and slides there rather than jumping as if the map were stale.
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
         fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m) }
         val s = Slides { 1_000 }
@@ -262,7 +247,6 @@ class MapDataTest {
         assertEquals("an older API: none listed", emptyList<String>(), c.upcoming)
         assertNull("an older API: no end", c.towards)
 
-        // Between stops: the stop it passed, the next, four more, and a count.
         assertEquals(
             BusStrip(
                 passed = "CLB",
@@ -277,7 +261,6 @@ class MapDataTest {
             BusStrip.of(a),
         )
         assertTrue(BusStrip.of(a).between)
-        // Opened out, every stop to the line's end, none left over.
         assertEquals(
             BusStrip(
                 passed = "CLB",
@@ -291,7 +274,6 @@ class MapDataTest {
             ),
             BusStrip.of(a, all = true),
         )
-        // At a stop: that stop, then what's ahead of it.
         assertEquals(
             BusStrip(
                 passed = null,
@@ -306,16 +288,12 @@ class MapDataTest {
             BusStrip.of(b),
         )
         assertFalse(BusStrip.of(b).between)
-        // Just its next stop, worked out here for an older server.
         assertEquals(BusStrip(passed = null, here = null, next = "LT 13", after = emptyList(), more = 0), BusStrip.of(c))
-        // Past a one-way line's end: nothing ahead to list.
         assertFalse(BusStrip.of(d).any)
     }
 
     @Test
     fun aStretchIntoALoopsLastStopEndsThereNotAtItsStart() {
-        // A loop whose line doesn't quite close (as A1's at KRB), and its last
-        // stop measured a little past the line's end (4568 m on a 4567.2 m line).
         val line =
             listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001), doubleArrayOf(103.0, 1.0003))
         val path = RoutePath(line, loop = true)
@@ -328,7 +306,6 @@ class MapDataTest {
 
     @Test
     fun aTappedBusShowsTheStretchItIsOn() {
-        // East, then north: an L with its corner at (103.001, 1.0).
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
         val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
         val line = path.slice(leg - 20, leg + 30)!!
@@ -376,43 +353,33 @@ class MapDataTest {
 
     @Test
     fun panLimitReachesPastTheMapUnderAnOpenSheet() {
-        // A tablet held upright, 720 by 1280 dp, at zoom 15, with a stop's sheet floating in the corner: 376 dp wide, 560 dp tall.
         val world = 512 * Math.pow(2.0, 15.0)
         val plain = PanLimit.centre(720.0, 1280.0, 15.0)
         val under = PanLimit.centre(720.0, 1280.0, 15.0, west = 376.0, south = 560.0)
-        // The centre may go as far past the map's south and west edges as the sheet covers: what shows there is under the sheet.
         assertEquals(560.0 / world, merc(under[1]) - merc(plain[1]), 1e-12)
         assertEquals(376.0 / world * 360, plain[0] - under[0], 1e-9)
         assertEquals("north and east stay as they were", listOf(plain[2], plain[3]), listOf(under[2], under[3]))
-        // And zooms out as far as the part of the screen the sheet leaves would let it.
         assertEquals(PanLimit.minZoom(720.0 - 376, 1280.0 - 560), PanLimit.minZoom(720.0, 1280.0, 376.0, 560.0), 1e-12)
     }
 
     @Test
     fun panLimitKeepsTheScreenOnTheMap() {
         val e = PanLimit.EXTENT
-        // A phone, 400 by 800 dp: tall, so its height fills the map first.
         val min = PanLimit.minZoom(400.0, 800.0)
         assertEquals(800.0, 512 * Math.pow(2.0, min) * (merc(e[1]) - merc(e[3])), 0.01)
-        // At zoom 17 the centre stays half a screen in from each edge: 200 dp
-        // across is 200 / (512 * 2^17) of the world, in degrees of longitude.
         val c = PanLimit.centre(400.0, 800.0, 17.0)
         val half = 200.0 / (512 * Math.pow(2.0, 17.0)) * 360
         assertEquals(e[0] + half, c[0], 1e-9)
         assertEquals(e[2] - half, c[2], 1e-9)
         assertTrue(c[1] > e[1] && c[3] < e[3] && c[1] < c[3])
-        // Zoomed right out, the screen is as tall as the map: the centre can
-        // only be mid-map up and down, and still moves side to side.
         val out = PanLimit.centre(400.0, 800.0, min)
         assertEquals(out[1], out[3], 1e-9)
         assertTrue(out[0] < out[2])
-        // Wider than the map both ways (a zoom it can't reach): its middle.
         val tiny = PanLimit.centre(400.0, 800.0, 10.0)
         assertEquals((e[0] + e[2]) / 2, tiny[0], 1e-9)
         assertEquals(tiny[0], tiny[2], 1e-9)
     }
 
-    /** Web Mercator's y, a fraction of the world from the top. */
     private fun merc(lat: Double) = (1 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / Math.PI) / 2
 
     @Test
@@ -433,14 +400,12 @@ class MapDataTest {
                 )
             )
         val line = Line.fromCampus(campus, "A1", from = "LT13")!!
-        // A loop's first stop again at the end; each stop by its full name, with the other services there.
         assertEquals(listOf("KR-BT", "LT13", "AS5", "KR-BT"), line.stops.map { it.code })
         assertEquals("Kent Ridge Bus Terminal", line.stops[0].name)
         assertEquals("LT 13", line.stops[1].name)
         assertEquals(listOf("A2"), line.stops[0].services)
         assertEquals(listOf("D1"), line.stops[1].services)
         assertEquals(1, line.here?.index)
-        // No buses or times: only /api/line has those.
         assertTrue(line.buses.isEmpty())
         assertNull(line.here?.row)
         assertNull(Line.fromCampus(campus, "Z", from = null))
@@ -448,7 +413,6 @@ class MapDataTest {
 
     @Test
     fun theMapFitsTheCampussLinesNotJustItsStops() {
-        // The real stops and lines (apps/api/data), with the API's own core: within three times the median distance of the middle.
         val data = listOf("../../../apps/api/data", "../../api/data").map(::File).first { it.isDirectory }
         val js = JSONObject(File(data, "stops.json").readText()).getJSONArray("stops")
         val stops =
@@ -485,7 +449,6 @@ class MapDataTest {
         for (svc in onCampus) {
             assertTrue("every point of $svc is in", routes.getValue(svc).line.all { (lon, lat) -> lon in w..e && lat in s..n })
         }
-        // Nothing of P's widens it: the frame is exactly the core stops and the on-campus lines.
         val pts = stops.filter { it.code in core }.map { doubleArrayOf(it.lon, it.lat) } + onCampus.flatMap { routes.getValue(it).line }
         val want = listOf(pts.minOf { it[0] }, pts.minOf { it[1] }, pts.maxOf { it[0] }, pts.maxOf { it[1] })
         assertEquals(want, listOf(w, s, e, n))

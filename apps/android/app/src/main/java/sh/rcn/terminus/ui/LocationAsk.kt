@@ -23,19 +23,14 @@ import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
 
-/** Whether the app may use the location while it's open, and the ways to allow it, for Now and Nearby ([rememberLocationAsk]). */
 internal class LocationAsk(
     val allowed: Boolean,
-    /** Android no longer shows its dialog (refused twice): the only way left is the app's page in the phone's settings. */
     val blocked: Boolean,
-    /** Shows Android's dialog. */
     val ask: () -> Unit,
     val openSettings: () -> Unit,
-    /** Reads it again: it may have been allowed in the phone's settings meanwhile. */
     val recheck: () -> Unit,
 )
 
-/** The location permission as it stands; [onAnswered] runs once Android's dialog has been answered, with whether it's now allowed. */
 @Composable
 internal fun rememberLocationAsk(onAnswered: (allowed: Boolean) -> Unit): LocationAsk {
     val ctx = LocalContext.current
@@ -58,7 +53,6 @@ internal fun rememberLocationAsk(onAnswered: (allowed: Boolean) -> Unit): Locati
     )
 }
 
-/** A card saying [why] to allow location, with the button that does: Android's dialog, or the phone's settings once that's [blocked]. */
 @Composable
 internal fun LocationCard(why: String, location: LocationAsk, modifier: Modifier = Modifier) {
     Card(Modifier.fillMaxWidth().then(modifier)) {

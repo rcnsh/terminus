@@ -86,9 +86,6 @@ internal fun AnswerCard(
     onPlace: (String) -> Unit = {},
     onStep: (Step, StepTarget?, String?) -> Unit = { _, _, _ -> },
 ) {
-    // Said when the card changes (a new bus, the trip's next phase), and
-    // only then: nothing in it ticks. A node of its own, as the card's words
-    // count down every second and must not be read out each time.
     Box {
         Spoken.announcement(answer)?.let { said ->
             Box(
@@ -98,8 +95,6 @@ internal fun AnswerCard(
                 }
             )
         }
-        // On the page, not in a box: the answer is the screen. A minimum height
-        // keeps what's under it from jumping as answers come and go.
         Column(
             Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(top = 4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -114,30 +109,17 @@ internal fun AnswerCard(
                 return@Column
             }
             if (answer.mode == "rest" || answer.isFree || answer.arrived) {
-                // Nothing to catch: said plainly, with no bus to mistake for advice.
-                // The server's buttons still show, as on the web: "Undo" when the
-                // class just taken off was the day's last, "Back on campus".
                 DayDone(answer, night = answer.mode == "rest", onPlace)
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
-            // What comes before any answer, in the sky with its top.
             val lead: @Composable ColumnScope.() -> Unit = {
-                // NUS's live times are down: said once, above the answer.
                 answer.card?.notice?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, MaterialTheme.typography.bodySmall) }
-                // Where the trip is, when one is under way: the same on every device.
                 answer.phaseText?.let { Pill(it, smallAccent()) }
-                // On the bus: how far along the ride, and the next stop, as the live notification shows.
                 answer.card?.ride?.let { RideProgress(it) }
                 answer.card?.warning?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold) }
             }
-            // Past the card's staleAt: its times may be gone, so they're dimmed
-            // and "Updating times…" stands in until the refresh lands, as on the
-            // web and the Mac. The styled cards fall through to the plain one.
             val old = stale(answer)
-            // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
-            // Read as one sentence of the server's words, not a word at a time
-            // round the line; the buttons under it stay their own.
             answer.card
                 ?.journey
                 ?.takeIf { !answer.arrived && !old }
@@ -169,7 +151,6 @@ internal fun AnswerCard(
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
-            // The server's ("Going to KR MRT", "Long gap · Home"); worked out here for an older server.
             val head =
                 answer.card?.heading
                     ?: when {
@@ -182,7 +163,6 @@ internal fun AnswerCard(
                 head?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { heading() }) }
                 val ctx = LocalContext.current
                 val muted = MaterialTheme.colorScheme.onSurfaceVariant
-                // The rest as one sentence, under the heading.
                 val said = if (old) null else spokenCard(answer, withLead = false)
                 Column(
                     if (said == null) Modifier else Modifier.clearAndSetSemantics { contentDescription = said },
@@ -202,33 +182,24 @@ internal fun AnswerCard(
                         LeaveLine(answer)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                        // On the bus, `detail` already says when it arrives: the pill would say it again, as on the Mac.
                         answer.timingText?.takeIf { !old && answer.card?.ride == null }?.let { Pill(it, timingColor(answer.timingStatus)) }
                         answer.crowdText?.let { Pill(it, muted) }
                     }
-                    // The alternative is already at the end of `detail`.
                     answer.qualityText?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             SkyGround()
-            // Old times are being updated: no bus to step from until they are.
             if (!old) StepBus(answer, onStep, busy)
             Actions(answer, onAction, busy, onSuggestion)
         }
     }
 }
 
-/**
- * The card as a screen reader says it: the server's words as sentences ([Spoken.summary]), then how long until it's time to go, to the
- * minute. [withLead]: the notice, phase, warning and where to as well, when they're inside the group rather than read on their own (the
- * plain card's pill and heading).
- */
 @Composable
 private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
     val ctx = LocalContext.current
-    // The sentence rounds to the minute: checked every 10 s is plenty.
     val now by
         produceState(ServerClock.now(), answer) {
             while (true) {
@@ -245,17 +216,13 @@ private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
         .joinToString(" ")
 }
 
-/** Whether [answer] is past its staleAt ([isOld]), checked again when that comes. */
 @Composable
 private fun stale(answer: NextAnswer): Boolean {
     val old by
         produceState(isOld(answer, ServerClock.now()), answer) {
-            // The state outlives a new answer (only the effect restarts), so a
-            // fresh answer after a dimmed one must clear it here.
             value = isOld(answer, ServerClock.now())
             while (!value) {
                 val at = answer.card?.staleAtMs ?: break
-                // At most a minute at a time, in case the clock's correction moves.
                 delay((at - ServerClock.now()).coerceIn(50, 60_000))
                 value = isOld(answer, ServerClock.now())
             }
@@ -263,21 +230,12 @@ private fun stale(answer: NextAnswer): Boolean {
     return old
 }
 
-/**
- * [answer] without the server's "Undo: going to UTown" for [undoing], the trip whose Undo bar is at the foot of the screen (a swipe off
- * Today, or "Not going" on this phone): Undo once, in the bar. A skip made anywhere else (another device, the leave notification) keeps the
- * card's undo, the only one there is.
- */
 internal fun withoutLocalUndo(answer: NextAnswer?, undoing: String?): NextAnswer? {
     val card = answer?.card ?: return answer
     if (undoing == null || card.actions.none { it.id == "reset" && it.trip == undoing }) return answer
     return answer.copy(card = card.copy(actions = card.actions.filterNot { it.id == "reset" && it.trip == undoing }))
 }
 
-/**
- * "‹ Earlier bus" and "Later bus ›" under the bus they change, and "Best bus" between them once you've moved: the server's buses either
- * side of this one, on a trip by bus until you set off. Greyed out at the first bus you can catch and the last one offered, as on the web.
- */
 @Composable
 private fun StepBus(answer: NextAnswer, onStep: (Step, StepTarget?, String?) -> Unit, busy: Boolean) {
     val step = answer.card?.step ?: return
@@ -309,13 +267,8 @@ private fun StepBus(answer: NextAnswer, onStep: (Step, StepTarget?, String?) -> 
     }
 }
 
-/** Which way a step goes, drawn but not read out: the label says it. */
 @Composable private fun Arrow(glyph: String) = Text(glyph, Modifier.padding(horizontal = 4.dp).clearAndSetSemantics {})
 
-/**
- * The server's buttons (plans only: "Not going", "Not on campus today", "Back on campus", undo), in its order: the first one filled, the
- * rest outlined. Then anything terminus has to suggest.
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun Actions(
@@ -324,13 +277,8 @@ internal fun Actions(
     busy: Boolean,
     onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
 ) {
-    // "Catch the D2 at Museum", and you don't know where Museum is: walking
-    // directions there, as the one filled button; the server's go beside it.
     val walkTo = answer.card?.walkTo
     val all = answer.card?.actions.orEmpty()
-    // "Not going" and "Not on campus today" are the same no for this class
-    // and for the whole day. With both on the card they share one menu, so
-    // they don't crowd out what the card is for.
     val skips = all.filter { it.id == "skipped" || it.id == "away" }.takeIf { it.size > 1 }.orEmpty()
     val actions = all - skips.toSet()
     walkTo?.let { w ->
@@ -352,7 +300,6 @@ internal fun Actions(
         }
     }
     val rest = if (walkTo != null && skips.isEmpty()) actions.drop(1) else actions
-    // Without directions, the menu is a button named for the first choice.
     val skipButton = walkTo == null && skips.isNotEmpty()
     if (rest.isNotEmpty() || skipButton) {
         FlowRow(
@@ -382,7 +329,6 @@ internal fun Actions(
     }
 }
 
-/** The skips behind one button: ⋯ beside directions, or [label] on its own. Each choice says underneath how much it skips. */
 @Composable
 private fun SkipMenu(skips: List<CardAction>, onAction: (CardAction) -> Unit, busy: Boolean, label: String?) {
     var open by remember { mutableStateOf(false) }
@@ -430,16 +376,11 @@ private fun SkipMenu(skips: List<CardAction>, onAction: (CardAction) -> Unit, bu
     }
 }
 
-/**
- * A class: when to leave is the headline, the bus that goes with it and when it gets you there underneath, and the next bus as the "or go
- * now" option. Every arrival sits next to the bus it belongs to.
- */
 @Composable
 internal fun ClassPlan(answer: NextAnswer) {
     val ctx = LocalContext.current
     val at = answer.leaveAtMs ?: return
     val fmt = { ms: Long -> clock(ctx, ms) }
-    // Minute resolution is enough for "in 24 min"; seconds near the end.
     val now by
         produceState(ServerClock.now(), at) {
             while (true) {
@@ -460,7 +401,6 @@ internal fun ClassPlan(answer: NextAnswer) {
         fontWeight = FontWeight.Bold,
         color = if (late) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
     )
-    // Counting down to leaving; at the stop the headline is the bus and its time.
     val left = if (answer.card?.phase == "waiting") 0 else (at - now) / 1000
     if (left > 0) {
         Text(
@@ -473,9 +413,6 @@ internal fun ClassPlan(answer: NextAnswer) {
             color = smallAccent(),
         )
     }
-    // The bus to catch, and underneath when it gets you there. The stop is
-    // named here, so no separate "board at" or general detail line below.
-    // One colour for "go" (the countdown above); red only when it's late.
     val error = MaterialTheme.colorScheme.error
     answer.catchHow?.let {
         Text(
@@ -487,7 +424,6 @@ internal fun ClassPlan(answer: NextAnswer) {
         )
     }
     answer.catchArrive?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = if (late) error else muted) }
-    // A busy bus and an estimate are small print, not more headlines.
     listOfNotNull(answer.leaveNote, answer.card?.estimate)
         .takeIf { it.isNotEmpty() }
         ?.let {
@@ -500,16 +436,10 @@ internal fun ClassPlan(answer: NextAnswer) {
     answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp)) }
 }
 
-/**
- * The day's done, or there's nothing to catch: the label large, what's next on a card of its own, then your favourites to plan a trip to
- * instead. On Now it's all up in the sky ([SkyHead]), the favourites on the ground below the horizon, under the hour's sky. Elsewhere, a
- * panel: the night's after your day, else a plain one.
- */
 @Composable
 private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {
     val c = MaterialTheme.colorScheme
     val upcoming = answer.card?.upcoming
-    // The line under the label: why today's empty on a break, or what's next when there's no card for it.
     val sub = upcoming?.off ?: answer.detail.takeIf { upcoming == null && it.isNotEmpty() }
     val places = answer.places.isNotEmpty()
     val sky = LocalSky.current
@@ -534,10 +464,8 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
             upcoming?.let { UpcomingCard(it, glass = true) }
         }
         SkyGround()
-        // On the ground, in the page's colours.
         if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 4.dp, bottom = 10.dp))
     } else if (night) {
-        // With no sky to sit in, the night is a panel of its own.
         NightTheme(true) {
             Column(
                 Modifier.fillMaxWidth()
@@ -627,10 +555,6 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     }
 }
 
-/**
- * The next class on a card of its own: when in the accent, what, then where. On the sky ([glass]) it's see-through: frosted on a light sky,
- * a faint pane on a dark one.
- */
 @Composable
 private fun UpcomingCard(u: Upcoming, glass: Boolean) {
     val c = MaterialTheme.colorScheme
@@ -657,12 +581,10 @@ private fun UpcomingCard(u: Upcoming, glass: Boolean) {
     }
 }
 
-/** "On time" green: the sky's in the sky, else the one for the scheme's page (night's on a light phone too). */
 @Composable
 internal fun goodColor() =
     LocalSkyTones.current?.good ?: if (MaterialTheme.colorScheme.background.luminance() < 0.5f) GoodDark else GoodLight
 
-/** "Leave by 09:38 · D2 from PGP", turning into "Leave now" when the time comes. */
 @Composable
 internal fun LeaveLine(answer: NextAnswer) {
     val at = answer.leaveAtMs ?: return
@@ -679,7 +601,6 @@ internal fun LeaveLine(answer: NextAnswer) {
     }
 }
 
-/** Ticks every second from `departsAt`, so the app never shows an old "4 min". */
 @Composable
 internal fun Countdown(answer: NextAnswer) {
     val at = answer.departsAtMs ?: return
@@ -695,7 +616,6 @@ internal fun Countdown(answer: NextAnswer) {
         when {
             left > 60 -> stringResource(R.string.leaves_in_min_s, (left / 60).toInt(), (left % 60).toInt())
             left > 0 -> stringResource(R.string.leaves_in_s, left.toInt())
-            // Gone: a minute ago from the moment it left, never "0 min ago", as on the Mac.
             else -> stringResource(R.string.left_ago, maxOf(1, ((-left + 59) / 60).toInt()))
         }
     Text(
@@ -705,7 +625,6 @@ internal fun Countdown(answer: NextAnswer) {
     )
 }
 
-/** Three states, three colours: "tight" is the one that must not look calm. */
 @Composable
 internal fun timingColor(status: String?) =
     when (status) {
@@ -714,7 +633,6 @@ internal fun timingColor(status: String?) =
         else -> goodColor()
     }
 
-/** Words in a colour of their own (a notice, a warning); in the sky, on its chip, so they read over any hour's colours. */
 @Composable
 private fun ToneText(text: String, color: Color, style: TextStyle = LocalTextStyle.current, fontWeight: FontWeight? = null) {
     val chip = LocalSkyTones.current?.chip
@@ -736,16 +654,11 @@ internal fun Pill(text: String, color: Color) {
         style = MaterialTheme.typography.labelMedium,
         color = color,
         modifier =
-            Modifier
-                // In the sky, on its chip, so the colour reads over any hour's (SkyTones).
-                .background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), RoundedCornerShape(50))
+            Modifier.background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), RoundedCornerShape(50))
                 .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
 
-/**
- * On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3 stops to go"; on a trip that changes, the second bus under it.
- */
 @Composable
 private fun RideProgress(ride: Ride) {
     val now by
@@ -774,16 +687,11 @@ private fun RideProgress(ride: Ride) {
     }
 }
 
-/**
- * The first answer on its way: the card's shape in the steps style, bars in the sky where the line, "Leave in" and the time go, and the
- * trip's points under the road. No buttons: one that can't be pressed yet would read as broken.
- */
 @Composable
 private fun NowSkeleton() {
     Skeleton(stringResource(R.string.checking), Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SkyHead {
             TextBar(LocalTextStyle.current, fraction = 0.62f, sky = true)
-            // LeaveHead's line: 34 sp on 38, with its padding.
             TextBar(TextStyle(fontSize = 34.sp, lineHeight = 38.sp), Modifier.padding(vertical = 2.dp), fraction = 0.78f, sky = true)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextBar(LocalTextStyle.current, Modifier.weight(1f, fill = false), fraction = 0.5f, sky = true)
@@ -799,7 +707,6 @@ private fun NowSkeleton() {
     }
 }
 
-/** One of the trip's points as the steps style lays it out (JourneyCard's LinePoint): the time, the dot and the line on, the words. */
 @Composable
 private fun SkeletonPoint(rail: Boolean, title: Float, below: Float?) {
     val type = MaterialTheme.typography

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// The sky over Now by the hour; the Android app keeps the same hours (NightSky.kt, SkyTest.kt).
 import { PHASES, parallax, phaseAt } from '../public/account/daylight.js';
 
 const at = (hhmm) => {
@@ -20,11 +19,9 @@ test('every minute of the day has a sky', () => {
 
 test('the sky has depth as Now scrolls: far things lag, near ones stay', () => {
   const at = (s) => Object.values(parallax(s)).map((n) => Math.round(n * 100) / 100);
-  // sky, far, fade
   assert.deepEqual(at(0), [0, 0, 1]);
   assert.deepEqual(at(50), [25, 6, 0.69]);
   assert.deepEqual(at(150), [75, 18, 0.06]);
   assert.deepEqual(at(400), [200, 18, 0]);
-  // Pulled past the top (a bounce): as at the top.
   assert.deepEqual(at(-20), at(0));
 });

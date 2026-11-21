@@ -6,7 +6,6 @@
 <title>terminus: NUS shuttle bus times, and when to leave</title>
 <meta name="description" content="Which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable. Live bus times, a campus map, an Android widget, a Mac menu bar app and the web. Free, and not affiliated with NUS.">
 <link rel="canonical" href="https://terminus.run/">
-<!-- How a link to terminus looks when it's shared (messages, social), and what search engines read about the app. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="terminus">
 <meta property="og:title" content="terminus: never run for a bus again">
@@ -31,16 +30,11 @@
 <link rel="stylesheet" href="/assets/sky.css">
 <script type="module" src="/assets/stars.js" blocking="render"></script>
 <style>
-  /* The page opens under Now's sky at this hour (sky.css) and ends on the
-     campus's horizon. The phone in it is the app's Now, drawn in the page. */
   .top .nav { position: relative; z-index: 2; }
   .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: end; padding-top: 44px; }
   .hero h1 { font-size: clamp(2.8rem, 6.4vw, 4.8rem); line-height: 1.02; letter-spacing: -0.035em; margin-top: 18px; }
   .hero h1 em { font-style: normal; color: var(--accent); }
   .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 32rem; }
-  /* Android first (the APK, or Google Play's own badge once the app is
-     there: src/site/landing.ts), then the web app and the Mac app as smaller
-     tiles. All three are the badge's height, so the row reads as one choice. */
   .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .cta .get-android { height: 50px; min-height: 0; padding: 0 18px; border-radius: 8px; margin-right: 4px; }
   .cta .play { display: block; margin-right: 4px; border-radius: 8px; line-height: 0; }
@@ -53,11 +47,6 @@
   .tile svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
   .hero-copy { padding-bottom: 56px; }
-  /* The steps open as a card out of the flow, so opening them moves nothing
-     on the page: over the hills under the hero, or over the phone when the
-     hero is one column. The hero rises over the page below while it's open,
-     or the card's lower part would sit under it, its link unclickable.
-     landing.js closes it on a tap elsewhere, Esc, or focus leaving it. */
   .top:has(.install[open]) { position: relative; z-index: 2; }
   .install { position: relative; z-index: 3; margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
   .install summary { cursor: pointer; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; width: fit-content; }
@@ -67,17 +56,10 @@
   @keyframes install-in { from { opacity: 0; transform: translateY(-4px); } }
   @media (prefers-reduced-motion: reduce) { .install[open] ol { animation: none; } }
   .install strong, .install a { color: var(--ink); }
-  /* The phone stands on the road, its foot over the page below. */
   .hero-phone { display: grid; justify-items: center; margin-bottom: -170px; position: relative; z-index: 1; }
   .ground { margin-top: -24px; }
 
-  /* The app's Now, inside the phone: the same parts as app.js draws. */
   .phone { width: min(300px, 78vw); padding: 9px; border-radius: 46px; background: #0c0a09; box-shadow: 0 30px 60px -20px rgb(28 25 23 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.08) inset; }
-  /* The phone stands in the hero's sky, which gives what's in it the sky's
-     ink (sky.css), but Now's sky ends at its horizon: under it the app is in
-     the page's own colours, as app.css scopes them. Kept here as the page
-     has them (a var() is resolved where it's declared), then given back to
-     the screen; its own sky-panel takes the sky's again. */
   :root { --page-surface: var(--surface); --page-surface-2: var(--surface-2); --page-ink: var(--ink); --page-muted: var(--muted); --page-faint: var(--faint);
     --page-line: var(--line); --page-line-strong: var(--line-strong); --page-accent: var(--accent); --page-accent-soft: var(--accent-soft);
     --page-good: var(--good); --page-warn: var(--warn); --page-bad: var(--bad); }
@@ -129,16 +111,12 @@
   .section-title { margin-top: 88px; font-size: clamp(1.8rem, 3.6vw, 2.4rem); letter-spacing: -0.03em; }
   .lede-sm { color: var(--muted); margin-top: 8px; max-width: 36rem; }
 
-  /* Below the hero, the services' route lines run faintly behind the page,
-     as on a transit map: edge to edge, fading out at the top and bottom. */
   body { overflow-x: clip; }
   .after-hero { position: relative; isolation: isolate; }
   .routes { position: absolute; z-index: -1; top: 40px; left: calc(50% - 50vw); width: 100vw; height: 1500px; opacity: 0.16; pointer-events: none;
     -webkit-mask: linear-gradient(transparent, #000 15%, #000 70%, transparent); mask: linear-gradient(transparent, #000 15%, #000 70%, transparent); }
   .routes circle { fill: var(--bg); stroke: var(--ink); stroke-width: 4; }
 
-  /* What it does, each shown as the app shows it: a grid of cards of
-     different sizes, the trip itself the widest. */
   .does { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
   .does > div { display: grid; grid-template-rows: auto 1fr; gap: 16px; padding: 18px; border-radius: 24px; background: color-mix(in srgb, var(--surface-2) 88%, transparent); border: 1px solid var(--line); backdrop-filter: blur(6px); }
   .does h3 { font-size: 1.1rem; margin-bottom: 4px; }
@@ -156,9 +134,6 @@
   .week span.off { background: none; border: 1px dashed var(--line-strong); color: var(--muted); font-weight: 500; }
   .show .pn-lead { font-size: 1.5rem; color: var(--ink); }
   .show .pn-lead em { font-style: normal; color: var(--accent); }
-  /* A stop's sign, as Nearby draws it (app.css .stop-sign): the name plate a
-     shade off the card, then a row per service read like a stop's board:
-     where it's going, its next bus large, and the two after. */
   .sign { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) repeat(3, auto); column-gap: 10px; margin: -14px; overflow: hidden; border-radius: 15px; background: var(--surface); font-variant-numeric: tabular-nums; }
   .sign > * { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: 0 14px; }
   .sign .sign-plate { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px 0 14px; background: color-mix(in srgb, var(--ink) 5%, var(--surface)); border-bottom: 1px solid var(--line); }
@@ -179,14 +154,12 @@
   .sign-row .t.pick { color: var(--ink); font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
   .sign-row .t small { margin-left: 1px; font: 500 0.62rem/1 var(--font); }
 
-  /* Set up: four numbered cards, each number on a service's colour. */
   .setup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 28px; counter-reset: step; }
   .setup > div { padding: 18px; border-radius: 20px; background: color-mix(in srgb, var(--surface-2) 88%, transparent); border: 1px solid var(--line); }
   .setup > div::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 14px; border-radius: 10px; background: var(--svc); color: var(--svc-ink, #fff); font: 800 1rem/1 var(--display); }
   .setup h3 { font-size: 1.05rem; margin-bottom: 4px; }
   .setup p { color: var(--muted); font-size: 0.93rem; }
 
-  /* Everywhere: the widget, the Mac, the web. */
   .places { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
   .places figure { margin: 0; display: grid; gap: 14px; align-content: start; padding: 14px 14px 20px; border-radius: 24px; background: var(--surface-2); }
   .places figcaption { padding: 0 4px; }
@@ -217,7 +190,6 @@
   .web { padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
   .web .sign { margin: 0; border: 1px solid var(--line); border-radius: 18px; }
 
-  /* The end of the page: back under the sky. */
   .closing { margin-top: 96px; padding-top: 56px; text-align: center; }
   .closing h2 { font-size: clamp(2rem, 4.4vw, 3rem); letter-spacing: -0.03em; }
   .closing .cta { justify-content: center; margin-top: 22px; }
@@ -241,7 +213,6 @@
   }
   .nav-links .gh svg { display: block; }
 </style>
-<!-- Every module the page starts with, asked for at once (web-sw.test.js keeps this list right). -->
 <link rel="modulepreload" href="/assets/ui.js">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/preact.mjs">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/hooks.mjs">

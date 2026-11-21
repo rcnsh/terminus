@@ -1,11 +1,4 @@
 <!doctype html>
-<!--
-  The README's banner: every client at once, standing on the live campus map
-  under the app's sky (day in light mode, night in dark). Made from the real
-  screenshots in apps/web/public/assets/shots and docs/readme, in the
-  site's own fonts and sky colours (assets/sky.css).
-  Re-render after changing it or the screenshots:  node docs/readme/hero.mjs
--->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -14,7 +7,6 @@
   @font-face { font-family: 'Inter'; font-weight: 400 700; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format('woff2'); }
   @font-face { font-family: 'Space Grotesk'; font-weight: 500 700; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format('woff2'); }
 
-  /* The day sky (sky.css [data-sky="day"]) and, in dark mode, the night's. */
   :root {
     --s0: #5ea8e5; --s1: #8ec4ec; --s2: #c7e2f4; --s3: #e3f0f8; --h-far: #9fbcae; --h-tree: #4f6f58; --h-near: #c9d6c8;
     --ink: #1c1917; --muted: #36312d; --accent: #9a3412; --chip: rgb(255 255 255 / 0.7); --chip-ink: #1c1917;
@@ -71,7 +63,6 @@
     background: var(--chip); color: var(--chip-ink); font: 600 0.8rem/1 var(--font);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   }
-  /* Just the widget: its card is 830x455 of the 900x563 shot, at 35,55. */
   .home { left: 72px; top: 340px; width: 370px; height: 203px; }
   .home .crop { width: 370px; height: 203px; overflow: hidden; border-radius: 22px; box-shadow: 0 30px 60px -18px var(--shadow); }
   .home .shot { width: 401px; margin: -24.5px 0 0 -15.6px; box-shadow: none; }

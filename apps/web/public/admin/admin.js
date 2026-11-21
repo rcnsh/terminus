@@ -1,17 +1,3 @@
-// The operator dashboard: /api/admin/stats, opened with a passkey (passkey.js),
-// whose session is kept in this tab's sessionStorage only. Adding a passkey
-// takes the HEALTH_TOKEN. English only: it's for the operator.
-//
-// A sidebar of sections (views.js), each its own address (#/answers), so a
-// section can be linked to and the back button works. The stats refresh
-// every minute while the tab is in front, keeping what's drawn until the
-// new numbers arrive. Keys: 1–9 and 0 open a section, r refreshes, / searches.
-//
-// Below them, the Timelapse (#/timelapse, timelapse/timelapse.js, loaded
-// when opened). The TIMELAPSE_TOKEN signs in too, for the machine that
-// renders the videos (render-timelapse.mjs): it opens that section alone,
-// with no stats, since the API answers it nothing else.
-
 import { html, render, store, useEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
 import { ago, motion, when } from '/admin/parts.js';
@@ -19,14 +5,11 @@ import { Model } from '/admin/model.js';
 import { Accounts, Answers, Arrivals, Collection, Crashes, Devices, Feed, Overview, Reports, SECTIONS, derive } from '/admin/views.js';
 
 const KEY = 'terminus-operator-token';
-/** Set beside the token when it's the timelapse token. */
 const ONLY = 'terminus-timelapse-only';
 const AUTO = 'terminus-admin-auto';
 const SIDE = 'terminus-admin-side';
 const EVERY_MS = 60_000;
 
-/** The stats once unlocked, or the token form (with why), or a line saying what went wrong.
- *  `only`: signed in with the timelapse token, so the Timelapse is all there is. */
 const view = store({ locked: false, msg: '', stats: null, note: '', loading: false, at: 0, only: false });
 
 function token() {
@@ -52,23 +35,18 @@ function remember(t, only = false) {
     else sessionStorage.removeItem(KEY);
     if (t && only) sessionStorage.setItem(ONLY, '1');
     else sessionStorage.removeItem(ONLY);
-  } catch {
-    // Without storage the token lasts until the page reloads.
-  }
+  } catch {}
 }
 
 let memory = null;
 let onlyMemory = false;
-/** Bumped by forget(): a stats reply asked for before then is dropped, not shown with the session gone. */
 let session = 0;
 
-/** Drops the token, from the tab and from this page. */
 function forget() {
   remember(null);
   memory = null;
   onlyMemory = false;
   session++;
-  // The Timelapse's day, video and any export in progress go with the session.
   timelapse?.then((m) => m.forget()).catch(() => {});
 }
 
@@ -77,7 +55,6 @@ const signedOut = (msg = '') => view.set({ locked: true, msg, stats: null, note:
 async function load() {
   const t = memory ?? token();
   if (!t) return signedOut();
-  // No stats for the timelapse token: the section checks it, and signs out when it's refused.
   if (timelapseOnly()) {
     if (!view.get().only) view.set({ locked: false, msg: '', stats: null, note: '', loading: false, at: 0, only: true });
     return undefined;
@@ -85,7 +62,6 @@ async function load() {
   if (view.get().loading) return undefined;
   view.set((v) => ({ ...v, loading: true }));
   const asked = session;
-  // Given up on after a while: a hung call would leave old stats up with no word of it.
   const res = await fetch('/api/admin/stats', {
     headers: { 'x-health-token': t },
     cache: 'no-store',
@@ -103,12 +79,10 @@ async function load() {
     if (asked !== session) return undefined;
     view.set({ locked: false, msg: '', stats: withoutDeleted(stats), note: '', loading: false, at: Date.now(), only: false });
   } catch (err) {
-    // A stats reply this page can't read: say so, not a blank page.
     view.set((v) => ({ ...v, loading: false, note: `Couldn't show the stats: ${err.message}` }));
   }
 }
 
-/** Turns a collection switch on or off; the stats then show it as it is now. */
 async function flip(name, on) {
   const res = await fetch('/api/admin/collect', {
     method: 'POST',
@@ -121,7 +95,6 @@ async function flip(name, on) {
   view.set((v) => ({ ...v, stats: v.stats && { ...v.stats, collect } }));
 }
 
-/** Hides a crash report until it's reported again; the stats then leave it out. */
 async function dismiss(fingerprint) {
   const res = await fetch('/api/admin/crashes/dismiss', {
     method: 'POST',
@@ -139,10 +112,8 @@ async function dismiss(fingerprint) {
   }));
 }
 
-/** Reports deleted in this tab: a stats load already under way when one was deleted still has it. */
 const deleted = new Set();
 
-/** The stats without the reports deleted here, the week's count with them. */
 function withoutDeleted(stats) {
   const fb = stats?.feedback;
   const gone = fb?.latest.filter((f) => deleted.has(f.id)) ?? [];
@@ -158,7 +129,6 @@ function withoutDeleted(stats) {
   };
 }
 
-/** Deletes a user's report for good; the dashboard then leaves it out. */
 async function remove(id) {
   const asked = session;
   const t = memory ?? token();
@@ -168,7 +138,6 @@ async function remove(id) {
     body: JSON.stringify({ id }),
   }).catch(() => null);
   if (!res) throw new Error("Couldn't reach terminus.");
-  // A reply to a session since replaced says nothing about the new one.
   const stale = asked !== session || (memory ?? token()) !== t;
   if (res.status === 404) {
     if (stale) return undefined;
@@ -185,7 +154,6 @@ function lock() {
   signedOut();
 }
 
-/** Keeps the session and opens the dashboard (only the Timelapse, for the timelapse token); or says what went wrong. */
 async function unlockWith(get, setBusy, only = false) {
   setBusy(true);
   view.set((v) => ({ ...v, msg: '' }));
@@ -203,7 +171,6 @@ async function unlockWith(get, setBusy, only = false) {
   }
 }
 
-/** The timelapse token, if the API takes it: else it would open a section that can only sign out again. */
 async function checkTimelapseToken(t) {
   const res = await fetch('/api/timelapse/days', { headers: { 'x-health-token': t }, cache: 'no-store' }).catch(() => null);
   if (!res) throw new Error("Couldn't reach terminus.");
@@ -212,7 +179,6 @@ async function checkTimelapseToken(t) {
   return t;
 }
 
-/** The timelapse section's loaded module, once asked for. */
 let timelapse = null;
 
 const timelapseSignedOut = () => {
@@ -231,7 +197,6 @@ function TimelapsePage() {
     timelapse.then(
       (m) => setPage(() => m.Timelapse),
       (e) => {
-        // Tried again on the next visit.
         timelapse = null;
         setErr(e.message);
       },
@@ -243,7 +208,6 @@ function TimelapsePage() {
 
 const KEY_ICON = html`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></svg>`;
 
-/** The card the gate shows: the mark, the title, and what's below. */
 function GateCard({ sub, children }) {
   return html`
     <div class="gate">
@@ -263,7 +227,6 @@ function Unlock({ msg }) {
   const [busy, setBusy] = useState(false);
   const passkeys = passkeysWork();
   const forTimelapse = !passkeys || parseHash().id === 'timelapse' || /timelapse/i.test(msg);
-  // The timelapse token needs no passkey: its form is there in any browser.
   const timelapseForm = html`
     <details class="add" open=${forTimelapse}>
       <summary>Only making videos? Use the timelapse token</summary>
@@ -275,7 +238,6 @@ function Unlock({ msg }) {
           unlockWith(
             () =>
               checkTimelapseToken(token).then((t) => {
-                // Only once it's taken: a refused token leaves the address as it was.
                 if (!location.hash.startsWith('#/timelapse')) location.hash = '#/timelapse';
                 return t;
               }),
@@ -331,10 +293,8 @@ function Unlock({ msg }) {
   `;
 }
 
-/** Below the sections, apart from them: it draws no stats, and the timelapse token opens it alone. */
 const TIMELAPSE = ['timelapse', 'Timelapse', 'Replay a recorded day of shuttles on the map, and export it as a video.'];
 
-/** The section and its options from the address: #/reports?open=fb-1. */
 function parseHash() {
   const [path, qs] = location.hash.replace(/^#\/?/, '').split('?');
   const id = SECTIONS.some(([s]) => s === path) || path === TIMELAPSE[0] ? path : 'overview';
@@ -355,7 +315,6 @@ function useRoute() {
   return route;
 }
 
-/** Whether the stats refresh by themselves, as last chosen on this browser. */
 function useAuto() {
   const [auto, setAuto] = useState(() => {
     try {
@@ -367,13 +326,10 @@ function useAuto() {
   useEffect(() => {
     try {
       localStorage.setItem(AUTO, auto ? 'on' : 'off');
-    } catch {
-      // Kept for this page only.
-    }
+    } catch {}
     if (!auto) return undefined;
     const tick = () => document.visibilityState === 'visible' && load();
     const id = setInterval(tick, EVERY_MS);
-    // Back in front after a while: catch up at once.
     const seen = () => document.visibilityState === 'visible' && Date.now() - view.get().at > EVERY_MS && load();
     document.addEventListener('visibilitychange', seen);
     return () => {
@@ -384,7 +340,6 @@ function useAuto() {
   return [auto, setAuto];
 }
 
-/** Whether the sidebar is narrowed to icons on a wide window, as last chosen on this browser. */
 function useSideNarrow() {
   const [narrow, setNarrow] = useState(() => {
     try {
@@ -396,9 +351,7 @@ function useSideNarrow() {
   useEffect(() => {
     try {
       localStorage.setItem(SIDE, narrow ? 'narrow' : 'wide');
-    } catch {
-      // Kept for this page only.
-    }
+    } catch {}
   }, [narrow]);
   return [narrow, setNarrow];
 }
@@ -408,7 +361,6 @@ const icon = (paths, size = 20) =>
 
 const SIDE_ICON = icon(html`<rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" />`, 18);
 
-/** Each section's icon, beside its name, and alone in the narrow sidebar. */
 const ICONS = {
   overview: html`<rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />`,
   accounts: html`<circle cx="9" cy="8" r="4" /><path d="M2 21a7 7 0 0 1 14 0" /><path d="M16 4.2a4 4 0 0 1 0 7.6M22 21a7 7 0 0 0-4-6.3" />`,
@@ -425,7 +377,6 @@ const ICONS = {
 const REFRESH_ICON = icon(html`<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8" /><path d="M21 3v5h-5" />`, 18);
 const LOCK_ICON = icon(html`<rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />`, 18);
 
-/** A clock for "updated 20 s ago". */
 function useNow(ms = 5_000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -435,23 +386,19 @@ function useNow(ms = 5_000) {
   return now;
 }
 
-/** The sidebar's count or dot for a section, when it has something to say. */
 function badge(id, s, d) {
   if (!s) return null;
   if (id === 'feed' && s.feed) return html`<span class=${`dot ${s.feed.up ? 'good' : 'bad'}`} title=${s.feed.up ? 'Up' : 'Down'}></span>`;
-  // Crash reports and reports both count this week's, as their pages' first tiles do.
   if (id === 'crashes' && d.crashReports) return html`<span class=${`count ${d.crashFatal ? 'bad' : ''}`}>${d.crashReports}</span>`;
   if (id === 'reports' && s.feedback?.last7d) return html`<span class="count">${s.feedback.last7d}</span>`;
   if (id === 'collection') {
     const on = Object.values(s.collect ?? {}).filter(Boolean).length;
-    // A word, not a count like the ones above it: what's off is a state. Nothing when all is on.
     if (on === Object.keys(s.collect ?? {}).length) return null;
     return html`<span class="count quiet">${on ? `${on} on` : 'all off'}</span>`;
   }
   return null;
 }
 
-/** Lines a name in the narrow sidebar up with what it names: it's drawn outside the sidebar, which clips. */
 function placeTip(e) {
   const el = e.target.closest?.('[data-tip]');
   if (!el) return;
@@ -475,7 +422,6 @@ const PAGES = {
 
 function Dashboard({ v, asked }) {
   const s = v.stats;
-  // Also before load() has set it, on a reload: no other section flashes up first.
   const only = v.only || timelapseOnly();
   const route = only ? { id: 'timelapse', query: {} } : asked;
   const [auto, setAuto] = useAuto();
@@ -485,7 +431,6 @@ function Dashboard({ v, asked }) {
   const [, title, what] = [...SECTIONS, TIMELAPSE].find(([id]) => id === route.id);
   const Page = PAGES[route.id];
   const tl = route.id === 'timelapse';
-  // Entrance motion plays as the dashboard opens, and not again for each section.
   const [opening, setOpening] = useState(true);
   const opened = useRef(route.id);
   useEffect(() => {
@@ -507,7 +452,6 @@ function Dashboard({ v, asked }) {
         if (e.key === 'Escape') document.activeElement.blur();
         return;
       }
-      // 1 to 9, then 0 for the tenth. None of them for the timelapse token, which opens no section.
       const n = e.key === '0' ? 10 : Number(e.key);
       const all = !view.get().only;
       if (all && n >= 1 && n <= SECTIONS.length) location.hash = `#/${SECTIONS[n - 1][0]}`;
@@ -617,14 +561,12 @@ function Dashboard({ v, asked }) {
 function Admin() {
   const v = useStore(view);
   const route = useRoute();
-  // The Timelapse needs no stats: it opens while they load, or when they fail.
   const tlAlone = !v.locked && route.id === 'timelapse' && Boolean(memory ?? token());
   const on = !v.locked && Boolean(v.stats || v.only || tlAlone);
   useEffect(() => {
     document.body.classList.toggle('dash-on', on);
   }, [on]);
   if (v.locked) return html`<${Unlock} msg=${v.msg} />`;
-  // The first load failed: the dashboard's own Refresh isn't drawn yet, and nothing tries again by itself.
   if (!v.stats && !v.only && !tlAlone)
     return html`<${GateCard} sub=${v.note || 'Loading…'}>
       ${v.note && html`<button type="button" class="btn" onClick=${load} disabled=${v.loading}>Try again</button>`}

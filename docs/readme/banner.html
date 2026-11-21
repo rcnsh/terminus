@@ -1,9 +1,4 @@
 <!doctype html>
-<!--
-  The site's link preview image (apps/web/public/assets/og.png), in the
-  site's own tokens and fonts. Re-render after changing it or the app
-  screenshot:  sh docs/readme/render.sh
--->
 <html lang="en">
 <head>
 <script>if (location.hash === '#og') document.documentElement.classList.add('og');</script>
@@ -12,9 +7,6 @@
 <link rel="stylesheet" href="../../apps/web/public/assets/site.css">
 <style>
   html, body { margin: 0; width: 1280px; height: 580px; overflow: hidden; background: var(--bg); }
-  /* banner.html#og: the same banner as the site's link preview image
-     (apps/web/public/assets/og.png), 1280x672 for the 1.91:1 previews use,
-     with the banner at the bottom so the phone still runs off the edge. */
   html.og, html.og body { height: 672px; }
   html.og .banner { margin-top: 92px; }
   .banner {

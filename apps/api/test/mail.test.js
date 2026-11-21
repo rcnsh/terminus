@@ -1,7 +1,3 @@
-/**
- * The emails' HTML (src/site/mail.ts): what each must say, in both languages,
- * with whatever a user typed escaped.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

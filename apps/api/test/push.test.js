@@ -1,8 +1,3 @@
-/**
- * Push: devices register a Firebase token, the Trip object wakes
- * when the card is due to change, and nudges the phones when the phase or
- * the question changed. On the frozen clock and a fake feed and Firebase.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -21,16 +16,10 @@ import { DAY_ASK } from '../src/answer/next.ts';
 import { answerFor, collectArrivals } from '../src/answer/answer.ts';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
-// How a headway guess is used, not how long it is: one guess for every shuttle.
 withoutMeasuredHeadways();
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
-/**
- * Buses that leave at fixed times (D2 every 10 min from 09:04, R2 every 12
- * from 09:06, at every stop), so the answers settle as the clock moves the
- * way real ones do, instead of every bus staying 4 minutes away.
- */
 const at = (h, m) => FROZEN_NOW + ((h - 9) * 60 + m) * 60_000;
 const times = (first, every) => Array.from({ length: 30 }, (_, i) => first + i * every * 60_000);
 const RUNS = { D2: times(at(9, 4), 10), R2: times(at(9, 6), 12) };
@@ -50,7 +39,6 @@ const PROFILE = {
   manual: [{ day: THU, arriveByMin: 600, endMin: 660, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
 };
 
-/** A throwaway service account with a real RSA key, so the JWT really gets signed. */
 async function serviceAccount() {
   const { privateKey } = await crypto.subtle.generateKey(
     { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
@@ -62,7 +50,6 @@ async function serviceAccount() {
   return JSON.stringify({ project_id: 'terminus-test', client_email: 'push@terminus-test.iam.gserviceaccount.com', private_key: pem });
 }
 
-/** `wrap` puts a fetch of the test's own in front of the fake feed and Firebase. */
 async function setup({ push = true, wrap = (f) => f, extra = {}, ae } = {}) {
   const fcm = { sent: [], dead: new Set() };
   const fetchImpl = wrap(makeFetch({ byStop: FEED, fcm }));
@@ -119,7 +106,6 @@ async function setup({ push = true, wrap = (f) => f, extra = {}, ae } = {}) {
       .all()
       .map((r) => ({ ...r }));
   const alarm = () => [...TRIPS.alarms.values()][0];
-  /** Lets the Trip object wake at each alarm until `done`; how many wakes it took. */
   const wakeUntil = async (done, max = 5) => {
     let n = 0;
     while (!done() && n < max && alarm() !== undefined) {
@@ -133,12 +119,11 @@ async function setup({ push = true, wrap = (f) => f, extra = {}, ae } = {}) {
   return { env, call, cookie, phone, mac, tablet, next, fcm, TRIPS, clock, pushTokens, alarm, wakeUntil };
 }
 
-test('a device registers its push token; the same token moves with the device', async () => {
+test('a device registers its push token; the same token moves with the device, as after a reinstall signed in as another', async () => {
   const { call, phone, mac, pushTokens } = await setup();
   assert.equal((await call('/api/me/push', { method: 'POST', token: phone, body: {} })).status, 400);
   assert.equal((await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-1' } })).status, 200);
   assert.deepEqual(pushTokens(), [{ name: 'Pixel', push_token: 'fcm-1' }]);
-  // A reinstall signed in as another device reports the same token: one session only.
   await call('/api/me/push', { method: 'POST', token: mac, body: { token: 'fcm-1' } });
   assert.deepEqual(pushTokens(), [{ name: 'MacBook', push_token: 'fcm-1' }]);
   await call('/api/me/push', { method: 'DELETE', token: mac });
@@ -149,7 +134,6 @@ test("a request's answer nudges the rider's other devices, never the one that as
   const { env, call, phone, mac, fcm } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await call('/api/me/push', { method: 'POST', token: mac, body: { token: 'fcm-mac' } });
-  // On the bus: a phase worth pushing (an idle card is never pushed).
   await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
   const session = (name) => env.DB._db.prepare('SELECT user_id, token_hash FROM sessions WHERE name = ?').get(name);
   const { user_id: userId, token_hash: phoneHash } = session('Pixel');
@@ -172,30 +156,28 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const first = await next(phone);
   assert.equal(first.card.phase, 'idle');
-  // Asked to wake when the phase next changes: five minutes before the
-  // leave-by (not when the card merely goes stale).
-  assert.equal(alarm(), Date.parse(first.leave.at) - 5 * 60_000);
+  assert.equal(
+    alarm(),
+    Date.parse(first.leave.at) - 5 * 60_000,
+    'wakes when the phase next changes, five minutes before the leave-by, not when the card goes stale',
+  );
 
-  // The phone already shows "idle": that is never pushed. (The 9:00 leave-by
-  // was an estimate; live times firm it up, so it may take a wake or two.)
   const woke = await wakeUntil(() => fcm.sent.length > 0);
-  assert.ok(woke <= 3);
+  assert.ok(woke <= 3, 'idle is never pushed; the estimated leave-by may take a wake or two to firm up');
   assert.equal(fcm.sent.length, 1);
   assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due' });
   assert.equal(fcm.sent[0].android.priority, 'HIGH', 'time to go is worth waking the phone for');
   assert.equal(fcm.sent[0].token, 'fcm-phone');
   assert.equal(fcm.oauth, 1);
 
-  // Still due at the next wake: nothing to say.
   const before = fcm.sent.length;
   const [wake] = [...TRIPS.alarms.values()];
   assert.ok(wake > Date.now(), 'it keeps waking');
-  assert.equal(fcm.sent.length, before);
+  assert.equal(fcm.sent.length, before, 'still due at the next wake: nothing to say');
   assert.equal(fcm.oauth, 1, 'the access token is reused');
 });
 
-test('a request from the stop before the leave-by still has the Trip object wake to push time to go', async () => {
-  // The leave-by, from an account of its own, so this one's first request is the one at the stop.
+test('a request from the stop before the leave-by (the first for its account) still has the Trip object wake to push time to go', async () => {
   const pilot = await setup();
   const leave = (await pilot.next(pilot.phone)).leave;
   const { call, phone, fcm, clock, alarm, wakeUntil } = await setup();
@@ -203,10 +185,8 @@ test('a request from the stop before the leave-by still has the Trip object wake
   clock(Date.parse(leave.at) - 10 * 60_000);
   const stop = indexGraph(GRAPH).byCode.get(leave.stopCode);
   const there = await (await call(`/api/me/next?lat=${stop.lat}&lon=${stop.lon}`, { token: phone })).json();
-  // The phone at the stop is waiting until its bus goes; the object, with no
-  // location, still owes "due" five minutes before the leave-by.
   assert.equal(there.card.phase, 'waiting');
-  assert.ok(alarm() <= Date.parse(there.leave.at) - DUE_MS);
+  assert.ok(alarm() <= Date.parse(there.leave.at) - DUE_MS, 'the object, with no location, still owes due before the leave-by');
   await wakeUntil(() => fcm.sent.length > 0);
   assert.deepEqual(
     fcm.sent.map((m) => m.data.phase),
@@ -215,9 +195,7 @@ test('a request from the stop before the leave-by still has the Trip object wake
   assert.equal(fcm.sent[0].android.priority, 'HIGH');
 });
 
-test('a request from near the stop, with a long walk from home, still has the Trip object wake for its own time to go', async () => {
-  // Twelve minutes from home to its stop (one outside any residence): the
-  // object plans from home, so it has to go well before a phone at the stop.
+test('a request from near the stop, with a 12-minute walk from home, still has the Trip object wake for its own time to go', async () => {
   const profile = { ...PROFILE, home: { stops: ['KR-MRT'] }, homeWalkMin: 12 };
   const pilot = await setup();
   await pilot.call('/api/me/profile', { method: 'PUT', cookie: pilot.cookie, body: profile });
@@ -225,7 +203,6 @@ test('a request from near the stop, with a long walk from home, still has the Tr
   await call('/api/me/profile', { method: 'PUT', cookie, body: profile });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   clock(Date.parse((await pilot.next(pilot.phone)).leave.at) - 10 * 60_000);
-  // The object's view, from another account with no location, and the phone's.
   const own = (await pilot.next(pilot.phone)).leave;
   const stop = indexGraph(GRAPH).byCode.get(own.stopCode);
   const there = await (await call(`/api/me/next?lat=${stop.lat}&lon=${stop.lon}`, { token: phone })).json();
@@ -240,8 +217,7 @@ test('a request from near the stop, with a long walk from home, still has the Tr
   assert.equal(fcm.sent[0].android.priority, 'HIGH');
 });
 
-test('through a long gap, the Trip object alone wakes for the class after it and pushes its time to go', async () => {
-  // GEA1000 09:00-10:00, then CS2030 at 15:00: long enough to go home in between, and back from 14:00.
+test('through a long gap, with no device asking, the Trip object alone wakes for the class after it and pushes its time to go', async () => {
   const gap = {
     ...PROFILE,
     manual: [
@@ -254,7 +230,6 @@ test('through a long gap, the Trip object alone wakes for the class after it and
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   clock(at(10, 16));
   await next(phone);
-  // No device asks again: the object's own wakes, until the class.
   const woke = [];
   while (alarm() !== undefined && alarm() < at(15, 0)) {
     clock(Math.max(alarm(), Date.now()));
@@ -269,11 +244,6 @@ test('through a long gap, the Trip object alone wakes for the class after it and
   assert.ok(after.includes('due'), `time to go for CS2030 (pushed: ${fcm.sent.map((m) => m.data.phase).join(' ')})`);
 });
 
-/**
- * A feed that answers only when the test lets it, so a POST can land while a
- * request or a wake waits for it. `asked()` fails fast when nothing asks the
- * feed, rather than hanging the test.
- */
 function heldFeed() {
   let hold = null;
   let release = () => {};
@@ -322,13 +292,11 @@ test('a step made while the Trip object wakes is kept: the wake does not save th
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // Woken two minutes before the leave-by: time to go, and the plan is saved.
   clock(Date.parse(first.leave.at) - 2 * 60_000);
   storage().set('wakeAt', Date.now());
   feed.hold();
   const woke = TRIPS.fireAlarms();
   await feed.asked('the wake');
-  // "Later bus" on another device while the wake waits for the feed.
   const res = await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
     method: 'POST',
     body: JSON.stringify({ date: sgtDate(Date.now()), steps: { [key]: to }, deleteAt: endOfDayMs(Date.now()) }),
@@ -357,7 +325,6 @@ test('a signal made while the Trip object wakes is kept: the wake does not save 
   feed.hold();
   const woke = TRIPS.fireAlarms();
   await feed.asked('the wake');
-  // "I'm on the bus" on another device, on an earlier R2, while the wake waits for the feed.
   const boarded = { svc: 'R2', stop: 'PGP', stopCode: 'PGP', board: new Date(Date.now() - 60_000).toISOString(), alightCode: 'UTOWN' };
   const rec = { kind: 'boarded', at: Date.now(), boarded };
   await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
@@ -382,7 +349,6 @@ test('a wake whose plan a step made stale pushes nothing from it, and wakes agai
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // Woken at time to go, which it would push.
   clock(Date.parse(first.leave.at) - 2 * 60_000);
   storage().set('wakeAt', Date.now());
   feed.hold();
@@ -411,7 +377,6 @@ test('a wake made stale is logged as pushing nothing, and keeps the leave-by the
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // A wake that sees the leave-by.
   clock(Date.parse(first.leave.at) - 4 * 60_000);
   storage().set('wakeAt', Date.now());
   await TRIPS.fireAlarms();
@@ -419,7 +384,6 @@ test('a wake made stale is logged as pushing nothing, and keeps the leave-by the
   assert.ok(seen.leaveAt, 'the wake saw a leave-by');
   assert.equal(ae.rows('tripwake').length, 1);
 
-  // The next one goes stale: "Later bus" while it waits for the feed.
   clock(Date.now() + 40_000);
   storage().set('wakeAt', Date.now());
   feed.hold();
@@ -452,7 +416,6 @@ test('a step made while the Trip object wakes, with its plan already saved, stop
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // Time to go: the request saves the plan, so the wake has none to save.
   clock(Date.parse(first.leave.at) - 2 * 60_000);
   await next(phone);
   assert.ok(storage().get('day').plans?.[key], 'the request saved the plan');
@@ -482,12 +445,10 @@ test('a step made while a request waits for the feed is kept: the request does n
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // Time to go: the request saves the plan.
   clock(Date.parse(first.leave.at) - 2 * 60_000);
   feed.hold();
   const asked = call('/api/me/next', { token: phone });
   await feed.asked('the request');
-  // "Later bus" on another device while the request waits for the feed.
   const res = await TRIPS.get([...TRIPS.instances.keys()][0]).fetch('https://trip/update', {
     method: 'POST',
     body: JSON.stringify({ date: sgtDate(Date.now()), steps: { [key]: to }, deleteAt: endOfDayMs(Date.now()) }),
@@ -506,7 +467,6 @@ test('a step made while the Trip object wakes is pushed once: by the step, not a
   const { call, phone, mac, next, fcm, TRIPS, clock, alarm, wakeUntil } = await setup({ wrap: feed.wrap });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
-  // Time to go is pushed for the planned bus.
   await wakeUntil(() => fcm.sent.length > 0);
   assert.deepEqual(
     fcm.sent.map((m) => m.data.phase),
@@ -518,7 +478,6 @@ test('a step made while the Trip object wakes is pushed once: by the step, not a
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // The next wake waits for the feed; "Later bus" on the Mac meanwhile.
   clock(Date.now() + 30_000);
   storage().set('wakeAt', Date.now());
   feed.hold();
@@ -536,7 +495,6 @@ test('a step made while the Trip object wakes is pushed once: by the step, not a
     'the step tells the phone about the later bus, and the stale wake says nothing',
   );
 
-  // The wake after it works out the same card the step pushed: nothing new to say.
   assert.equal(alarm(), Date.now() + 30_000);
   clock(alarm());
   await TRIPS.fireAlarms();
@@ -567,13 +525,11 @@ test('a tap whose nudge lands after a wake pushed time to go does not make the w
   assert.ok(key);
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
 
-  // Just before time to go, "Best bus" on the Mac; its nudge to the phone is slow to send.
   clock(Date.parse(first.leave.at) - DUE_MS - 20_000);
   let release = () => {};
   held = new Promise((r) => (release = r));
   const tapped = call('/api/me/step', { method: 'POST', token: mac, body: { trip: key, to: null } });
   await reachedP;
-  // Meanwhile the wake at time to go pushes it.
   clock(Date.parse((await next(mac)).leave.at) - DUE_MS + 5_000);
   storage().set('wakeAt', Date.now());
   await TRIPS.fireAlarms();
@@ -597,7 +553,6 @@ test('a request whose plan a step made stale does not arm its wake either', asyn
   const to = first.card.step?.later;
   assert.ok(key && to, 'the card offers a later bus');
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
-  // No wake pending, so the request asks for one with its plan.
   storage().delete('wakeAt');
   const { watch: _w, ...rest } = storage().get('day');
   storage().set('day', rest);
@@ -629,30 +584,25 @@ test('the Trip object saves a plan only from the revision of the trip it reads: 
       })
     ).json();
   const plan = (svc) => ({ svc, stop: 'PGP', board: new Date(Date.now() + 600_000).toISOString() });
-  // Read at revision 0, and nothing wrote since: saved, and the revision moves on.
   let day = await post({ plans: { t: plan('D2') }, basis: { t: 0 } });
   assert.equal(day.plans.t.svc, 'D2');
-  assert.equal(day.revs.t, 1);
-  // A plan worked out from revision 0 again is from before that one: dropped.
+  assert.equal(day.revs.t, 1, 'read at revision 0 with nothing written since: saved, and the revision moves on');
   day = await post({ plans: { t: plan('R2') }, basis: { t: 0 } });
   assert.equal(day.plans.t.svc, 'D2', 'a plan from an older revision is dropped');
-  // A signal, a step and a reset each move it on.
   day = await post({ items: [{ key: 't', rec: { kind: 'waiting', at: Date.now() } }] });
-  assert.equal(day.revs.t, 2);
+  assert.equal(day.revs.t, 2, 'a signal moves it on');
   day = await post({ steps: { t: { svc: 'D2', board: plan('D2').board } } });
-  assert.equal(day.revs.t, 3);
+  assert.equal(day.revs.t, 3, 'a step moves it on');
   day = await post({ items: [{ key: 't', rec: null }] });
-  assert.equal(day.revs.t, 4);
+  assert.equal(day.revs.t, 4, 'a reset moves it on');
   day = await post({ plans: { t: plan('R2') }, basis: { t: 3 } });
   assert.equal(day.plans?.t, undefined, 'a plan from before the reset is dropped');
   day = await post({ plans: { t: plan('R2') }, basis: { t: 4 } });
   assert.equal(day.plans.t.svc, 'R2', 'one from the revision stored is saved');
-  // An older Worker sends no basis: its plan is saved as it always was.
   day = await post({ plans: { t: plan('A1') } });
-  assert.equal(day.plans.t.svc, 'A1');
-  // Another trip's revision is its own.
+  assert.equal(day.plans.t.svc, 'A1', 'an older Worker sends no basis: saved as always');
   day = await post({ plans: { u: plan('D2') }, basis: { u: 0 } });
-  assert.equal(day.plans.u.svc, 'D2');
+  assert.equal(day.plans.u.svc, 'D2', 'another trip’s revision is its own');
 });
 
 test('a trip reset to nothing still has its plan saved: the request reads the revision the reset left', async () => {
@@ -668,7 +618,6 @@ test('a trip reset to nothing still has its plan saved: the request reads the re
       method: 'POST',
       body: JSON.stringify({ date: sgtDate(Date.now()), deleteAt: endOfDayMs(Date.now()), ...body }),
     });
-  // A signal and its undo leave the day with nothing in it but the revision.
   await post({ items: [{ key, rec: { kind: 'waiting', at: Date.now() } }] });
   await post({ items: [{ key, rec: null }] });
   storage().delete('wakeAt');
@@ -712,7 +661,6 @@ test("the Trip object tells an iPhone too: the notification in the account's wor
   assert.ok('svc' in live.body.aps['content-state']);
 });
 
-/** An Apple that takes every push, and the APNs settings with a real key. */
 async function fakeApple() {
   const { privateKey } = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
@@ -760,25 +708,23 @@ test("time to go starts an iPhone's Live Activity by push, once per trip; with i
   assert.equal(storage().get('pushed').started.key, trip);
   assert.equal(storage().get('pushed').started.sessions.length, 1, 'the phone it went to');
 
-  // Ended on the phone (swiped away) with no new token: the same trip due again (woken at the same moment) isn't started again.
   storage().set('pushed', { ...storage().get('pushed'), phase: 'idle' });
   apple.length = 0;
   storage().set('wakeAt', Date.now());
   await TRIPS.fireAlarms();
   assert.ok(
     apple.some((p) => p.type === 'alert' && p.body.phase === 'due'),
-    'pushed again',
+    'ended on the phone with no new token: pushed again',
   );
   assert.deepEqual(starts(), [], 'but not started again');
 
-  // Turned off on the phone: its token goes, and a new trip starts nothing either.
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, alerts: true, live: false } });
   storage().set('pushed', { ...storage().get('pushed'), phase: 'idle', started: undefined });
   apple.length = 0;
   storage().set('wakeAt', Date.now());
   await TRIPS.fireAlarms();
   assert.ok(apple.some((p) => p.type === 'alert' && p.body.phase === 'due'));
-  assert.deepEqual(starts(), []);
+  assert.deepEqual(starts(), [], 'turned off on the phone: its token goes, and a new trip starts nothing');
 });
 
 test('a Live Activity already running counts as started: the trip due again starts no other', async () => {
@@ -800,10 +746,9 @@ test('a Live Activity ended on the phone no longer counts as running: its token 
   const liveTokens = () => env.DB._db.prepare('SELECT live_token FROM sessions WHERE live_token IS NOT NULL').all();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, live: true } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
-  // Registered again with it still running, or by a build that doesn't say: kept.
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, live: true, activity: true } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, live: true } });
-  assert.equal(liveTokens().length, 1);
+  assert.equal(liveTokens().length, 1, 'registered again while running, or by a build that does not say: kept');
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, live: true, activity: false } });
   assert.deepEqual(liveTokens(), []);
   assert.equal(apple.length, 0);
@@ -858,8 +803,7 @@ test("a Live Activity's start that didn't go is tried again at the next wake, wi
   assert.equal(storage().get('pushed').started.sessions.length, 1);
 });
 
-test('with APNs off, an iPhone alone is nobody to tell: the Trip object stops waking', async () => {
-  // Push is on (Android's), so a card asks the object to watch; APNs isn't set up.
+test('with APNs off and Android push on, an iPhone alone is nobody to tell: the Trip object stops waking', async () => {
   const { call, phone, next, alarm, TRIPS, clock, fcm } = await setup({ extra: { APNS_TOPIC: 'sh.rcn.terminus' } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
@@ -877,18 +821,16 @@ test('with APNs off, an iPhone alone is nobody to tell: the Trip object stops wa
 test("a tap on an English device reaches a Chinese iPhone in Chinese; the account's language, once saved, reaches every iPhone", async () => {
   const { apple, wrap, extra } = await fakeApple();
   const { call, cookie, phone, tablet, next, wakeUntil, env } = await setup({ push: false, wrap, extra });
-  // The account follows each device; the iPhone is set to Chinese.
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS }, lang: 'zh-CN' });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
   const pushLang = () => env.DB._db.prepare('SELECT push_lang FROM sessions WHERE push_token = ?').get(APNS).push_lang;
-  assert.equal(pushLang(), 'zh');
+  assert.equal(pushLang(), 'zh', 'the account follows each device; the iPhone is set to Chinese');
   await next(phone);
   await wakeUntil(() => apple.some((p) => p.body.phase === 'due'));
   const due = apple.find((p) => p.type === 'alert' && p.body.phase === 'due');
   assert.match(due.body.aps.alert.title, CHINESE, "the Trip object words it in the iPhone's language");
   assert.equal(apple.find((p) => p.type === 'liveactivity').priority, '10', 'a phase change');
 
-  // "On it", tapped on the tablet in English.
   apple.length = 0;
   const out = await (await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'boarded' }, lang: 'en' })).json();
   assert.doesNotMatch(out.card.line, CHINESE, "the tablet's answer is English");
@@ -898,17 +840,15 @@ test("a tap on an English device reaches a Chinese iPhone in Chinese; the accoun
   assert.equal(live.priority, '5', 'a tap never spends a priority-10 update');
   for (const p of apple.filter((x) => x.type === 'alert')) assert.match(p.body.aps.alert.title, CHINESE);
 
-  // "Not on campus today", also in English.
   apple.length = 0;
   await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'away' }, lang: 'en' });
-  for (const p of apple.filter((x) => x.type === 'liveactivity')) assert.match(p.body.aps['content-state'].line, CHINESE);
+  for (const p of apple.filter((x) => x.type === 'liveactivity'))
+    assert.match(p.body.aps['content-state'].line, CHINESE, 'Not on campus today, tapped in English, still in Chinese');
 
-  // The account picks English: every iPhone is pushed in it from now on.
   await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, lang: 'en' } });
-  assert.equal(pushLang(), 'en');
-  // Back to following each device, from the iPhone set to Chinese: its own again.
+  assert.equal(pushLang(), 'en', 'the account picks English for every iPhone');
   await call('/api/me/profile', { method: 'PUT', token: phone, body: { ...PROFILE, lang: 'auto' }, lang: 'zh' });
-  assert.equal(pushLang(), 'zh');
+  assert.equal(pushLang(), 'zh', 'back to following each device: the iPhone’s own again');
 });
 
 test("the Trip object words each iPhone's alert and Live Activity in its own clock, unless the account chose one", async () => {
@@ -916,7 +856,6 @@ test("the Trip object words each iPhone's alert and Live Activity in its own clo
   const { call, cookie, phone, mac, next, wakeUntil } = await setup({ push: false, wrap, extra });
   const OTHER = `apns:${'12'.repeat(32)}`;
   const OTHER_LIVE = `apnsla:${'34'.repeat(32)}`;
-  // Two iPhones following the system's clock: one 12-hour, one 24-hour.
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS, h12: true } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
   await call('/api/me/push', { method: 'POST', token: mac, body: { token: OTHER, h12: false } });
@@ -931,24 +870,21 @@ test("the Trip object words each iPhone's alert and Live Activity in its own clo
   assert.doesNotMatch(words(to(OTHER, 'alert')), AMPM, '24-hour on the other');
   assert.doesNotMatch(words(to(OTHER_LIVE, 'liveactivity')), AMPM);
   assert.match(words(to(OTHER_LIVE, 'liveactivity')), /\d\d:\d\d/);
-  // The account picks 24-hour: every iPhone gets it.
   await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '24' } });
   apple.length = 0;
   await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
   const live = apple.filter((p) => p.type === 'liveactivity');
   assert.ok(live.length > 0);
-  for (const p of live) assert.doesNotMatch(words(p), AMPM);
+  for (const p of live) assert.doesNotMatch(words(p), AMPM, 'the account picks 24-hour: every iPhone gets it');
 });
 
-test("a step on another device that leaves no trip ends the iPhone's Live Activity at once", async () => {
+test("a step on another device that leaves no trip (Best bus after Not on campus) ends the iPhone's Live Activity at once", async () => {
   const { apple, wrap, extra } = await fakeApple();
   const { call, phone, mac, next, wakeUntil } = await setup({ push: false, wrap, extra });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
   const first = await next(phone);
   await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
-  // Not on campus from the Mac (which ends that Live Activity), an iPhone
-  // still running one, then "Best bus" on the class: the answer has no trip left.
   await call('/api/me/signal', { method: 'POST', token: mac, body: { kind: 'away' } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
   apple.length = 0;
@@ -960,14 +896,13 @@ test("a step on another device that leaves no trip ends the iPhone's Live Activi
   );
 });
 
-test('with no class left today, a running Live Activity is ended', async () => {
+test('with no class left today, a running Live Activity is ended, once', async () => {
   const { apple, wrap, extra } = await fakeApple();
   const { call, cookie, phone, next, wakeUntil, alarm, clock, TRIPS } = await setup({ push: false, wrap, extra });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: APNS } });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
   await next(phone);
   await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
-  // The class is taken off the timetable; the object's next wake finds no card.
   await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, manual: [] } });
   apple.length = 0;
   clock(alarm());
@@ -975,8 +910,11 @@ test('with no class left today, a running Live Activity is ended', async () => {
   const end = apple.filter((p) => p.type === 'liveactivity');
   assert.equal(end.length, 1);
   assert.equal(end[0].body.aps.event, 'end');
-  // Noted as ended, so a later wake doesn't end it again.
-  assert.equal([...TRIPS.instances.values()][0].storage._map.get('pushed').live, undefined);
+  assert.equal(
+    [...TRIPS.instances.values()][0].storage._map.get('pushed').live,
+    undefined,
+    'noted as ended, so no later wake ends it again',
+  );
 });
 
 test("a tap on another device that ends the trip ends the iPhone's Live Activity at once", async () => {
@@ -986,14 +924,12 @@ test("a tap on another device that ends the trip ends the iPhone's Live Activity
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: LIVE } });
   await next(phone);
   await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
-  // "Not on campus today" on the tablet: the day's only class is off.
   apple.length = 0;
   await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'away' } });
   assert.deepEqual(
     apple.filter((p) => p.type === 'liveactivity').map((p) => p.body.aps.event),
     ['end'],
   );
-  // "Back on campus": the trip again, and no Live Activity to end.
   apple.length = 0;
   await call('/api/me/signal', { method: 'POST', token: tablet, body: { kind: 'back' } });
   assert.deepEqual(
@@ -1019,20 +955,18 @@ test('a Live Activity whose end could not be sent is ended at a later wake', asy
   await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'));
   await call('/api/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, manual: [] } });
   apple.length = 0;
-  // Apple is down for the end: the trip stays on the Lock Screen, so the object wakes again.
   down = true;
   const at = alarm();
   clock(at);
   await errorsOf(() => TRIPS.fireAlarms());
   const storage = () => [...TRIPS.instances.values()][0].storage._map;
-  assert.ok(storage().get('pushed').live, 'not noted as ended');
+  assert.ok(storage().get('pushed').live, 'Apple down for the end: not noted as ended');
   assert.ok(alarm() < storage().get('deleteAt'), 'a wake before midnight');
-  // Back up, and the pause over: the end goes.
   down = false;
   clock(at + 15 * 60_000);
   await wakeUntil(() => apple.some((p) => p.type === 'liveactivity'), 10);
   assert.equal(apple.find((p) => p.type === 'liveactivity').body.aps.event, 'end');
-  assert.equal(storage().get('pushed').live, undefined);
+  assert.equal(storage().get('pushed').live, undefined, 'back up, the pause over: the end goes');
 });
 
 test('each wake logs how fresh its card was: the gap since the last, the feed age, the leave-by moving', async () => {
@@ -1055,8 +989,10 @@ test('each wake logs how fresh its card was: the gap since the last, the feed ag
     assert.ok(lateS >= 0);
   }
   assert.equal(ae.named('tripwake').filter((r) => r.changed === 'pushed').length, fcm.sent.length, 'pushed rows are the pushes');
-  // Nothing about who or where.
-  assert.ok(rows.every((r) => r.blobs.length === 5 && !r.blobs.some((b) => /@|fcm|COM|UTOWN|KR/.test(b))));
+  assert.ok(
+    rows.every((r) => r.blobs.length === 5 && !r.blobs.some((b) => /@|fcm|COM|UTOWN|KR/.test(b))),
+    'nothing about who or where',
+  );
   assert.equal(stored(TRIPS).get('lastWake').at, Date.now());
 });
 
@@ -1077,7 +1013,6 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
   const { call, phone, tablet, next, fcm, TRIPS, clock, wakeUntil } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
-  // Due: the object remembers which bus the trip is for.
   await wakeUntil(() => fcm.sent.some((m) => m.data.phase === 'due'));
   const plan = Object.values([...TRIPS.instances.values()][0].storage._map.get('day').plans)[0];
   clock(Date.parse(plan.board) + 30_000);
@@ -1086,9 +1021,6 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
     fcm.sent.every((m) => !('ask' in m.data)),
     'never a question',
   );
-  // No answer, and the object has no location: not taken to be on it. The
-  // phase stays "heading", but the card is now "has left": pushed, quietly,
-  // so the phones drop their "Leave now".
   const sentBefore = fcm.sent.length;
   clock(Date.parse(plan.board) + 4 * 60_000);
   await TRIPS.fireAlarms();
@@ -1099,10 +1031,10 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
   assert.deepEqual(
     fcm.sent.slice(sentBefore).map((m) => [m.data.phase, m.android.priority]),
     [['heading', 'NORMAL']],
+    'no answer and no location: has left, pushed quietly so the phones drop Leave now',
   );
   await TRIPS.fireAlarms();
   assert.equal(fcm.sent.length, sentBefore + 1, 'once');
-  // An older app's tap still reaches the user's other phones (quietly); this one doesn't need telling.
   await call('/api/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
   const before = fcm.sent.length;
   await call('/api/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
@@ -1110,6 +1042,7 @@ test('nothing is pushed to ask about the bus, and nothing says you are on it unl
   assert.deepEqual(
     told.map((m) => [m.token, m.data.phase, m.android.priority]),
     [['fcm-tablet', 'riding', 'NORMAL']],
+    'an older app’s tap reaches the other phones quietly, not the one that tapped',
   );
 });
 
@@ -1127,12 +1060,10 @@ test('the morning cron starts the day for push users, so the push comes without 
 test('the morning cron arms push users in batches, each run carrying on from the last', async () => {
   const { call, phone, env } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
-  // A batch of one: the first run arms the one user and isn't sure it's done.
-  assert.equal(await armTrips(env, Date.now(), 1), 1);
+  assert.equal(await armTrips(env, Date.now(), 1), 1, 'a batch of one arms the one user');
   assert.match(await env.KV.get('trips:armed'), / /, 'under way, after that user');
-  // The next run finds nobody after them: the day is done.
   assert.equal(await armTrips(env, Date.now(), 1), 0);
-  assert.doesNotMatch(await env.KV.get('trips:armed'), / /);
+  assert.doesNotMatch(await env.KV.get('trips:armed'), / /, 'the next run finds nobody after them: done');
   assert.equal(await armTrips(env, Date.now(), 1), 0, 'once a day');
 });
 
@@ -1174,7 +1105,6 @@ test('the week before a semester, push users with an older timetable are reminde
     env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   };
   setProfile({ term: { acadYear: '2025/2026', semester: 2 } });
-  // Semester 1 of 2026/27 starts on Monday 10 August.
   clock(Date.parse('2026-08-01T10:30:00+08:00'));
   assert.equal(await remindTerm(env, Date.now()), 0, 'not yet: nine days before');
   clock(Date.parse('2026-08-04T09:30:00+08:00'));
@@ -1189,7 +1119,6 @@ test('the week before a semester, push users with an older timetable are reminde
   assert.match(sent.data.body, /NUSMods/);
   assert.equal(await remindTerm(env, Date.now()), 0, 'once a semester');
 
-  // An app that fetches the words is pushed only the kind; it asks for them itself.
   await env.KV.delete('term:reminded');
   env.DB._db.prepare("UPDATE sessions SET client = 'android/2.5.0' WHERE push_token = 'fcm-phone'").run();
   const bare = fcm.sent.length;
@@ -1199,7 +1128,6 @@ test('the week before a semester, push users with an older timetable are reminde
   assert.equal(notice.title, 'Sem 1 2026/27 starts Mon 10 Aug');
   assert.equal(notice.zhTitle, '2026/27 第 1 学期将于 8月10日（周一）开始');
 
-  // Already imported for the new semester, or no timetable: nothing.
   await env.KV.delete('term:reminded');
   setProfile({ term: { acadYear: '2026/2027', semester: 1 } });
   assert.equal(await remindTerm(env, Date.now()), 0, 'already imported');
@@ -1219,8 +1147,6 @@ test('a semester reminder for someone with no device left to reach is not tried 
   };
   env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
   clock(Date.parse('2026-08-04T10:30:00+08:00'));
-  // The app was uninstalled: Firebase says the token is gone, so it's dropped
-  // and there is nobody left to send to, which no retry would change.
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) =>
     String(url).startsWith('https://fcm.googleapis.com/')
@@ -1231,7 +1157,7 @@ test('a semester reminder for someone with no device left to reach is not tried 
   } finally {
     globalThis.fetch = real;
   }
-  assert.equal(await env.KV.get('term:retry'), null);
+  assert.equal(await env.KV.get('term:retry'), null, 'an unregistered token is dropped, and no retry would change that');
 });
 
 test('a semester reminder that reaches nobody is tried again; one whose mark cannot be saved is not sent', async () => {
@@ -1246,17 +1172,15 @@ test('a semester reminder that reaches nobody is tried again; one whose mark can
   clock(Date.parse('2026-08-04T10:30:00+08:00'));
   const quiet = console.error;
   console.error = () => {};
-  // The mark can't be saved: nothing goes, rather than the batch every run.
   const put = env.KV.put;
   env.KV.put = async (k, ...rest) => {
     if (k === 'term:reminded') throw new Error('KV write quota');
     return put.call(env.KV, k, ...rest);
   };
   const before = fcm.sent.length;
-  await assert.rejects(remindTerm(env, Date.now()));
+  await assert.rejects(remindTerm(env, Date.now()), 'the mark cannot be saved: nothing goes, rather than the batch every run');
   env.KV.put = put;
   assert.equal(fcm.sent.length, before);
-  // Firebase failing: nothing reached, so the user is kept to try again.
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) =>
     String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init);
@@ -1280,7 +1204,6 @@ test('a semester reminder that never gets through holds up no one after it, and 
     term: { acadYear: '2025/2026', semester: 2 },
   };
   db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
-  // A second user, after the first in id order, whose phone works.
   const later = 'zzzz-later';
   db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, 'later@u.nus.edu', 0, 0, 'web')").run(later);
   db.prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, 0)').run(later, JSON.stringify(p));
@@ -1288,13 +1211,11 @@ test('a semester reminder that never gets through holds up no one after it, and 
     "INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES ('later-hash', ?, 'device', 'Later', 0, 0, 'fcm-later')",
   ).run(later);
   clock(Date.parse('2026-08-04T10:30:00+08:00'));
-  // Firebase fails for the first user's token every time, without saying it's gone.
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) =>
     String(url).startsWith('https://fcm.googleapis.com/') && String(init?.body).includes('fcm-broken')
       ? new Response('internal', { status: 500 })
       : real(url, init);
-  // KV as Cloudflare runs it: one write a second to a key, so one per run here.
   const put = env.KV.put.bind(env.KV);
   let written = new Set();
   env.KV.put = async (k, ...rest) => {
@@ -1335,7 +1256,6 @@ test('a run whose retried and new semester reminders all fail keeps every one of
     term: { acadYear: '2025/2026', semester: 2 },
   };
   db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
-  // A full batch (ARM_BATCH, 400) and one more, after the first user in id order.
   for (let i = 0; i < 400; i++) {
     const id = `zzzz-${String(i).padStart(3, '0')}`;
     db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, 0, 0, 'web')").run(id, `${id}@u.nus.edu`);
@@ -1347,7 +1267,6 @@ test('a run whose retried and new semester reminders all fail keeps every one of
   const start = Date.parse('2026-08-04T10:30:00+08:00');
   const quiet = console.error;
   console.error = () => {};
-  // Firebase failing throughout (set after each clock, which puts the fake fetch back).
   const failing = () => {
     const real = globalThis.fetch;
     globalThis.fetch = async (url, init) =>
@@ -1358,7 +1277,6 @@ test('a run whose retried and new semester reminders all fail keeps every one of
     failing();
     assert.equal(await remindTerm(env, Date.now()), 0);
     assert.equal(JSON.parse(await env.KV.get('term:retry')).users.length, 400, 'the first batch, kept');
-    // The batch retried and the one user left, all failing again: none dropped.
     clock(start + 15 * 60_000);
     failing();
     assert.equal(await remindTerm(env, Date.now()), 0);
@@ -1385,12 +1303,10 @@ test('a retried semester reminder is not sent twice when the retry list cannot b
   const real = globalThis.fetch;
   const del = env.KV.delete;
   try {
-    // Firebase failing: the user goes on the retry list.
     globalThis.fetch = async (url, init) =>
       String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init);
     assert.equal(await remindTerm(env, Date.now()), 0);
     globalThis.fetch = real;
-    // The retry reaches them, but the list can't be cleared.
     env.KV.delete = async () => {
       throw new Error('KV write failed');
     };
@@ -1428,7 +1344,6 @@ test('a retried semester reminder reads the profile again: imported since, nothi
     globalThis.fetch = failing;
     assert.equal(await remindTerm(env, Date.now()), 0);
     globalThis.fetch = real;
-    // They change to Chinese, then the retry goes: in Chinese.
     setProfile({ lang: 'zh' });
     const before = fcm.sent.length;
     clock(start + 15 * 60_000);
@@ -1436,7 +1351,6 @@ test('a retried semester reminder reads the profile again: imported since, nothi
     assert.equal(fcm.sent[before].data.title, fcm.sent[before].data.zhTitle);
     assert.match(fcm.sent[before].data.title, /学期/);
 
-    // Another semester's reminder fails, then they import the new timetable.
     await env.KV.delete('term:reminded');
     setProfile({});
     clock(start + 30 * 60_000);
@@ -1510,7 +1424,6 @@ test('without push set up, or with no device registered, the object only wakes a
     await next(phone);
     if (!push) assert.equal(alarm(), undefined, 'not even created for nothing');
   }
-  // Registered nobody: it wakes once, finds no one to tell, and stops.
   const { phone, next, TRIPS, clock, alarm, fcm } = await setup();
   await next(phone);
   clock(alarm());
@@ -1523,7 +1436,6 @@ test("another device fetching the card doesn't stop the phone being told", async
   const { call, phone, mac, next, fcm, TRIPS, clock, alarm } = await setup();
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
-  // The trip becomes due; the Mac (no push) happens to refresh first.
   for (let i = 0; i < 5 && !fcm.sent.length; i++) {
     clock(alarm());
     await next(mac);
@@ -1533,7 +1445,6 @@ test("another device fetching the card doesn't stop the phone being told", async
 });
 
 const FCM_SEND = 'https://fcm.googleapis.com/v1/projects/';
-/** What FCM says to a message it can't take, by the field that's wrong (none: as FCM words a token that isn't valid). */
 const fcmRefusal = (field) =>
   Response.json(
     {
@@ -1551,9 +1462,7 @@ const fcmRefusal = (field) =>
     },
     { status: 400 },
   );
-/** The Trip object's storage, for the one user in these tests. */
 const stored = (TRIPS) => [...TRIPS.instances.values()][0].storage._map;
-/** Captures console.error while `fn` runs. */
 async function errorsOf(fn) {
   const logged = [];
   const error = console.error;
@@ -1573,9 +1482,7 @@ test('a message FCM refuses keeps the token; a token FCM says is bad is dropped'
   const { call, phone, next, pushTokens, TRIPS, clock, alarm } = await setup({ wrap });
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
-  // A bug in our message: every phone would lose its token, so none does.
   refuse = 'message.data';
-  // Until the first refusal: the push it didn't send is tried again at the next wake.
   const logged = await errorsOf(async () => {
     for (let i = 0; i < 5 && !refused; i++) {
       clock(alarm());
@@ -1592,7 +1499,6 @@ test('a message FCM refuses keeps the token; a token FCM says is bad is dropped'
     logged.every((l) => !l.includes('fcm-phone')),
     'never the token',
   );
-  // The token itself named as the bad value: that one goes.
   refuse = 'message.token';
   clock(alarm());
   await TRIPS.fireAlarms();
@@ -1640,8 +1546,7 @@ test('every call to Firebase has a time limit', async () => {
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
   await wakeUntil(() => fcm.sent.length > 0);
-  // The token, the send, the new token after a 401 and the send again.
-  assert.equal(signals.length, 4);
+  assert.equal(signals.length, 4, 'the token, the send, the new token after a 401, and the send again');
   assert.ok(signals.every((s) => s instanceof AbortSignal));
 });
 
@@ -1680,10 +1585,9 @@ test('a wake that fails is tried again soon, and pushes then', async () => {
   const logged = await errorsOf(() => TRIPS.fireAlarms());
   assert.ok(logged.some((l) => l.includes('trip wake failed')));
   assert.equal(alarm(), first + 30_000, 'again in 30 s, not at midnight');
-  // Failing again waits twice as long.
   clock(alarm());
   await errorsOf(() => TRIPS.fireAlarms());
-  assert.equal(alarm(), first + 30_000 + 60_000);
+  assert.equal(alarm(), first + 30_000 + 60_000, 'failing again waits twice as long');
   broken = false;
   for (let i = 0; i < 5 && !fcm.sent.length; i++) {
     clock(alarm());
@@ -1700,7 +1604,6 @@ test('an alarm run again after the object restarted mid-wake still wakes', async
   for (let i = 0; i < 5 && !fcm.sent.length; i++) {
     const at = alarm();
     clock(at);
-    // As the alarm leaves it just before the wake: the wake owed moved aside.
     const m = stored(TRIPS);
     m.set('waking', m.get('wakeAt'));
     m.delete('wakeAt');
@@ -1716,7 +1619,6 @@ test('an alarm run again after it failed past the push does not push the same th
   await next(phone);
   const { storage } = [...TRIPS.instances.values()][0];
   const del = storage.delete.bind(storage);
-  // The alarm's last step fails once the push is out, as a storage error would.
   storage.delete = async (k) => {
     if (k === 'waking' && fcm.sent.length && !storage.failed) {
       storage.failed = true;
@@ -1730,14 +1632,12 @@ test('an alarm run again after it failed past the push does not push the same th
     await TRIPS.fireAlarms().catch(() => {});
   }
   assert.equal(fcm.sent.length, 1);
-  // The platform runs the alarm again within seconds.
   await [...TRIPS.instances.values()][0].alarm();
-  assert.equal(fcm.sent.length, 1, 'not pushed again');
+  assert.equal(fcm.sent.length, 1, 'the platform runs the alarm again within seconds: not pushed again');
   assert.equal(stored(TRIPS).get('waking'), undefined);
 });
 
 test('a /clear or a sooner /watch while the object wakes is not undone by it', async () => {
-  // While `gate` is set, a send to Firebase waits for it to open.
   let gate = null;
   const wrap = (f) => async (url, init) => {
     if (gate && String(url).startsWith(FCM_SEND)) {
@@ -1762,7 +1662,6 @@ test('a /clear or a sooner /watch while the object wakes is not undone by it', a
   const trip = TRIPS.get(userId);
   const date = new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
   const deleteAt = stored(TRIPS).get('deleteAt');
-  /** Wakes the object until it's held sending a push; the wake still running. */
   const untilSending = async () => {
     const g = shut();
     for (let i = 0; i < 5; i++) {
@@ -1775,7 +1674,6 @@ test('a /clear or a sooner /watch while the object wakes is not undone by it', a
     assert.fail('never pushed');
   };
 
-  // A watch for sooner than the wake would pick, while it's pushing.
   let { g, run } = await untilSending();
   const soon = Date.now() + 5_000;
   await trip.fetch('https://trip/update', { method: 'POST', body: JSON.stringify({ date, watch: { userId, at: soon }, deleteAt }) });
@@ -1785,7 +1683,6 @@ test('a /clear or a sooner /watch while the object wakes is not undone by it', a
   assert.equal(stored(TRIPS).get('wakeAt'), soon, 'the sooner wake stays');
   assert.equal(alarm(), soon);
 
-  // A /clear (the account deleted) while it's pushing: nothing comes back.
   stored(TRIPS).set('pushed', { key: 'other', phase: 'idle' });
   ({ g, run } = await untilSending());
   await trip.fetch('https://trip/clear', { method: 'POST' });
@@ -1801,7 +1698,6 @@ test('deleting the account clears its Trip object, its wake alarm too', async ()
   await next(phone);
   assert.ok(alarm() !== undefined);
   assert.equal((await call('/api/me', { method: 'DELETE', cookie })).status, 200);
-  // Only the mark that keeps it empty today is left, and the alarm that ends it at midnight.
   assert.deepEqual([...stored(TRIPS).keys()].sort(), ['deleteAt', 'gone']);
   assert.equal(alarm(), stored(TRIPS).get('deleteAt'), 'no wake left, which deleteAll alone would leave');
 });
@@ -1820,7 +1716,6 @@ test('/api/health says which push is set up; a key that will not parse is push o
   assert.ok(!said[0].includes('not a secret'), 'never the value');
 });
 
-/** Records the changes each request sends to the Trip objects. */
 function sentToTrips(TRIPS) {
   const sent = [];
   const get = TRIPS.get.bind(TRIPS);
@@ -1849,7 +1744,6 @@ test('refreshing while the leave-by moves by seconds asks the Trip object to wat
     `a watch only when it brings the wake sooner, not one per refresh (${watches.length})`,
   );
   for (let i = 1; i < watches.length; i++) assert.ok(watches[i] < watches[i - 1], 'each watch is sooner than the one pending');
-  // The wake booked is no later than the latest card's own "due".
   assert.ok(Math.min(...watches) <= Date.parse(last.leave.at) - DUE_MS, 'the push is not late');
   await wakeUntil(() => fcm.sent.length > 0);
   assert.equal(fcm.sent[0].data.phase, 'due');
@@ -1857,14 +1751,12 @@ test('refreshing while the leave-by moves by seconds asks the Trip object to wat
 
 test('a Trip object that stopped waking is asked again by the next request', async () => {
   const { call, phone, next, TRIPS, clock, alarm } = await setup();
-  // Nobody to tell yet: the object wakes once and stops.
   await next(phone);
   clock(alarm());
   await TRIPS.fireAlarms();
   const user = [...TRIPS.instances.keys()][0];
   const day = await (await TRIPS.get(user).fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
   assert.equal(day?.watch, undefined, 'no wake pending, and the day says so');
-  // A phone registers; its next refresh has the object watch again.
   await call('/api/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const sent = sentToTrips(TRIPS);
   await next(phone);

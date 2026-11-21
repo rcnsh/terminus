@@ -50,13 +50,6 @@ import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseNearby
 import sh.rcn.terminus.setWhileIdle
 
-/**
- * What a widget shows. The timetable's plan by default; a row of buttons switches it, in place, to the buses near you or the quickest way
- * from where you are to one of the places you usually go. Each widget keeps its own choice.
- *
- * The choice gives way to the timetable by itself: after [KEEP_MS], when a trip becomes due after it was made, and whenever the widget is
- * too small for the buttons (so a widget can't be stuck on a place with no way back).
- */
 sealed interface Mode {
     val id: String
     val label: String
@@ -73,7 +66,6 @@ sealed interface Mode {
             get() = L.s(R.string.chip_nearby)
     }
 
-    /** A favourite (`place:<key>`) or a stop looked up (`stop:<code>`). */
     data class To(val dest: Destinations.Dest) : Mode {
         override val id
             get() = dest.id
@@ -99,13 +91,9 @@ sealed interface Mode {
 }
 
 object WidgetModes {
-    /** A Glance Row holds at most 10 children; this many buttons is plenty. */
     const val MAX_BUTTONS = 8
-    /** A place chosen on the widget goes back to the timetable after this long. */
     const val KEEP_MS = 30 * 60_000L
-    /** A chosen place's answer is fetched again in the background at most this often. */
     private const val REFETCH_MS = 60_000L
-    /** Nearby's times may be old past this: dimmed then, and the line above says so. */
     const val NEARBY_OLD_MS = 180_000L
 
     val MODE = stringPreferencesKey("mode")
@@ -115,7 +103,6 @@ object WidgetModes {
     val MODE_FETCHED = longPreferencesKey("mode-fetched")
     val MODE_ERROR = stringPreferencesKey("mode-error")
 
-    /** Back to the timetable, with nothing kept of the answer shown: for signing out. */
     fun forget(prefs: MutablePreferences) {
         for (k in
             listOf(
@@ -132,24 +119,14 @@ object WidgetModes {
             )) prefs.remove(k)
     }
 
-    /**
-     * The mode to show now: the chosen one, unless it has run out or a trip has become due since it was chosen (the timetable matters
-     * then). [chosenAt] and [now] are on the phone's clock ([MODE_AT] is); the plan's times are the server's, put on the phone's by
-     * [toDevice].
-     */
     fun effective(chosen: Mode, chosenAt: Long?, plan: NextAnswer?, rowShown: Boolean, now: Long, toDevice: (Long) -> Long = { it }): Mode {
         if (chosen == Mode.Timetable || !rowShown || chosenAt == null) return Mode.Timetable
         if (now - chosenAt > KEEP_MS) return Mode.Timetable
-        // When the trip turned due: the server's reminder time, else its leave time.
         val dueAt = (plan?.card?.remindAtMs ?: plan?.leaveAtMs)?.let(toDevice)
         if (dueAt != null && dueAt in (chosenAt + 1)..now && plan?.card?.phase in LiveService.TRIP_PHASES) return Mode.Timetable
         return chosen
     }
 
-    /**
-     * How many buttons fit a row this wide: the text at about 7.2 dp a character, 28 dp of padding each and 6 dp between. Glance can't
-     * measure text, and a button cut in half is worse than one fewer.
-     */
     fun fitting(labels: List<String>, widthDp: Float): Int {
         var used = 0f
         labels.forEachIndexed { i, l ->
@@ -159,29 +136,21 @@ object WidgetModes {
         return labels.size
     }
 
-    /** Whether a widget of this shape has the row of buttons at all: [large] (the favourites widget), or tall enough for your day. */
     internal fun rowWanted(shape: WidgetShape, large: Boolean): Boolean = shape.roomy && (large || shape == WidgetShape.DAY)
 
-    /** The row's width on a widget this wide: the big widget's buttons share it with ↻. */
     internal fun rowWidth(widthDp: Float, shape: WidgetShape): Float = widthDp - 28f - if (shape == WidgetShape.DAY) 44f else 0f
 
-    /** Whether a widget this size shows the buttons, as it's drawn: wanted, and Timetable and Nearby fit ([pick]). */
     internal fun rowShown(widthDp: Float, heightDp: Float, large: Boolean): Boolean {
         val shape = WidgetShape.of(widthDp, heightDp)
         return rowWanted(shape, large) && fitting(listOf(Mode.Timetable.label, Mode.Nearby.label), rowWidth(widthDp, shape)) == 2
     }
 
-    /**
-     * Whether the widget shows the buttons at any of the sizes the home screen has given it (one each way up). True when it hasn't said.
-     */
     private fun rowShownAnySize(ctx: Context, id: GlanceId, large: Boolean): Boolean =
         anySize(ctx, id, unknown = true) { w, h -> rowShown(w, h, large) }
 
-    /** Whether the widget is big enough for your day ([WidgetShape.DAY]), and its next buses, at any of its sizes. */
     internal fun bigAnySize(ctx: Context, id: GlanceId): Boolean =
         anySize(ctx, id, unknown = false) { w, h -> WidgetShape.of(w, h) == WidgetShape.DAY }
 
-    /** Whether [test] holds at any of the sizes the home screen has given the widget; [unknown] when it hasn't said. */
     private fun anySize(ctx: Context, id: GlanceId, unknown: Boolean, test: (Float, Float) -> Boolean): Boolean {
         val options = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(GlanceAppWidgetManager(ctx).getAppWidgetId(id))
         val sizes = BundleCompat.getParcelableArrayList(options, AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
@@ -194,10 +163,6 @@ object WidgetModes {
         return test(minW.toFloat(), maxH.toFloat()) || test(maxW.toFloat(), minH.toFloat())
     }
 
-    /**
-     * The buttons for a row this wide: Timetable and Nearby, then favourites and added places ([uses]: Store.destinationUses). None if
-     * those two don't fit.
-     */
     fun chips(
         uses: Map<String, Destinations.Use>,
         places: List<Place>,
@@ -209,10 +174,6 @@ object WidgetModes {
         return pick(listOf(Mode.Timetable, Mode.Nearby) + ranked, ranked.firstOrNull { it.dest.id == added.firstOrNull()?.id }, widthDp)
     }
 
-    /**
-     * As many of `all` as fit, in order; but the place added last from "Go somewhere else" always gets the last button, in place of
-     * favourites that would have pushed it off. None if Timetable and Nearby don't fit.
-     */
     fun pick(all: List<Mode>, newest: Mode?, widthDp: Float): List<Mode> {
         val fits = { modes: List<Mode> -> fitting(modes.map { it.label }, widthDp) == modes.size }
         val shown = all.take(minOf(fitting(all.map { it.label }, widthDp), MAX_BUTTONS))
@@ -223,10 +184,6 @@ object WidgetModes {
         return if (fits(head + newest)) head + newest else shown
     }
 
-    /**
-     * Switches one widget to `mode` and fetches what it shows. `fresh`: take a new location fix (only inside [WidgetModeService], which a
-     * tap started).
-     */
     suspend fun show(ctx: Context, id: GlanceId, mode: Mode, fresh: Boolean) {
         val now = System.currentTimeMillis()
         val same = currentMode(ctx, id).id == mode.id
@@ -235,7 +192,6 @@ object WidgetModes {
             it[MODE_LABEL] = mode.label
             it[MODE_AT] = now
             it[MODE_ERROR] = UPDATING
-            // A different place: its old answer is someone else's.
             if (!same) {
                 it.remove(MODE_JSON)
                 it.remove(MODE_FETCHED)
@@ -244,12 +200,9 @@ object WidgetModes {
         redrawWidgets(ctx)
         if (mode is Mode.To) Store(ctx).noteDestination(mode.dest, now)
         if (mode == Mode.Timetable) {
-            // The plan's own "Updating…", as a tap on the widget shows: tapping
-            // Timetable while it's already showing must visibly do something.
             updateAppWidgetState(ctx, id) { it.remove(MODE_ERROR) }
             Store(ctx).lastError = UPDATING
             redrawWidgets(ctx)
-            // A tap's broadcast has seconds: the rest of a refresh follows in a job.
             Refresher.refresh(ctx, fast = true, extras = false)
             armChosen(ctx)
             return
@@ -259,10 +212,6 @@ object WidgetModes {
         armChosen(ctx)
     }
 
-    /**
-     * What [mode] shows, asked for once, with the token it was asked with; null when there's nothing to record (signed out, or the token
-     * refused).
-     */
     private suspend fun request(ctx: Context, mode: Mode, fresh: Boolean): Pair<String, Result<JSONObject>>? {
         val store = Store(ctx)
         val token = store.token ?: return null
@@ -276,18 +225,12 @@ object WidgetModes {
             }
         }
         when (val e = result.exceptionOrNull()) {
-            // Replaced or stopped: nothing to record.
             is kotlinx.coroutines.CancellationException -> throw e
-            // The token refused: the phone signs out (the widget says why), and this place goes with the rest.
             is ApiError -> if (e.status == 401 && sh.rcn.terminus.Session.rejected(ctx, token)) return null
         }
         return token to result
     }
 
-    /**
-     * [result] on the widget, unless [sentWith] has been signed out since it was asked for: a sign-out clears the token before it forgets
-     * the widgets' places, and both go through the widget's state in turn, so the old account's answer can't land after it.
-     */
     private suspend fun record(ctx: Context, id: GlanceId, mode: Mode, sentWith: String, result: Result<JSONObject>) {
         updateAppWidgetState(ctx, id) {
             if (Store(ctx).token != sentWith) return@updateAppWidgetState
@@ -313,14 +256,11 @@ object WidgetModes {
         return Mode.of(prefs[MODE], prefs[MODE_LABEL])
     }
 
-    /** A widget showing a place or Nearby, while the choice still stands. */
     private class Chosen(val id: GlanceId, val mode: Mode, val at: Long, val fetchedAt: Long?, val json: String?) {
-        /** A place's answer, read only when asked for. */
         val answer: NextAnswer? by lazy {
             json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() }
         }
 
-        /** Nearby: when the next of its buses shown goes, or with [exact] alarms its count ticks down; read only when asked for. */
         fun busGoes(now: Long, exact: Boolean): Long? {
             if (mode != Mode.Nearby || fetchedAt == null) return null
             val stops = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } ?: return null
@@ -340,9 +280,6 @@ object WidgetModes {
                 val prefs: Preferences = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
                 val mode = Mode.of(prefs[MODE], prefs[MODE_LABEL])
                 val at = prefs[MODE_AT] ?: return@mapNotNull null
-                // Run out, back on the timetable since a trip turned due, or too
-                // small for the buttons, so showing the timetable ([effective]):
-                // nothing of its own to fetch.
                 val rowShown = mode != Mode.Timetable && rowShownAnySize(ctx, id, large)
                 if (effective(mode, at, plan, rowShown = rowShown, now = now, toDevice = ServerClock::toDevice) == Mode.Timetable) null
                 else Chosen(id, mode, at, prefs[MODE_FETCHED], prefs[MODE_JSON])
@@ -350,22 +287,15 @@ object WidgetModes {
         }
     }
 
-    /** Those of [all] due a fetch: at most once a minute, and with [staleOnly] only a place whose answer has gone stale. */
     private fun due(all: List<Chosen>, now: Long, staleOnly: Boolean): List<Chosen> = all.filter { c ->
         now - (c.fetchedAt ?: 0L) >= REFETCH_MS && (!staleOnly || c.answer?.let { isOld(it, ServerClock.fromDevice(now)) } == true)
     }
 
-    /** Whether [refreshChosen] would ask for anything now. */
     suspend fun anyDue(ctx: Context): Boolean {
         val now = System.currentTimeMillis()
         return due(chosen(ctx, now), now, staleOnly = false).isNotEmpty()
     }
 
-    /**
-     * Keeps each widget showing a place or Nearby current, from the background refresh: at most once a minute, with the last known
-     * location, and only while the choice still stands. Widgets showing the same are asked for once between them. With [staleOnly] (the
-     * widgets' own alarm), only places whose answer has gone stale.
-     */
     suspend fun refreshChosen(ctx: Context, staleOnly: Boolean = false) {
         val now = System.currentTimeMillis()
         for ((_, same) in due(chosen(ctx, now), now, staleOnly).groupBy { it.mode.id }) {
@@ -374,9 +304,6 @@ object WidgetModes {
         }
     }
 
-    /**
-     * Arms the redraw of the widgets showing a place or Nearby, at the soonest of their moments ([redrawAt]); none when no widget has one.
-     */
     suspend fun armChosen(ctx: Context) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
@@ -384,7 +311,6 @@ object WidgetModes {
         val at =
             if (Store(ctx).paired) {
                 val chosen = chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now, it.busGoes(now, exact)) }
-                // The Nearby widgets and the big widget's next buses share one board.
                 val shared = if (NearbyShared.wanted(ctx)) NearbyShared.redrawAt(ctx, now) else null
                 (chosen + listOfNotNull(shared)).minOrNull()
             } else null
@@ -393,30 +319,14 @@ object WidgetModes {
         if (backstop == null) am.cancel(backstopIntent(ctx)) else am.setAndAllowWhileIdle(AlarmManager.RTC, backstop, backstopIntent(ctx))
     }
 
-    /**
-     * An inexact redraw [BACKSTOP_MS] behind an [exact] one at [at]. Turning off "Alarms & reminders" cancels exact alarms and stops the
-     * app with no broadcast, which would leave Nearby's minute counts standing; inexact alarms stay, so this one redraws them as clock
-     * times. Each redraw moves it on, so while exact alarms work it never comes.
-     */
     internal fun backstopAt(at: Long?, exact: Boolean): Long? = at?.takeIf { exact }?.plus(BACKSTOP_MS)
 
     private const val BACKSTOP_MS = 120_000L
 
-    /** The last inexact step: run this close to its moment, a redraw is late by under half a minute. */
     const val LAST_STEP_MS = 25_000L
 
-    /**
-     * When to set the redraw alarm for [at]. Exact, at [at]. Inexact, Android may run it as late again as it is away, so a countdown would
-     * run on past zero before turning to "now": it's set for a third of the way there, each step re-arming the next, until [at] is within
-     * [LAST_STEP_MS].
-     */
     internal fun stepTo(at: Long, now: Long, exact: Boolean): Long = if (exact || at - now <= LAST_STEP_MS) at else now + (at - now) / 3
 
-    /**
-     * When a widget showing [mode] (chosen at [chosenAt], its answer fetched at [fetchedAt]) next looks different with nothing new, on the
-     * phone's clock like [now]: the choice running out, Nearby's times turning old or one of its buses going ([busGoes]), a place's answer
-     * moving on ("Leave now", going stale). Null: never.
-     */
     internal fun redrawAt(mode: Mode, chosenAt: Long, fetchedAt: Long?, answer: NextAnswer?, now: Long, busGoes: Long? = null): Long? =
         listOfNotNull(
                 chosenAt + KEEP_MS,
@@ -438,7 +348,6 @@ object WidgetModes {
     internal fun backstopIntent(ctx: Context): PendingIntent = alarmIntent(ctx, requestCode = 10)
 }
 
-/** A widget button that needs no location: Timetable (and every button without location permission). */
 class ModeAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val mode = Mode.of(parameters[MODE_ID], parameters[MODE_LABEL_PARAM])
@@ -451,10 +360,6 @@ class ModeAction : ActionCallback {
     }
 }
 
-/**
- * A widget button that needs where you are (Nearby, a place): a moment in the foreground with the location type, which Android allows when
- * a widget tap starts it, to take a fresh fix and fetch. Usually done before Android would even show its notification.
- */
 class WidgetModeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -493,7 +398,6 @@ class WidgetModeService : Service() {
         stopSelf(startId)
     }
 
-    /** Android 14's form of [onTimeout]: 15 calls the one above instead. */
     @Deprecated("Android 15 calls onTimeout(startId, fgsType)")
     override fun onTimeout(startId: Int) {
         stopSelf(startId)
@@ -525,12 +429,10 @@ class WidgetModeService : Service() {
         const val EXTRA_WIDGET = "widget"
         const val EXTRA_MODE = "mode"
         const val EXTRA_LABEL = "label"
-        /** A Nearby widget's ↻: the shared board ([NearbyShared]), not a widget's own mode. */
         const val EXTRA_SHARED = "shared"
 
         fun intent(ctx: Context, appWidgetId: Int, mode: Mode): Intent =
             Intent(ctx, WidgetModeService::class.java)
-                // Distinct per widget and mode, so each button keeps its own PendingIntent.
                 .setData("terminus-widget://$appWidgetId/${Uri.encode(mode.id)}".toUri())
                 .putExtra(EXTRA_WIDGET, appWidgetId)
                 .putExtra(EXTRA_MODE, mode.id)

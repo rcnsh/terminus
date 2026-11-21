@@ -1,13 +1,10 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Footer
-
 struct Footer: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
 
-    /// A menu bar app's window comes up behind whatever is in front unless the app activates.
     private func open(_ id: String) {
         openWindow(id: id)
         NSApp.activate()
@@ -40,8 +37,6 @@ struct Footer: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut("m")
                 .padding(.leading, 12)
-                // ⌘, for Settings, as in any Mac app: the menu's items only
-                // answer their shortcuts while it's open.
                 .background {
                     Button("") { open("settings") }
                         .keyboardShortcut(",")

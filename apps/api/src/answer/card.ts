@@ -1,13 +1,3 @@
-/**
- * What every client shows, worded once.
- *
- * The Android app and widget, the notifications, the Mac popover and the
- * account page's preview all render /api/me/next. The server sends the class
- * card's lines, the crowd word, the quality note and the "old" rule in
- * `card`; clients keep only what has to tick: "Leave now" once `leave.at` passes, countdowns, and
- * dimming once `card.staleAt` passes.
- */
-
 import type { Arrival, BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from '../types.ts';
 import { clockAt, slackText } from '../clock.ts';
 import { type Plan, type Phase, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
@@ -24,304 +14,141 @@ import { m } from '../i18n.ts';
 
 export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
 
-/** A button the server decided to show. Clients render it and send `id`
- *  and `trip` back to /api/me/signal; they never decide which to show. */
 export interface CardAction {
   id: 'boarded' | 'missed' | 'skipped' | 'arrived' | 'reset' | 'away' | 'back';
   label: string;
   trip: string;
 }
 
-/**
- * "Earlier bus", "Later bus" and "Best bus" (step.ts). A client sends `trip`
- * and the bus to /api/me/step: `earlier` or `later` as it is, or null for
- * the server's own bus. Greyed out where it's null.
- */
 export interface CardStep {
   trip: string;
   earlier: StepTarget | null;
   later: StepTarget | null;
-  /** The bus is the user's choice: show "Best bus". */
   moved: boolean;
   earlierLabel: string;
   laterLabel: string;
   bestLabel: string;
 }
 
-/** Where the day's trip is, for the card (trip.ts). */
 export interface TripView {
   key: string | null;
   phase: Phase;
   rec?: TripRecord;
-  /** A trip skipped a moment ago, so it can be undone. */
   undo?: { key: string; label: string | null } | null;
-  /** The bus the plan says to catch, kept once the answer has moved on to riding. */
   plan?: Plan | null;
-  /** The phase is the plan's, not something a signal said: on the bus a
-   *  location saw you on, or missed it at the stop. */
   assumed?: boolean;
-  /** The plan's bus has left and nothing says whether you're on it: the
-   *  answer is the next way there, and the card says the bus has gone. */
   gone?: boolean;
-  /** The plan's bus, just seen ridden by this request's location (the
-   *  caller saves it, so devices without a location follow). */
   seenOn?: Plan;
-  /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
   planChanged?: boolean;
-  /** The remembered plan was a guess this request's location replaced with a walk (the caller deletes it). */
   planDropped?: boolean;
-  /** When the trip's phase next changes by itself (phase.ts), as this
-   *  request sees it: the card's next change. Absent outside a trip. */
   changesAt?: Change | null;
-  /** The same as the Trip object sees it, with no location (tripPhase's
-   *  `wakesAt`): the object wakes then to push. */
   wakesAt?: Change | null;
-  /** False when the user turned reminders off for this trip. */
   remind?: boolean;
-  /** Something terminus has learned and offers to change (outcomes.ts). */
   suggestion?: Suggestion | null;
-  /** Today was set to "Not on campus": offer "Back on campus". */
   away?: boolean;
-  /** A trip this request's location says is over (home, in your
-   *  residence, or at the destination): the caller records it as reached. */
   reached?: string;
 }
 
-/** A bus in the journey: the service, its colour as painted on the bus, its stop and when it leaves. */
 export interface JourneyBus {
   svc: string;
   color: string;
   stop: string;
-  /** "4:05 PM", "~4:05 PM" for an estimate. */
   board: string;
-  /** A public bus, with a fare. Absent for a shuttle. */
   paid?: true;
 }
 
-/**
- * The change of bus on a trip that needs two (Journey.change): off the first
- * at `from`, across the road to `stop` when it isn't the same stop, and on
- * to the second bus.
- */
 export interface JourneyChange {
-  /** Where the first bus drops you, and where the second goes from: the same stop, or across the road. */
   from: string;
   stop: string;
-  /** When the first bus gets to `from` ("9:12", "~9:12"). */
   reach: string;
-  /** The walk across the road ("1 min"); null at the same stop. */
   walk: string | null;
-  /** The wait there for the second bus ("3 min"); null when it's under a minute. */
   wait: string | null;
-  /** The second bus, and when it leaves (ISO, to count down to). */
   bus: JourneyBus;
   boardAt: string;
-  /** Time on the second bus, and on the first ("6 min", "8 min"): the
-   *  journey's own `ride` names both, for the clients that draw one bus. */
   ride: string;
   firstRide: string;
-  /** "8 min ride · off at Kent Vale": the first bus's line, in place of `rideText`. */
   firstRideText: string;
-  /** "Change at Kent Vale · cross the road · 3 min wait". */
   changeText: string;
-  /** "6 min ride", or "6 min ride · off at Opp NUSS": the second bus's line. */
   rideText: string;
 }
 
-/**
- * The trip as steps, for the card styles that draw it (a line from you to
- * the destination, or a list of steps): walk to the stop, take the
- * bus, get there. On foot the whole way it's the walk alone, with no bus.
- * Every client draws the same steps from this; only the leave countdown
- * ticks on the client, from `leave.at` (and `boardAt`).
- */
 export interface Journey {
-  /** When to set off ("4:01 PM", "~4:01 PM"); null when it's now. */
   leave: string | null;
-  /** The walk to the stop ("3 min"); null when you're at it. On foot, the
-   *  whole walk there. */
   walk: string | null;
-  /** The bus to catch; null on foot. */
   bus: JourneyBus | null;
-  /** When the bus leaves, ISO, to count down to; null on foot. */
   boardAt: string | null;
-  /** Time on the bus ("3 min"); null on foot. */
   ride: string | null;
-  /** Where to get off, when that's across the road from the destination. */
   off: string | null;
-  /** Where you're going ("GEA1000 @ UTown"), the stop you get off at
-   *  ("UTown", short enough for the end of a line), and when you get there
-   *  ("4:08 PM"): to the room or building itself when it's a walk from the stop. */
   to: string;
   toStop: string;
   arrive: string | null;
-  /** The walk from `toStop` to where you're going ("2 min"): a class's room,
-   *  a building searched for, a food court. Null when it's at the stop. */
   walkEnd: string | null;
-  /** When the bus gets to `toStop`; the same as `arrive` with no `walkEnd`. */
   arriveStop: string | null;
-  /** A class only: "3 min early", "2 min late". */
   slack: string | null;
-  /** The bus's time is live, not an estimate. */
   live: boolean;
-  /** Another bus: the next one for a trip, the one to go now on for a class. */
   backup: JourneyBus | null;
-  /** On foot: why not a bus ("D1 would be 16 min"). Null with a bus. */
   why: string | null;
-  /**
-   * A trip that changes buses: the change, and the second bus. `bus` is then
-   * the first bus, and `ride` and `rideText` name the change too ("8 min,
-   * then P"), for the clients that draw only one bus; a client that draws
-   * both uses `change.firstRide` and `change.firstRideText` for the first.
-   * Null on one bus, and on foot.
-   */
   change: JourneyChange | null;
 
-  /* The lines the card styles put together, worded here so every client says the same. */
-  /** "To GEA1000 @ UTown · starts 10:00": the class's start only for a class. */
   title: string;
-  /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
   place: string;
-  /** "by ~09:36", under the leave countdown. Null when it's now, and at the stop. */
   byText: string | null;
-  /** "3 min walk", the walk to the stop (or the whole walk on foot). Null when `walk` is. */
   walkText: string | null;
-  /** "8 min ride · off at Opp NUSS". Null on foot. */
   rideText: string | null;
-  /** "2 min walk", from `toStop` on to the place. Null when `walkEnd` is. */
   walkEndText: string | null;
-  /** "Arrive ~09:51 · 9 min early" (the slack for a class only). Null when `arrive` is. */
   arriveText: string | null;
-  /** Under the arrival: "2 min walk from UTown", or "at UTown". */
   arriveWhere: string;
-  /** The other way: "Or go now: R2 at 09:06 from PGP" for a class, "Or A1 at
-   *  09:09 from PGP" for a trip; on foot, why not a bus. Null with neither. */
   backupText: string | null;
-  /** The trip in one line, most needed first, for a compact widget:
-   *  "arrive ~09:51 · R2 ~09:42 at PGP" for a class, "Walk to PGP · D2 09:04",
-   *  "D2 09:04 at PGP", or on foot "8 min walk · D1 would be 16 min". */
   summary: string;
 }
 
-/**
- * The next class, for the card under Done for today (or no classes today):
- * when, what and where, each a line ready to show. Only what the timetable
- * says: no bus, since tomorrow's buses aren't known yet.
- */
 export interface Upcoming {
-  /** "Tomorrow · Tue", "Today", "Wednesday", "Mon 28 Sep". */
   when: string;
-  /** "CS2030 at 10:00". */
   title: string;
-  /** "At COM1 · get off at COM 3", or "At COM 3" when the room is at the stop. */
   where: string;
-  /** Why today has none, when it's a break: "Recess week", a holiday. */
   off: string | null;
 }
 
 export interface Card {
   kind: CardKind;
-  /** The headline: "D2 · 09:42" (with "~" for a timetable time) when there's
-   *  a bus to count down to, otherwise `label` as it is. */
   title: string;
-  /** The small line above the card: "Next class · CS2030", "Long gap · Home",
-   *  "Heading home", "Going to KR MRT". Null with nowhere to go. */
   heading: string | null;
-  /** When to post the leave reminder: `leave.at` less DUE_MS (five minutes),
-   *  ISO. Null when there's none to post: reminders off for the trip, not a
-   *  class, no leave-by, the trip under way, or the class started. */
   remindAt: string | null;
-  /** Dim the answer from this instant: the bus has gone, the plan has moved
-   *  on, or it is 15 minutes old. Null: never on its own (setup). */
   staleAt: string | null;
-  /** "Crowding: low" / "Crowding: medium" / "Crowding: high", for the bus in the headline. */
   crowd: string | null;
-  /** "Estimated time", "Live times are a few minutes old", "No live data". */
   quality: string | null;
-  /** "Leave by ~6:36 PM". Clients say "Leave now" once `leave.at` passes,
-   *  except at the stop (phase `waiting`), where it's the bus: "D2 at 6:41 PM". */
   leaveBy: string | null;
-  /** "catch the 6:38 PM D2 at PGP", after the leave-by on non-class trips. */
   leaveVia: string | null;
-  /** Class only: "Catch the 6:38 PM D2 at PGP", or "Walk there". */
   catch: string | null;
-  /** Class only: "Arrive 6:53 PM · 5 min early". */
   arrive: string | null;
-  /** Class only: both on one line, for the widget and notifications. */
   catchLine: string | null;
-  /** Class only: the arrival misses the start. */
   late: boolean;
-  /** Class only: "Or go now: R2 at 6:31 PM · arrive 6:46 PM". */
   goNow: string | null;
-  /** Class only: why the leave-by is earlier than it could be. */
   note: string | null;
-  /** Class only, when the leave-by rests on a headway guess. */
   estimate: string | null;
-  /** The journey's bus times are live (`journey.live`) and every bus in it
-   *  is a shuttle, so a report that one never came or was off is about NUS's
-   *  feed: the report sheet says so. Absent for a public bus (LTA), an
-   *  estimate, a kept plan or old reading, no live times or a walk. */
   fromNus?: true;
-  /** The "Is this wrong?" reasons that fit this card, in the order the sheet
-   *  offers them (reasonsOf). */
   reasons: ReportReason[];
 
-  /* By where the trip is: every surface picks what fits. */
-  /** Where the trip is. 'idle' when there is no trip in progress. */
   phase: Phase;
-  /** A few words on the phase, above the answer: "On your way". Null when idle. */
   phaseText: string | null;
-  /** 12 characters at most: a watch face, the menu bar, a tile. "D2 9:41". */
   glance: string;
-  /** One line: a collapsed notification, a compact widget. */
   line: string;
-  /** Buttons to show, in order. */
   actions: CardAction[];
-  /** "Last D2 from UTown in 18 min". */
   warning: string | null;
-  /** When this card should be expected to change by itself; refetch then. */
   nextChangeAt: string | null;
-  /** False when the user asked for no reminders for this trip: no leave
-   *  notification. The card itself is unchanged. */
   remind: boolean;
-  /** "Leave one bus earlier for CS2030?", with its two buttons: send the id
-   *  to /api/me/choice. Never during a trip. */
   suggestion: Suggestion | null;
-  /** On the bus: the stops from boarding to getting off and the board and
-   *  arrival times (the arrival live when the bus's plate is known), for a
-   *  progress bar. Null otherwise. */
   ride: Ride | null;
-  /** The planned bus has left and nothing says whether you're on it (no
-   *  location saw you, on it or at the stop): `line` says it has gone and
-   *  the next way there. A notification says that line, quietly, never
-   *  "Leave now": you may be on board. */
   gone: boolean;
-  /** Where to walk to now, for a maps app's walking directions: the stop to
-   *  catch the bus at, or the destination's stop when the answer is to walk.
-   *  Null on the bus, at the stop, once there, and with nothing to catch. */
   walkTo: { name: string; lat: number; lon: number } | null;
-  /** "NUS's live bus times have been down since 9:14 AM": a notice above
-   *  the answer while the monitor has the feed down and this answer is an
-   *  estimate or has no time. Null otherwise. */
   notice: string | null;
-  /** The card's times are 12-hour ("6:36 PM"), not 24-hour ("18:36"): the
-   *  account's choice, else the request's. Clients write their own times
-   *  (a class's start, "Updated") the same way. */
   h12: boolean;
-  /** The trip as steps, when there's a bus to catch and you're not on it
-   *  yet, or a walk the whole way. */
   journey: Journey | null;
-  /** Rest, free and home: the next class, for its own card. Null with none
-   *  coming, and on every other kind. */
   upcoming: Upcoming | null;
-  /** Step to the bus before or after this one: before you set off on a
-   *  trip by bus. Null otherwise. */
   step: CardStep | null;
 }
 
-/** Answers older than this are dimmed even if nothing else says so. */
 export const MAX_AGE_MS = 15 * 60_000;
-/** A bus shown leaving at 09:42 may still be at the stop at 09:42:20. */
 export const DEPARTED_GRACE_MS = 30_000;
 
 const CROWD: Record<Crowd, () => string> = { low: () => m().crowdLowCap, medium: () => m().crowdMediumCap, high: () => m().crowdHighCap };
@@ -344,7 +171,6 @@ function kindOf(a: MeAnswer): CardKind {
 function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   const marks: number[] = [];
   if (a.refreshAt) marks.push(Date.parse(a.refreshAt));
-  // Nothing on a rest or free card depends on live times.
   if (kind !== 'rest' && kind !== 'setup' && kind !== 'free') {
     if (a.departsAt) marks.push(Date.parse(a.departsAt) + DEPARTED_GRACE_MS);
     marks.push(Date.parse(a.asOf) + MAX_AGE_MS);
@@ -352,7 +178,6 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   return marks.length ? Math.min(...marks) : null;
 }
 
-// The fields that follow where the trip is, and the card without them.
 type PhaseKeys =
   | 'phase'
   | 'phaseText'
@@ -368,10 +193,6 @@ type PhaseKeys =
   | 'walkTo';
 type BaseCard = Omit<Card, PhaseKeys | 'notice' | 'h12' | 'journey' | 'reasons' | 'upcoming' | 'step' | 'title' | 'heading' | 'remindAt'>;
 
-/**
- * `feedDownSince`: when the monitor confirmed NUS's feed down, or null while
- * it's up. `nowMs`: the request's now; a stale answer's `asOf` is older.
- */
 export function cardFor(
   a: MeAnswer,
   h12 = false,
@@ -380,13 +201,9 @@ export function cardFor(
   nowMs = Date.parse(a.asOf),
 ): Card {
   const card = baseCard(a, h12);
-  // At the stop, there's nowhere to leave: the headline is the bus to wait for
-  // ("D2 at 9:41"). Apps show it as it is, without turning it into "Leave now".
   const l = a.leave ?? null;
   if (trip.key && trip.phase === 'waiting' && l?.svc && l.board)
     card.leaveBy = m().busAt(l.svc, approx(l.estimated, clockAt(Date.parse(l.board), h12)));
-  // Only on an answer that wanted a live time and has none: the feed may be
-  // back before the monitor's next check, and a day with no bus needs none.
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
   const journey = journeyOf(a, card, h12, trip.phase, nowMs);
   return {
@@ -405,22 +222,9 @@ export function cardFor(
   };
 }
 
-/**
- * What can be wrong with an answer, as the report sheet's chips offer them
- * and /api/me/feedback takes them (REASONS in ops/feedback.ts, the same keys
- * in the same order).
- */
 export const REPORT_REASONS = ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
-/**
- * The reasons that fit a card, so the sheet never offers one about something
- * the card doesn't have. "Never came" needs a bus to catch (Nearby's, or the
- * trip's); "wrong stop" also fits the bus you're on, which has a stop to get
- * off at; "times were off" and "the walk is longer" fit any trip, since one on
- * foot weighs the walk against a bus's time ("D1 would be 13 min"). "Wrong
- * class" always fits: a day said to be done can be the mistake.
- */
 export function reasonsOf(a: MeAnswer, kind: CardKind, journey: Journey | null, phase: Phase): ReportReason[] {
   const toCatch = kind === 'nearby' || Boolean(a.leave?.svc) || Boolean(journey?.bus);
   const bus = toCatch || phase === 'riding';
@@ -435,43 +239,25 @@ export function reasonsOf(a: MeAnswer, kind: CardKind, journey: Journey | null, 
   return REPORT_REASONS.filter((r) => fits[r]);
 }
 
-/**
- * The headline: a departure as a clock time ("D2 · 09:42"), which stays true
- * until the bus leaves where "4 min" is wrong a minute later. With no time to
- * give (on foot, nothing running, no live data), the label as it is.
- */
 export function titleOf(a: MeAnswer, h12: boolean): string {
-  // A kept plan is the bus the journey, the button and Today say: the
-  // headline says it too, not this answer's own. Its time is an older reading.
   const l = a.leave;
   if (l?.stale && l.svc && l.board) return `${named({ svc: l.svc, paid: l.paid })} · ${m().approx(clockAt(Date.parse(l.board), h12))}`;
   if (!timedAt(a)) return a.label;
   return `${a.label.split(' · ')[0]} · ${approx(roughly(a), clockAt(Date.parse(a.departsAt!), h12))}`;
 }
 
-/**
- * The card's steps: on a trip by bus (a class's, home, a favourite) until
- * you set off. Past the leave-by with nothing said, you may not have: a
- * later bus is still yours to take. Not once you've said you left, at the
- * stop, on the bus or once it has gone: the trip follows its plan from there.
- */
 function stepOf(a: MeAnswer, kind: CardKind, trip: TripView): CardStep | null {
   const s = a.steps;
-  // A bus to step from: the leave-by's, or with none (it goes within a minute) the headline's.
   if (!s || !(a.leave ? a.leave.svc : a.bus) || (kind !== 'class' && kind !== 'trip')) return null;
   if (trip.phase !== 'idle' && trip.phase !== 'due' && trip.phase !== 'heading') return null;
   if (trip.gone || trip.rec) return null;
-  // Past the leave-by only a later bus is worth offering, or the best bus
-  // back from one you chose: neither, no row.
   if (trip.phase === 'heading' && !s.later && !s.moved) return null;
   const earlier = trip.phase === 'heading' ? null : s.earlier;
   return { ...s, earlier, earlierLabel: m().earlierBus, laterLabel: m().laterBus, bestLabel: m().bestBus };
 }
 
-/** The answer has a departure to give as a clock time: not a sort key ('unknown'), and not nothing running. */
 const timedAt = (a: MeAnswer): boolean => Boolean(a.departsAt) && a.quality !== 'unknown' && a.quality !== 'ended';
 
-/** The small line above the card (see Card.heading). */
 export function headingOf(a: MeAnswer): string | null {
   const d = a.dest;
   if (!d) return null;
@@ -481,34 +267,24 @@ export function headingOf(a: MeAnswer): string | null {
   return m().headPlace(d.label);
 }
 
-/**
- * When the leave reminder goes (see Card.remindAt): the same five minutes
- * the trip turns `due` (DUE_MS), so the reminder and the card agree. Only for
- * a class: a favourite you tap is already on your mind.
- */
 export function remindAtOf(a: MeAnswer, kind: CardKind, trip: TripView, nowMs = Date.parse(a.asOf)): string | null {
   const l = a.leave ?? null;
   if (!l || trip.remind === false || a.dest?.why !== 'class' || kind === 'arrived') return null;
-  // Under way (left, at the stop, on the bus, missed it) or there: the reminder is over.
   if (trip.phase !== 'idle' && trip.phase !== 'due') return null;
   if (a.timing && Date.parse(a.timing.classAt) <= nowMs) return null;
   return iso(Date.parse(l.at) - DUE_MS);
 }
 
-/** The journey (see Journey): null on the bus, once there, and with no time to give. */
 export function journeyOf(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, nowMs = Date.parse(a.asOf)): Journey | null {
   if ((card.kind !== 'class' && card.kind !== 'trip') || !a.dest) return null;
   if (phase === 'riding' || phase === 'arrived') return null;
   const l = a.leave ?? null;
-  // The leave-by's bus, which a kept plan fixes for the trip (see next.ts);
-  // with no leave-by (a bus about to go), a trip's headline bus.
   const planned: BusLeg | null =
     l?.svc && l.stop && l.board
       ? {
           svc: l.svc,
           stop: l.stop,
           stopCode: l.stopCode ?? '',
-          // A plan kept from before the leave-by carried these: worked out from its own times.
           walkS: l.walkS ?? Math.max(0, (Date.parse(l.board) - Date.parse(l.at)) / 1000 - WALK.boardBufferS),
           rideS: l.rideS ?? (l.arrive ? Math.max(0, (Date.parse(l.arrive) - Date.parse(l.board)) / 1000) : 0),
           board: l.board,
@@ -521,7 +297,6 @@ export function journeyOf(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phas
           ...(l.change ? { change: l.change } : {}),
         }
       : null;
-  // On foot the whole way, unless a kept plan still has a bus to catch.
   if (!planned && a.foot) return footJourney(a, a.dest, a.foot, card, h12, phase, nowMs);
   const leg = planned ?? (card.kind === 'class' ? null : (a.bus ?? null));
   if (!leg?.board) return null;
@@ -530,15 +305,11 @@ export function journeyOf(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phas
     b.board
       ? { svc: b.svc, color: routeColor(b.svc), stop: b.stop, board: at(b.board, b.estimated), ...(b.paid ? { paid: true as const } : {}) }
       : null;
-  // A class's backup is the headline bus when it isn't the one to wait for;
-  // a trip's, the headline bus when a plan holds another, else the other bus.
   const headlineDiffers = Boolean(
     planned && a.bus && !(a.bus.svc === planned.svc && a.bus.stop === planned.stop && a.bus.board === planned.board),
   );
   const other = card.kind === 'class' ? (card.goNow ? a.bus : null) : headlineDiffers ? a.bus : a.altBus;
   const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
-  // The walk on from the stop this bus gets you off at. A class's leave-by
-  // already counts it in its arrival (it aims at the room); a bus's arrival is at the stop.
   const endS = leg.endWalkS ?? a.endWalk?.s ?? 0;
   const stopMs = leg.arrive ? Date.parse(leg.arrive) - (leg === planned && a.endWalk?.inLeave ? endS * 1000 : 0) : null;
   const thereMs = stopMs != null ? stopMs + endS * 1000 : null;
@@ -560,20 +331,17 @@ export function journeyOf(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phas
     : null;
   return worded(a, card, h12, phase, {
     leave: l && Date.parse(l.at) > nowMs ? at(l.at, l.estimated) : null,
-    // At the stop, or close enough that the walk is nothing.
     walk: phase === 'waiting' || leg.walkS < 45 ? null : mins(leg.walkS),
     bus: busOf(leg)!,
     boardAt: leg.board,
     ride: mins(leg.rideS),
     off: leg.off ?? null,
     to: a.dest.label,
-    // Where this bus stops, which for a place with several stops may not be its first.
     toStop: leg.off ?? leg.toStop ?? stopName(targetStops(a.dest.to).to) ?? a.dest.label,
     arrive,
     walkEnd,
     arriveStop: walkEnd && stopMs != null ? approx(leg.estimated, clockAt(stopMs, h12)) : arrive,
     slack: card.kind === 'class' && classAt != null && thereMs != null ? slackText((classAt - thereMs) / 1000) : null,
-    // Not a kept plan's or a stale feed's time: exact, but an older reading.
     live: a.quality === 'live' && !leg.estimated && !(leg === planned && l?.stale) && !ch?.estimated,
     backup: other ? busOf(other) : null,
     why: null,
@@ -581,13 +349,10 @@ export function journeyOf(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phas
   });
 }
 
-/** A change of bus before it's worded (see worded). */
 type ChangeSteps = Omit<JourneyChange, 'firstRideText' | 'changeText' | 'rideText'>;
 
-/** The wait at a change, in words; none worth saying under a minute. */
 const waitOf = (s: number): string | null => (s >= 60 ? mins(s) : null);
 
-/** The journey's own facts, before they're worded. */
 type Steps = Omit<
   Journey,
   | 'title'
@@ -603,16 +368,10 @@ type Steps = Omit<
   | 'change'
 > & { change: ChangeSteps | null };
 
-/** Where to get off the class card's sooner bus: not with a change of bus, where `off` is the second bus's. */
 const goNowOff = (a: MeAnswer): string | null => (a.bus?.change ? null : (a.bus?.off ?? null));
 
-/** The service in running text: "95 ($)" for a public bus, so the fare shows where no badge does. */
 const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
 
-/**
- * The lines the card styles put round the journey (see Journey), from its
- * own facts, for the web's three styles, the app's card and the widgets.
- */
 function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Steps): Journey {
   const isClass = card.kind === 'class';
   const starts = isClass && a.timing ? (a.dest?.place ? m().thereBy : m().startsShort)(clockAt(Date.parse(a.timing.classAt), h12)) : null;
@@ -621,8 +380,7 @@ function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Step
     ? j.why
     : j.backup
       ? isClass
-        ? // A class's sooner bus is the headline one: where to get off when it isn't the class's own stop.
-          m().orGoNowFrom(busName(j.backup), j.backup.board, j.backup.stop, goNowOff(a))
+        ? m().orGoNowFrom(busName(j.backup), j.backup.board, j.backup.stop, goNowOff(a))
         : m().orBusFrom(busName(j.backup), j.backup.board, j.backup.stop)
       : null;
   const c = j.change;
@@ -637,7 +395,6 @@ function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Step
     : null;
   return {
     ...j,
-    // A client that draws one bus reads the change from these.
     ...(c ? { ride: m().rideThen(c.firstRide, busName(c.bus)) } : {}),
     change,
     title: [m().journeyTo(j.to), starts].filter(Boolean).join(' · '),
@@ -659,27 +416,16 @@ function worded(a: MeAnswer, card: BaseCard, h12: boolean, phase: Phase, j: Step
   };
 }
 
-/**
- * The trip in one line, most needed first, as a narrow widget cuts the end:
- * for a class, when you get there and then the bus; otherwise the walk to the
- * stop and the bus, or just the bus when you're at the stop.
- */
 function summaryOf(j: Steps, isClass: boolean): string {
   const b = j.bus;
   if (!b)
     return [isClass && j.arrive ? m().arriveAt(j.arrive) : null, j.walk ? m().walkToStop(j.walk) : null, j.why].filter(Boolean).join(' · ');
-  // A change of bus last: the first bus is what to do now.
   const change = j.change ? ` · ${m().changeTo(j.change.from, busName(j.change.bus))}` : '';
   if (isClass && j.arrive) return `${m().arriveAt(j.arrive)} · ${m().svcAtStop(busName(b), b.board, b.stop)}${change}`;
   if (j.walk) return `${m().walkToPlace(b.stop)} · ${m().busTime(busName(b), b.board)}${change}`;
   return `${m().svcAtStop(busName(b), b.board, b.stop)}${change}`;
 }
 
-/**
- * The walk the whole way, as a journey with no bus. A class leaves at its
- * leave-by and gets to the room as the leave-by says; anything else is now,
- * for the walk the answer says.
- */
 function footJourney(
   a: MeAnswer,
   dest: Dest,
@@ -714,16 +460,10 @@ function footJourney(
   });
 }
 
-/**
- * The board row the headline bus is: of its service's rows, the one whose
- * time is the departure (`departsAt`), not the first listed, which may be a
- * bus the walk can't catch. The first of them with no departure to go by.
- */
 function headlineRow(a: MeAnswer, svc: string): Arrival | undefined {
   const rows = a.arrivals.filter((x) => x.svc === svc);
   const departs = a.departsAt ? Date.parse(a.departsAt) : NaN;
   if (Number.isNaN(departs)) return rows[0];
-  // etaS counts from the feed's fetch, which asOf is or follows within a cache window.
   const asOf = Date.parse(a.asOf);
   const off = (x: Arrival) => (x.etaS === null ? Infinity : Math.abs(asOf + x.etaS * 1000 - departs));
   return rows.reduce<Arrival | undefined>((best, x) => (best === undefined || off(x) < off(best) ? x : best), undefined);
@@ -736,7 +476,6 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   const svc = a.label.split(' · ')[0];
   const crowd = headlineRow(a, svc)?.crowd ?? null;
   const l = a.leave ?? null;
-  // "~9:41" when the leave-by is an estimate.
   const est = (iso: string) => approx(l?.estimated, at(iso));
 
   const card: BaseCard = {
@@ -745,7 +484,6 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
     crowd: crowd ? CROWD[crowd]() : null,
     quality: QUALITY[a.quality]?.() ?? null,
     leaveBy: l ? m().leaveBy(est(l.at)) : null,
-    // "95 ($)": the fare shows in the words, for the clients that show only them (the Mac, notifications).
     leaveVia:
       l?.svc && l.stop
         ? m().leaveVia(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop, l.off ?? null) + andChange(l)
@@ -761,7 +499,6 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   if (kind !== 'class' || !l || !a.timing) return card;
 
   const classAt = Date.parse(a.timing.classAt);
-  // The bus stops across the road from the class's stop: say where to get off.
   card.catch = l.svc
     ? m().catchBus(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop ?? '', l.off ?? null) + andChange(l)
     : m().walkThere;
@@ -774,9 +511,6 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   } else {
     card.catchLine = card.catch;
   }
-  // The headline bus, when it isn't the one to wait for and gets you there
-  // sooner (by its arrival, else by when it goes): a later one is no "go
-  // now". A guessed time gets there at a guessed time too.
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   const sooner =
@@ -797,7 +531,6 @@ function baseCard(a: MeAnswer, h12: boolean): BaseCard {
   return card;
 }
 
-/** ", change at Kent Vale to P", after the bus to catch, on a trip that changes buses. */
 const andChange = (l: Leave): string => (l.change ? m().andChange(l.change.from, l.change.svc) : '');
 
 const PHASE_TEXT: Record<Phase, (() => string) | null> = {
@@ -810,13 +543,10 @@ const PHASE_TEXT: Record<Phase, (() => string) | null> = {
   arrived: null,
 };
 
-/** "~9:41" for an estimate, "9:41" otherwise. */
 const approx = (estimated: boolean | undefined, clock: string) => (estimated ? m().approx(clock) : clock);
 
-/** The answer's times are no more exact than a guess: a timetable's, or an old reading aged to now (as etaPhrase says). */
 const roughly = (a: MeAnswer): boolean => a.quality === 'scheduled' || a.quality === 'stale';
 
-/** The time in a message made by `make(time)`, or null when `text` isn't one: "Day starts 09:00" -> "09:00". */
 function slotOf(text: string, make: (t: string) => string): string | null {
   const [pre, post] = make('\u0000').split('\u0000');
   return text.length > pre.length + post.length && text.startsWith(pre) && text.endsWith(post)
@@ -824,25 +554,21 @@ function slotOf(text: string, make: (t: string) => string): string | null {
     : null;
 }
 
-/** A stop's short name, from its code. */
 const stopName = (code: string | null | undefined) => {
   const s = code ? indexGraph(GRAPH).byCode.get(code) : undefined;
   return s ? shortStop(s.name) : null;
 };
 
-/** The stop to walk to (see Card.walkTo). */
 function walkToOf(a: MeAnswer, kind: CardKind, phase: Phase): Card['walkTo'] {
   if (kind === 'rest' || kind === 'free' || kind === 'setup' || kind === 'arrived' || kind === 'nearby') return null;
   if (phase === 'riding' || phase === 'waiting' || phase === 'arrived') return null;
   const l = a.leave ?? null;
-  // The bus's stop; on foot, the destination's (a food court's nearest stop).
   const code = l?.svc ? (l.stopCode ?? a.stop.code) : l ? (a.dest?.to ? targetStops(a.dest.to).to : null) : null;
   const s = code ? indexGraph(GRAPH).byCode.get(code) : undefined;
   if (!s) return null;
   return { name: l?.svc && l.stop ? l.stop : shortStop(s.name), lat: s.lat, lon: s.lon };
 }
 
-/** The ride on the bus you're on, and on the first of two, the bus to change to (Ride.change). */
 function rideWithChange(b: Plan, h12: boolean): Ride | null {
   const r = rideOf(b);
   const c = b.change;
@@ -860,10 +586,8 @@ function rideWithChange(b: Plan, h12: boolean): Ride | null {
   };
 }
 
-/** "9:38" or "9:38p": clocks short enough for a glance. */
 function shortClock(ms: number, h12: boolean): string {
   const c = clockAt(ms, h12);
-  // clockAt puts a no-break space before AM/PM, so a line never ends between them.
   return h12 ? c.replace(/[ \u00a0]([AaPp])[Mm]$/, (_m, x: string) => x.toLowerCase()) : c;
 }
 
@@ -874,17 +598,10 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
   const est = (iso: string) => approx(l?.estimated, at(iso));
   const svc = l?.svc ?? null;
   const phase = trip.phase;
-  // "D2 9:41", or the walk when there's no bus.
   const busGlance = (leave: Leave) => (svc ? `${svc} ${leave.board ? short(leave.board) : m().now}` : m().walkNow);
 
-  // One line and a glance per phase; outside a trip, the answer's own words.
-  // When the plan's bus left, while nothing says whether you're on it (see Card.gone).
   const goneAt = trip.gone && phase === 'heading' && trip.key && l ? (trip.plan?.board ?? null) : null;
   let line = a.detail ? `${a.label} · ${a.detail.split(' · ')[0]}` : a.label;
-  // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
-  // sit unrefreshed for minutes, and a clock time stays true until the bus
-  // leaves. The label as it is when there's no time to give.
-  // With no bus at all, the walk: "No bus · walk 27 min" cut to fit read "No bus walk ".
   let glance = timedAt(a)
     ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}`
     : (a.quality === 'ended' && a.foot ? m().walkLabel(mins(a.foot.s)) : a.label).replace(' · ', ' ');
@@ -911,8 +628,6 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
       line = m().missedLine(missed, next, a.timing?.status === 'late' ? a.timing.text : null);
       glance = busGlance(l);
     }
-    // The plan's bus gone and nothing saying whether you're on it: the next
-    // way there, worded so it's true either way.
     if (goneAt) {
       const next = svc ? `${svc}${l.board ? ` ${est(l.board)}` : ''}` : m().walk;
       line = m().missedLine(m().busLeft(at(goneAt)), next, a.timing?.status === 'late' ? a.timing.text : null);
@@ -927,16 +642,11 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
   }
   glance = glance.slice(0, 12);
 
-  // Buttons: only for a planned trip, and only those that change what's shown.
   const actions: CardAction[] = [];
   const key = trip.key;
   if (key) {
-    // Nothing asks what happened (on the bus, missed it, there): the trip
-    // follows the plan and, when the phone says, where you are. Only plans.
-    // Not at a change of buses either: you're on your way.
     if (a.dest?.why === 'class' && phase !== 'arrived' && phase !== 'riding' && trip.rec?.kind !== 'boarded')
       actions.push({ id: 'skipped', label: m().notGoing, trip: key });
-    // Before the trip starts: the whole day off campus, every trip at once.
     if (a.dest?.why === 'class' && phase === 'idle') actions.push({ id: 'away', label: m().notOnCampus, trip: key });
   }
   if (trip.away) actions.push({ id: 'back', label: m().backOnCampus, trip: 'day' });
@@ -948,9 +658,6 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
     });
   }
 
-  // The next moment this card changes by itself: the trip's next phase, or
-  // the answer going stale, whichever is sooner. A leave-by's no sooner than
-  // LEAVE_GAP_MS, unless a change that doesn't slide comes first.
   const c = trip.changesAt;
   const phaseAt = c ? (c.leave ? Math.min(Math.max(c.at, nowMs + LEAVE_GAP_MS), c.firm ?? Infinity) : c.at) : null;
   const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null]
@@ -959,8 +666,6 @@ function phaseFields(a: MeAnswer, card: BaseCard, h12: boolean, trip: TripView, 
 
   return {
     phase,
-    // Gone: the headline is the next bus, which is only for you if you missed it.
-    // At the stop of a change of buses: what you're there for.
     phaseText: goneAt
       ? m().phaseGone
       : phase === 'waiting' && trip.rec?.boarded?.change

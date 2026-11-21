@@ -62,15 +62,8 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.widget.clock
 
-/**
- * A trip by bus, or on foot the whole way, drawn in the style chosen in Settings › Appearance ([CardStyle]). Both lead with when to leave
- * and end with when you get there; the words and times are the server's (`card.journey`), and only the countdowns tick here. [lead] (where
- * the trip is, a notice) goes first. On Now the top of it is up in the sky ([SkyHead]), and the horizon under it has your bus on its way to
- * your stop; the rest is on the ground.
- */
 @Composable
 internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, lead: @Composable ColumnScope.() -> Unit = {}) {
-    // Every second near the end, so "Leave in 45 s" is never a stale 45.
     val now by
         produceState(ServerClock.now(), answer.leaveAtMs, journey.boardAtMs) {
             while (true) {
@@ -88,32 +81,26 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, le
         SkyGround(road)
         RoadLine(journey, now)
     }
-    // At a large text size the route's points are too narrow for their names
-    // and times: the trip as steps then, one point to a line, with room to wrap.
     val big = LocalDensity.current.fontScale > LARGE_TEXT
     if (big || style == CardStyle.STEPS) Steps(answer, journey, now, top) else Route(answer, journey, now, top)
-    // A busy bus and an estimate are small print, not more headlines.
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     listOfNotNull(answer.leaveNote, answer.card?.estimate)
         .takeIf { it.isNotEmpty() }
         ?.let {
             Text(it.joinToString(" "), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 8.dp))
         }
-    // On foot, the bus's data quality isn't about the walk: `why` says what matters.
     if (journey.bus != null && !journey.live)
         answer.qualityText?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
         }
 }
 
-/** Route: you, the stop and where you're going on a line, the times under each. */
 @Composable
 private fun Route(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     top {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         LeaveHead(answer, journey, now)
-        // With a change of bus the line has no room for the walk to the stop: said here.
         val under =
             listOfNotNull(
                     JourneyText.by(answer, journey, now),
@@ -127,11 +114,6 @@ private fun Route(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     Tags(answer, journey)
 }
 
-/**
- * The line itself: a dashed walk, the bus's stretch in its colour, how long each takes under it. On foot, you and the place, the walk
- * between. With a change of bus the line starts at the stop, as on the web: a phone has room for the points of both rides, and the walk to
- * the stop is said above it.
- */
 @Composable
 internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
     val fg = MaterialTheme.colorScheme.onSurface
@@ -180,7 +162,6 @@ internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
             }
         Point(bus.stop, bus.board, fg, narrow = narrow)
         ride(bus, change?.firstRide ?: journey.ride.orEmpty())
-        // Where the first bus drops you, across the road to the second's stop when it isn't the same one, and the second ride.
         if (change != null) {
             Point(change.from, if (change.walk != null) change.reach else change.bus.board, fg, narrow = true)
             change.walk?.let { walk ->
@@ -190,7 +171,6 @@ internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
             ride(change.bus, change.ride)
         }
         Point(journey.toStop, (if (journey.walkEnd != null) journey.arriveStop else journey.arrive) ?: "", fg, narrow = narrow)
-        // On from the stop to the room or building: a fourth point, so the points take only the room their words need.
         journey.walkEnd?.let { walk ->
             Stretch(Modifier.weight(1f), {}, walk, dashed)
             Point(journey.place, journey.arrive ?: "", fg, narrow = true)
@@ -198,7 +178,6 @@ internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
     }
 }
 
-/** A point on the line: a dot, its name and its time. */
 @Composable
 private fun Point(name: String, time: String, dot: Color, narrow: Boolean = false) {
     Column(
@@ -207,7 +186,6 @@ private fun Point(name: String, time: String, dot: Color, narrow: Boolean = fals
     ) {
         Spacer(Modifier.height(CAPTION))
         Box(Modifier.size(DOT), contentAlignment = Alignment.Center) { Box(Modifier.size(14.dp).background(dot, CircleShape)) }
-        // A long name takes two lines; the time is never cut.
         Text(
             name,
             style = MaterialTheme.typography.labelLarge,
@@ -226,7 +204,6 @@ private fun Point(name: String, time: String, dot: Color, narrow: Boolean = fals
     }
 }
 
-/** Between two points: the bus above the line (nothing for a walk), the line level with the dots, how long under it. */
 @Composable
 private fun Stretch(
     modifier: Modifier,
@@ -237,7 +214,6 @@ private fun Stretch(
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.height(CAPTION), contentAlignment = Alignment.Center) { above() }
         Canvas(Modifier.fillMaxWidth().height(DOT)) { line() }
-        // Wider than a short stretch ("5 min" between two 12-hour times): drawn past its ends, over the gap beside the names, not cut.
         Text(
             takes,
             style = MaterialTheme.typography.labelMedium,
@@ -250,16 +226,11 @@ private fun Stretch(
     }
 }
 
-/** Text scaled past this (Settings › Display), the route card is drawn as steps. */
 private const val LARGE_TEXT = 1.3f
 
 private val CAPTION = 22.dp
 private val DOT = 18.dp
 
-/**
- * Steps: the trip as a line diagram, as on a bus's route map. Each point has its time on the left and a dot on the line; between them the
- * walk is dotted and the ride is drawn in the bus's colour; the last point, where you're going, is ringed in the accent.
- */
 @Composable
 private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     val late = answer.leaveLate
@@ -287,7 +258,6 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
                 Text(stringResource(R.string.journey_leave), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
         }
-        // On foot the whole way, the walk runs straight from leaving to the place.
         if (bus != null)
             LinePoint(
                 bus.board,
@@ -335,7 +305,6 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
                 Text(journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
         }
-        // The slack ("9 min early") is said once, under the headline, as on the web.
         LinePoint(journey.arrive ?: "", Dot.END, null, null) {
             Text(
                 if (bus == null || journey.walkEnd != null) journey.place else journey.toStop,
@@ -344,7 +313,6 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
             )
         }
     }
-    // Information, not a control: a line with the bus's icon, as on the Mac, never in a box that looks tappable.
     JourneyText.backup(answer, journey)?.let {
         Row(Modifier.padding(top = 14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = muted, modifier = Modifier.size(18.dp))
@@ -360,22 +328,16 @@ private enum class Dot {
     END,
 }
 
-/** The stretch after a point: a walk (dotted) or a ride (the bus's colour). */
 private sealed interface Line {
     data object Walk : Line
 
     data class Ride(val color: Color) : Line
 }
 
-/**
- * A point on the line: its time, its dot, what's there, and under it how long the stretch to the next point takes, which the line runs
- * beside.
- */
 @Composable
 private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, title: @Composable () -> Unit) {
     val c = MaterialTheme.colorScheme
     Row(Modifier.height(IntrinsicSize.Min)) {
-        // Wider with larger text, the same for every point so the line stays straight.
         val wide = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
         Text(
             time,
@@ -427,7 +389,6 @@ private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, title
                     it,
                     style = MaterialTheme.typography.bodySmall,
                     color = c.onSurfaceVariant,
-                    // A ride's stretch is longer: the line is the trip's backbone.
                     modifier =
                         Modifier.padding(top = if (line is Line.Ride) 14.dp else 6.dp, bottom = if (line is Line.Ride) 14.dp else 0.dp),
                 )
@@ -436,24 +397,15 @@ private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, title
     }
 }
 
-/** The top of the card, up in Now's sky with the horizon under it. */
 private typealias Top = @Composable (@Composable ColumnScope.() -> Unit) -> Unit
 
-/** Seconds until your bus reaches your stop, or 0 with no time. */
 private fun dueIn(journey: Journey, now: Long): Int = journey.boardAtMs?.let { ((it - now) / 1000).toInt() } ?: 0
 
-/**
- * Your bus on the horizon's road: coming up to your stop's sign, nearer the sooner it's due. On foot, an empty road. As the web draws it
- * (journey.js onTheRoad).
- */
 internal fun roadFor(journey: Journey, now: Long): Road {
     val bus = journey.bus ?: return Road(shuttle = false)
     return Road(true, RoadBus(bus.color, dueIn(journey, now).coerceAtLeast(0) / 900f, journey.live), shuttle = false)
 }
 
-/**
- * When your bus reaches [stop], [left] seconds away: "arriving at COM3" only for a bus seen; an estimate is "in about 1 min" to the end.
- */
 internal fun roadWords(stop: String, left: Int, live: Boolean): String {
     val n = (left / 60f).roundToInt()
     return when {
@@ -464,17 +416,12 @@ internal fun roadWords(stop: String, left: Int, live: Boolean): String {
     }
 }
 
-/**
- * The horizon's road in words, on the ground just under it at the page's size: your bus and when it reaches your stop ("about" for a
- * estimate), the stop's name in bold. Only on Now, where the horizon is. As the web's (journey.js RoadLine).
- */
 @Composable
 private fun RoadLine(journey: Journey, now: Long) {
     if (LocalSky.current == null) return
     val bus = journey.bus ?: return
     val text = roadWords(bus.stop, dueIn(journey, now), journey.live)
     Row(
-        // Up into the strip under the road, which is just the near hill.
         Modifier.layout { m, c ->
             val p = m.measure(c)
             val up = 12.dp.roundToPx()
@@ -494,17 +441,12 @@ private fun RoadLine(journey: Journey, now: Long) {
     }
 }
 
-/** Clock times in the account's style, for a class's start. */
 @Composable
 private fun clockOf(): (Long) -> String {
     val ctx = LocalContext.current
     return { clock(ctx, it) }
 }
 
-/**
- * "Leave in 6 min" as one line at one size, with only the time in the accent, so it reads first without a giant digit crowding the lines
- * round it. "Leave now" is all accent; too late to be on time, all red.
- */
 @Composable
 private fun LeaveHead(answer: NextAnswer, journey: Journey, now: Long) {
     val text = JourneyText.leaveIn(answer, journey, now)
@@ -531,7 +473,6 @@ private fun LeaveHead(answer: NextAnswer, journey: Journey, now: Long) {
     )
 }
 
-/** Live (or not), the crowd, and the backup bus, as tags under the trip. */
 @Composable
 private fun Tags(answer: NextAnswer, journey: Journey) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -541,7 +482,6 @@ private fun Tags(answer: NextAnswer, journey: Journey) {
         modifier = Modifier.padding(top = 10.dp),
     ) {
         if (journey.live) Pill(stringResource(R.string.journey_live), goodColor())
-        // The crowd is the headline bus's: a class's leave-by bus can be another.
         if (!answer.isClassPlan) answer.card?.crowd?.let { Pill(it, muted) }
     }
     JourneyText.backup(answer, journey)?.let {
@@ -549,15 +489,11 @@ private fun Tags(answer: NextAnswer, journey: Journey) {
     }
 }
 
-/** The badge's text: the service, with a $ after a public bus's number so the fare is never a surprise. */
 internal fun badgeText(svc: String, paid: Boolean): String = if (paid) "$svc \$" else svc
 
-/** A service as it's painted on the bus: its code on its colour, in the ink that reads there ([inkOn]). */
 @Composable
 internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, paid: Boolean = false, even: Boolean = false) {
-    // "Bus D2", so it isn't read as a code on its own.
     val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
-    // `even`: wide enough for two characters, so in a row of them P and R2 are the same size.
     val least = if (even) with(LocalDensity.current) { (size * 2.4f).toDp() } else 0.dp
     Text(
         badgeText(svc, paid),

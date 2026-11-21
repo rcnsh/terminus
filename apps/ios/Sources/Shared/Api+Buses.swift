@@ -1,13 +1,6 @@
 import Foundation
 
-/// The Stops tab's own requests: the pinned stops as Nearby shows them, and
-/// each line's buses out. `/api/campus` comes through CampusStore, read as
-/// BusCampus.
 extension Api {
-    /// `/api/me/stops`: the stops asked for, each exactly as Nearby shows it;
-    /// with a location, the walk to each, else none. The services not running
-    /// now come too, after the others: a stop with none running lists them,
-    /// with when each starts again.
     func pinnedStops(_ codes: [String], lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {
         struct R: Decodable { let stops: [NearbyStop] }
         let q =
@@ -16,8 +9,6 @@ extension Api {
         return try JSONDecoder().decode(R.self, from: await send("GET", "/api/me/stops", query: q)).stops
     }
 
-    /// `/api/lines`: how many of each service's buses are out, by service (a
-    /// service the feed didn't answer for is left out), and when they were counted.
     func lineCounts() async throws -> (counts: [String: LineCount], asOf: Date?) {
         struct R: Decodable {
             let lines: [String: Lossy<LineCount>]
@@ -28,11 +19,9 @@ extension Api {
     }
 }
 
-/// One service's buses out now, worded by the server ("3 out", "None out").
 struct LineCount: Decodable, Equatable, Sendable {
     let out: Int
     let outText: String
-    /// The feed's last answer rather than a new one.
     let stale: Bool
 
     enum CodingKeys: String, CodingKey { case out, outText, stale }
@@ -54,9 +43,6 @@ struct LineCount: Decodable, Equatable, Sendable {
     }
 }
 
-/// `/api/campus` for the Stops tab: its stops in the order the server gives
-/// them (the search's last tie-break is that order, as on Android and the
-/// web), each service's colour, and each stop's nicknames.
 struct BusCampus: Decodable, Sendable {
     struct Stop: Decodable, Hashable, Sendable {
         let code: String
@@ -77,11 +63,8 @@ struct BusCampus: Decodable, Sendable {
             longName = c.string(.longName).flatMap { $0.isEmpty ? nil : $0 }
             services = c.lenientList(String.self, forKey: .services) ?? []
         }
-        /// The full name ("Kent Ridge Bus Terminal"); `name` is the short one.
         var fullName: String { longName ?? name }
     }
-    /// A service's stops in the order it calls (a loop's first stop once), and whether it's a loop;
-    /// its name ("Loop from KR Bus Ter") and the stops it passes ("via AS 5, PGP, KR MRT"), worded by the server.
     struct Route: Decodable, Hashable, Sendable {
         let seq: [String]
         let loop: Bool
@@ -112,13 +95,9 @@ struct BusCampus: Decodable, Sendable {
     }
 
     let stops: [Stop]
-    /// Each service's colour ("#8e44c9"), by its code.
     let colors: [String: String]
-    /// Every shuttle service, in plain code order.
     let services: [String]
-    /// Each service's route, by its code.
     let routes: [String: Route]
-    /// Each stop's nicknames, from /campus's destinations of kind "stop".
     let aliases: [String: [String]]
 
     enum CodingKeys: String, CodingKey { case stops, routes, destinations }

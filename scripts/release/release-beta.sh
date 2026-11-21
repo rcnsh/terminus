@@ -1,44 +1,10 @@
 #!/bin/bash
-# Release a beta: everything at beta.terminus.run, from this commit.
-#
-#   scripts/release/release-beta.sh 2.0.1-beta.1 --dry-run   # tests and builds, nothing uploaded
-#   scripts/release/release-beta.sh 2.0.1-beta.1             # also deploys and uploads
-#
-# In order: the tests; "terminus beta" for Android and the Mac; the beta
-# Worker's D1 migrations and the beta Worker (before any upload, as for
-# stable); then their downloads, appcast and latest.json, in the beta's own R2 bucket.
-#
-# A beta version is the next stable version's pre-release (after 2.0.0:
-# 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count, so
-# it only goes up along main; it must be above the live beta's. Nothing is
-# uploaded until the deploy has finished and the beta Worker answers with an
-# API version (API_VERSION) at least this commit's. A beta doesn't bump
-# API_VERSION, so that check can't tell the new Worker from the one before
-# it: the Worker exposes no commit or build id to wait for. A release's
-# own version (2.0.0) can go out on the beta too, so the beta apps move onto
-# it from their betas. Nothing touches the stable site, its data or its
-# downloads. It runs on this Mac from origin/main once CI has passed on it,
-# and signs with the same keys as stable (the Android release key in
-# ~/.gradle, the terminus certificate in the login keychain and the Sparkle
-# key in ~/.terminus), each checked against what the apps trust.
-#
-# Last, a beta version gets its tag (pushed) and a GitHub pre-release with
-# the APKs, the DMG and the commits since the previous tag. A release's version
-# already has its own, from scripts/release/release.sh.
-#
-# Each run starts from the lockfiles, as scripts/release/release.sh does.
-#
-# A dry run builds into build/dry-run/beta/<version>; a release into
-# build/release/beta/<version>. If a release stops after it starts deploying,
-# it says what's live and the commands that finish it.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
 USAGE="usage: scripts/release/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry-run]"
 VERSION=
 DRY=0
-# --dry-run anywhere; any other option, or a second version, stops here: a
-# mistyped one (--dryrun) would otherwise deploy and publish a real beta.
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY=1 ;;
@@ -48,12 +14,9 @@ for arg in "$@"; do
 done
 [ -n "$VERSION" ] || { echo "$USAGE"; exit 1; }
 . scripts/release/release-lib.sh
-# As in release.sh: the address the apps call, the site's own.
 SITE=https://beta.terminus.run
 BUCKET=terminus-beta
 
-# Not `echo | grep`: grep passes a version with a newline in it if any one
-# line matches, and it names a directory that's deleted, R2 keys and the tag.
 VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$'
 [[ $VERSION =~ $VERSION_RE ]] || die "a beta version looks like 2.0.1-beta.1 (or a release's, 2.0.1)"
 [ "$(uname -s)" = Darwin ] || die "releases run on a Mac: the Mac app is built and signed here"
@@ -62,8 +25,6 @@ BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloud
 [ -n "$BETA_D1" ] || [ $DRY -eq 1 ] || die "the beta's D1 id isn't in apps/api/cloudflare.config.ts yet"
 grep -q "^TERMINUS_KEYSTORE=" "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
 no_api_base
-# The terminus certificate, as for stable: the beta app keeps its own
-# permissions and login item across updates only with the same code identity.
 export SIGN_IDENTITY=B0692598973AE875C270263F0403FE4495EEF562
 has_sign_identity
 export NOTARY_PROFILE=terminus-notary
@@ -75,10 +36,7 @@ case "$VERSION" in *-beta.*) BETA=1 ;; esac
 
 TAG_LOCAL=0 TAG_REMOTE=0 GH_RELEASE=0
 if [ $DRY -eq 0 ]; then
-  # What's released must be what's committed, untracked files included: the
-  # Swift package and Gradle build whatever sources are on disk.
   [ -z "$(git status --porcelain)" ] || die "uncommitted changes; commit them before releasing"
-  # Only what's on GitHub's main, so the tag and the notes match it.
   git fetch -q origin main
   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || die "this commit isn't origin/main; push main first"
   gh auth status >/dev/null 2>&1 || die "gh isn't signed in: gh auth login"
@@ -109,8 +67,6 @@ if [ "$LIVE_VERSION" = "$VERSION" ]; then
 fi
 build_goes_up "commit to main and run again (the build is the commit count)"
 
-# Whether the live beta's API version is at least this commit's
-# (scripts/release/release-check.py).
 live_check() {
   python3 scripts/release/release-check.py "$@" && return 0
   [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
@@ -118,8 +74,6 @@ live_check() {
 }
 
 mkdir -p build
-# A dry run builds apart, so it never wipes the files a stopped release
-# needs to finish (github-release.sh reads build/release/beta/<version>).
 RELEASES="$ROOT/build/release"
 [ $DRY -eq 0 ] || RELEASES="$ROOT/build/dry-run"
 OUT="$RELEASES/beta/$VERSION"
@@ -163,7 +117,6 @@ cp "$APKS/app-beta-x86_64-release.apk" "$OUT/terminus-$VERSION-x86_64.apk"
 apks_signed "$APK" "$OUT/terminus-$VERSION-armv7.apk" "$OUT/terminus-$VERSION-x86_64.apk"
 
 echo "== mac"
-# Set here, whatever the shell has: they make package-mac.sh build the beta.
 CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" RELEASES="$RELEASES" PUBLISH=true scripts/release/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
 sign_update_tool
@@ -190,7 +143,6 @@ print(json.dumps({
 EOF
 cat "$OUT/latest.json"
 
-# The beta's apps expect this commit's API (API_VERSION, apps/api/src/openapi.ts).
 API_VERSION=$(sed -n "s/^export const API_VERSION = '\(.*\)';/\1/p" apps/api/src/openapi.ts)
 [ -n "$API_VERSION" ] || { echo "no API_VERSION in apps/api/src/openapi.ts"; exit 1; }
 
@@ -203,13 +155,7 @@ fi
 
 echo "== beta Worker"
 STAGE=deploy
-# deploy:beta applies the beta D1's pending migrations first.
 (cd apps/api && pnpm run deploy:beta)
-# Before the appcast: nothing went up since the first check, and the beta
-# answers with an API version at least this commit's. That's all it can
-# tell: with the same API_VERSION the Worker from before passes too, so the
-# finished deploy above is what says the new one is up. A new deploy can
-# take a few seconds to answer everywhere.
 echo "== live beta"
 live_release "$SITE"
 build_goes_up "commit to main and run again (the build is the commit count)"

@@ -1,9 +1,4 @@
 <!doctype html>
-<!--
-  The README's "How it fits together": where the Worker's data comes from,
-  what it keeps, and the clients it answers. Light by default, dark with #dark.
-  Re-render after changing it:  sh docs/readme/diagram.sh
--->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -11,7 +6,6 @@
   @font-face { font-family: 'Inter'; font-weight: 400 700; src: url(../../apps/web/public/assets/fonts/inter-latin.woff2) format('woff2'); }
   @font-face { font-family: 'Space Grotesk'; font-weight: 500 700; src: url(../../apps/web/public/assets/fonts/space-grotesk-latin.woff2) format('woff2'); }
 
-  /* The site's own tokens (assets/site.css), light and dark. */
   :root {
     --bg: #fafaf9; --surface: #ffffff; --surface-2: #f5f4f2; --ink: #1c1917; --muted: #6b6560; --faint: #a8a29e;
     --line: #e7e5e2; --wire: #c9c4be; --accent: #c2410c; --accent-soft: #fff1e6; --shadow: rgb(28 25 23 / 0.08);
@@ -71,7 +65,6 @@
 <script>if (location.hash === '#dark') document.documentElement.className = 'dark';</script>
 
 <svg class="wires" width="1280" height="572" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Sources into the spine at x 432, then into the Worker at y 317. -->
   <path class="live" d="M392 129 H420 Q432 129 432 141 V317" />
   <path class="live" d="M392 197 H420 Q432 197 432 209" />
   <path class="live" d="M392 265 H420 Q432 265 432 277" />

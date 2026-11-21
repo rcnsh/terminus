@@ -1,8 +1,3 @@
-/**
- * Measured headways: which one an estimate counts at a time (departures.ts), how
- * scripts/data/measure_headways.mjs measures them from the recorder's
- * passings, and that data/headways.json is a file headwayFor can read.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -16,14 +11,13 @@ import { DEFAULT_HEADWAY_S } from '../src/config.ts';
 import { MIN_GAPS, headwaysOf, periodOf } from '../scripts/data/measure_headways.mjs';
 import headways from '../data/headways.json' with { type: 'json' };
 
-/** An instant from a Singapore wall-clock time, "2026-08-27T09:00". */
 const at = (sgt) => Date.parse(`${sgt}+08:00`);
-const THU_0930 = at('2026-08-27T09:30'); // term, a weekday
+const THU_0930 = at('2026-08-27T09:30');
 const THU_2130 = at('2026-08-27T21:30');
 const SAT = at('2026-08-29T12:00');
 const SUN = at('2026-08-30T12:00');
-const HOLIDAY = at('2026-11-09T12:00'); // Deepavali (observed), a Monday in term
-const VACATION = at('2026-12-21T09:30'); // a Monday
+const HOLIDAY = at('2026-11-09T12:00');
+const VACATION = at('2026-12-21T09:30');
 
 const graph = {
   stops: [],
@@ -35,7 +29,6 @@ const graph = {
   },
 };
 
-/** The headway an estimate counts after a live bus of `svc` at `atMs`, in seconds (departures.ts). */
 const headwayAfter = (g, svc, atMs) => {
   const sa = {
     code: 'X',
@@ -73,30 +66,25 @@ test('the day kinds and periods are the ones the service hours use', () => {
   assert.equal(periodOf(at('2035-01-01T09:00')), null, 'no calendar for it');
 });
 
-/** Buses of `svc` at `stop` every `gapS` from `from`, `n` of them, plates in turn from `plates`. */
 const every = (svc, stop, from, gapS, n, plates = ['A', 'B', 'C']) =>
   Array.from({ length: n }, (_, i) => ({ svc, stop, t: from + i * gapS * 1000, plate: plates[i % plates.length] }));
 
 test('headwaysOf: the median gap between buses, by hour and day, with enough of them', () => {
   const at9 = at('2026-08-27T09:00');
   const passings = [
-    // Two stops, a bus every 6 min from 09:00 for two hours.
     ...every('D2', 'PGP', at9, 360, 21),
     ...every('D2', 'UTOWN', at9 + 60_000, 360, 21),
-    // Two this close are a bunch, not a headway.
     { svc: 'D2', stop: 'PGP', t: at9 + 10_000, plate: 'B' },
-    // Too few on a Saturday for a median.
     ...every('D2', 'PGP', at('2026-08-29T09:00'), 600, 5),
-    // In the vacation: measured on its own, and not part of the usual.
     ...every('D2', 'PGP', at('2026-12-21T09:00'), 900, 30),
   ];
   const { usualS, byTime } = headwaysOf(passings);
-  assert.equal(usualS.D2, 360);
+  assert.equal(usualS.D2, 360, 'two stops, a bus every 6 min; the bunched pair and the vacation are not part of the usual');
   const weekday = byTime.D2.term.weekday;
   assert.equal(weekday.all, 360);
   assert.deepEqual(weekday.hours, { 9: 360, 10: 360 });
   assert.equal(byTime.D2.term.saturday, undefined, `fewer than ${MIN_GAPS} gaps`);
-  assert.equal(byTime.D2.vacation.weekday.all, 900);
+  assert.equal(byTime.D2.vacation.weekday.all, 900, 'the vacation measured on its own');
 });
 
 test('headwaysOf: one bus running alone comes round again a lap later, and that lap is the headway', () => {
@@ -135,7 +123,6 @@ test('data/headways.json is in the graph, for shuttles only, at minutes-scale', 
   assert.deepEqual(GRAPH.headwaysByTime, headways.byTime);
 });
 
-/** D2 every 10 min at 08:00, 5 at 09:00, 7 at 10:00, on a weekday in term. */
 const hourly = {
   stops: [],
   routes: {},
@@ -166,22 +153,20 @@ test('with no live times, the chosen bus stays among the departures though the h
 });
 
 test("a class's leave-by with no live times is a headway early by the hour the bus is caught, not the class's", () => {
-  // A 10:05 class: the bus is caught before 09:52, at 09:00's headway, not 10:00's.
   const now = at('2026-08-27T07:00');
   const arriveBy = { atMs: at('2026-08-27T10:05'), venueWalkS: 0 };
   const b = scheduled(now);
   const sa = { code: 'PGP', arrivals: [], fetchedAt: now, stale: false, available: true };
   const l = leaveBy({ options: [b], candidates: [], byStop: new Map([['PGP', sa]]), graph: hourly, arriveBy, walkAllS: null, nowMs: now });
   const latestBoard = Date.parse(l.arrive) - b.rideS * 1000;
-  assert.equal(latestBoard - Date.parse(l.board), 300_000);
+  assert.equal(latestBoard - Date.parse(l.board), 300_000, "a 10:05 class: caught before 09:52, at 09:00's headway");
 });
 
 test('in a residence that is not yours, standing at its stop is being at the stop, whatever your home stops are', () => {
   const krb = GRAPH.stops.find((s) => s.code === 'KRB');
   assert.ok(residenceAt(krb.lat, krb.lon), 'KRB is inside a residence');
-  // A home stop across the road from another residence's: not this one's.
   const input = { lat: krb.lat, lon: krb.lon, to: 'COM3', preferStops: ['NUSS-OPP'], homeWalkS: 120 };
   const c = candidateStops(GRAPH, input, { any: true }).find((x) => x.stop.code === 'KRB');
-  assert.equal(c.here, true);
+  assert.equal(c.here, true, "a home stop across the road from another residence's is not this one's");
   assert.equal(c.walkS, 0);
 });

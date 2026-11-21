@@ -4,9 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Android's back animation between pages: the held swipe, the release from wherever it was, and no jump between them. */
 class PeelTest {
-    /** A 412 × 915 dp phone at 3 px a dp. */
     private val w = 1236f
     private val h = 2745f
     private val margin = 24f
@@ -30,13 +28,11 @@ class PeelTest {
         assertEquals(0.9f, f.card.scale, 1e-4f)
         val right = w / 2f + f.card.x + w * f.card.scale / 2f
         assertEquals(w - margin, right, 0.5f)
-        // From the right edge it stays centred.
         assertEquals(0f, frame(1f, fromRight = true).card.x, 0f)
     }
 
     @Test
     fun theGestureCurveAnswersQuickly() {
-        // A tenth of the way across already gives well over a tenth of the shrink.
         val shrink = (1f - frame(0.1f).card.scale) / 0.1f
         assertTrue("shrink $shrink", shrink > 0.25f)
     }
@@ -85,7 +81,6 @@ class PeelTest {
 
     @Test
     fun theReleaseIsFastToStart() {
-        // Emphasized: most of the way home by a third of the release, so a flick lands at once.
         val e = Peel.EMPHASIZED
         assertEquals(0f, e.transform(0f), 1e-4f)
         assertEquals(0.4f, e.transform(1f / 6f), 1e-3f)

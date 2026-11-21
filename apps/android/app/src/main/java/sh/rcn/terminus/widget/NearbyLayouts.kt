@@ -62,37 +62,25 @@ import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.ui.Road
 
-/** What a Nearby widget draws from: the board as last fetched, in the order shown, and how old it is. */
 internal class NearbyView(
     val paired: Boolean,
-    /** As shown: the opposite stop first after a swap. Null before any board, or one that can't be read. */
     val stops: List<NearbyStop>?,
-    /** In the API's order, for the swap button. */
     val all: List<NearbyStop>?,
     val swap: NearbySwap.Swap?,
-    /** When the board was fetched, on the phone's clock. */
     val fetchedAt: Long?,
-    /** The last fetch's problem, or [UPDATING]. */
     val error: String?,
-    /** Which page of services the pager is on. */
     val page: Int = 0,
 ) {
     val first: NearbyStop?
         get() = stops?.firstOrNull()
 
-    /**
-     * Past [WidgetModes.NEARBY_OLD_MS]: the times are dimmed and the line above says so. First buses ([StopBus.first]) are a timetable's,
-     * so they don't go old.
-     */
     fun old(now: Long): Boolean = (fetchedAt == null || now - fetchedAt > WidgetModes.NEARBY_OLD_MS) && buses(now).any { !it.first }
 
     fun buses(now: Long): List<StopBus> = first?.let { busesAt(it, now) }.orEmpty()
 
-    /** [stop]'s buses, as [buses] gives the first's. */
     fun busesAt(stop: NearbyStop, now: Long): List<StopBus> = NearbyBoard.buses(stop, fetchedAt ?: 0L, now, ServerClock.skewMs)
 
     companion object {
-        /** [stopsInApiOrder] ordered for [swap], as it's shown. */
         fun of(
             paired: Boolean,
             stopsInApiOrder: List<NearbyStop>?,
@@ -105,10 +93,8 @@ internal class NearbyView(
     }
 }
 
-/** What a Nearby widget's buttons do; null for one it doesn't have. */
 internal class NearbyControls(
     val refresh: Action?,
-    /** The pager's arrows, by which way they go (-1, 1). */
     val page: ((Int) -> Action)?,
     val chips: List<Mode> = emptyList(),
     val showing: Mode = Mode.Nearby,
@@ -117,21 +103,14 @@ internal class NearbyControls(
 
 private val PAD = 14.dp
 
-/** The sky over the buses: the line above (Now, the walk, ↻) and the stop's name; with the chips, their row too. */
 private const val SKY_DP = 72f
 private const val CHIPS_SKY_DP = 94f
 
-/**
- * Nearby, at any size ([NearbyFit]): the nearest stop's services, each with its badge, the time it's due as a clock time, its next stop,
- * the buses after it, Live and how full. The sky carries the stop's name and "Now 9:41", which ticks by itself, so the times needn't be
- * counted down.
- */
 @Composable
 internal fun NearbyLayout(look: WidgetLook, w: Float, h: Float, v: NearbyView, c: NearbyControls) {
     val now = System.currentTimeMillis()
     val chipsOnTop = c.chips.isNotEmpty()
     val newcomer = NewToNus.on(LocalContext.current)
-    // Both sides of the road where there's a stop beside yours and room for them, under a slimmer sky.
     val beside = v.stops?.let { NearbyBoard.beside(it) { st -> v.busesAt(st, now) } }
     val sidesSky = if (chipsOnTop) CHIPS_SKY_DP else NearbyFit.SIDES_SKY_DP
     val sides = beside?.let { NearbyFit.sides(w, h, sidesSky, newcomer) }
@@ -144,7 +123,6 @@ internal fun NearbyLayout(look: WidgetLook, w: Float, h: Float, v: NearbyView, c
     }
 }
 
-/** The words a Nearby widget shows instead of buses; null when there are buses to show. */
 private fun problem(v: NearbyView, buses: List<StopBus>): String? {
     val first = v.first
     return when {
@@ -157,13 +135,8 @@ private fun problem(v: NearbyView, buses: List<StopBus>): String? {
     }
 }
 
-/**
- * The first look under way, with no stops to show yet: bars where the buses will be, rather than the word. A stop already shown with no
- * buses due keeps saying so while it refreshes.
- */
 private fun checking(v: NearbyView): Boolean = v.paired && v.error == UPDATING && v.stops.isNullOrEmpty()
 
-/** Buses on their way, as rows of bars: a badge, its next stop, its time. Still, as a widget can't animate; said as "Checking…". */
 @Composable
 private fun SkeletonRows(rows: Int, inks: Inks) {
     Column(GlanceModifier.fillMaxWidth().semantics { contentDescription = L.s(R.string.checking) }) {
@@ -179,14 +152,12 @@ private fun SkeletonRows(rows: Int, inks: Inks) {
     }
 }
 
-/** The stop's name, or what to call the widget before there is one. */
 private fun title(v: NearbyView): String =
     when {
         !v.paired -> "terminus"
         else -> v.first?.let { it.longName ?: it.name } ?: L.s(R.string.chip_nearby)
     }
 
-/** 2×1: the next bus at the nearest stop and its next stop, under the stop's name and the time now. */
 @Composable
 private fun NearbyMini(look: WidgetLook, v: NearbyView, now: Long) {
     val ink = look.ground
@@ -212,7 +183,6 @@ private fun NearbyMini(look: WidgetLook, v: NearbyView, now: Long) {
     }
 }
 
-/** 4×1: the bar split down the middle, the next two services side by side, and ↻. */
 @Composable
 private fun NearbyBar(look: WidgetLook, v: NearbyView, now: Long, c: NearbyControls) {
     val ink = look.ground
@@ -245,7 +215,6 @@ private fun NearbyBar(look: WidgetLook, v: NearbyView, now: Long, c: NearbyContr
     }
 }
 
-/** The sky with the stop's name and Now, then the buses under it: rows, or tiles. */
 @Composable
 private fun NearbySky(
     look: WidgetLook,
@@ -265,10 +234,8 @@ private fun NearbySky(
     val buses = v.buses(now)
     val old = v.old(now)
     val besideBuses = beside?.let { v.busesAt(it, now) }.orEmpty()
-    // The hills low, under the stop's name; no moon in the slim sky over both sides, where Now is.
     val moon = Offset(110f, 20f).takeIf { w >= 300f && beside == null }
     val bitmap = skyBitmap(ctx, look, w, skyH, 15f / 92f, Road(stop = true, shuttle = false), moon = moon)
-    // The opposite stop a tap away, unless it's the one shown already: beside it, or first.
     val other = v.first?.takeIf { beside == null }?.let { NearbySwap.offer(v.all.orEmpty(), v.swap, now, listOf(it.code)) }
     val swap: (@Composable () -> Unit)? = other?.let { o -> { SwapButton(o, v.all!!.first().code, sky) } }
     Box(GlanceModifier.fillMaxSize()) {
@@ -281,7 +248,6 @@ private fun NearbySky(
                         c.refresh?.let { RefreshButton(it, sky, 28.dp) }
                     }
                     Row(GlanceModifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // In a Box: beside the clock's RemoteViews, a weighted Text gets no width.
                         Box(GlanceModifier.defaultWeight()) {
                             Text(title(v), style = TextStyle(color = sky.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp), maxLines = 1)
                         }
@@ -289,7 +255,6 @@ private fun NearbySky(
                         swap?.invoke()
                     }
                 } else if (beside != null) {
-                    // Slim: the stop's name, Now and ↻ on one line; each side says how far it is.
                     Row(GlanceModifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(GlanceModifier.defaultWeight()) {
                             Text(title(v), style = TextStyle(color = sky.ink, fontWeight = FontWeight.Bold, fontSize = 17.sp), maxLines = 1)
@@ -332,12 +297,6 @@ private fun NearbySky(
     }
 }
 
-/**
- * Both sides of the road, a column each: your stop (or this side) and the one [beside] it (across the road, or the next stop), each service
- * a row with the time it's due, up to [rows]. Which side a bus is on says which way it goes. New to NUS ([newcomer]) heads each side with
- * the places its buses go and gives each bus the places it passes, Live or Scheduled in words, and Packed; otherwise each row is the badge,
- * the time and the bus after, for more buses at a glance.
- */
 @Composable
 private fun Sides(
     v: NearbyView,
@@ -350,7 +309,6 @@ private fun Sides(
     newcomer: Boolean,
 ) {
     val first = v.first ?: return
-    // Under the sky's full name, each side goes by its short one ("PGP Foyer", "PGP").
     val across = first.opposite == beside.code && first.oppositeAcross
     Row(GlanceModifier.fillMaxWidth().padding(top = 2.dp)) {
         Box(GlanceModifier.defaultWeight()) {
@@ -379,7 +337,6 @@ private fun Sides(
     }
 }
 
-/** One side: its heading ("Across the road · 1 min walk"), where its buses go with New to NUS, then a row a bus. */
 @Composable
 private fun Side(head: String, sub: String, stop: NearbyStop, shown: List<StopBus>, inks: Inks, old: Boolean, newcomer: Boolean) {
     Column(GlanceModifier.fillMaxWidth().padding(horizontal = 12.dp)) {
@@ -397,7 +354,6 @@ private fun Side(head: String, sub: String, stop: NearbyStop, shown: List<StopBu
             )
             return@Column
         }
-        // In a Column of its own: a Glance Column holds at most 10 children.
         Column(GlanceModifier.fillMaxWidth()) {
             shown.forEachIndexed { i, b ->
                 if (i > 0) Box(GlanceModifier.fillMaxWidth().height(1.dp).background(inks.line)) {}
@@ -407,17 +363,14 @@ private fun Side(head: String, sub: String, stop: NearbyStop, shown: List<StopBu
     }
 }
 
-/** A bus on its side of the road: its badge, the time it's due, and the one after, muted. */
 @Composable
 private fun SideRow(b: StopBus, inks: Inks, old: Boolean) {
     val ctx = LocalContext.current
     Row(GlanceModifier.fillMaxWidth().height(NearbyFit.SIDE_ROW_DP.dp), verticalAlignment = Alignment.CenterVertically) {
-        // A column for the badges, so the times line up whatever the service's name.
         Box(GlanceModifier.width(BADGE_DP.dp)) { Badge(b.svc, b.color, b.paid) }
         TimeText(b, inks, old, 15.sp)
         val left = minutes(ctx, b, old)
         if (left != null) {
-            // The bus after makes way for how long until this one.
             Spacer(GlanceModifier.defaultWeight())
             Minutes(b, left, inks, 11f)
         } else
@@ -427,10 +380,6 @@ private fun SideRow(b: StopBus, inks: Inks, old: Boolean) {
     }
 }
 
-/**
- * New to NUS: a bus, its time and how long until it; under them, the places it passes (where it stops next when it passes none), then Live
- * or Scheduled, or Packed (only a live bus says how full it is).
- */
 @Composable
 private fun SideRowExplained(b: StopBus, shown: List<StopBus>, inks: Inks, old: Boolean) {
     val left = minutes(LocalContext.current, b, old)
@@ -457,15 +406,9 @@ private fun SideRowExplained(b: StopBus, shown: List<StopBus>, inks: Inks, old: 
     }
 }
 
-/**
- * Whole minutes until [b] ([NearbyBoard.minutesLeft]), when it shows them: with exact alarms only, which redraw the widget as each minute
- * goes (without them a count could stand a minute or more behind, where a clock time can't); not while the times may be old (a count would
- * claim more than an old guess knows), and not for a first bus, which is a timetable's. Null: the clock time alone.
- */
 private fun minutes(ctx: Context, b: StopBus, old: Boolean): Int? =
     if (old || b.first || !LeaveAlerts.canBeExact(ctx)) null else NearbyBoard.minutesLeft(b.atMs, System.currentTimeMillis())
 
-/** How long until a bus, [left] whole minutes ([NearbyBoard.minutesWords]), "now" in its own colour. */
 @Composable
 private fun Minutes(b: StopBus, left: Int, inks: Inks, sizeSp: Float) {
     Box(GlanceModifier.cornerRadius(8.dp).background(inks.chip).padding(horizontal = 6.dp, vertical = 1.dp)) {
@@ -483,22 +426,14 @@ private fun Minutes(b: StopBus, left: Int, inks: Inks, sizeSp: Float) {
     }
 }
 
-/** Wide enough for a badge and the gap after it ("R1"; a public bus's "95 $" a little over). */
 private const val BADGE_DP = 36f
 
-/** "2 min walk", or "here" under a minute; nothing without a walk. */
 private fun walkWords(stop: NearbyStop): String = stop.walkWords.orEmpty()
 
-/** The biggest a tile grows: past this, the room is better spent on the next stop's buses. */
 private const val TILE_MAX_DP = 128f
 private const val STOP_HEAD_DP = 24f
-/** Clear of the widget's rounded corners, so the last row's pills aren't cut. */
 private const val BOTTOM_DP = NearbyFit.BOTTOM_DP
 
-/**
- * The stop's services as tiles, [NearbyFit.cols] across: one row and the pager, or rows and the rest along the bottom. Rows a stop with few
- * services leaves empty go to the next stop's, under its name.
- */
 @Composable
 private fun Tiles(
     v: NearbyView,
@@ -521,10 +456,7 @@ private fun Tiles(
     val rows = minOf(fit.rows, (buses.size + cols - 1) / cols)
     val rest = buses.drop(rows * cols)
     val foot = if (fit.footer && rest.isNotEmpty()) NearbyFit.FOOTER_DP else 0f
-    // Spare rows: the next stop with buses, as the Stops tab lists it, as
-    // many as fit under its name without squeezing a tile below its smallest.
     val room = area - BOTTOM_DP
-    // A few dp under a tile's smallest is fine: it leaves room for a later line seldom used.
     val spare = minOf(fit.rows - rows, ((room - STOP_HEAD_DP) / (NearbyFit.tileDp(cols) - 4f)).toInt() - rows)
     val next =
         if (spare > 0 && rest.isEmpty())
@@ -535,11 +467,9 @@ private fun Tiles(
             }
         else null
     val nextRows = next?.let { (it.second.size + cols - 1) / cols } ?: 0
-    // The 1 dp rules between rows count too.
     val rules = (rows - 1) + maxOf(nextRows - 1, 0)
     val tileH = minOf((room - foot - rules - (if (next != null) STOP_HEAD_DP else 0f)) / (rows + nextRows), TILE_MAX_DP).dp
     val shown = buses.take(rows * cols)
-    // In a Column of its own: a Glance Column holds at most 10 children.
     Column(GlanceModifier.fillMaxWidth()) {
         for (r in 0 until rows) {
             if (r > 0) HRule(inks)
@@ -561,10 +491,6 @@ private fun Tiles(
     }
 }
 
-/**
- * The line above the stop's name: "Now 9:41 · 2 min walk"; "Times may be old · 9:39" once they are; "Updating…" or the last fetch's
- * problem.
- */
 @Composable
 private fun HeadWords(v: NearbyView, buses: List<StopBus>, old: Boolean, inks: Inks, walk: Boolean) {
     val ctx = LocalContext.current
@@ -583,7 +509,6 @@ private fun HeadWords(v: NearbyView, buses: List<StopBus>, old: Boolean, inks: I
     }
 }
 
-/** A row of tiles, [cols] across, the rule between them; an empty cell where there's no bus. */
 @Composable
 private fun TileRow(row: List<StopBus>, shown: List<StopBus>, cols: Int, inks: Inks, old: Boolean, height: Dp, laterBeside: Boolean) {
     Row(GlanceModifier.fillMaxWidth().height(height)) {
@@ -597,10 +522,6 @@ private fun TileRow(row: List<StopBus>, shown: List<StopBus>, cols: Int, inks: I
     }
 }
 
-/**
- * One service: its badge and the time it's due, the next ones beside it where there's room ("then 9:50"), its next stop over up to two
- * lines, the next ones under it where there isn't, and Live and how full.
- */
 @Composable
 private fun Tile(b: StopBus, shown: List<StopBus>, inks: Inks, old: Boolean, laterBeside: Boolean, big: Boolean) {
     val ctx = LocalContext.current
@@ -637,7 +558,6 @@ private fun Tile(b: StopBus, shown: List<StopBus>, inks: Inks, old: Boolean, lat
     }
 }
 
-/** Narrow widgets: a service a row, its next stop over the buses after it, its time at the end. */
 @Composable
 private fun BusRows(buses: List<StopBus>, inks: Inks, old: Boolean, area: Float) {
     val ctx = LocalContext.current
@@ -657,7 +577,6 @@ private fun BusRows(buses: List<StopBus>, inks: Inks, old: Boolean, area: Float)
     }
 }
 
-/** ‹ the dots › under a row of tiles: the other services, a page of them at a time. */
 @Composable
 private fun Pager(page: Int, pages: Int, inks: Inks, action: ((Int) -> Action)?) {
     Row(
@@ -666,7 +585,6 @@ private fun Pager(page: Int, pages: Int, inks: Inks, action: ((Int) -> Action)?)
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Arrow("‹", L.s(R.string.nearby_page_prev), inks, action?.invoke(-1))
-        // A Row holds at most 10 children: the arrows and up to 8 dots.
         for (i in 0 until minOf(pages, 8)) {
             Box(GlanceModifier.padding(horizontal = 2.dp)) {
                 Box(GlanceModifier.size(5.dp).cornerRadius(3.dp).background(if (i == page) inks.muted else inks.line)) {}
@@ -685,7 +603,6 @@ private fun Arrow(text: String, spoken: String, inks: Inks, action: Action?) {
     }
 }
 
-/** Under a grid: the services that didn't fit, each with its time. */
 @Composable
 private fun Footer(rest: List<StopBus>, inks: Inks, old: Boolean) {
     val ctx = LocalContext.current
@@ -702,10 +619,6 @@ private fun Footer(rest: List<StopBus>, inks: Inks, old: Boolean) {
     }
 }
 
-/**
- * The nearest stop's services two by two under a heading, [rows] of them: the big widget's next buses, under its trip. The heading says
- * when the times may be old, as Nearby's line above does.
- */
 @Composable
 internal fun NearbyPair(v: NearbyView, inks: Inks, now: Long, rows: Int = 1) {
     val ctx = LocalContext.current
@@ -724,7 +637,6 @@ internal fun NearbyPair(v: NearbyView, inks: Inks, now: Long, rows: Int = 1) {
     }
 }
 
-/** The big widget's next buses: a heading, and a row of tiles with room for a next stop over two lines. */
 internal const val NEARBY_PAIR_DP = 106f
 internal const val NEARBY_PAIR_HEAD_DP = 22f
 
@@ -748,7 +660,6 @@ private fun Pills(b: StopBus, inks: Inks) {
     }
 }
 
-/** The time a bus is due, big: "9:42", "~9:48" for a timetable's guess; muted once the times may be old. */
 @Composable
 private fun TimeText(b: StopBus, inks: Inks, old: Boolean, size: TextUnit) {
     Text(
@@ -758,7 +669,6 @@ private fun TimeText(b: StopBus, inks: Inks, old: Boolean, size: TextUnit) {
     )
 }
 
-/** A rule between two columns, [inset] short of each end. */
 @Composable
 private fun VRule(inks: Inks, inset: Dp) {
     Box(GlanceModifier.width(1.dp).fillMaxHeight().padding(vertical = inset)) {
@@ -775,10 +685,8 @@ private fun HRule(inks: Inks) {
 
 private fun timeText(ctx: Context, b: StopBus): String = (if (b.live || b.first) "" else "~") + shortClock(ctx, b.atMs)
 
-/** Under the next stop where there are no pills: the buses after it, or which first bus it is. */
 private fun subLine(ctx: Context, b: StopBus): String = if (b.first) firstLabel(b) else laterLine(ctx, b)
 
-/** "First bus"; "First bus tomorrow", "First bus Monday" when it isn't today, on campus. */
 private fun firstLabel(b: StopBus): String {
     val zone = java.time.ZoneId.of(CAMPUS_ZONE)
     fun day(ms: Long) = java.time.Instant.ofEpochMilli(ServerClock.fromDevice(ms)).atZone(zone).toLocalDate()
@@ -791,18 +699,15 @@ private fun firstLabel(b: StopBus): String {
     }
 }
 
-/** "Next Yusof Ishak House"; with where it ends when another bus shown stops there next too; "Ends here". */
 private fun nextLine(b: StopBus, shown: List<StopBus>): String {
     val next = b.next ?: return if (b.endsHere) L.s(R.string.buses_ends_here) else ""
     return NearbyBoard.endIfNeeded(b, shown)?.let { L.s(R.string.nearby_next_to, next, it) } ?: L.s(R.string.nearby_next, next)
 }
 
-/** "then 9:50, 9:58"; empty with none after it. */
 private fun laterLine(ctx: Context, b: StopBus): String =
     if (b.later.isEmpty()) ""
     else L.s(R.string.nearby_then, b.later.take(2).joinToString(L.s(R.string.nearby_times_sep)) { shortClock(ctx, it) })
 
-/** Shows the stop across the road first, or the nearest one again. */
 @Composable
 internal fun SwapButton(other: NearbyStop, nearest: String, inks: Inks, side: Dp = 26.dp) {
     Box(
@@ -822,10 +727,6 @@ internal fun SwapButton(other: NearbyStop, nearest: String, inks: Inks, side: Dp
     }
 }
 
-/**
- * "Now 9:41", the time a [TextClock][android.widget.TextClock] keeps by itself, in campus time and the account's 12/24-hour style, as the
- * bus times beside it ([shortClock]). [label]: with "Now" before it.
- */
 @Composable
 internal fun NowClock(labelColor: ColorProvider, timeColor: ColorProvider, sizeSp: Float, label: Boolean = true) {
     val ctx = LocalContext.current
@@ -845,18 +746,13 @@ internal fun NowClock(labelColor: ColorProvider, timeColor: ColorProvider, sizeS
 
 private const val CAMPUS_ZONE = "Asia/Singapore"
 
-/**
- * Hours and minutes in the account's 12/24-hour style, without AM or PM: a bus is due within the hour, and "9:42 AM" doesn't fit a tile.
- */
 internal fun shortPattern(ctx: Context): String = if (hour12(ctx)) "h:mm" else "HH:mm"
 
-/** [deviceMs] (the phone's clock) as campus time, short ([shortPattern]), beside "Now" ([NowClock]). */
 internal fun shortClock(ctx: Context, deviceMs: Long): String =
     SimpleDateFormat(shortPattern(ctx), Locale.ROOT)
         .apply { timeZone = TimeZone.getTimeZone(CAMPUS_ZONE) }
         .format(Date(ServerClock.fromDevice(deviceMs)))
 
-/** Nearby, as a sentence for screen readers. */
 internal fun nearbySpoken(ctx: Context, stops: List<NearbyStop>?, fetchedAt: Long?, error: String?): String {
     val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, error ?: L.s(R.string.a11y_checking))
     val age = fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
@@ -872,10 +768,8 @@ internal fun nearbySpoken(ctx: Context, stops: List<NearbyStop>?, fetchedAt: Lon
     return L.s(R.string.a11y_nearby, first.name, Spoken.spell(due))
 }
 
-/** The pager's page, per widget: which of a stop's services a row of tiles shows. */
 internal val NEARBY_PAGE = intPreferencesKey("nearby-page")
 
-/** The pager's arrows: the next page of services, or the one before, counting round. */
 class PageAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val dir = parameters[DIR] ?: return

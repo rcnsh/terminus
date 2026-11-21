@@ -3,8 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// The API's golden answers, checked by its own tests: a change in the
-/// response shape fails here too.
 private func golden(_ name: String) throws -> NextAnswer {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -13,8 +11,6 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-/// Every golden there is, English and Chinese ("zh/free"), found in the
-/// directory: a new one is read without being listed here.
 func goldenNames() -> [String] {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -31,10 +27,6 @@ func goldenNames() -> [String] {
     #expect(goldenNames().count >= 40)
 }
 
-/// By the endpoint each answers: /api/me/nearby has `stops`, /api/me/day `items`,
-/// the rest are /api/me/next with a card. The card's parts are read leniently,
-/// so one that no longer decodes would just vanish: each one sent must
-/// come through.
 @Test(arguments: goldenNames())
 func everyGoldenAnswerDecodes(name: String) throws {
     let dir = URL(fileURLWithPath: #filePath)
@@ -60,13 +52,11 @@ func everyGoldenAnswerDecodes(name: String) throws {
     if present("upcoming") { #expect(card.upcoming != nil, "card.upcoming") }
     if present("suggestion") { #expect(card.suggestion != nil, "card.suggestion") }
     if present("step") { #expect(card.step != nil, "card.step") }
-    // So does a change of bus, read leniently inside them.
     if (sent["journey"] as? [String: Any])?["change"] is [String: Any] { #expect(card.journey?.change != nil, "journey.change") }
     if (sent["ride"] as? [String: Any])?["change"] is [String: Any] { #expect(card.ride?.change != nil, "ride.change") }
     #expect(card.actions?.count ?? 0 == (sent["actions"] as? [Any])?.count ?? 0, "card.actions")
 }
 
-/// Earlier and Later bus, worded on the server; none once the trip's under way.
 @Test func stepDecodesFilledAndNull() throws {
     let step = try #require(try golden("class-bus").card?.step)
     #expect(step.trip == "4:600:UTOWN")
@@ -75,7 +65,6 @@ func everyGoldenAnswerDecodes(name: String) throws {
     #expect(!step.moved)
     #expect(step.earlierLabel == "Earlier bus" && step.laterLabel == "Later bus" && step.bestLabel == "Best bus")
     #expect(try golden("arrived").card?.step == nil)
-    // A side with no bus is null, and the rest of the step still reads.
     let json = #"""
         {"trip":"t","earlier":null,"later":{"svc":"A1","stop":"COM3","board":"2026-08-27T01:50:00Z"},"moved":true,
          "earlierLabel":"Earlier bus","laterLabel":"Later bus","bestLabel":"Best bus"}
@@ -85,7 +74,6 @@ func everyGoldenAnswerDecodes(name: String) throws {
 }
 
 @Test func crowdIsShownOnceWhenTheDetailSaysIt() throws {
-    // "… · crowding: high · or D2 in 14 min": not said again under it.
     let a = try golden("place")
     #expect(a.detail.contains("crowding: high"))
     #expect(a.crowdText == nil)
@@ -122,7 +110,6 @@ func everyGoldenAnswerDecodes(name: String) throws {
     #expect((a.card?.glance?.count ?? 99) <= 12)
 }
 
-/// A question (`ask`) from an older server decodes without trouble and is not shown.
 @Test func aSuggestionDecodesAndAnOldQuestionIsIgnored() throws {
     let json = """
         {"label":"On the R2","detail":"Off at UTown","mode":"trip","card":{"kind":"trip","phase":"riding",
@@ -194,7 +181,6 @@ func everyGoldenAnswerDecodes(name: String) throws {
             == "Nothing imported: no stop. Your timetable was not changed.")
 }
 
-/// After your day, on a free day and at home: the next class, worded on the server.
 @Test(arguments: ["free", "rest", "home"])
 func theNextClassComesWithTheCard(name: String) throws {
     let u = try #require(golden(name).card?.upcoming)
@@ -215,21 +201,18 @@ private func nearbyFixture() throws -> [NearbyStop] {
     let stops = try nearbyFixture()
     let d2 = try #require(stops.first?.board.first { $0.svc == "D2" })
     #expect(NearbyBoard.eta(d2) == "4 min", "the server's words")
-    // The server's destination, its place set apart.
     let d = NearbyBoard.dest(d2)
     #expect(d.lead == "via " && d.place == "COM\u{a0}3" && d.trail == "")
     let buses = d2.buses
     #expect(buses.count == 3)
     #expect(buses.map { $0?.etaS } == [240, 840, 1560])
     #expect(NearbyBoard.pick(buses) == 0)
-    // Only Next carries its unit; an estimate is "~" and its figure.
     #expect(NearbyBoard.cell(buses[0], first: true) == .init(figure: "4", trail: " min"))
     #expect(NearbyBoard.cell(buses[1], first: false) == .init(figure: "14"))
     #expect(NearbyBoard.cell(buses[2], first: false) == .init(mark: "~", figure: "26"))
     #expect(
         NearbyBoard.spoken(d2)
             == "Bus D2, via COM\u{a0}3, 4 minutes, live, then 14 minutes, then about 26 minutes")
-    // No time at all: a dash in every column, and nothing set large.
     let a2 = try #require(stops.first?.board.first { $0.svc == "A2" })
     #expect(a2.buses.map { NearbyBoard.cell($0, first: false).whole } == ["–", "–", "–"])
     #expect(NearbyBoard.pick(a2.buses) == nil)
@@ -237,7 +220,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyBoard.spoken(a2) == "Bus A2, to KR\u{a0}Bus\u{a0}Ter")
     let k = try #require(stops.first?.board.first { $0.svc == "K" })
     #expect(NearbyBoard.dest(k) == ("Ends here", nil, ""), "no place: all of it muted")
-    // An older answer's "too soon" is ignored: the next bus is an ordinary time, and the large one.
     let older = try #require(stops.dropFirst().first?.board.first { $0.svc == "D2" })
     #expect(NearbyBoard.pick(older.buses) == 0)
     #expect(NearbyBoard.cell(older.buses[0], first: true) == .init(figure: "4", trail: " min"))
@@ -245,16 +227,13 @@ private func nearbyFixture() throws -> [NearbyStop] {
         NearbyBoard.spoken(older) == "Bus D2, via KR\u{a0}MRT, 4 minutes, live, then 14 minutes, then about 26 minutes")
 }
 
-/// An older server sends no `dest`: the end of the line, all muted.
 @Test func nearbyFallsBackToTheEndOfTheLine() {
     let r = BoardRow(svc: "D2", etaS: 240, quality: "live", towards: ["TCOMS", "UTown"])
     #expect(NearbyBoard.dest(r) == ("to UTown", nil, ""))
     #expect(NearbyBoard.dest(BoardRow(svc: "K", etaS: nil, quality: "live", toText: "Ends here")) == ("Ends here", nil, ""))
-    // A place the words don't contain: shown as it is.
     #expect(NearbyBoard.dest(BoardRow(svc: "K", etaS: nil, quality: "live", dest: "Ends here", destPlace: "PGP")) == ("Ends here", nil, ""))
 }
 
-/// The next bus is set large; with no time for it, nothing is, even with later buses.
 @Test func theLargeTimeIsTheNextBus() {
     let live = NearbyBus(etaS: 780, quality: "live")
     #expect(NearbyBoard.pick([NearbyBus(etaS: 60, quality: "live"), live, live]) == 0)
@@ -263,7 +242,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyBoard.pick([nil, nil, nil]) == nil)
 }
 
-/// "~" in both languages, the server's "约" replaced; "now" as it is.
 @Test func nearbyCellsTakeTheirFiguresFromTheServersWords() {
     #expect(
         NearbyBoard.cell(NearbyBus(etaS: 360, quality: "scheduled", eta: "约 6 分钟"), first: true)
@@ -273,9 +251,7 @@ private func nearbyFixture() throws -> [NearbyStop] {
             == .init(mark: "~", figure: "6"))
     #expect(
         NearbyBoard.cell(NearbyBus(etaS: 20, quality: "live", eta: "now"), first: true) == .init(figure: "now"))
-    // In Then: its figure alone, no unit.
     #expect(NearbyBoard.cell(NearbyBus(etaS: 660, quality: "live", eta: "11 min"), first: false).whole == "11")
-    // An older server's words, worked out here.
     #expect(
         NearbyBoard.cell(NearbyBus(etaS: 270, quality: "live"), first: true) == .init(figure: "5", trail: " min"))
 }
@@ -287,7 +263,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
         [NearbyStop].self,
         from: Data(#"[{"stop":{"code":"A","name":"A"},"walkS":60,"board":[{"svc":"D1","etaS":240,"quality":"live"}]}]"#.utf8))
     #expect(NearbyBoard.foot(plain) == [])
-    // A guess due under a minute away is "~1 min", so it has its "~" explained; a live "now" has none.
     let now = { (q: String) in
         try JSONDecoder().decode(
             [NearbyStop].self,
@@ -296,7 +271,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     }
     #expect(NearbyBoard.foot(try now("scheduled")) == ["~ is a guess from the timetable, not a live time."])
     #expect(NearbyBoard.foot(try now("live")) == [])
-    // A stop with no live data shows none of its board.
     let off = try JSONDecoder().decode(
         [NearbyStop].self,
         from: Data(
@@ -305,13 +279,11 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyBoard.foot(off) == [])
 }
 
-/// Every badge one width, the widest's ("95 $"), and each time column as wide as its widest time on every stop.
 @Test func nearbysColumnsAreAsWideAsTheirWidest() throws {
     let stops = try nearbyFixture()
     let l = NearbyLayout(stops, rowWidth: nil)
     #expect(l.scale == 1)
     #expect(l.badge >= NearbyLayout.badgeMin)
-    // A two-letter line's badge, not wider, when nothing on screen is wider.
     let short = NearbyLayout(
         try JSONDecoder().decode(
             [NearbyStop].self,
@@ -339,9 +311,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(wide.badge > l.badge, "a public bus's $ widens every badge")
 }
 
-/// What gives way as the rows narrow, for the whole screen at once: the gaps, then the times shrink (never past
-/// minScale), and only then every row stacks, its times at full size. Every row that doesn't stack has its
-/// destination in two lines.
 @Test func nearbyGivesWayInOrder() throws {
     let stops = try nearbyFixture()
     let rows = stops.flatMap(\.board)
@@ -363,13 +332,10 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(!NearbyLayout(stops, rowWidth: 420).stacks)
 }
 
-/// A place moves to its own line whole when it fits there, and breaks between its words when it doesn't:
-/// never a reason to stack while two lines hold it.
 @Test func nearbysPlacesStayWholeWhereTheyFit() {
     let w = NearbyLayout.width("Buona Vista Int", NearbyLayout.place())
     #expect(NearbyBoard.keptWhole("Buona Vista Int", width: w) == "Buona\u{a0}Vista\u{a0}Int")
     #expect(NearbyBoard.keptWhole("Buona Vista Int", width: w - 10) == "Buona Vista Int")
-    // The server's non-breaking spaces give way too, rather than the place being cut.
     #expect(NearbyBoard.keptWhole("KR\u{a0}Bus\u{a0}Ter", width: 30) == "KR Bus Ter")
     let r = BoardRow(svc: "151", etaS: 240, quality: "live", dest: "to Hougang Central Int", destPlace: "Hougang Central Int")
     let place = NearbyLayout.width("Hougang Central Int", NearbyLayout.place())
@@ -382,7 +348,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyLayout.longestWord(r) == NearbyLayout.width("Hougang", NearbyLayout.place()))
 }
 
-/// The menu bar's countdown: a timetable guess is never "now".
 @MainActor @Test func aGuessInTheMenuBarIsNeverNow() throws {
     for (quality, title) in [("scheduled", "D2 ~1 min"), ("live", "D2 now")] {
         let json =
@@ -393,8 +358,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     }
 }
 
-/// A row's time, worked out here for an older server: the map's stop card uses
-/// this too, so 4 min 30 s is "5 min" in both, not "4 min" on the map.
 @Test func aRowsTimeRoundsToTheNearestMinute() {
     #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")
     #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 269, quality: "live")) == "4 min")
@@ -409,16 +372,13 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyBoard.eta(etaS: 20, quality: "live") == "now")
     #expect(NearbyBoard.eta(etaS: nil, quality: "ended") == "ended")
     let said = { (b: NearbyBus, first: Bool) in NearbyBoard.said(b, first: first) }
-    // The first bus says how sure it is; the others don't.
     #expect(said(NearbyBus(etaS: 60, quality: "live", eta: "1 min"), true) == "1 minute, live")
     #expect(said(NearbyBus(etaS: 60, quality: "live", eta: "1 min"), false) == "1 minute")
     #expect(said(NearbyBus(etaS: 360, quality: "scheduled"), true) == "about 6 minutes, estimated")
     #expect(said(NearbyBus(etaS: 360, quality: "stale"), true) == "about 6 minutes")
-    // A live bus under 45 s is arriving; a guess that close, about a minute away.
     #expect(said(NearbyBus(etaS: 30, quality: "live", eta: "now"), true) == "Arriving")
     #expect(said(NearbyBus(etaS: 30, quality: "scheduled", eta: "~1 min"), true) == "about 1 minute, estimated")
     #expect(said(NearbyBus(etaS: nil, quality: "ended"), true) == nil)
-    // A guess is never "now", from the server or worked out here.
     #expect(NearbyBoard.eta(etaS: 30, quality: "scheduled") == "~1 min")
     #expect(NearbyBoard.eta(etaS: 30, quality: "stale") == "~1 min")
     #expect(NearbyBoard.eta(etaS: 300, quality: "stale") == "~5 min")
@@ -429,7 +389,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     let row = BoardRow(
         svc: "D2", etaS: 240, quality: "live",
         later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live")], towards: ["UTown"])
-    // Spoken, the "~" is a word: VoiceOver doesn't read it.
     #expect(
         NearbyBoard.spoken(row)
             == "Bus D2, to UTown, 4 minutes, live, then about 15 minutes, then 25 minutes")
@@ -443,7 +402,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(AnswerDetail.grouped([skip, undo]) == [[skip], [undo]])
 }
 
-/// A golden's JSON with `edit` applied to it, decoded.
 private func goldenEdited(_ name: String, _ edit: (inout [String: Any]) -> Void) throws -> NextAnswer {
     let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -498,8 +456,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(number.card?.kind == "trip")
 }
 
-/// A newer server's phase and quality: the answer shows, no trip is
-/// followed for it, and its times aren't shown as live.
 @Test func anUnknownPhaseAndQualityAreNeitherATripNorLive() throws {
     let a = try goldenEdited("class-bus") { o in
         o["quality"] = "predicted"
@@ -530,12 +486,10 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
         #expect(m.menuTitle(at: Date()) == m.plan?.card?.glance, "\(name)")
     }
     m.answers[.plan] = try golden("class-bus")
-    // Whatever the time: the glance is a clock time, not a count.
     let at = try #require(m.plan?.leaveAt)
     #expect(m.menuTitle(at: at.addingTimeInterval(600)) == "Leave 09:36")
 }
 
-/// Offline with no day plan kept, an old glance would pass for current: the plain icon instead.
 @MainActor @Test func offlineTheMenuBarDropsAGlanceGoneStale() throws {
     let m = AppModel(snapshot: true)
     m.answers[.plan] = try golden("class-bus")
@@ -547,7 +501,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(m.menuTitle(at: stale) == m.plan?.card?.glance)
 }
 
-/// The rule every client follows: a card without staleAt never dims; only an answer with no card is old.
 @MainActor @Test func onlyAnAnswerWithoutACardIsOldWithoutStaleAt() throws {
     let m = AppModel(snapshot: true)
     let now = Date()
@@ -578,7 +531,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     let local = try #require(ServerClock.parseHTTPDate("Wed, 07 Oct 2026 01:14:02 GMT"))
     #expect(local == parseISODate("2026-10-07T01:14:02Z"))
     #expect(ServerClock.parseHTTPDate("yesterday") == nil)
-    // Date's one-second steps and the trip there: not a wrong clock.
     #expect(ServerClock.skew(server: local.addingTimeInterval(2.9), local: local) == 0)
     #expect(ServerClock.skew(server: local.addingTimeInterval(-2.9), local: local) == 0)
     #expect(ServerClock.skew(server: local.addingTimeInterval(90), local: local) == 90, "this Mac is 90 s slow")
@@ -622,7 +574,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(j.arriveText == "Arrive ~09:51 · 9 min early")
     #expect(j.backupText == "Or go now: R2 at 09:06 from PGP")
     #expect(j.bus?.svc == "R2")
-    // One line the wrong type: only it is left out.
     let odd = try goldenEdited("class-bus") { o in
         editCard(&o) { c in
             var j = c["journey"] as? [String: Any] ?? [:]
@@ -637,7 +588,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
 @Test func aTripThatChangesBusesCarriesTheSecondBus() throws {
     let j = try #require(try golden("change-class").card?.journey)
     #expect(j.bus?.svc == "K")
-    // A version that draws one bus still reads the change in its words.
     #expect(j.rideText == "14 min ride · change at Kent Vale to the 09:42 P · 14 min ride")
     let c = try #require(j.change)
     #expect(c.bus.svc == "P")
@@ -691,8 +641,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(day.items[1].sub == nil)
 }
 
-/// The search every client is held to (fixtures/search.json).
-/// The Mac has no Buses tab, so only its "destinations" section.
 @Test func theSearchFollowsTheSharedCases() throws {
     struct Fixture: Decodable {
         struct Section: Decodable {
@@ -740,7 +688,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(old.homeStops == 3 && old.places == 12 && old.placeLabel == 24 && old.homeWalkMin == 0...30, "today's values without them")
 }
 
-/// VoiceOver hears where the bus is and how far is left, not every stop.
 @Test func theRideIsSpokenAsTheNextStopAndWhatsLeft() {
     let stops = ["PGP", "Kent Ridge MRT", "LT27", "UTown"]
     #expect(AnswerDetail.RideLine.spoken(stops, passed: 0) == "Next stop: Kent Ridge MRT. 3 stops to go, getting off at UTown.")
@@ -758,8 +705,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(m.wantsFix(at: ends), "the rest's end has come")
 }
 
-/// At the stop the headline names the bus, so the header counts to the bus
-/// (`leave.board`), not to the leave-by that has already come.
 @Test func atTheStopTheCountdownIsToTheBus() throws {
     let idle = try goldenEdited("class-bus") { _ in }
     #expect(idle.countdownAt == idle.leaveAt)
@@ -769,8 +714,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(board > a.leaveAt!)
 }
 
-/// A one-off trip is planned like a class but isn't one: the app's own
-/// heading (for an older server) says "arrive by", a class "starts".
 @Test func aOneOffTripSaysArriveByNotStarts() throws {
     let once = try golden("once-from-home")
     #expect(once.isClassPlan)
@@ -781,14 +724,12 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(lesson.startsAt(try #require(lesson.classAt)).hasPrefix("starts "))
 }
 
-/// "Is this wrong?" says a missed or late bus is NUS's only for a shuttle's live time, which the server decides.
 @Test func theReportSheetKnowsWhenTimesAreNUSs() throws {
     #expect(try golden("class-late").card?.fromNus == true)
     #expect(try golden("public-wins").card?.fromNus == nil, "a public bus's times are LTA's")
     #expect(try golden("scheduled").card?.fromNus == nil, "an estimate is ours")
 }
 
-/// "Is this wrong?" offers only the reasons that fit the answer, which the server decides: no bus to come on a day that's done.
 @MainActor @Test func theReportSheetOffersTheReasonsThatFit() throws {
     let ids = { (name: String) in ReportForm.offered(try golden(name).card?.reasons).map(\.id) }
     #expect(try ids("class-bus") == ["never-came", "times-off", "wrong-stop", "walk-longer", "wrong-class"])

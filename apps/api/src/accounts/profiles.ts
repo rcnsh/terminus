@@ -1,9 +1,3 @@
-/**
- * The account's profile as read back from D1: checked against today's stops,
- * and what still holds kept when a stop is gone. Apart from me.ts, so the
- * answer engine and the Trip object read a profile without loading the routes.
- */
-
 import type { Graph } from '../types.ts';
 import { loadProfileJson } from './accounts.ts';
 import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, parseProfile } from '../timetable/profile.ts';
@@ -12,20 +6,16 @@ import { landmark } from '../answer/landmarks.ts';
 import { GRAPH_PUBLIC } from '../answer/graph.ts';
 import { LANG_PREFS, useProfileLang } from '../i18n.ts';
 
-/** The account's profile, checked against today's stops. `raw`: the saved JSON, when the caller has already read it. */
 export async function getProfile(db: D1Database, userId: string, graph: Graph, raw?: unknown): Promise<Profile> {
   if (raw === undefined) raw = await loadProfileJson(db, userId);
   if (!raw) return structuredClone(DEFAULT_PROFILE);
   const idx = indexGraph(graph);
-  // A stop can vanish from a new scrape. Re-validating on read would reject
-  // the whole profile, so drop only what no longer resolves.
   const r = parseProfile(
     raw,
     (c) => idx.byCode.has(c),
     (c) => idx.byCode.has(c) || landmark(c) !== null,
     pinnable(graph),
   );
-  // The language the account chose wins over the device's, for the rest of this request.
   if (r.ok) {
     useProfileLang(r.profile.lang);
     return r.profile;
@@ -35,18 +25,12 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
 }
 
-/** A stop a pin may name: one of `graph`'s, or a public bus's stop of its own. */
 export function pinnable(graph: Graph): (code: string) => boolean {
   const idx = indexGraph(graph);
   const pub = indexGraph(GRAPH_PUBLIC);
   return (c) => idx.byCode.has(c) || pub.byCode.has(c);
 }
 
-/**
- * A saved profile that no longer validates whole (a stop gone from a new
- * scrape): everything that still holds, so the next save doesn't write the
- * user's hours, usual times or one-off trips back as the defaults.
- */
 export function salvageProfile(p: Profile, ok: (code: string) => boolean, pinnable: (code: string) => boolean = ok): Profile {
   const minute = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;
   const hours = minute(p.dayStartMin) && minute(p.dayEndMin) && p.dayStartMin < p.dayEndMin;

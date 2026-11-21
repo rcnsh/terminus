@@ -13,12 +13,10 @@ final class SignInCodeTests: XCTestCase {
     }
 
     func testAPasteFindsTheCode() {
-        // As Android's codeEdit: the last six-character word that could be a code.
         XCTAssertEqual(SignInCode.edit(old: "", new: "Your code is 7KQ2XM"), "7KQ2XM")
         XCTAssertEqual(SignInCode.edit(old: "AB", new: "AB7KQ2XM"), "7KQ2XM")
         XCTAssertEqual(SignInCode.edit(old: "", new: "7KQ 2XM"), "7KQ2XM")
         XCTAssertEqual(SignInCode.edit(old: "", new: "7kq-2xm"), "7KQ2XM")
-        // "WITHIN" is six letters but has an I: not a code.
         XCTAssertEqual(SignInCode.edit(old: "", new: "7KQ2XM works within"), "7KQ2XM")
     }
 
@@ -36,7 +34,6 @@ final class SignInCodeTests: XCTestCase {
         XCTAssertEqual(SignInCode.pairCode(scanned: "https://terminus.run/pair?code=n2nfwd", hosts: hosts), "N2NFWD")
         XCTAssertEqual(SignInCode.pairCode(scanned: "https://terminus.rcn.sh/pair/?code=TEST67", hosts: hosts), "TEST67")
         XCTAssertEqual(SignInCode.pairCode(scanned: "TEST78", hosts: hosts), "TEST78")
-        // Someone else's site, another page, or no code: not ours.
         XCTAssertNil(SignInCode.pairCode(scanned: "https://example.com/pair?code=TEST67", hosts: hosts))
         XCTAssertNil(SignInCode.pairCode(scanned: "https://terminus.run/account?code=TEST67", hosts: hosts))
         XCTAssertNil(SignInCode.pairCode(scanned: "https://terminus.run/pair", hosts: hosts))

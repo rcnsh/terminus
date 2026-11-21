@@ -5,12 +5,6 @@ import Testing
 
 @testable import Terminus
 
-/// Nearby as VoiceOver finds it, read through the accessibility tree (no
-/// VoiceOver): each row one element, its second line too when stacked; the
-/// columns' heading not there at all; each stop's name before its rows and
-/// the foot last; and the times said in words. Asking this process's own
-/// tree needs the runner to be trusted for accessibility (System Settings,
-/// Privacy & Security, Accessibility), so it's skipped where it isn't (CI).
 @MainActor @Suite(.enabled(if: AXIsProcessTrusted()), .serialized)
 struct NearbyAccessibilityTests {
     struct Element {
@@ -39,7 +33,6 @@ struct NearbyAccessibilityTests {
     }
 
     @Test func stacked() throws {
-        // Narrow enough that every row stacks, its times on a second line.
         let width: CGFloat = 200
         #expect(NearbyLayout(stops, rowWidth: width - 20).stacks)
         let rows = try check(tree(width: width))
@@ -49,7 +42,6 @@ struct NearbyAccessibilityTests {
         )
     }
 
-    /// The order and shape every layout shares; the rows, in order.
     private func check(_ elements: [Element]) throws -> [Element] {
         let board = stops.flatMap(\.board)
         let rows = elements.filter { e in
@@ -71,7 +63,6 @@ struct NearbyAccessibilityTests {
         return rows
     }
 
-    /// Nearby in a window of its own, `width` wide, as the accessibility tree has it: every element, in order.
     private func tree(width: CGFloat) -> [Element] {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
@@ -80,13 +71,11 @@ struct NearbyAccessibilityTests {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: width, height: 1400), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        // Found by its title in the tree: other tests may have windows open.
         window.title = "nearby-accessibility"
         window.contentView = host
         window.orderFrontRegardless()
         defer { window.close() }
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-        // The tree is asked for from another thread: this one answers.
         final class Found: @unchecked Sendable {
             var elements: [Element] = []
             var done = false
@@ -107,7 +96,6 @@ struct NearbyAccessibilityTests {
                 children.forEach(walk)
             }
             let app = AXUIElementCreateApplication(pid)
-            // Asked once, SwiftUI builds its tree.
             _ = attr(app, kAXWindowsAttribute)
             Thread.sleep(forTimeInterval: 0.3)
             let windows = attr(app, kAXWindowsAttribute) as? [AXUIElement] ?? []

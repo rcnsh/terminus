@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - Tabs
-
 struct Tabs: View {
     @Bindable var model: AppModel
     @Namespace private var pill
@@ -14,8 +12,6 @@ struct Tabs: View {
         case nearby
     }
 
-    /// Next, Nearby, each favourite, then the places added from the search, as
-    /// on the phone, its widget and the web.
     private var tabs: [(Tab, String, String)] {
         var out: [(Tab, String, String)] = [(.plan, L("Next"), "clock"), (.nearby, L("Nearby"), "location")]
         out += model.places.map { (.place($0.key), $0.label, "mappin") }
@@ -36,16 +32,12 @@ struct Tabs: View {
     }
 
     var body: some View {
-        // No scrolling unless the tabs genuinely don't fit. Icons and text,
-        // then text only, then text with less room around it, then scroll:
-        // the first that fits.
         ViewThatFits(in: .horizontal) {
             strip(icons: true)
             strip(icons: false)
             strip(icons: false, inset: 6)
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) { strip(icons: false, inset: 6) }
-                    // A tab cut off at the edge fades out, so the row reads as more to scroll to.
                     .mask(
                         LinearGradient(
                             stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading,
@@ -66,8 +58,6 @@ struct Tabs: View {
             ForEach(Array(all.enumerated()), id: \.element.0) { i, entry in
                 let (tab, title, icon) = entry
                 let on = tab == current
-                // An added place carries its own ×, inside its tab, so it reads
-                // as removing that place rather than closing the row.
                 let added: AppModel.AddedPlace? = if case .code(let c, _) = tab { model.added.first(where: { $0.code == c }) } else { nil }
                 HStack(spacing: 0) {
                     Button {
@@ -111,7 +101,6 @@ struct Tabs: View {
                             .fill(.primary.opacity(0.12))
                             .matchedGeometryEffect(id: "pill", in: pill)
                     } else if added != nil {
-                        // Outlined when not chosen, so the × is seen to belong to this tab.
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .strokeBorder(.primary.opacity(0.1))
                     }
@@ -120,7 +109,6 @@ struct Tabs: View {
             }
         }
         .padding(3)
-        // One group, named, so VoiceOver says where the tabs are.
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L("Destinations"))
     }

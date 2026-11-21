@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Creates the model at launch, so refreshing starts even before (or
-/// without) SwiftUI ever drawing the menu bar item.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
@@ -32,7 +30,6 @@ struct TerminusApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        // Setup and Settings: real windows, opened from the popover.
         Window(L("Set up terminus"), id: "setup") { SetupView(app: model).closesWhenSignedOut(model, id: "setup") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
@@ -42,19 +39,13 @@ struct TerminusApp: App {
             .defaultSize(width: 900, height: 680)
             .defaultPosition(.center)
         #if DEBUG
-            // The popover's content in a window (TERMINUS_OPEN=popover), for
-            // testing it when the menu bar item is hidden behind the notch.
             Window("terminus", id: "popover") { Popover(model: model) }
                 .windowResizability(.contentSize)
         #endif
     }
 }
 
-// MARK: - Shell
-
 extension View {
-    /// Closes this window when the Mac is signed out (from the menu, or the
-    /// device removed elsewhere): what it shows belongs to the account.
     func closesWhenSignedOut(_ model: AppModel, id: String) -> some View {
         modifier(ClosesWhenSignedOut(model: model, id: id))
     }
@@ -70,31 +61,22 @@ private struct ClosesWhenSignedOut: ViewModifier {
     }
 }
 
-/// The menu bar item. Recomputed from the departure time on the model's 30 s
-/// clock, so the menu bar never shows a count that was true two refreshes
-/// ago. (A TimelineView here starves app launch.)
 private struct MenuBarLabel: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let title = model.menuTitle(at: model.clock)
-        // Resting, the moon, with the server's glance ("From 9:00") when it sends one.
         let icon = model.resting ? "moon.zzz.fill" : "bus.fill"
         Group {
             if let title {
-                // One Text with the symbol inline: a Label gets the status
-                // button's wide image-to-title gap, which looks detached.
                 Text("\(Image(systemName: icon)) \(Text(verbatim: title))")
             } else {
                 Image(systemName: icon)
             }
         }
-        // The name first, then the glance with its "~" said as a word.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title.map { L("terminus: %@", spokenTimes($0)) } ?? "terminus")
-        // TERMINUS_OPEN=setup, settings, map or (debug) popover opens that window at launch, for
-        // testing when the menu bar item is hidden behind the notch.
         .task {
             guard let id = ProcessInfo.processInfo.environment["TERMINUS_OPEN"] else { return }
             openWindow(id: id)
@@ -103,9 +85,7 @@ private struct MenuBarLabel: View {
     }
 }
 
-/// A fixed "now" for snapshot renders, which can't run a TimelineView.
 struct FixedNowKey: EnvironmentKey { static let defaultValue: Date? = nil }
-/// Whether anyone can see it tick: false while the popover is closed.
 struct TickingKey: EnvironmentKey { static let defaultValue = true }
 extension EnvironmentValues {
     var fixedNow: Date? {
@@ -118,10 +98,6 @@ extension EnvironmentValues {
     }
 }
 
-/// Re-renders its content every `every` seconds with the current time, on
-/// the server's clock (ServerClock): it's compared with the answer's times.
-/// Not while the popover is closed (`ticking`): its views stay alive then,
-/// and a countdown nobody sees would redraw every second all day.
 struct Ticking<Content: View>: View {
     let every: TimeInterval
     @ViewBuilder let content: (Date) -> Content
@@ -141,13 +117,9 @@ struct Ticking<Content: View>: View {
 
 struct Popover: View {
     @Bindable var model: AppModel
-    /// Drives the opening animation, from the key state of the popover's own
-    /// window (`window`): Setup, Settings and the map are windows of their own.
     @State private var shown: Bool
     @State private var window: NSWindow?
-    /// The content is taller than the screen, so it scrolls.
     @State private var overflows = false
-    /// The window's height, as the content's least: see `fit`.
     @State private var floor: CGFloat = 0
 
     init(model: AppModel, startShown: Bool = false) {
@@ -162,16 +134,8 @@ struct Popover: View {
             }
             .padding(14)
             if model.isSnapshot {
-                // ImageRenderer can't draw a ScrollView (an NSScrollView).
                 content
             } else {
-                // No taller than the screen: a long Today scrolls inside the
-                // popover, with the footer kept in view, instead of running
-                // off the bottom. It scrolls only then: scrolling content
-                // that fits would shake the popover on a tab switch, its scroll
-                // bar flickering, as the window's height changes. The scroll
-                // view stays either way, so the content (a search being
-                // typed, Go later) keeps its state as it grows past the screen.
                 ScrollView {
                     content.onGeometryChange(for: CGFloat.self) {
                         $0.size.height
@@ -189,16 +153,9 @@ struct Popover: View {
         .environment(\.ticking, model.popoverOpen)
         .frame(width: 360)
         .fixedSize(horizontal: false, vertical: true)
-        // The menu bar window grows to fit taller content, top edge fixed,
-        // but shrinks around its middle and then slides back up under the
-        // menu bar: a jump on every switch to a shorter tab. So the content
-        // never gets shorter than the window (`floor`); `fit` measures it and
-        // shrinks the window itself, top edge pinned.
         .background(GeometryReader { g in Color.clear.preference(key: ContentHeight.self, value: g.size.height) })
         .onPreferenceChange(ContentHeight.self) { h in fit(height: h) }
         .frame(minHeight: floor, alignment: .top)
-        // A snapshot has no window, and ImageRenderer can't draw an NSView.
-        // Updater tells it apart from the windows that hold back an install.
         .background {
             if !model.isSnapshot {
                 WindowReader {
@@ -209,7 +166,6 @@ struct Popover: View {
                 }
             }
         }
-        // Opening is a plain fade of the whole popover; nothing moves.
         .opacity(shown ? 1 : 0)
         .frame(maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
@@ -219,7 +175,6 @@ struct Popover: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { n in
             if n.object as? NSWindow === window { close() }
         }
-        // The definitive "it's gone": the window stops being visible.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { n in
             guard let w = n.object as? NSWindow, w === window, !w.occlusionState.contains(.visible) else { return }
             model.popoverOpen = false
@@ -228,7 +183,6 @@ struct Popover: View {
         .onAppear { open() }
     }
 
-    /// The screen under the menu bar, less room for the footer and a margin.
     private static var maxContentHeight: CGFloat {
         ((NSScreen.main?.visibleFrame.height) ?? 800) - 90
     }
@@ -239,9 +193,6 @@ struct Popover: View {
         withAnimation(.easeOut(duration: 0.18)) { shown = true }
     }
 
-    /// Losing key status doesn't mean the popover closed: opening the
-    /// Settings menu takes key away while the popover stays on screen. Only
-    /// treat it as closed once the window has actually gone.
     private func close() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             guard let window, !window.isVisible || !window.occlusionState.contains(.visible) else { return }
@@ -255,8 +206,6 @@ struct Popover: View {
         if over != overflows { overflows = over }
     }
 
-    /// After SwiftUI's update, not inside it: resizing the window there lays
-    /// the popover out again in the middle of laying it out.
     private func fit(height: CGFloat) {
         DispatchQueue.main.async {
             guard let window, height > 0 else { return }
@@ -267,9 +216,6 @@ struct Popover: View {
             }
             var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.minY, width: content.width, height: height))
             frame.origin.y = window.frame.maxY - frame.height
-            // The window and the floor change in the same pass, drawn together:
-            // the content is never taller than the window, nor the window
-            // resized by the system, in between.
             window.setFrame(frame, display: false, animate: false)
             floor = height
         }
@@ -281,7 +227,6 @@ private struct ContentHeight: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
-/// Hands back the NSWindow this view ends up in.
 struct WindowReader: NSViewRepresentable {
     let found: (NSWindow) -> Void
 

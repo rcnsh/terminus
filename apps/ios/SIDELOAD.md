@@ -51,7 +51,9 @@ You need a Mac with [Xcode](https://apps.apple.com/app/xcode/id497799835),
    scripts/sideload.sh
    ```
 
-   It builds terminus, signs it with your Apple ID and installs it.
+   It builds terminus, signs it with your Apple ID and installs it. With
+   several teams in Xcode, pick one with `TEAM=<id>`; with several iPhones
+   plugged in, `DEVICE=<udid>`.
 
 5. The first time, on the iPhone:
    - **Settings › Privacy & Security › Developer Mode**: turn it on. The

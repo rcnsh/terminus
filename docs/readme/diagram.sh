@@ -1,7 +1,4 @@
 #!/bin/sh
-# Renders diagram.html to the README's "How it fits together" picture,
-# light and dark (diagram-light.webp, diagram-dark.webp).
-# Needs a headless Chromium (Playwright's, or set CHROME) and cwebp.
 set -eu
 cd "$(dirname "$0")"
 CHROME="${CHROME:-$(ls -d "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-*/chrome-headless-shell 2>/dev/null | tail -1)}"

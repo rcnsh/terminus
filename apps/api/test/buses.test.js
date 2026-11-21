@@ -22,10 +22,6 @@ const mLon = (lat) => 111_320 * Math.cos((lat * Math.PI) / 180);
 const metres = (a, b) => Math.hypot((b[0] - a[0]) * mLon(a[1]), (b[1] - a[1]) * M_LAT);
 const bearingOf = (a, b) => ((Math.atan2((b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180), b[1] - a[1]) * 180) / Math.PI + 360) % 360;
 
-/**
- * One road used both ways: out east 500 m, then back west [gap] m to the
- * north. Stops A (start), B (the far end) and C (back at the start).
- */
 function twoWay(gap = 8) {
   const east = 500 / mLon(1.3);
   const north = gap / M_LAT;
@@ -44,16 +40,12 @@ function twoWay(gap = 8) {
     },
   };
 }
-/** A fix [m] metres east of the start and [n] metres north of the eastbound side. */
 const at = ({ east }, m, n, heading = null) => ({ lon: 103.77 + (east * m) / 500, lat: 1.3 + n / M_LAT, heading });
 const track = (along, at, doubt = 0) => ({ along, at, seen: at, doubt, offSince: null });
-/** A line's length in metres, as the API measures it. */
 const cumulativeOf = (line) => line.slice(1).reduce((m, p, i) => m + metres(line[i], p), 0);
 
 test('a live bus is placed on its line, and its next stop is the one ahead', () => {
   const shape = SHAPES.A1;
-  // At the line's vertex for its 3rd stop, heading along the line: the next
-  // stop is the 4th.
   const k = 2;
   let walked = 0;
   let idx = 0;
@@ -64,50 +56,43 @@ test('a live bus is placed on its line, and its next stop is the one ahead', () 
   assert.ok(along != null && Math.abs(along - shape.at[k]) < 20, `placed at ${along}, stop at ${shape.at[k]}`);
   const section = sectionOf(shape, along, true);
   assert.equal(section.at, k, 'at the stop');
-  assert.equal(shape.stops[nextOf(shape, section, true)], shape.stops[k + 1]);
+  assert.equal(
+    shape.stops[nextOf(shape, section, true)],
+    shape.stops[k + 1],
+    'at its 3rd stop heading along the line: the next is the 4th',
+  );
   assert.equal(alongLine(shape, lat + 0.01, lon, heading), null);
 });
 
 test('on a road its route uses both ways, a bus keeps to its own side', () => {
   const road = twoWay();
   const { shape } = road;
-  // 280 m along eastbound, but GPS puts it 5 m north: nearer the westbound side.
   const fix = at(road, 280, 5);
   assert.ok(alongLine(shape, fix.lat, fix.lon, null) > 500, 'with nothing to go on, the nearer side');
-  // It was at 270 m ten seconds ago: standing, it's still eastbound.
   const kept = follow(shape, fix, track(270, 0), 10_000);
   assert.ok(Math.abs(kept.place.along - 280) < 2, `standing, kept its side: ${kept.place.along}`);
-  // Moving west once (a bad heading): still eastbound, with a doubt.
   const odd = follow(shape, { ...fix, heading: 270 }, track(270, 0), 10_000);
   assert.ok(Math.abs(odd.place.along - 280) < 2, `one odd heading: ${odd.place.along}`);
-  assert.equal(odd.track.doubt, 1);
-  // The same reading again (the feed holds one for 15-20 s): the same answer, no more doubt.
+  assert.equal(odd.track.doubt, 1, 'one odd heading: a doubt');
   const again = follow(shape, { ...fix, heading: 270 }, odd.track, 15_000);
-  assert.equal(again.place.along, odd.place.along);
-  assert.equal(again.track.doubt, 1);
-  // A second reading moving west: the track was wrong, and gives way.
+  assert.equal(again.place.along, odd.place.along, 'the feed holds a reading for 15-20 s: the same reading, the same answer');
+  assert.equal(again.track.doubt, 1, 'and no more doubt');
   const turned = follow(shape, at(road, 274, 5, 270), odd.track, 25_000);
   assert.ok(turned.place.along > 500, `seen going west again: ${turned.place.along}`);
-  assert.equal(turned.track.doubt, 0);
-  // A heading that agrees clears the doubt.
-  assert.equal(follow(shape, at(road, 290, 5, 90), odd.track, 25_000).track.doubt, 0);
-  // Somewhere it can't have driven to since: placed afresh.
-  assert.ok(follow(shape, fix, track(0, 0), 1_000).place.along > 500);
+  assert.equal(turned.track.doubt, 0, 'a second reading moving west: the track gives way');
+  assert.equal(follow(shape, at(road, 290, 5, 90), odd.track, 25_000).track.doubt, 0, 'a heading that agrees clears the doubt');
+  assert.ok(follow(shape, fix, track(0, 0), 1_000).place.along > 500, "somewhere it can't have driven to since: placed afresh");
 });
 
 test('a bus reported standing still for longer than a track lasts keeps its side', async () => {
   const road = twoWay();
   const { shape } = road;
-  // Eastbound at 280 m, its fix 5 m north: nearer the westbound side.
   const fix = at(road, 280, 5);
   let r = follow(shape, fix, track(270, 0), 10_000);
-  // The feed repeats the very same position every 15 s for 20 minutes, past
-  // TRACK_MS (10 min) since it last moved.
   for (let now = 25_000; now <= 1_210_000; now += 15_000) {
     r = follow(shape, fix, r.track, now);
-    assert.ok(Math.abs(r.place.along - 280) < 2, `at ${now / 1000} s: ${r.place.along}`);
+    assert.ok(Math.abs(r.place.along - 280) < 2, `the same fix for 20 min, past TRACK_MS: at ${now / 1000} s, ${r.place.along}`);
   }
-  // The same through placeBuses, which drops tracks it thinks are old.
   const graph = { stops: [], routes: { X: shape.stops } };
   const raw = [{ plate: 'S1', lat: fix.lat, lon: fix.lon, heading: 90, speed: 20, crowd: null }];
   let placed = await placeBuses(graph, 'X', raw, 0, {}, shape);
@@ -116,11 +101,10 @@ test('a bus reported standing still for longer than a track lasts keeps its side
   const standing = [{ ...raw[0], heading: null, speed: 0 }];
   for (let now = 15_000; now <= 1_215_000; now += 15_000) {
     placed = await placeBuses(graph, 'X', standing, now, placed.tracks, shape);
-    assert.equal(placed.buses[0].along, along, `at ${now / 1000} s`);
+    assert.equal(placed.buses[0].along, along, `through placeBuses too, at ${now / 1000} s`);
   }
-  // Not reported at all for longer than that: the track goes.
   const gone = await placeBuses(graph, 'X', [], 1_215_000 + 600_000, placed.tracks, shape);
-  assert.deepEqual(gone.tracks, {});
+  assert.deepEqual(gone.tracks, {}, 'not reported for longer than a track lasts: the track goes');
 });
 
 test('a bus is never put back along its line', () => {
@@ -129,7 +113,6 @@ test('a bus is never put back along its line', () => {
   assert.equal(moved.place.along, 300, 'GPS a little behind: it stays where it was');
   assert.ok(metres([moved.place.lon, moved.place.lat], [at(road, 300, 0).lon, 1.3]) < 1, 'drawn there too');
   assert.equal(moved.track.along, 300);
-  // Round a loop, past its start is ahead, not 1 km back.
   const loop = {
     stops: ['A', 'B', 'A'],
     line: [
@@ -142,13 +125,7 @@ test('a bus is never put back along its line', () => {
     at: [0, 508, 1016],
   };
   const past = follow(loop, at(road, 30, 0, 90), track(1010, 0), 5_000, true);
-  assert.ok(Math.abs(past.place.along - 30) < 2, `round the loop: ${past.place.along}`);
-  // A loop round a block, 500 m by 200 m: east, north, west, then south
-  // into the terminus at its start. Leaving the terminus, the bus drives
-  // north up the road it came in by: up to 500 m behind its place, it waits
-  // there, then joins its line ahead. At the loop's end (the terminus) it
-  // waits as long as its track lasts: at Kent Ridge Bus Terminal, A1 waited
-  // more than two minutes and was drawn 261 m back.
+  assert.ok(Math.abs(past.place.along - 30) < 2, `round a loop, past its start is ahead: ${past.place.along}`);
   const w = 500 / mLon(1.3),
     h = 200 / M_LAT;
   const block = {
@@ -164,14 +141,13 @@ test('a bus is never put back along its line', () => {
   };
   const up = { lon: 103.77, lat: 1.3 + 150 / M_LAT, heading: 0 };
   const waits = follow(block, up, track(1390, 0), 20_000, true);
-  assert.equal(waits.place.along, 1390);
+  assert.equal(waits.place.along, 1390, 'leaving the terminus up the road it came in by, it waits');
   assert.ok(
     Math.abs(follow(block, { lon: 103.77 + (w * 30) / 500, lat: 1.3, heading: 90 }, waits.track, 40_000, true).place.along - 30) < 2,
     'and then on ahead',
   );
   assert.equal(follow(block, up, track(1390, 0), 130_000, true).place.along, 1390, 'at the loop end, still waiting after two minutes');
   assert.ok(follow(block, up, track(1390, 0), 700_000, true).place.along < 1300, 'its track gone (10 minutes): placed afresh');
-  // Mid-route, behind it for more than two minutes: placed afresh.
   const side = { lon: 103.77 + w, lat: 1.3 + 50 / M_LAT, heading: 180 };
   assert.ok(follow(block, side, track(800, 0), 20_000, true).place.along === 800, 'mid-route, waits');
   assert.ok(follow(block, side, track(800, 0), 130_000, true).place.along < 800, 'mid-route, after two minutes: placed afresh');
@@ -190,8 +166,6 @@ test('a tracked bus that jumps off its line for a moment stays on it', () => {
 });
 
 test('standing with no track, a bus at a stop is on that stop’s side', () => {
-  // Both directions drawn on the very same points (as OpenStreetMap draws
-  // many two-way roads): GPS can't choose, the stops can.
   const road = twoWay(0);
   const south = { lat: 1.3 - 8 / M_LAT, lon: 103.77 + (road.east * 250) / 500 };
   const north = { lat: 1.3 + 8 / M_LAT, lon: 103.77 + (road.east * 250) / 500 };
@@ -201,8 +175,7 @@ test('standing with no track, a bus at a stop is on that stop’s side', () => {
   assert.ok(Math.abs(bySouth.place.along - 252) < 2, `at the eastbound stop: ${bySouth.place.along}`);
   const byNorth = follow(shape, at(road, 252, 3), null, 0, false, stops);
   assert.ok(Math.abs(byNorth.place.along - 748) < 2, `at the westbound stop: ${byNorth.place.along}`);
-  // Moving, its heading decides.
-  assert.ok(follow(shape, at(road, 252, 3, 90), null, 0, false, stops).place.along < 500);
+  assert.ok(follow(shape, at(road, 252, 3, 90), null, 0, false, stops).place.along < 500, 'moving, its heading decides');
 });
 
 test('a live bus that stops on a two-way stretch of D2 keeps its next stop', async () => {
@@ -219,7 +192,6 @@ test('a live bus that stops on a two-way stretch of D2 keeps its next stop', asy
     if (j < 0) continue;
     const [a, b] = [shape.line[i], shape.line[i + 1]];
     const heading = bearingOf(a, b);
-    // Two thirds of the way across the road: nearer the other direction.
     const lon = a[0] + (shape.line[j][0] - a[0]) * 0.67,
       lat = a[1] + (shape.line[j][1] - a[1]) * 0.67;
     const raw = (speed) => [{ plate: `T${i}`, lat, lon, heading, speed, crowd: null }];
@@ -235,10 +207,6 @@ test('a live bus that stops on a two-way stretch of D2 keeps its next stop', asy
   assert.ok(checked > 0, 'found a two-way stretch of D2 to test on');
 });
 
-/**
- * A straight road east, 1 km, with stops A, B and C at 0, 500 and 1000 m,
- * their dots 10 m north of the line, as a graph and a shape.
- */
 function straight() {
   const east = 1000 / mLon(1.3);
   const lonAt = (m) => 103.77 + (east * m) / 1000;
@@ -274,7 +242,6 @@ test('a bus within 40 m of a stop along its line is at the stop; otherwise betwe
   assert.equal(nextOf(shape, sectionOf(shape, 535, false), false), 2, 'at B, next is C');
   assert.equal(nextOf(shape, sectionOf(shape, 300, false), false), 1, 'between A and B, next is B');
   assert.equal(nextOf(shape, sectionOf(shape, 1000, false), false), null, 'at the end of a one-way route: none');
-  // A loop: its first stop is its last.
   const loop = {
     stops: ['A', 'B', 'C', 'A'],
     line: [
@@ -310,9 +277,8 @@ test('buses are drawn at their stop’s dot, or spread evenly between two stops'
     ['P1', 'P2', 'P3', 'P4', 'P5'],
     'in the feed’s order',
   );
-  // At B: drawn on its dot, the one further on in front.
   assert.equal(by.P1.at.code, 'B');
-  assert.equal(by.P1.slot, 0);
+  assert.equal(by.P1.slot, 0, 'at B, the one further on in front');
   assert.equal(by.P3.at.code, 'B');
   assert.equal(by.P3.slot, 1);
   assert.equal(by.P1.lat, Math.round(graph.stops[1].lat * 1e6) / 1e6);
@@ -320,16 +286,14 @@ test('buses are drawn at their stop’s dot, or spread evenly between two stops'
   assert.equal(by.P1.along, 500);
   assert.equal(by.P1.nextStop.code, 'C');
   assert.equal(by.P1.stretch, null, 'at a stop: no stretch');
-  // Two between A and B: a third and two thirds of the way.
   assert.equal(by.P2.at, null);
   assert.ok(Math.abs(by.P2.along - 500 / 3) < 0.1, `the one behind at a third: ${by.P2.along}`);
   assert.ok(Math.abs(by.P4.along - 1000 / 3) < 0.1, `the one ahead at two thirds: ${by.P4.along}`);
   assert.equal(by.P2.slot, 0);
   assert.equal(by.P2.nextStop.code, 'B');
   assert.deepEqual(by.P2.stretch, { from: 0, to: 500, last: { code: 'A', name: graph.stops[0].name } }, 'somewhere from A to B');
-  // One between B and C: halfway, on the line, pointing along the road.
   assert.equal(by.P5.along, 750);
-  assert.ok(metres([by.P5.lon, by.P5.lat], [lonAt(750), 1.3]) < 3);
+  assert.ok(metres([by.P5.lon, by.P5.lat], [lonAt(750), 1.3]) < 3, 'one between B and C: halfway, on the line');
   assert.equal(by.P5.heading, 90);
   assert.equal(by.P5.crowd, 'low');
   assert.deepEqual([by.P5.stretch.from, by.P5.stretch.to, by.P5.stretch.last.code], [500, 1000, 'B']);
@@ -350,7 +314,6 @@ test('tracks are shared through the edge cache: every instance draws a bus the s
   const ctx = { waitUntil: (p) => pending.push(p) };
   const shape = SHAPES.D2;
   const graph = { stops: [], routes: { D2: shape.stops } };
-  // Driving along D2's 40th stretch, then standing two thirds across the road.
   const [a, b] = [shape.line[40], shape.line[41]];
   const raw = (speed, lat, lon) => [{ plate: 'SHARED', lat, lon, heading: bearingOf(a, b), speed, crowd: null }];
   const first = await trackedBuses(graph, 'D2', { buses: raw(20, a[1], a[0]), fetchedAt: 1_000 }, ctx);
@@ -365,10 +328,6 @@ test('tracks are shared through the edge cache: every instance draws a bus the s
 });
 
 test('replaying 15 minutes of the real feed: no bus changes side, and none is shown going back', async () => {
-  // test/fixtures/bus-trace.jsonl: A1, A2, D1 and D2 on Saturday 3 October
-  // 2026 at 1 pm, every 5 s (the probe workflow with `trace`). Replayed
-  // against the routes as they were then (bus-trace-routes.json), so a
-  // weekly scrape that changes a route doesn't fail it.
   const { readFileSync } = await import('node:fs');
   const graph = (await import('./fixtures/bus-trace-routes.json', { with: { type: 'json' } })).default;
   const rows = readFileSync(new URL('./fixtures/bus-trace.jsonl', import.meta.url), 'utf8')
@@ -382,7 +341,6 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
     polls.get(key).raw.push({ plate: r.bus, lat: r.lat, lon: r.lng, heading: r.direction, speed: r.speed, crowd: null });
   }
   const tracks = {};
-  /** Each bus at each poll: where its reading is along the line, and where it's shown. */
   const seen = new Map();
   let atStops = 0;
   let between = 0;
@@ -392,7 +350,6 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
     tracks[p.svc] = placed.tracks;
     const shown = new Map(placed.buses.map((b) => [b.plate, b]));
     for (const r of p.raw) {
-      // Off its line (not shown): its reading is null, and it starts afresh.
       const b = shown.get(r.plate);
       const key = `${p.svc} ${r.plate}`;
       const list = seen.get(key) ?? [];
@@ -401,25 +358,22 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
       if (b?.at) atStops++;
       else if (b) {
         between++;
-        // Drawn inside its stretch, which runs from the stop it passed to its next.
         if (!(b.stretch.from < b.along && b.along < b.stretch.to) || b.stretch.last.code === b.nextStop.code)
           outside.push(`${key} at ${p.t} s: ${b.along} in ${JSON.stringify(b.stretch)}`);
       }
     }
   }
-  assert.deepEqual(outside, []);
+  assert.deepEqual(outside, [], 'drawn inside its stretch, from the stop it passed to its next');
   const wrong = [];
   const back = [];
   for (const [key, list] of seen) {
     const total = graph.shapes[key.split(' ')[0]].at.at(-1);
     const wrap = (d) => (d < -total / 2 ? d + total : d > total / 2 ? d - total : d);
-    // Each new reading's place, with when it was first given.
     const readings = list.filter((x, i) => i === 0 || x.fix !== list[i - 1].fix || (x.reading == null) !== (list[i - 1].reading == null));
     for (let i = 1; i < readings.length; i++) {
       const [a, b] = [readings[i - 1], readings[i]];
       if (a.reading == null || b.reading == null) continue;
       const gone = wrap(b.reading - a.reading);
-      // Back more than GPS error, or further than a bus can drive: the other side.
       if (gone < -60 || gone > 100 + 20 * (b.t - a.t)) wrong.push(`${key} at ${b.t} s: ${a.reading} → ${b.reading}`);
     }
     for (let i = 1; i < list.length; i++) {
@@ -427,8 +381,8 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
       if (a.shown != null && b.shown != null && wrap(b.shown - a.shown) < 0) back.push(`${key} at ${b.t} s: shown ${a.shown} → ${b.shown}`);
     }
   }
-  assert.deepEqual(wrong, []);
-  assert.deepEqual(back, []);
+  assert.deepEqual(wrong, [], 'a reading back more than GPS error, or further than a bus can drive, is the other side');
+  assert.deepEqual(back, [], 'never shown going back');
   assert.ok(atStops > 100 && between > 100, `shown at stops ${atStops} times, between ${between}`);
 });
 
@@ -441,13 +395,11 @@ test('/api/line: D1’s stops in route order, ending where its loop began, each 
   );
   assert.deepEqual(stops.at(-1), stops[0], 'the loop’s last stop is its first');
   assert.deepEqual(stops[0], { code: 'COM3', name: 'COM 3', longName: 'COM 3', services: ['D2'] });
-  // The full name too, for a list with room for it: CLB is Central Library.
-  assert.equal(stops.find((s) => s.code === 'CLB').longName, 'Central Library');
+  assert.equal(stops.find((s) => s.code === 'CLB').longName, 'Central Library', 'the full name, for a list with room for it');
   assert.deepEqual(stops[8].services, ['A1', 'K', 'R1'], 'YIH: the others, not D1 itself');
-  // K doesn't loop: its first and last stops are different stops, both listed.
   const k = lineStops(idx, 'K');
   assert.equal(k[0].code, 'PGP');
-  assert.equal(k.at(-1).code, 'PGPR');
+  assert.equal(k.at(-1).code, 'PGPR', "K doesn't loop: its first and last stops are both listed");
   assert.equal(k.length, idx.routes.get('K').seq.length, 'K: nothing added');
 });
 
@@ -478,17 +430,14 @@ test('/api/line: after a loop’s last stop the bus is heading back to its first
   const between = (last, next) => ({ at: null, stretch: { from: 0, to: 1, last: name(last) }, nextStop: name(next) });
   const loop = ['COM3', 'A', 'B'];
   assert.deepEqual(indexOnLine(loop, true, between('B', 'COM3')), { at: null, after: 2 });
-  // The end of a line that doesn't loop: nowhere further on, so at that stop.
-  assert.deepEqual(indexOnLine(['A', 'B'], false, between('B', 'A')), { at: 1, after: null });
+  assert.deepEqual(indexOnLine(['A', 'B'], false, between('B', 'A')), { at: 1, after: null }, 'the end of a one-way line: at that stop');
   const twice = ['A', 'B', 'A', 'C'];
   assert.deepEqual(indexOnLine(twice, false, between('A', 'C')), { at: null, after: 2 });
   assert.deepEqual(indexOnLine(twice, false, between('A', 'B')), { at: null, after: 0 });
   assert.deepEqual(indexOnLine(twice, false, { at: name('A'), stretch: null, nextStop: name('C') }), { at: 2, after: null });
-  // A stop the list doesn't have (the route changed since the shapes were made): left off.
-  assert.equal(indexOnLine(loop, true, between('ZZ', 'A')), null);
+  assert.equal(indexOnLine(loop, true, between('ZZ', 'A')), null, 'a stop the list lacks (the route changed since the shapes): left off');
 });
 
-/** A real bus [m] metres along [svc]'s line, driving its way, placed on its own. */
 async function placedAt(svc, m) {
   const shape = SHAPES[svc];
   const p = pointAlong(shape, m);
@@ -516,13 +465,15 @@ test('K ends at PGP Foyer: a bus there has no next stop, and one coming in is he
   const there = await placedAt('K', end);
   assert.equal(there.at?.code, 'PGPR');
   assert.equal(there.nextStop, null);
-  // Half way along the last stretch, from Opp KR MRT.
   const coming = await placedAt('K', (shape.at[last - 1] + end) / 2);
   assert.equal(coming.at, null);
-  assert.equal(coming.stretch.last.code, 'KR-MRT-OPP');
+  assert.equal(coming.stretch.last.code, 'KR-MRT-OPP', 'half way along the last stretch, from Opp KR MRT');
   assert.equal(coming.nextStop.code, 'PGPR');
-  // At PGP, its first stop, it's on its way to KR MRT, not round from the end.
-  assert.equal((await placedAt('K', 0)).nextStop.code, shape.stops[1]);
+  assert.equal(
+    (await placedAt('K', 0)).nextStop.code,
+    shape.stops[1],
+    'at PGP, its first stop, on its way to KR MRT, not round from the end',
+  );
 });
 
 test('P’s long legs off campus: a bus on the way to College Green is between Kent Vale and it', async () => {
@@ -539,13 +490,11 @@ test('P’s long legs off campus: a bus on the way to College Green is between K
     [shape.at[kv], shape.at[cg]].map((m) => Math.round(m * 10) / 10),
   );
   assert.equal((await placedAt('P', shape.at[cg])).nextStop.code, 'OTH');
-  // Back from Botanic Gardens MRT to KR MRT, the other long leg.
   const back = await placedAt('P', (shape.at[bg] + shape.at[kr]) / 2);
-  assert.deepEqual([back.stretch.last.code, back.nextStop.code], ['BG-MRT', 'KR-MRT']);
-  // Round the loop at Kent Vale: on to College Green again.
+  assert.deepEqual([back.stretch.last.code, back.nextStop.code], ['BG-MRT', 'KR-MRT'], 'the other long leg');
   const home = await placedAt('P', shape.at.at(-1));
   assert.equal(home.at?.code, 'KV');
-  assert.equal(home.nextStop.code, 'CG');
+  assert.equal(home.nextStop.code, 'CG', 'round the loop at Kent Vale: on to College Green again');
 });
 
 test('a real D1 bus lists the stops still ahead, to COM 3 where its loop ends; a K bus at its last stop has none', async () => {

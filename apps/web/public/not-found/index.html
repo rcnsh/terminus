@@ -18,8 +18,6 @@
 <script type="module" src="/assets/stars.js" blocking="render"></script>
 <script src="/assets/i18n.js"></script>
 <style>
-  /* Any address the website doesn't have (the Worker's sitePage): the sky,
-     your stop's sign on an empty road, and the way home. */
   .lost { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
   .lost > .wrap { width: 100%; }
   .lost .msg { flex: 1; display: grid; align-content: center; justify-items: start; gap: 12px; padding-top: 32px; padding-bottom: 32px; }
@@ -29,7 +27,6 @@
   .lost .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
   .lost .night-sky { --sky-room: 420px; }
 </style>
-<!-- Every module the page starts with, asked for at once (web-sw.test.js keeps this list right). -->
 <link rel="modulepreload" href="/assets/ui.js">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/preact.mjs">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/hooks.mjs">

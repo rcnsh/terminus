@@ -1,8 +1,3 @@
-/**
- * A stop's sign (apps/web/public/app/sign.js), as the Stops tab's pinned
- * card draws it: with nothing running, the services that call there are
- * listed greyed, with when each starts again, and still open their line.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';

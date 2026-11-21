@@ -11,7 +11,9 @@ the owner's, is the old address: apps before 3.3.0 (betas before
 they can't reach terminus.run at all (`Servers.order`). From 3.6.0 the
 apps have only terminus.run built in.
 Both addresses stay attached to each Worker (`test/deploy.test.js`) until
-no app that uses the old one is left. The
+no app that uses the old one is left. A deploy detaches any custom domain
+not in `domains` in `cloudflare.config.ts`, so dropping a line takes that
+address offline at once. The
 apps' developer menu (Settings, About: always in debug and beta builds,
 after seven taps on the version in a stable release) shows diagnostics and
 the recent requests, for a bug report, and in debug builds switches to the
@@ -19,7 +21,8 @@ dev stub, never a typed server (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
 (`movedPage` in `src/site/site.ts`, on with `MOVE_PAGES`), and emailed links use
-terminus.run (`linkOrigin`). If a network refuses terminus.run,
-`cloudflare.config.ts` says how to switch both off. The
+terminus.run (`linkOrigin`). If a network refuses terminus.run, drop
+`MOVE_PAGES` and set `LINK_ORIGIN` to the old address in
+`cloudflare.config.ts`. The
 privacy contact is privacy@terminus.run, through Email Routing's catch-all,
 so it goes with the domain.

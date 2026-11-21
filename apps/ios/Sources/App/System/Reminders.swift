@@ -1,25 +1,16 @@
 import Foundation
 import UserNotifications
 
-/// The leave reminders on this phone (TripReminders decides): local
-/// notifications scheduled ahead from each answer, so they go on time with
-/// the app closed. A later answer moves them; a push for the same trip
-/// (worded by the notification service) takes their place.
 @MainActor enum Reminders {
     private static var d: UserDefaults { Shared.defaults }
     private static var center: UNUserNotificationCenter { UNUserNotificationCenter.current() }
 
-    /// Bumped by each update, so one waiting on the permission can tell a later answer came meanwhile.
     private static var asked = 0
 
-    /// Brings the scheduled reminders in line with the latest plan.
     static func update(_ plan: NextAnswer, checked: Date) {
         asked += 1
         guard TripPrefs.leaveAlerts else { return clear() }
         guard Push.notificationsAllowed else {
-            // Refused: none. Merely not known yet (a launch in the background
-            // can answer before Push.checkPermission has): asked, then this
-            // again, rather than clearing reminders that are allowed.
             if Push.notificationsDenied { return clear() }
             let mine = asked
             Task {
@@ -53,37 +44,28 @@ import UserNotifications
         }
     }
 
-    /// Every leave reminder goes, shown or still to come.
     static func clear() {
         let ids = [TripReminders.soonID, TripReminders.nowID]
         center.removePendingNotificationRequests(withIdentifiers: ids)
         center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
-    /// The heads-up for `key` was swiped away: "Leave now" doesn't follow
-    /// it, and no later answer brings either back for that trip.
     static func dismissed(_ key: String) {
         d.set(key, forKey: "dismissedTrip")
         center.removePendingNotificationRequests(withIdentifiers: [TripReminders.nowID])
     }
 
-    /// Signed out: the reminders and what they were for.
     static func forget() {
         clear()
         for k in ["soonTrip", "soonAt", "dismissedTrip"] { d.removeObject(forKey: k) }
     }
 
-    /// The card's "Not going", with the server's own words, as the reminders' one button.
     private static func setCategory(_ plan: NextAnswer) {
         registerCategories(skipLabel: plan.card?.actions.first { $0.id == "skipped" }?.label)
     }
 
-    /// The trip category and its "Not going" button, at launch too: a
-    /// pushed alert carries the category on a phone that has never
-    /// scheduled a reminder, and without it there'd be no button.
     static func registerCategories(skipLabel: String? = nil) {
         let skip = UNNotificationAction(identifier: TripReminders.skipAction, title: skipLabel ?? L("Not going"), options: [])
-        // Both tell the app when one is swiped away (customDismissAction).
         center.setNotificationCategories([
             UNNotificationCategory(
                 identifier: TripReminders.category, actions: [skip], intentIdentifiers: [], options: .customDismissAction),
@@ -109,7 +91,6 @@ import UserNotifications
         c.userInfo = info
         c.interruptionLevel = .timeSensitive
         c.relevanceScore = 1
-        // Both on the server's clock, so the wait is right on a phone whose clock is out.
         let wait = at.timeIntervalSince(now)
         let trigger = wait > 1 ? UNTimeIntervalNotificationTrigger(timeInterval: wait, repeats: false) : nil
         center.add(UNNotificationRequest(identifier: id, content: c, trigger: trigger))

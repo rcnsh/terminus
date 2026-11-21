@@ -5,7 +5,25 @@
   each route line, moving every 18 s like the real feed.
 - an in-memory D1;
 - the test account `you@u.nus.edu`. Sign-in codes and links print to the
-  stub's stdout.
+  stub's stdout. Its profile: home stop PGP, favourites KR MRT, UTown and
+  Gym, a class (GEA1000 at UTown) `CLASS_IN_MIN` (50) minutes after the
+  clock starts, and pairing codes `TEST67`, `TEST78` and `TEST89`. It is
+  saved at version 1, as a saved profile is (0 means none, and a page
+  saving with `If-Match` could never save over it).
+- crowd history saying every bus at PGP is usually packed, so the full-bus
+  warning shows.
+- a fake LTA DataMall: each public bus at the stop about every 10 minutes,
+  a third from the timetable (`Monitored` 0), as the real feed does at night.
+- a fake NUSMods: every module has a Monday lab, a Tuesday online tutorial
+  and a Wednesday off-campus lecture; `XX9999` is not offered and
+  `DOWN1000` answers 502.
+- the map's files from `dev/map/` when it's there (`scripts/map-tiles.sh
+  --dry-run`, then copy `build/map` to `dev/map`), standing in for R2, byte
+  ranges included. `latest.json` names this version, with no app files.
+- real FCM pushes when `.private/fcm-service-account.json` is there (the
+  real Firebase project, so they reach a real device; each send logs its
+  status only). Web Push gets a fresh VAPID key each run, and a browser
+  subscribed to an old one subscribes again.
 - the timelapse recorder on the fake buses. `POST /__stub/timelapse?minutes=N`
   records N minutes at once, moving the clock ahead. Then open
   `/admin/#/timelapse` (token `dev`).
@@ -22,7 +40,31 @@
   hours back: the iPhone's UI tests set what each suite needs with these.
 
 It listens on loopback only; `STUB_HOST=0.0.0.0` opens it to the network
-(a phone on the same Wi-Fi), and `PORT` moves it from 8787.
+(a phone on the same Wi-Fi), and `PORT` moves it from 8787. It listens on
+127.0.0.1 and ::1 (the first alone without IPv6). `STUB_TLS=<dir with
+localhost.key and localhost.pem>` serves it over HTTPS on `PORT + 1` too,
+for a page that needs a secure origin (Web Push on iOS): trust the
+certificate's CA on the device first, and a phone needs `STUB_HOST`.
+
+- `POST /__stub/freeze` and `/__stub/thaw` stop and restart the clock (light
+  and dark screenshots of one moment); `POST /__stub/skip?min=N` moves it
+  ahead, to walk through a trip. `at`, `hours` and `reset` also forget what
+  the edge cache and feed gates hold, since an answer fetched at a later
+  time would stay fresh for good once the clock goes back.
+- Every reply's `Date` header carries the stub's clock, which the apps set
+  their clock by. The recorder's alarms fire on time, and its starting cron
+  runs every minute rather than every 15.
+- `GET /__stub/trips` shows each Trip object's alarm and storage;
+  `GET /__stub/push` which sessions take push (tokens masked).
+- WebKit (iOS Safari, the installed web app) keeps no `Secure` or `__Host-`
+  cookie over plain http, even on localhost, so the stub sends the session
+  cookie as `tm_dev` and renames it back for the Worker.
+- The Mac app takes `TERMINUS_API_BASE=http://localhost:8787`; an Android
+  debug build can be built with `./gradlew installStableDebug
+  -PapiBase=http://localhost:8787`.
+- The dashboard's made-up Analytics Engine rows (`fakeAeRows` in
+  `stub-admin.mjs`) take their column names from `analytics-rows.ts`, the
+  declaration admin.ts queries by, so a moved column moves in the stub too.
 
 It serves `apps/web/public` from disk, so a reload shows your change. Check
 web UI changes against it in headless Chromium and screenshot them:
@@ -51,9 +93,24 @@ starts on terminus.run, and its first answers come from NUS (rule 2). Give
 each agent its own `PORT` and stop only the stub you started, by its PID.
 
 - **iPhone (Simulator, debug build):** the app reads `TERMINUS_*`
-  variables from its environment (the list and what each does are in
-  `DevLaunch`, `apps/ios/Sources/App/TerminusApp.swift`). Set them in the
-  simulator's launchd, then launch the app:
+  variables from its environment (most in `DevLaunch`,
+  `apps/ios/Sources/App/TerminusApp.swift`):
+  - `TERMINUS_RESET=1` starts signed out with nothing kept;
+    `TERMINUS_TOKEN` (and `TERMINUS_EMAIL`) signs in with that token, set
+    up; `TERMINUS_API_BASE` the server (the stub at
+    `http://localhost:8787` is also kept as the developer menu's choice,
+    so it stays on it when opened from the home screen).
+  - `TERMINUS_LANG=en|zh|auto` the language, which then goes to the
+    account rather than the other way round; `TERMINUS_THEME=light|dark`;
+    `TERMINUS_CARD_STYLE=steps|route`; `TERMINUS_NEW_TO_NUS=1|0`;
+    `TERMINUS_SKY=night|dawn|day|golden|dusk` one hour's sky.
+  - `TERMINUS_VIEW=nearby` opens on Nearby; `TERMINUS_OPEN_STOP=<code>` a
+    stop's page on Stops; `TERMINUS_MAP_SVC` turns a map pill on,
+    `TERMINUS_MAP_STOP` opens a stop's sheet, `TERMINUS_MAP_BUS=1` the
+    first bus's; `TERMINUS_ALERTS=1` and `TERMINUS_LIVE=1` turn the leave
+    alerts and the Live Activity on.
+
+  Set them in the simulator's launchd, then launch the app:
 
   ```sh
   TOK=$(curl -s -X POST http://127.0.0.1:$PORT/__stub/session | python3 -I -c 'import sys,json; print(json.load(sys.stdin)["token"])')
@@ -79,3 +136,32 @@ each agent its own `PORT` and stop only the stub you started, by its PID.
   `simlock adb …` for `adb …`.
 - A fresh worktree has no `node_modules`: `pnpm install` before starting
   the stub, and `curl http://127.0.0.1:$PORT/` before launching anything.
+
+## The README's pictures
+
+`docs/readme/` holds each picture's page and the script that renders it,
+light and dark, to WebP (`cwebp`) in a headless Chromium (Playwright's, or
+`CHROME`; `PLAYWRIGHT=<path>/node_modules/playwright` if it isn't
+resolvable). Each page is light by default and dark with `#dark`, in the
+site's own tokens and fonts.
+
+- `node docs/readme/shots.mjs` takes the screenshots from the real site
+  under the stub: Now, the Stops tab with two stops pinned (as the store
+  screenshots have), and the map with D2 picked. It adds a phone's room
+  under the tab bar, which a browser window lacks, so the frames don't
+  clip the bar's end labels. Take them in Singapore's daytime (the stub's
+  class is 50 minutes from the real clock and the sky follows the real
+  hour), or give the stub and the pages a morning:
+  `STUB_NOW=2026-10-09T01:26:00Z CLASS_IN_MIN=34 SHOTS_AT=2026-10-09T01:26:00Z`.
+- Then the pictures composed from them: `node docs/readme/hero.mjs`
+  (`hero.html`, the banner: every client on the campus map under the
+  sky) and `sh docs/readme/features.sh` (`clients.html` and `knows.html`,
+  on a transparent background so they sit on GitHub's).
+- `sh docs/readme/diagram.sh` (`diagram.html`, "How it fits together"),
+  `sh docs/readme/loc.sh` (`loc.html`: the lines of code from
+  `pnpm loc --json`, passed in the address as base64, so the page holds no
+  counts of its own) and `sh docs/readme/render.sh` (`banner.html#og`, the
+  site's 1280x672 link preview, `apps/web/public/assets/og.png`).
+- `pnpm loc` counts the non-blank lines of the files git tracks, by part
+  and language, leaving out vendored code, lockfiles, test fixtures and
+  bundled data (`NO_COLOR` turns its colours off).

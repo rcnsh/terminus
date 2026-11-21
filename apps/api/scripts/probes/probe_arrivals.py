@@ -35,16 +35,13 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-# The feed client is the weekly scrape's (scripts/data/scrape_stops.py).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
 from scrape_stops import REQUIRED, ROOT, get_session, load_dev_vars, pick_list, proxy, use_live_version
 
 
-# Limits, enforced here rather than left as defaults: the test must stay small.
 MIN_EVERY_S = 5.0
 MAX_MINUTES = 15.0
 MAX_STOPS = 4
-# A stop code as the graph spells it (COM3, KR-MRT, UHALL-OPP); it must also be in stops.json.
 STOP_CODE = re.compile(r"[A-Z0-9]{1,12}(-[A-Z0-9]{1,6}){0,2}")
 SGT = timezone(timedelta(hours=8))
 
@@ -123,7 +120,6 @@ def main() -> int:
         ap.error(f"not in stops.json: {' '.join(unknown)}")
     if not args.stops or len(args.stops) > MAX_STOPS:
         ap.error(f"{len(args.stops)} stops; 1 to {MAX_STOPS} in one run")
-    # NaN fails both comparisons, so it is caught here too.
     if not args.every >= MIN_EVERY_S:
         print(f"--every {args.every:g} is below the floor; using {MIN_EVERY_S:g} s", file=sys.stderr)
         args.every = MIN_EVERY_S
@@ -133,8 +129,6 @@ def main() -> int:
 
     load_dev_vars()
     use_live_version()
-    # Never the Worker's device id: a fresh random one (scrape_stops.device_id),
-    # as each uNivUS install has its own.
     os.environ.pop("NEXTBUS_DEVICE_ID", None)
     missing = [k for k in REQUIRED if not os.environ.get(k)]
     if missing:
@@ -148,10 +142,9 @@ def main() -> int:
         print(f"## Arrivals probe\n\nStopped before the first poll: {failure(exc)}.")
         return 1
 
-    # (stop, svc, berth) -> [(t, first, next, eta_s)]
-    seen: dict = {}
-    replies: dict = {s: [] for s in args.stops}  # stop -> [(t, digest of the rows)]
-    stamps: dict = {s: [] for s in args.stops}  # stop -> [(t, TimeStamp, lag s)]
+    seen: dict[tuple[str, str, str], list[tuple]] = {}
+    digests: dict[str, list[tuple[float, str]]] = {s: [] for s in args.stops}
+    stamps: dict[str, list[tuple]] = {s: [] for s in args.stops}
     calls = 0
     trace = open(args.trace, "w") if args.trace else None
     start = time.monotonic()
@@ -163,12 +156,11 @@ def main() -> int:
             try:
                 data = proxy(session, "shuttle-service", busstopname=stop)
             except (SystemExit, Exception) as exc:
-                # Any refusal, 429, 5xx or timeout ends the run: never ask again.
                 ended = f"{stop}: {failure(exc)}"
                 break
             t = time.monotonic() - start
             rows = readings(data)
-            replies[stop].append((t, hashlib.sha256(json.dumps(rows).encode()).hexdigest()))
+            digests[stop].append((t, hashlib.sha256(json.dumps(rows).encode()).hexdigest()))
             if isinstance(data, dict) and data.get("TimeStamp") is not None:
                 stamp = str(data["TimeStamp"])
                 stamps[stop].append((t, stamp, stamp_lag(stamp, time.time())))
@@ -238,7 +230,7 @@ def main() -> int:
     print("\n| stop | replies | same as the one before | TimeStamp changes | TimeStamp held: median | lag behind our clock: median | max |")
     print("|---|---|---|---|---|---|---|")
     for stop in args.stops:
-        r = replies[stop]
+        r = digests[stop]
         same = sum(1 for a, b in zip(r, r[1:]) if a[1] == b[1])
         st = stamps[stop]
         held, last = [], None

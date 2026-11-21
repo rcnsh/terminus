@@ -4,10 +4,6 @@ import UIKit
 
 @testable import Terminus
 
-/// The Map tab's data, from replies shaped like the API's (see its /campus
-/// and /buses tests). The same cases as Android's MapDataTest and the Mac's
-/// MapDataTests.
-
 private let campusJson = Data(
     """
     {"stops": [
@@ -34,7 +30,6 @@ private func near(_ a: Double?, _ b: Double, _ tolerance: Double = 1e-9) -> Bool
     return abs(a - b) <= tolerance
 }
 
-/// A bus `m` metres along `path`.
 private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Double = 0) -> LiveBus {
     let p = path.point(at: m)
     return LiveBus(id: id, lat: p.lat, lon: p.lon, heading: heading, moving: true, along: m)
@@ -52,8 +47,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func campusIsFramedWithItsLinesNotJustItsStops() throws {
-    // D2 and A1 stay on campus: their lines bend out past COM3, the one stop, and count.
-    // P goes out to Botanic Gardens: its line would frame half the island, so it doesn't.
     var o = try json(campusJson)
     var routes = try #require(o["routes"] as? [String: Any])
     routes["P"] = ["seq": ["COM3", "BG-MRT"], "loop": false, "color": "#888888", "line": [[103.7745, 1.2948], [103.8153, 1.3224]]]
@@ -103,7 +96,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let stops = try features(MapGeoJson.stops(campus))
     let com3 = try #require(stops.first { ($0["properties"] as? [String: Any])?["code"] as? String == "COM3" })
     #expect((com3["properties"] as? [String: Any])?["services"] as? String == " D1 D2 ")
-    // In the API's order, the last on top: the same every launch, as on the web and Android.
     let lines = try features(MapGeoJson.routes(campus)).map { ($0["properties"] as? [String: Any])?["svc"] as? String }
     #expect(lines == ["A1", "D2"])
     let placed = LiveBus(id: "b1", lat: 1, lon: 103, heading: nil, moving: true, at: "COM 3", slot: 1).placed()
@@ -116,7 +108,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func busesSlideAlongTheirLineRoundACorner() throws {
-    // East, then north: an L with its corner at (103.001, 1.0).
     let path = RoutePath([[103.0, 1.0], [103.001, 1.0], [103.001, 1.001]])
     let leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
     var s = Slides(duration: { _ in 1 })
@@ -131,12 +122,10 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let end = try #require(s.at(1).first { $0.id == "b1" })
     #expect(near(end.along, leg + 50))
     #expect(near(end.heading, 0, 1e-6), "pointing along the road")
-    // Eased: slower at the ends than in the middle.
     #expect(try #require(s.at(0.1).first { $0.id == "b1" }?.along) - (leg - 50) < 10)
 }
 
 @Test func busesSlideBesideTheDotAtAStop() throws {
-    // A straight line east, about 1.1 km; a stop's dot 10 m north of it at 500 m.
     let path = RoutePath([[103.0, 1.0], [103.01, 1.0]])
     var between = bus(path, 300, heading: 90)
     between.nextStop = "COM 3"
@@ -154,20 +143,16 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     let there = s.at(3)[0]
     #expect(near(there.lat, atStop.lat, 1e-12), "at the dot")
     #expect(there.ox == -LiveBus.atStopSide)
-    // Behind where it's drawn (the other side of the road, or put right): it jumps.
     s.update([between], path: path, now: 4)
     #expect(near(s.at(4)[0].along, 300))
     #expect(!s.moving(4))
-    // Reduce motion: it jumps.
     s.update([atStop], path: path, now: 5, still: true)
     #expect(near(s.at(5)[0].along, 500))
-    // No answer for 20 s (the phone slept): it jumps.
     var later = atStop
     later.along = 700
     later.at = nil
     s.update([later], path: path, now: 25)
     #expect(near(s.at(25)[0].along, 700))
-    // A long way on (over 1.5 km), or on a line kept from before the route changed: it jumps.
     var far = atStop
     far.along = 2_000
     #expect(path.ahead(from: between, to: far) == nil)
@@ -176,9 +161,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() throws {
-    // Like A1 at KRB: out east about 1.1 km, then back west on the other
-    // side of the road, ending some 40 m from where it started. The loop
-    // comes from /campus, not from where the line ends.
     let campus = try #require(
         CampusMap.parse(
             Data(
@@ -199,7 +181,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     s.update([start], path: loop, now: 5)
     #expect(s.moving(5.5))
     #expect(near(s.at(5.5)[0].along, 5, 1e-6), "half way, at its start")
-    // A line that doesn't loop: back at the start, it jumps.
     let oneWay = try #require(campus.routes["K"]?.path)
     #expect(!oneWay.closed)
     #expect(oneWay.ahead(from: bus(oneWay, oneWay.total - 20), to: bus(oneWay, 30)) == nil)
@@ -252,7 +233,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func aTappedBusShowsTheStretchItIsOn() throws {
-    // East, then north: an L with its corner at (103.001, 1.0).
     let path = RoutePath([[103.0, 1.0], [103.001, 1.0], [103.001, 1.001]])
     let leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
     let line = try #require(path.slice(leg - 20, leg + 30))
@@ -325,8 +305,6 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(s.at(5).map(\.id) == ids.reversed(), "the latest answer's order")
 }
 
-/// The map plans its slides on every answer, the same or not: a bus that
-/// stood still for a while still slides when it moves off.
 @Test func aBusThatStoodStillStillSlides() {
     let path = RoutePath([[103.0, 1.0], [103.01, 1.0]])
     var s = Slides(duration: { _ in 1 })
@@ -352,32 +330,25 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(!MapFiles.isPMTiles(Data("PMTiles".utf8), size: 4_000_000), "no version byte")
 }
 
-/// Web Mercator's y, a fraction of the world from the top.
 private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 360)) / .pi) / 2 }
 
 @Test func panLimitKeepsTheScreenOnTheMap() {
     let e = PanLimit.extent
-    // A phone, 400 by 800 points: tall, so its height fills the map first.
     let min = PanLimit.minZoom(width: 400, height: 800)
     #expect(abs(512 * pow(2, min) * (merc(e[1]) - merc(e[3])) - 800) < 0.01)
-    // At zoom 17 the centre stays half a screen in from each edge.
     let c = PanLimit.centre(width: 400, height: 800, zoom: 17)
     let half: Double = 200 / (512 * pow(2.0, 17.0)) * 360
     #expect(abs(c[0] - (e[0] + half)) < 1e-9)
     #expect(abs(c[2] - (e[2] - half)) < 1e-9)
     #expect(c[1] > e[1] && c[3] < e[3] && c[1] < c[3])
-    // Zoomed right out: mid-map up and down, still free side to side.
     let out = PanLimit.centre(width: 400, height: 800, zoom: min)
     #expect(abs(out[1] - out[3]) < 1e-9)
     #expect(out[0] < out[2])
-    // Wider than the map both ways (a zoom it can't reach): its middle.
     let tiny = PanLimit.centre(width: 400, height: 800, zoom: 10)
     #expect(abs(tiny[0] - (e[0] + e[2]) / 2) < 1e-9 && tiny[0] == tiny[2])
 }
 
 @Test func aSheetLetsTheCentreGoAsFarPastTheEdgeAsItHides() {
-    // A phone's sheet across the bottom, 500 points tall: the centre may go
-    // 500 points further south, and no further any other way.
     let open = PanLimit.centre(width: 400, height: 800, zoom: 17)
     let sheet = PanLimit.centre(width: 400, height: 800, zoom: 17, bottom: 500)
     let world = 512 * pow(2.0, 17.0)
@@ -386,9 +357,6 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
 }
 
 @Test func aFloatingSheetLetsTheCentreGoWestAndSouthAsFarAsItReaches() {
-    // An iPad mini in portrait, a sheet 376 wide and 517 up in its corner: a
-    // line fitted above it (D2 from UHall, its centre at 1.29735 at zoom
-    // 14.13) stays where it was fitted instead of being pushed under it.
     let floating = PanLimit.centre(width: 744, height: 1113, zoom: 14.13, left: 376, bottom: 517)
     #expect(floating[1] < 1.29735)
     #expect(PanLimit.centre(width: 744, height: 1113, zoom: 14.13)[1] > 1.29735, "without the sheet, it was")
@@ -413,29 +381,24 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
                   {"id": "d", "lat": 1.0, "lon": 103.0, "moving": false, "crowd": null, "at": {"code": "KR-MRT", "name": "KR MRT"}, "nextStop": null, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}
                 """.utf8)))
     let (a, b, c, d) = (list.buses[0], list.buses[1], list.buses[2], list.buses[3])
-    // Between stops: the stop it passed, the next, four more, and a count.
     #expect(
         BusStrip.of(a)
             == BusStrip(
                 passed: "CLB", here: nil, next: "LT 13", after: ["AS 5", "BIZ 2", "S", "T"], more: 2, passedCode: "CLB", nextCode: "LT13",
                 afterCodes: ["AS5", "BIZ2", "S", "T"]))
     #expect(BusStrip.of(a).between)
-    // Opened out, every stop to the line's end, none left over.
     #expect(
         BusStrip.of(a, all: true)
             == BusStrip(
                 passed: "CLB", here: nil, next: "LT 13", after: ["AS 5", "BIZ 2", "S", "T", "U", "V"], more: 0, passedCode: "CLB",
                 nextCode: "LT13", afterCodes: ["AS5", "BIZ2", "S", "T", "U", "V"]))
-    // At a stop: that stop, then what's ahead of it.
     #expect(
         BusStrip.of(b)
             == BusStrip(
                 passed: nil, here: "COM 3", next: "BIZ 2", after: ["UTown"], more: 0, hereCode: "COM3", nextCode: "BIZ2",
                 afterCodes: ["UTOWN"]))
     #expect(!BusStrip.of(b).between)
-    // An older API: just its next stop.
     #expect(BusStrip.of(c) == BusStrip(passed: nil, here: nil, next: "LT 13", after: [], more: 0, nextCode: "LT13"))
-    // Past a one-way line's end: nothing ahead to list.
     #expect(!BusStrip.of(d).any)
 }
 
@@ -472,10 +435,7 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
     #expect(MapModel.pollDelay(base: 15, failures: 0, quiet: 0) == 15)
 }
 
-// MARK: the room round a chosen line
-
 @Test func aLineIsFittedAboveASheetAcrossTheBottom() {
-    // A phone with a stop's sheet open: the line above it, under the pills.
     let p = LineRoom.padding(
         cover: UIEdgeInsets(top: 120, left: 0, bottom: 300, right: 0), buttons: .zero, in: CGSize(width: 402, height: 874))
     #expect(p == UIEdgeInsets(top: 144, left: 40, bottom: 324, right: 40))
@@ -489,12 +449,10 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
 }
 
 @Test func theButtonsKeepTheirRoomAboveTheBarsTheMapRunsUnder() {
-    // A phone, no sheet: the map runs under the tab bar, and the buttons sit on it.
     let phone = LineRoom.padding(
         cover: UIEdgeInsets(top: 120, left: 0, bottom: 83, right: 0), buttons: CGSize(width: 0, height: 114),
         bars: UIEdgeInsets(top: 0, left: 0, bottom: 83, right: 0), in: CGSize(width: 402, height: 874))
     #expect(phone == UIEdgeInsets(top: 144, left: 40, bottom: 83 + 114 + 24, right: 40))
-    // The Duo open: its status bar along the right, the buttons inside it.
     let duo = LineRoom.padding(
         cover: UIEdgeInsets(top: 60, left: 0, bottom: 20, right: 28), buttons: CGSize(width: 56, height: 0),
         bars: UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 28), in: CGSize(width: 951, height: 669))
@@ -502,14 +460,11 @@ private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 
 }
 
 @Test func aQuarterOfEachWayStaysFreeHoweverMuchIsCovered() {
-    // The sheet up to the pills (UHall's, on a phone): never a sliver of map.
     let size = CGSize(width: 402, height: 874)
     let p = LineRoom.padding(cover: UIEdgeInsets(top: 210, left: 0, bottom: 580, right: 0), buttons: .zero, in: size)
     #expect(abs(p.top + p.bottom - size.height * 0.75) < 0.001)
     #expect(p.top < p.bottom, "each side keeps its share")
 }
-
-// MARK: the device named
 
 @Test func theDeviceIsNamedAsItIs() async {
     let pad = await MainActor.run { UIDevice.current.userInterfaceIdiom == .pad }

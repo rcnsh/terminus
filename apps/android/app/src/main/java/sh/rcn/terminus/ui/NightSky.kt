@@ -69,18 +69,6 @@ import kotlin.math.sin
 import sh.rcn.terminus.Pull
 import sh.rcn.terminus.PullScene
 
-/*
- * Now's sky: behind the top of Now, from the status bar down to a horizon
- * of the campus's hills, in the hour's colours (dawn, day, the golden hour,
- * dusk, night), by the clock. There's one sky for the whole
- * tab, so it stays as the chips switch: whatever Now shows has its top in a
- * [SkyHead] and ends on a [SkyGround], which says where the sky ends and
- * what's on the road. Now draws the sky and puts what's over it (the
- * header, the chips, the status bar's icons) in the sky's ink. The web draws
- * the same scene from the same numbers (sky.js, daylight.js).
- */
-
-/** The sky's looks, in the order of the day. */
 internal enum class Phase {
     NIGHT,
     DAWN,
@@ -89,10 +77,6 @@ internal enum class Phase {
     DUSK,
 }
 
-/**
- * The sky at [min] minutes past midnight, at the web's hours (daylight.js): dawn from 6:30, day from 8:30, the golden hour from 4:30 PM,
- * dusk from 6:45 PM and night from 7:40 PM.
- */
 internal fun phaseAt(min: Int): Phase =
     when {
         min < 390 || min >= 1180 -> Phase.NIGHT
@@ -102,11 +86,6 @@ internal fun phaseAt(min: Int): Phase =
         else -> Phase.DUSK
     }
 
-/**
- * How far each layer of the sky lags, in dp, as Now scrolls down by [s] dp: the moon and the stars at half speed, fading out by 160 dp; the
- * far hills, the city and a low sun sinking behind the near hill, by 18 dp at most. The near hill, the road and your bus stay with the
- * page. The web's numbers (daylight.js parallax).
- */
 internal data class Parallax(val sky: Float, val far: Float, val fade: Float)
 
 internal fun parallax(s: Float): Parallax {
@@ -114,66 +93,40 @@ internal fun parallax(s: Float): Parallax {
     return Parallax(y * 0.5f, minOf(y * 0.12f, 18f), (1 - y / 160f).coerceAtLeast(0f))
 }
 
-/**
- * Your bus on the horizon's road: its colour, how far off it is (0 at the stop, 1 a quarter of an hour away), and whether that's live. A
- * estimate is drawn as an outline.
- */
 internal data class RoadBus(val color: Long, val far: Float, val live: Boolean)
 
-/**
- * What's on the horizon's road: your stop's sign and your bus, or a shuttle going by. It's a picture with no words: drawn this small,
- * they're too hard to read, so the card says them under it ([RoadLine]).
- */
 internal data class Road(val stop: Boolean = false, val bus: RoadBus? = null, val shuttle: Boolean = true)
 
-/** Now's sky: where it ends, its hour, the page's theme, and what's on the road. */
 @Stable
 internal class SkyState {
-    /** The top of Now's scrolling content, in root pixels. */
     var contentTop by mutableFloatStateOf(0f)
 
-    /**
-     * The bottom of the horizon on screen, in root pixels; null before the first. Kept while what's shown changes, until the next horizon
-     * says where it ends.
-     */
     var groundBottom by mutableStateOf<Float?>(null)
 
     var phase by mutableStateOf(Phase.NIGHT)
     var dark by mutableStateOf(false)
     var road by mutableStateOf(Road())
 
-    /** The window is short ([Widths.short]): the horizon is the bands' low one, just the hills, with nothing on a road. */
     var short by mutableStateOf(false)
 
-    /** How far Now has scrolled, in pixels: read while drawing, so scrolling only redraws. */
     var scroll: () -> Int = { 0 }
 
-    /** No depth as it scrolls: the phone's "Remove animations" is on. */
     var still by mutableStateOf(false)
 
-    /** Each layer's lag at the current scroll, in dp ([parallax]). */
     fun depth(dp: Float): Parallax = parallax(if (still) 0f else scroll() / dp)
 
-    /** How far down the content the sky goes, in pixels, or null for none yet. */
     val end: Float?
         get() = groundBottom?.let { it - contentTop }
 
-    /** The hour's colours, in the page's theme. */
     val palette: Palette
         get() = palette(phase, dark)
 }
 
-/** The sky Now draws, for what's on it to report to. Null outside Now. */
 internal val LocalSky = staticCompositionLocalOf<SkyState?> { null }
 
 internal val NIGHT = listOf(Color(0xFF121A33), Color(0xFF181A30), Color(0xFF1C1B26))
 internal val MOON = Color(0xFFFDE9C9)
 
-/**
- * An hour's colours: the sky from top to horizon, the far hills, the trees, the city, the sun low behind the hills (at dawn, in the golden
- * hour and at dusk only: it's the time of day, not the weather), and whether the words over it are light. On a dark phone every hour is
- * deep and muted, so the sky never glares; the words are light.
- */
 internal class Palette(
     val sky: List<Color>,
     val far: Color,
@@ -284,7 +237,6 @@ internal fun palette(phase: Phase, dark: Boolean): Palette {
         }
 }
 
-/** Across (0–1), down (0–1.05 of the room above the words), brightness and size in dp. Fixed, so they never twinkle into a distraction. */
 private val STARS =
     listOf(
         floatArrayOf(0.06f, 0.30f, 0.7f, 1.3f),
@@ -303,20 +255,13 @@ private val STARS =
         floatArrayOf(0.97f, 0.16f, 0.45f, 1.1f),
     )
 
-/** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
 internal const val ROAD_SCALE = 1.25f
 
-/** The strip at the foot of the sky where the horizon is drawn: its 92 dp, [ROAD_SCALE] times. */
 internal val HORIZON = 115.dp
 
-/** The hour's sky from the top down to [end] px, where it meets the horizon. */
 internal fun skyBrush(p: Palette, end: Float) =
     Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end)
 
-/**
- * The sky behind Now's content, down to the horizon, once something on it has said where that is. Stretched by a [pull], the gradient runs
- * on down to the horizon's new place and the pull plays on its road.
- */
 internal fun Modifier.skyBehind(sky: SkyState, page: Color, pull: PullView? = null): Modifier = drawBehind {
     val end = sky.end ?: return@drawBehind
     val p = sky.palette
@@ -328,10 +273,6 @@ internal fun Modifier.skyBehind(sky: SkyState, page: Color, pull: PullView? = nu
     horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE, pull = pull)
 }
 
-/**
- * The scene for a pull on Now's horizon, [width] dp across: your stop's sign, and the bus already on the road, the card's or the shuttle
- * going by, which then drives on to the stop rather than another coming in.
- */
 internal fun roadScene(width: Float, road: Road): PullScene {
     val w = width / ROAD_SCALE
     val sign = Pull.roadSign(w)
@@ -339,13 +280,8 @@ internal fun roadScene(width: Float, road: Road): PullScene {
     return PullScene(w, sign, card?.let { Pull.roadBus(sign, it.far) } ?: shuttleX(w).takeIf { road.shuttle })
 }
 
-/** Where the shuttle going by stands on a road [w] units across. */
 internal fun shuttleX(w: Float): Float = (w * 0.58f).roundToInt().toFloat() - 19f
 
-/**
- * The top of what Now shows, up in the sky in the sky's ink, with a short [room] above it, for the stars and the moon at night: the card is
- * the picture, not the sky. Off Now (no [LocalSky]), just [content].
- */
 @Composable
 internal fun SkyHead(room: Dp = 34.dp, content: @Composable ColumnScope.() -> Unit) {
     val sky = LocalSky.current
@@ -355,7 +291,6 @@ internal fun SkyHead(room: Dp = 34.dp, content: @Composable ColumnScope.() -> Un
     }
     val pull = LocalPull.current
     SkyInk(true, sky.palette.lightInk) {
-        // Pulled down, the room grows ([PullRoom]) and the stars spread over it; the moon keeps its size.
         Column(
             Modifier.fillMaxWidth().drawBehind {
                 celestial(sky.phase, room.toPx() + (pull?.read()?.pull ?: 0f) * 1.dp.toPx(), room.toPx(), sky.depth(1.dp.toPx()))
@@ -367,10 +302,6 @@ internal fun SkyHead(room: Dp = 34.dp, content: @Composable ColumnScope.() -> Un
     }
 }
 
-/**
- * Where the sky ends on Now: room for the horizon (drawn by [skyBehind]), with [road]'s sign and bus on it; in a short window, room for the
- * low horizon alone. Off Now, nothing.
- */
 @Composable
 internal fun SkyGround(road: Road = Road()) {
     val sky = LocalSky.current ?: return
@@ -382,26 +313,15 @@ internal fun SkyGround(road: Road = Road()) {
     )
 }
 
-/**
- * What's up in the room above the words at [phase]: the stars and the moon at night, and nothing by day (the sun stays low, behind the
- * hills). Lagging behind the page as it scrolls, by [depth], and fading behind the words.
- */
 private fun DrawScope.celestial(phase: Phase, room: Float, moonRoom: Float, depth: Parallax) {
     if (phase != Phase.NIGHT || depth.fade <= 0f) return
     translate(top = depth.sky * 1.dp.toPx()) { starsAndMoon(room, depth.fade, moonRoom) }
 }
 
-/*
- * The hills along the horizon, more or less Kent Ridge: how far down the
- * strip (92 dp) each is, x dp across. Fixed waves in dp, so a wider screen
- * shows more hills rather than stretched ones. The web draws the same
- * (sky.js Horizon).
- */
 private fun farY(x: Float) = 30f + 6f * sin(x / 47f + 0.6f) + 4f * sin(x / 19f + 2.1f)
 
 internal fun nearY(x: Float) = 52f + 3f * sin(x / 61f + 1.3f) + 1.5f * sin(x / 27f)
 
-/** The lowest point of the far hills between [lo] and [hi] dp, where the city shows above them. */
 private fun dip(lo: Float, hi: Float): Float {
     var best = lo
     var x = lo
@@ -412,13 +332,6 @@ private fun dip(lo: Float, hi: Float): Float {
     return best
 }
 
-/**
- * Where the sky ends, from [top] down: the hills, a building or two, rain trees, Singapore's flag by the road, and Marina Bay Sands far off
- * in the city, in [p]'s colours at [phase], with the lights on after dark and the sun low behind the hills at dawn, in the golden hour and
- * at dusk. The near hill is [page]'s own colour, so the sky meets the ground instead of fading into the page. On the road, [road]'s sign
- * and bus, or a shuttle going by. Drawn [scale] times its numbers; [far] is in pixels. [withSun]: false for just the hills (the band at the
- * top of Settings and its pages). While [pull] is open, its sign and bus are on the road instead ([pullRoad]).
- */
 internal fun DrawScope.horizon(
     top: Float,
     page: Color,
@@ -462,14 +375,10 @@ internal fun DrawScope.horizon(
     val lit = MOON
     val dim = MOON.copy(alpha = 0.6f)
     fun across(f: Float) = (w * f).roundToInt().toFloat()
-    // Your stop's sign left of the flag; the flag right of anything on the
-    // road; the city clear of the flag and of the screen's edge.
     val sx = Pull.roadSign(w)
     val flag = across(0.76f)
-    // The far layer sinks behind the near hill as Now scrolls ([far]), kept to the strip.
     clipRect(top = top, bottom = top + 92 * d) {
         translate(top = far) {
-            // The sun, low: rising at dawn, low in the golden hour, setting at dusk. As the web's (.horizon .sun).
             p.sun
                 ?.takeIf { withSun }
                 ?.let { sun ->
@@ -479,7 +388,6 @@ internal fun DrawScope.horizon(
                         else -> drawCircle(sun, 26 * d, at(across(0.5f), 40f))
                     }
                 }
-            // Marina Bay Sands, far off and pale: three towers and the SkyPark across them, out over the right.
             val mbs = dip(maxOf(across(0.8f) - 40, flag + 30), minOf(across(0.8f) + 40, w - 29))
             if (mbs + 25 <= w) {
                 val city = farY(mbs) + 3
@@ -508,14 +416,12 @@ internal fun DrawScope.horizon(
         val c = across(f)
         rainTree(at(c, nearY(c)), d, p.tree)
     }
-    // A Singapore flag on its pole by the road.
     val pole = nearY(flag)
     drawLine(p.tree, at(flag, pole + 2), at(flag, pole - 24), 1.2f * d)
     val red = Color(0xFFEF3340)
     val white = Color(0xFFF2EFEB)
     box(flag + 0.6f, pole - 24, 12f, 4f, red)
     box(flag + 0.6f, pole - 20, 12f, 4f, white)
-    // The crescent and its five stars, which tell it from Indonesia's.
     drawCircle(white, 1.5f * d, at(flag + 3.2f, pole - 22))
     drawCircle(red, 1.3f * d, at(flag + 3.8f, pole - 22))
     for (i in 0 until 5) {
@@ -530,7 +436,6 @@ internal fun DrawScope.horizon(
         return
     }
     if (road.stop) {
-        // The sign: a bus on it, as on a real one.
         drawLine(p.post, at(sx, 70f), at(sx, 44f), 1.6f * d)
         box(sx - 6.5f, 33f, 13f, 13f, p.post, 2.5f)
         box(sx - 3.5f, 35.5f, 7f, 7.5f, p.postInk, 1.5f)
@@ -538,12 +443,10 @@ internal fun DrawScope.horizon(
     }
     val yours = road.bus
     if (yours != null && road.stop) {
-        // Your bus pulls up just short of the sign.
         val colour = Color(yours.color)
         val x = Pull.roadBus(sx, yours.far)
         bus(x, colour, if (yours.live) Color.White.copy(alpha = 0.85f) else null)
     } else if (road.shuttle) {
-        // A shuttle going by, heading right, its headlights on after dark: A1's red along the bottom.
         val x = shuttleX(w)
         if (lights) {
             val beam = listOf(at(x + 38, 66f), at(x + 60, 63f), at(x + 60, 70f))
@@ -560,7 +463,6 @@ internal fun DrawScope.horizon(
     }
 }
 
-/** A rain tree standing at [foot] ([d] px a unit): a trunk forking low under a wide, flat crown. */
 internal fun DrawScope.rainTree(foot: Offset, d: Float, color: Color) {
     fun at(x: Float, y: Float) = Offset(foot.x + x * d, foot.y + y * d)
     val trunk = listOf(-1.5f to 2f, -1.5f to -7f, -7f to -13f, -4.5f to -13f, 0f to -9f, 4.5f to -13f, 7f to -13f, 1.5f to -7f, 1.5f to 2f)
@@ -577,12 +479,6 @@ internal fun DrawScope.rainTree(foot: Offset, d: Float, color: Color) {
     oval(8f, -22f, 12f, 4.5f)
 }
 
-/**
- * A single-decker from the side, heading right: 38 by 12 from [o], its top left, [d] px a unit, standing on its wheels at 12. The air-con
- * on its roof, a row of windows ([glass]), the driver's, the door ahead of the front wheel, the windscreen raking back to the headlight, a
- * tail light, and the wheels in their arches. With no [band] it's an outline in [paint] (an estimate, so it never passes for live). Window
- * [dim] (0 to 3) has its light off. Without [wheels], just their arches, for wheels drawn turning ([shuttleWheel]). As the web's busParts.
- */
 internal fun DrawScope.shuttle(o: Offset, d: Float, paint: Color, band: Color?, glass: Color, dim: Int = -1, wheels: Boolean = true) {
     val solid = band != null
     fun pt(px: Float, py: Float) = Offset(o.x + px * d, o.y + py * d)
@@ -645,16 +541,11 @@ internal fun DrawScope.shuttle(o: Offset, d: Float, paint: Color, band: Color?, 
     }
 }
 
-/**
- * The shuttle on the horizon when nothing's coming, and the pull's when the screen has no service: dark, with A1's red along the bottom.
- */
 internal const val SHUTTLE = 0xFF24211EL
 internal val SHUTTLE_BAND = Color(0xFFD32F2F)
 
-/** Across a [shuttle], in its units, where its wheels are. */
 internal val SHUTTLE_WHEELS = floatArrayOf(7.5f, 26f)
 
-/** A shuttle's wheel at [c], [d] px a unit; turned [turn] radians, a spoke on its hub shows it going round. */
 internal fun DrawScope.shuttleWheel(c: Offset, d: Float, turn: Float? = null) {
     val tyre = Color(0xFF151311)
     drawCircle(tyre, 2.2f * d, c)
@@ -665,10 +556,6 @@ internal fun DrawScope.shuttleWheel(c: Offset, d: Float, turn: Float? = null) {
         }
 }
 
-/**
- * The stars across the room above the words, and the moon among them: at the right, or centred on [moonAt] (a widget keeps it clear of its
- * button).
- */
 internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f, moonRoom: Float = room, moonAt: Offset? = null) {
     for ((x, y, a, r) in STARS) drawCircle(
         Color.White.copy(alpha = a * alpha),
@@ -679,17 +566,12 @@ internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f, moonRoom: Fl
     crescent(moonAt ?: Offset(size.width - 16.dp.toPx() - r, moonRoom * 0.48f), r, alpha)
 }
 
-/** A crescent moon centred at [c], of radius [r]: a disc with a slightly smaller one taken out up and to the right. */
 internal fun DrawScope.crescent(c: Offset, r: Float, alpha: Float = 1f) {
     val moon = Path().apply { addOval(Rect(c, r)) }
     val bite = Path().apply { addOval(Rect(c + Offset(r * 0.46f, -r * 0.3f), r * 0.9f)) }
     drawPath(Path.combine(PathOperation.Difference, moon, bite), MOON, alpha = alpha)
 }
 
-/**
- * [content] in night colours when [on] (the dark scheme, whatever the phone's theme), else as it is. Always the same tree, so nothing
- * inside loses its state when night comes or goes.
- */
 @Composable
 internal fun NightTheme(on: Boolean, content: @Composable () -> Unit) {
     val scheme = if (on) BrandDark else MaterialTheme.colorScheme
@@ -698,26 +580,12 @@ internal fun NightTheme(on: Boolean, content: @Composable () -> Unit) {
     }
 }
 
-/**
- * What [SkyInk] adds for words in the sky: the "on time" green, the chip small coloured words (Live, a notice) sit on, darker than a dark
- * sky and lighter than a light one, and the accent for small words (a countdown, the trip's phase), stronger than the headline's. The web's
- * --k-good, --k-chip and --k-accent-small.
- */
 internal class SkyTones(val good: Color, val chip: Color, val smallAccent: Color)
 
 internal val LocalSkyTones = staticCompositionLocalOf<SkyTones?> { null }
 
-/**
- * [content] in the sky's ink when [on]: light words on a dark sky, dark on a light one ([light]), with the muted words a shade stronger
- * than the page's, as they're over colour. Every colour, the late red and the warning amber too, reads at 4.5:1 over any hour's sky (large
- * words at 3:1). Cards and tiles on it are glass, a faint pane on a dark sky and frosted on a light one, so they take the sky's colour at
- * every hour rather than sitting on it as a block (the web's --k-surface). Else as it is. Always the same tree, so nothing inside loses its
- * state as the hour or the sky changes.
- */
 @Composable
 internal fun SkyInk(on: Boolean, light: Boolean, content: @Composable () -> Unit) {
-    // A card takes its words' colour from matching its background in the
-    // scheme, so the containers are the surface and surfaceVariant differs (Brand.kt).
     fun glass(base: ColorScheme, pane: Color, raised: Color, line: Color, muted: Color, accent: Color, late: Color, warn: Color) =
         base.copy(
             surface = pane,
@@ -774,13 +642,8 @@ internal fun SkyInk(on: Boolean, light: Boolean, content: @Composable () -> Unit
     }
 }
 
-/** The accent for small words: in the sky, its stronger one ([SkyTones]). */
 @Composable internal fun smallAccent() = LocalSkyTones.current?.smallAccent ?: MaterialTheme.colorScheme.primary
 
-/**
- * A tab's sky ([SkyState]) that scrolls with [scroll], in [phase] and the page's theme: Now's. Still while the phone's "Remove animations"
- * is on (checked again on coming back to the app).
- */
 @Composable
 internal fun rememberSky(scroll: ScrollState, phase: Phase): SkyState {
     val sky = remember(scroll) { SkyState().apply { this.scroll = { scroll.value } } }
@@ -799,20 +662,12 @@ internal fun rememberSky(scroll: ScrollState, phase: Phase): SkyState {
     return sky
 }
 
-/**
- * The status bar's own strip, [top] high, over a tab whose content scrolls under it ([scroll]): clear at the top, so the sky ([sky], if
- * any) or the page shows through, then filled as the content goes under it.
- */
 @Composable
 internal fun StatusStrip(sky: SkyState?, top: Dp, scroll: ScrollState) {
     val page = MaterialTheme.colorScheme.background
     StatusStrip(if (sky?.end != null) sky.palette.sky[0] else page, top, scroll)
 }
 
-/**
- * The status bar's strip over a page whose [SkyBand] scrolls away with it, as Now's sky does: filled with the top of the band's sky as the
- * page goes under, so the status bar's icons stay on the colour they were set for.
- */
 @Composable
 internal fun StatusStrip(phase: Phase, top: Dp, scroll: ScrollState) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -829,22 +684,14 @@ private fun StatusStrip(color: Color, top: Dp, scroll: ScrollState) {
     )
 }
 
-/** The line a low moon ([SkyBand]) has to itself, just over the hills. */
 private val MOON_LINE = 24.dp
 
-/** How much of the horizon Settings' band shows: the city's top to the near hill. Now's whole horizon in a short window. */
 private val LOW = 52.dp
 
-/** Under a band's words in a short window, where the hills would be: the sky ends this far below them. */
 private val SHORT_FOOT = 12.dp
 
-/**
- * The low horizon ending at [end] px: just the hills, no road, sun or town, as the bands draw it. A [pull] that's open grows a sign out of
- * the near hill and drives its bus along the hilltop to it ([pullHill]).
- */
 private fun DrawScope.lowHorizon(end: Float, page: Color, p: Palette, phase: Phase, pull: PullView?) {
     val d = 1.dp.toPx()
-    // The strip's y 6 to 58 dp, at the foot.
     val strip = end - 58 * d
     clipRect(top = end - LOW.toPx(), bottom = end) {
         horizon(strip, page, p, phase, Road(shuttle = false), 0f, withSun = false)
@@ -852,7 +699,6 @@ private fun DrawScope.lowHorizon(end: Float, page: Color, p: Palette, phase: Pha
     }
 }
 
-/** A few stars beside a page's title in the band, clear of the title: across (0–1), down (0–1 of the title's row). */
 private val BAND_STARS =
     listOf(
         floatArrayOf(0.56f, 0.2f, 0.6f),
@@ -863,7 +709,6 @@ private val BAND_STARS =
         floatArrayOf(0.95f, 0.85f, 0.45f),
     )
 
-/** The low moon's stars ([SkyBand]): on its line, left of it and right of the page dots. */
 private val LOW_STARS =
     listOf(
         floatArrayOf(0.69f, 0.3f, 0.6f),
@@ -873,15 +718,6 @@ private val LOW_STARS =
         floatArrayOf(0.98f, 0.55f, 0.45f),
     )
 
-/**
- * A slim band of the sky at the top of Settings' list and of each of its pages, in [phase]: from the top of the screen, [top] for the
- * status bar, then [content] (the title, with the back arrow on a page) in the sky's ink with the moon on the right at night, ending on the
- * low horizon (just the hills, no road). The page's controls stay on the plain page under it. It's the top of the page's scroll, not pinned
- * over it, so the page is one piece that scrolls away under a [StatusStrip], as Now's sky does. As the web's (.page-band).
- *
- * A taller band (a stop's or a line's page) puts the moon low on the right, just over the hills, with the stars beside it, on a line of its
- * own, clear of a button at the top right ([moonLow]).
- */
 @Composable
 internal fun SkyBand(
     phase: Phase,
@@ -893,14 +729,11 @@ internal fun SkyBand(
     val p = palette(phase, page.luminance() < 0.5f)
     val pull = LocalPull.current
     NightStatusBar(p.lightInk, p.sky[0])
-    // Beside another pane's band: grown to the taller of the two, so the horizons meet, and the moon only in the trailing one.
     val pane = LocalSkyPane.current
-    // Short, no hills: the band ends just under its words, and a pull plays out in the room it opens, with no hill to drive along.
     val short = windowShort()
     val hills = if (short) 0.dp else LOW
     val band = remember { Any() }
     if (pane != null) DisposableEffect(pane) { onDispose { pane.skies.gone(band) } }
-    // Short, a low moon has no line of its own to keep clear of a button on, so it shows only beside the words, as on the iPhone.
     val shown = pane?.leading != true && !(short && moonLow)
     var natural by remember { mutableIntStateOf(0) }
     val grow = with(LocalDensity.current) { ((pane?.skies?.tallest ?: 0) - natural).coerceAtLeast(0).toDp() }
@@ -909,8 +742,6 @@ internal fun SkyBand(
             val d = 1.dp.toPx()
             val end = size.height
             drawRect(skyBrush(p, end))
-            // Beside the title, on the right: its row is between the status bar and the hills.
-            // Low, the moon and stars keep to a line of their own over the hills, so none lands on a word however long.
             val floor = end - hills.toPx() - if (short) SHORT_FOOT.toPx() else 0f
             val row = if (moonLow) (floor - MOON_LINE.toPx())..floor else top.toPx()..floor
             val mid = (row.start + row.endInclusive) / 2
@@ -924,8 +755,6 @@ internal fun SkyBand(
                 )
                 crescent(centre, r + d)
             }
-            // Just the hills, the sun staying for Now's horizon. Pulled down (the Stops tab): a sign grows out of the near hill and a bus
-            // drives to it.
             if (!short) lowHorizon(end, page, p, phase, pull)
         }
     ) {
@@ -936,27 +765,19 @@ internal fun SkyBand(
             }
         ) {
             Spacer(Modifier.height(top))
-            // In the page's column, as what's under it is; the sky goes on to the edges.
             SkyInk(true, p.lightInk) { Box(Modifier.column().padding(horizontal = 16.dp)) { content() } }
-            // The moon's own line, under the content, so it never sits on a button.
             if (moonLow && !short) Spacer(Modifier.height(MOON_LINE))
         }
         Spacer(Modifier.height(grow + if (short) SHORT_FOOT else LOW))
     }
 }
 
-/** Which screen set the status bar's icons last, so one going away doesn't undo the next one's. */
 private var statusOwner: Any? = null
 
-/**
- * The colour under the status bar's light icons while a dark sky is up ([NightStatusBar]), for the navigation rail to paint its own strip
- * of the status bar with, so the clock over the rail reads too. Null while the icons are the theme's.
- */
 internal object StatusSky {
     var color by mutableStateOf<Color?>(null)
 }
 
-/** Light status bar icons over a dark sky ([sky], its top colour), back to the theme's when it goes. */
 @Composable
 internal fun NightStatusBar(night: Boolean, sky: Color) {
     val view = LocalView.current
@@ -970,7 +791,6 @@ internal fun NightStatusBar(night: Boolean, sky: Color) {
         bars?.isAppearanceLightStatusBars = !dark && !night
         StatusSky.color = if (night) sky else null
         onDispose {
-            // A tab fading out after the next one has set its own: leave them.
             if (statusOwner === me) {
                 bars?.isAppearanceLightStatusBars = !dark
                 StatusSky.color = null

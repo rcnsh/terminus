@@ -1,12 +1,3 @@
-/**
- * The OpenAPI spec (src/openapi.ts) against what the Worker really sends.
- *
- * worker.smoke.js checks the spec lists every route; this checks what it says
- * about them: its examples fit its schemas, the golden answers fit them too,
- * every operation answers with a status it documents and a body its schema
- * describes (with no keys the schema doesn't name), the routes that need
- * credentials refuse a caller without them, and no schema is left unused.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -33,13 +24,11 @@ test('every example in the spec fits its schema', () => {
   const walk = (node, at) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach((x, i) => walk(x, `${at}[${i}]`));
-    // A parameter or a media type: its example(s) against its schema.
     if (node.schema && node.example !== undefined) bad.push(...check(node.schema, node.example).map((e) => `${at}.example ${e}`));
     if (node.schema && node.examples && !Array.isArray(node.examples)) {
       for (const [name, ex] of Object.entries(node.examples))
         bad.push(...check(node.schema, ex.value).map((e) => `${at}.examples.${name} ${e}`));
     }
-    // A schema with an example of its own.
     if (!node.schema && node.example !== undefined && (node.type || node.$ref || node.oneOf || node.allOf)) {
       const { example, ...schema } = node;
       bad.push(...check(schema, example).map((e) => `${at}.example ${e}`));
@@ -69,7 +58,6 @@ test('every golden answer fits the schema of the route it came from, with nothin
   const bad = [];
   for (const file of files) {
     const body = JSON.parse(fs.readFileSync(file, 'utf8'));
-    // Which route a fixture is from, by its shape: /api/me/day has items, /api/me/nearby a list of stops, the rest are /api/me/next.
     const route =
       Array.isArray(body.items) && body.date
         ? 'GET /api/me/day'
@@ -90,7 +78,6 @@ for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB
   ];
 }
 
-/** NUSMods' module files, by code: 'fail' answers 500; a code not here, 404. */
 const NUSMODS = {
   MA1100: {
     semesterData: [
@@ -137,7 +124,7 @@ function limiter() {
   };
 }
 
-const THU = 4; // FROZEN_NOW is Thursday 2026-08-27, 09:00 SGT
+const THU = 4;
 const PROFILE = {
   home: { stops: ['PGP'] },
   manual: [{ day: THU, arriveByMin: 600, endMin: 660, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
@@ -146,7 +133,6 @@ const PROFILE = {
 const CLASS_KEY = '4:600:UTOWN';
 const DORM = 'lat=1.2915&lon=103.7828';
 
-/** One request to the Worker. `auth`: who asks (see world()). */
 async function send(w, path, { method = 'GET', body, form, auth, headers = {} } = {}) {
   const h = { ...headers };
   if (auth === 'cookie') h.cookie = w.cookie;
@@ -173,13 +159,6 @@ async function send(w, path, { method = 'GET', body, form, auth, headers = {} } 
   return res;
 }
 
-/**
- * A fresh Worker with everything bound, and four callers: a browser signed
- * in with an email (`cookie`), a device paired to that account (`device`),
- * an app's account without an email (`anon`) and an API key (`key`).
- * `w.turnstile` ('ok', 'fail', 'down') is what Turnstile answers once
- * TURNSTILE_SECRET is set; `w.limit.RL_*.block` refuses that limiter.
- */
 async function world() {
   const w = { turnstile: 'ok' };
   const feed = makeFetch({ byStop: FEED });
@@ -208,7 +187,6 @@ async function world() {
     FILES: downloads(),
     ...w.limit,
   };
-  // The answer routes as deployed: a key or a session, nothing open.
   delete w.env[Symbol.for('terminus.testOpen')];
   const call = (path, opts) => send(w, path, opts);
   w.call = call;
@@ -227,7 +205,6 @@ async function world() {
   return w;
 }
 
-/** Starts an app's sign-in for a new address: `w.started` and the email's code and link. */
 async function startApp(w, address = 'app@u.nus.edu') {
   w.started = await (await w.call('/api/auth/app/start', { method: 'POST', body: { email: address, name: 'MacBook' } })).json();
   w.appCode = /code is ([2-9A-Z]{6})/.exec(w.email.sent.at(-1).text)[1];
@@ -255,26 +232,17 @@ const etagOf = (path) => async (w) => {
 };
 const cross = { 'sec-fetch-site': 'cross-site' };
 const challengeOf = async (w) => (await (await w.call('/api/admin/passkey/challenge')).json()).challenge;
-/** A new passkey, made but not yet kept, in `w.made`. */
 const passkey = async (w) => {
   w.authenticator = await makeAuthenticator({ origin: BASE });
   w.made = await w.authenticator.create(await challengeOf(w));
 };
-/** A kept passkey, and its answer to a fresh challenge in `w.assertion`. */
 const signedIn = async (w) => {
   await passkey(w);
   await w.call('/api/admin/passkey/register', { method: 'POST', auth: 'operator', body: w.made });
   w.assertion = await w.authenticator.get(await challengeOf(w));
 };
 
-/**
- * [operation, status, options]: options as send() takes them, plus `path`
- * (the request's own, by default the operation's), `block` (limiters that
- * refuse), and `before(w)`. A function of `w` for path, body or form or
- * headers is called with the world once `before` has run.
- */
 const CASES = [
-  // Answers and stops: a key or a session.
   ['GET /api/next', 200, { auth: 'cookie', why: 'nothing sent: set up' }],
   ['GET /api/next', 200, { auth: 'key', path: `/api/next?to=UTOWN&${DORM}`, why: 'with a key' }],
   ['GET /api/next', 200, { auth: 'device', path: '/api/next?from=PGP&to=COM3', why: 'with a device token' }],
@@ -301,7 +269,6 @@ const CASES = [
   ['GET /api/stops/pairs', 200, { auth: 'key' }],
   ['GET /api/stops/pairs', 401, {}],
 
-  // Service.
   ['GET /api/status.json', 200, {}],
   ['GET /api/status.json', 429, { block: ['RL_PUBLIC'] }],
   ['GET /api/health', 200, {}],
@@ -400,7 +367,6 @@ const CASES = [
   ['GET /api/timelapse/days/{date}', 200, { auth: 'operator', path: '/api/timelapse/days/2026-08-26' }],
   ['GET /api/timelapse/days/{date}', 404, { auth: 'operator', path: '/api/timelapse/days/2026-08-01' }],
 
-  // Signing in.
   ['GET /api/auth/config', 200, {}],
   ['GET /api/auth/config', 429, { block: ['RL_PUBLIC'] }],
   ['POST /api/auth/login', 200, { body: { email: 'new@u.nus.edu' } }],
@@ -539,7 +505,6 @@ const CASES = [
   ['POST /api/pair/check', 400, { body: { code: 'ZZZZZZ' } }],
   ['POST /api/pair/check', 429, { block: ['RL_PAIR'], body: { code: 'ZZZZZZ' } }],
 
-  // The account.
   ['GET /api/me', 200, { auth: 'cookie' }],
   ['GET /api/me', 200, { auth: 'anon' }],
   ['GET /api/me', 401, {}],
@@ -685,7 +650,6 @@ const CASES = [
   ['DELETE /api/me/devices/{id}', 404, { auth: 'anon', path: '/api/me/devices/nope' }],
   ['DELETE /api/me/devices/{id}', 404, { auth: 'cookie', path: '/api/me/devices/nope' }],
 
-  // The map.
   ['GET /map/style.json', 200, { path: '/map/style.json?theme=dark&lang=zh' }],
   ['GET /map/campus.pmtiles', 200, {}],
   ['GET /map/campus.pmtiles', 206, { headers: { range: 'bytes=0-9' } }],
@@ -724,7 +688,6 @@ const CASES = [
   ['GET /map/sprites/v4/{sprite}', 404, { path: '/map/sprites/v4/dark.png' }],
   ['GET /map/sprites/v4/{sprite}', 429, { block: ['RL_MAP'], path: '/map/sprites/v4/light.json' }],
 
-  // Downloads.
   ['GET /download/latest.json', 200, {}],
   [
     'GET /download/latest.json',
@@ -764,7 +727,6 @@ const CASES = [
 
 const at = (w, v) => (typeof v === 'function' ? v(w) : v);
 
-/** What the spec says of `res` for `op`: the status listed, the body its schema, the headers it names. */
 async function conforms(op, res) {
   const status = String(res.status);
   const doc = op.op.responses[status];
@@ -828,13 +790,12 @@ test('an operation refuses a caller without credentials (401) exactly when its s
   const wrong = [];
   for (const op of OPS) {
     const security = op.op.security ?? spec.security;
-    // `{}` among the requirements: credentials are optional.
-    const needs = security.length > 0 && !security.some((r) => Object.keys(r).length === 0);
-    // The operator's routes hide behind a 404, as if they weren't there.
-    const operator = needs && security.every((r) => Object.keys(r).every((k) => k === 'operator'));
+    const credentialsOptional = security.some((r) => Object.keys(r).length === 0);
+    const needs = security.length > 0 && !credentialsOptional;
+    const operatorHiddenAs404 = needs && security.every((r) => Object.keys(r).every((k) => k === 'operator'));
     const path = op.path.replace(/\{(\w+)\}/g, (_, k) => SAMPLE[k]);
     const res = await send(w, path, { method: op.method, ...(op.method === 'GET' || op.method === 'DELETE' ? {} : { body: {} }) });
-    const expected = operator ? 404 : needs ? 401 : null;
+    const expected = operatorHiddenAs404 ? 404 : needs ? 401 : null;
     if (expected ? res.status !== expected : res.status === 401) wrong.push(`${op.key}: ${res.status}, expected ${expected ?? 'not 401'}`);
     if (res.status === 401 && op.op.responses['401'] === undefined) wrong.push(`${op.key}: 401 not documented`);
   }
@@ -846,8 +807,8 @@ test('every component schema is used', () => {
   const unused = Object.keys(spec.components.schemas).filter((name) => {
     const own = JSON.stringify(spec.components.schemas[name]);
     const ref = `"#/components/schemas/${name}"`;
-    // Referenced somewhere other than inside itself.
-    return text.split(ref).length - own.split(ref).length < 1;
+    const refsOutsideItself = text.split(ref).length - own.split(ref).length;
+    return refsOutsideItself < 1;
   });
   assert.deepEqual(unused, []);
 });

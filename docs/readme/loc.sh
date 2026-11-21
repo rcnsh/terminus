@@ -1,7 +1,4 @@
 #!/bin/sh
-# Renders loc.html to the picture at the end of the README, light and dark
-# (loc-light.webp, loc-dark.webp), with the numbers `pnpm loc --json` counts.
-# Needs a headless Chromium (Playwright's, or set CHROME) and cwebp.
 set -eu
 cd "$(dirname "$0")"
 CHROME="${CHROME:-$(ls -d "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-*/chrome-headless-shell 2>/dev/null | tail -1)}"

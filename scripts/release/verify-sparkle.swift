@@ -1,9 +1,3 @@
-// Checks a Sparkle EdDSA signature the way an installed app does: Ed25519
-// over the whole file, with the app's SUPublicEDKey. scripts/release/release.sh and
-// scripts/release/release-beta.sh run it after sign_update, so a Sparkle key that
-// isn't the app's stops the release instead of every Mac's update.
-//
-//   swift scripts/release/verify-sparkle.swift <public key, base64> <signature, base64> <file>
 import CryptoKit
 import Foundation
 

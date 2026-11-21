@@ -6,7 +6,6 @@ import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.TestStrings
 
-/** Nearby on the widget: the server's words while fresh, then its own countdown. */
 class DeparturesTest {
     init {
         TestStrings.install()
@@ -32,7 +31,6 @@ class DeparturesTest {
 
     @Test
     fun olderIsCountedDownOnThePhone() {
-        // 200 s less 40: 2 min 40 s, rounded.
         assertEquals("D2 3 min · A1 ~8 min", BaseWidget.departures(stop, 40, 3))
         assertEquals("D2 2 min · A1 ~7 min", BaseWidget.departures(stop, 90, 3))
     }

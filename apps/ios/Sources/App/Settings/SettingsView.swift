@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Settings: everything the account page has, so the website is optional for
-/// daily use. Who you are, then the rest as rows in groups, each saying
-/// what's set, each opening a page; About under them. As on Android
-/// (Settings.kt) and the website.
 struct SettingsView: View {
     @State private var model = SettingsModel.shared
     @Environment(AppModel.self) private var app
@@ -14,9 +10,7 @@ struct SettingsView: View {
     var body: some View {
         Group {
             if width.panes {
-                // The list beside the page open from it; a page opened from that pushes in its pane.
                 ListDetail {
-                    // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
                     NavigationStack { SettingsList(model: model).listPaneRoot().keyboardRoom() }
                 } detail: {
                     NavigationStack(path: model.pagesOver) {
@@ -43,15 +37,11 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             SettingsToast(model: model).animation(.snappy, value: model.message)
         }
-        // On opening, and each time the app comes back while Settings shows:
-        // a device added or a change made on another one shows here.
         .task { await model.refresh() }
         .onChange(of: phase) { _, p in if p == .active { Task { await model.refresh() } } }
         .onChange(of: app.session) { _, _ in model.reset() }
-        // "Add your email": the email sign-in, which keeps this phone's setup.
         .onReceive(NotificationCenter.default.publisher(for: .settingsSignIn)) { _ in signingIn = true }
         .sheet(isPresented: $signingIn, onDismiss: { Task { await model.refresh() } }) { SignInSheet().centredSheet() }
-        // A NUSMods link shared into the app: straight to Timetable, to import it.
         .onReceive(NotificationCenter.default.publisher(for: .settingsImportTimetable)) { n in
             guard let link = n.object as? String else { return }
             model.sharedLink = link
@@ -61,24 +51,19 @@ struct SettingsView: View {
 }
 
 extension Notification.Name {
-    /// A NUSMods share link to import: `object` is the link. Opens Settings › Timetable with it filled in.
     static let settingsImportTimetable = Notification.Name("terminus.importTimetable")
-    /// Asks for the email sign-in, to add an email to an anonymous account (the welcome flow's sheet).
     static let settingsSignIn = Notification.Name("terminus.signIn")
 }
 
-/// The list: who you are, the groups of pages, About.
 private struct SettingsList: View {
     let model: SettingsModel
     @Environment(AppModel.self) private var app
     @Environment(Prefs.self) private var prefs
     @Environment(\.dynamicTypeSize) private var type
-    /// In the 360 list pane, a row's value goes under its name, so nothing is cut off.
     @Environment(\.listPane) private var listPane
 
     var body: some View {
         SettingsScaffold(title: L("Settings"), back: false) {
-            // Closer together than a page's groups, as on Android.
             VStack(spacing: 12) {
                 accountTile
                 ForEach(Array(Self.groups.enumerated()), id: \.offset) { _, group in
@@ -99,15 +84,12 @@ private struct SettingsList: View {
         }
     }
 
-    /// The pages, with their icons, in three groups: what your trips use,
-    /// this device, then feedback, as Android and the website list them.
     private static let groups: [[(SettingsPage, String)]] = [
         [(.trips, "mappin.and.ellipse"), (.timetable, "calendar"), (.favourites, "heart"), (.notifications, "bell")],
         [(.language, "globe"), (.appearance, "circle.lefthalf.filled"), (.devices, "ipad.and.iphone")],
         [(.feedback, "bubble.left")],
     ]
 
-    /// Who you are: your email (or that you're not signed in) and your devices, opening Account.
     private var accountTile: some View {
         Button {
             model.open(.account)
@@ -137,8 +119,6 @@ private struct SettingsList: View {
         .accessibilityIdentifier("settings.account")
     }
 
-    /// A page's row: its icon on a tile of the accent, its name, then what's
-    /// set on the right in a line (under the name at the largest text sizes).
     private func row(_ page: SettingsPage, icon: String) -> some View {
         let s = summary(page)
         let said = s.text.map { t in
@@ -164,7 +144,6 @@ private struct SettingsList: View {
                 if type.isAccessibilitySize || listPane {
                     under
                 } else {
-                    // Beside the name where it fits whole, else under it, so nothing is cut off.
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 14) {
                             Text(page.title).foregroundStyle(Color.ink).lineLimit(1).layoutPriority(1)
@@ -190,8 +169,6 @@ private struct SettingsList: View {
 
     private enum Tone { case plain, todo, off }
 
-    /// What's set on a page, in a line. What isn't set yet (a home stop,
-    /// classes) says what to do, in the accent; notifications all off, in amber.
     private func summary(_ page: SettingsPage) -> (text: String?, tone: Tone) {
         let p = model.profile
         switch page {
@@ -241,7 +218,6 @@ private struct SettingsList: View {
     }
 }
 
-/// A row's press, and the account's: dimmed while held.
 struct SettingsTilePressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
@@ -256,7 +232,6 @@ func settingsPaceName(_ pace: String) -> String {
     }
 }
 
-/// Following the device's own setting, named as the device it's on.
 var settingsFollowDevice: String { onIPad ? L("Follow this iPad") : L("Follow this phone") }
 
 @MainActor func settingsThemeName(_ theme: String) -> String {
@@ -274,7 +249,6 @@ func settingsCardStyleName(_ style: String) -> String {
     }
 }
 
-/// One page of Settings.
 private struct SettingsPageView: View {
     let page: SettingsPage
     let model: SettingsModel
@@ -298,8 +272,6 @@ private struct SettingsPageView: View {
     }
 }
 
-/// While the profile is on its way: the page's groups in bars, each row in
-/// a setting row's box, so the settings fill in where they'll stay.
 struct SettingsProfileLoading: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -322,7 +294,6 @@ struct SettingsProfileLoading: View {
     }
 }
 
-/// One setting in bars: its name, and its control's place at the end.
 struct SettingsSkeletonRow: View {
     var seed = 0
 

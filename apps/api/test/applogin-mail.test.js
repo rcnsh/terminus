@@ -1,7 +1,3 @@
-/**
- * An app's sign-in email that could not be sent: the app hears 502, and the
- * request that went nowhere doesn't hold the address's one-a-minute cooldown.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

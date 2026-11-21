@@ -27,10 +27,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** How long a row takes to fold away; what it was for happens once it has. */
 internal const val FOLD_MS = 220
 
-/** False while a list first draws, true after: rows that come later are new, and unfold. */
 @Composable
 internal fun rememberDrawn(): Boolean {
     var drawn by remember { mutableStateOf(false) }
@@ -38,11 +36,6 @@ internal fun rememberDrawn(): Boolean {
     return drawn
 }
 
-/**
- * A row of a list that comes and goes gently rather than in one frame: it fades and folds away when [shown] turns false, and one [arriving]
- * (added after the list drew) unfolds and keeps a soft wash of the accent for a moment, so the eye sees where it went. Rows there from the
- * start just show.
- */
 @Composable
 internal fun FoldRow(shown: Boolean, arriving: Boolean, content: @Composable () -> Unit) {
     val state = remember { MutableTransitionState(!arriving) }
@@ -64,10 +57,6 @@ internal fun FoldRow(shown: Boolean, arriving: Boolean, content: @Composable () 
     }
 }
 
-/**
- * [then] once a row has folded away. Carried through even if the page closes meanwhile: the fold is only how it looks, the change still
- * happens.
- */
 internal fun CoroutineScope.afterFold(then: () -> Unit) =
     launch(start = CoroutineStart.UNDISPATCHED) {
         withContext(NonCancellable) {

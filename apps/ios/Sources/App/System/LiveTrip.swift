@@ -2,37 +2,17 @@ import ActivityKit
 import Foundation
 import UIKit
 
-/// The Live Activity for a trip under way, Android's live notification:
-/// started when the card's phase says the trip is on (due, heading, waiting,
-/// riding or missed), updated with each answer, and ended when you're there
-/// or the trip is over. Only while it's turned on in Settings and allowed in
-/// the phone's. iOS lets the app start one only while it's open; updates, and the end, can come
-/// from the background too. From iOS 17.2 the server starts one by push
-/// (the push-to-start token, `apnsstart:`) when the trip is due or missed
-/// with the app closed, as Android's starts from a push. Its countdown ticks by itself.
 @MainActor enum LiveTrip {
-    /// How long a finished trip stays on the Lock Screen, saying you're there:
-    /// as long as the server's end by push keeps it (LIVE_DISMISS_S in apns.ts).
     nonisolated static let lingerS: TimeInterval = 10 * 60
 
-    /// Whether an activity is still on the Lock Screen: a stale one (nothing
-    /// new for a while, the phone offline) is the trip's still, to update.
-    /// Ending it would leave nothing, since only the open app may start one.
     nonisolated static func onScreen(_ state: ActivityState) -> Bool { state == .active || state == .stale }
 
     static var allowed: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
-    /// Whether this device has Live Activities at all: an iPad has none, so
-    /// its Settings don't offer one (`allowed` is false there, and also on a
-    /// phone where they're turned off, which Settings still offers).
     static var supported: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
     private static var d: UserDefaults { Shared.defaults }
 
-    /// The activity for `a`: started, updated or ended. One step at a time:
-    /// two answers close together would otherwise both find no activity
-    /// across their awaits and start one each. A step overtaken by a later
-    /// answer before its turn is skipped; the later one is what counts.
     static func update(_ a: NextAnswer?) async {
         asked += 1
         let mine = asked
@@ -42,12 +22,9 @@ import UIKit
         }
     }
 
-    /// Bumped by each update and endAll, so a queued update can tell it's been overtaken.
     private static var asked = 0
-    /// The last step queued: each waits for the one before it.
     private static var tail: Task<Void, Never>?
 
-    /// Runs `step` after every step queued before it, and waits for it.
     static func serially(_ step: @escaping @MainActor () async -> Void) async {
         let before = tail
         let task = Task { @MainActor in
@@ -69,9 +46,7 @@ import UIKit
             return
         }
         let trip = TripReminders.tripKey(a) ?? "trip"
-        // Stale past the card's staleAt: the Lock Screen dims it and says so.
         let content = ActivityContent(state: state, staleDate: a.staleAt?.addingTimeInterval(-ServerClock.skew), relevanceScore: 100)
-        // One no push can reach dims when the trip should be over, whatever the card said, until the app ends it.
         let unpushedContent = ActivityContent(
             state: state, staleDate: (a.staleAt ?? state.overAt(linger: lingerS))?.addingTimeInterval(-ServerClock.skew),
             relevanceScore: 100)
@@ -82,31 +57,24 @@ import UIKit
             return
         }
         await end(running, arrived: nil)
-        // Only the open app may start one.
         guard UIApplication.shared.applicationState != .background else { return }
         let attributes = TripAttributes(trip: trip)
         do {
-            // Its push token comes through activityUpdates (observeTokens).
             _ = try Activity.request(attributes: attributes, content: content, pushType: .token)
         } catch {
-            // Without push (a build without the entitlement): it still runs, updated from the app.
             _ = try? Activity.request(attributes: attributes, content: unpushedContent, pushType: nil)
         }
     }
 
-    /// Updates one activity, found again here by its id: an Activity isn't
-    /// Sendable, so it's never handed from the main actor to ActivityKit's calls.
     private nonisolated static func update(_ id: String, _ content: ActivityContent<TripAttributes.ContentState>) async {
         guard let act = Activity<TripAttributes>.activities.first(where: { $0.id == id }) else { return }
         if act.content.state != content.state || act.content.staleDate != content.staleDate { await act.update(content) }
     }
 
-    /// Ends the activities `ids`; with `arrived`, they say so for a few minutes first.
     private static func end(_ ids: [String], arrived: NextAnswer?) async {
         guard !ids.isEmpty else { return }
         let words = arrived.map { a in (a.card?.phaseText, a.card?.title ?? a.label, a.card?.line ?? a.label, a.card?.glance) }
         await finish(ids, arrived: words, linger: lingerS)
-        // The server's token goes only with the activity it's for, not with a duplicate ended beside it.
         if let owner = tokenFor, ids.contains(owner) { forgetToken() }
     }
 
@@ -130,37 +98,25 @@ import UIKit
         }
     }
 
-    /// Every activity goes: signed out, or turned off.
     static func endAll() async {
         asked += 1
         await serially { await end(Activity<TripAttributes>.activities.map(\.id), arrived: nil) }
     }
 
-    // MARK: without push
-
-    /// Whether the server can't update `act`: started without push (a build
-    /// without the entitlement), or its token isn't the one the server has.
     private static func unpushed(_ act: Activity<TripAttributes>) -> Bool {
         act.pushToken == nil || Push.liveToken == nil || act.id != tokenFor
     }
 
-    /// Ends the activities no push can end once their trip is over: they'd
-    /// otherwise say "Times may have changed" until iOS's own limit. Each
-    /// time the app runs, in the foreground or the background.
     private static func endFinished() async {
         let now = ServerClock.now
         let over = Activity<TripAttributes>.activities.filter { unpushed($0) && isOver($0.content.state, now: now) }
         await end(over.map(\.id), arrived: nil)
     }
 
-    /// Whether a trip nothing can update is over at `now` (the server's clock).
     nonisolated static func isOver(_ s: TripAttributes.ContentState, now: Date) -> Bool {
         s.overAt(linger: lingerS).map { now >= $0 } ?? false
     }
 
-    // MARK: the push token
-
-    /// The activity the live token sent to the server belongs to.
     private static var tokenFor: String? {
         get { d.string(forKey: "live.tokenFor") }
         set { d.set(newValue, forKey: "live.tokenFor") }
@@ -173,7 +129,6 @@ import UIKit
         Push.sync()
     }
 
-    /// The token's activity has gone without the app ending it (swiped away, iOS's limit): so does the token.
     private static func dropOrphanToken() {
         guard Push.liveToken != nil else { return }
         let owner = tokenFor
@@ -184,7 +139,6 @@ import UIKit
         }
     }
 
-    /// The server is told each running activity's push token, so it can update it.
     private static func observe(_ activity: Activity<TripAttributes>) {
         Task {
             for await token in activity.pushTokenUpdates {
@@ -195,9 +149,6 @@ import UIKit
         }
     }
 
-    /// At launch: each activity's push token as it comes, whoever started
-    /// it (the app, or the server by push); the token that lets the server
-    /// start one; and the ones no push can end, ended if their trip is over.
     static func observeTokens() {
         for activity in Activity<TripAttributes>.activities { observe(activity) }
         Task {

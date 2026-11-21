@@ -1,11 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// The Stops tab: its title in the sky, a search, then the pinned stops in one card
-/// that swipes from stop to stop, each as Nearby shows it, then every line
-/// with its buses out. A row opens its service's line; a stop on the line,
-/// or found in the search, opens its board. The stops around you are the
-/// Nearby tab's. As Android's BusesScreen, in the hour's sky.
 struct BusesView: View {
     @State private var model = BusesModel.shared
     @Environment(AppModel.self) private var app
@@ -15,9 +10,7 @@ struct BusesView: View {
         @Bindable var model = model
         Group {
             if width.panes {
-                // The home beside the page open from it; the pages opened from that push in its pane.
                 ListDetail {
-                    // In a stack of its own, as on a phone, so the tab bar's room above it is the same.
                     NavigationStack { BusesHome().listPaneRoot().keyboardRoom() }
                 } detail: {
                     NavigationStack(path: pagesOver) {
@@ -48,16 +41,13 @@ struct BusesView: View {
             model.sync()
             await model.loadCampus()
         }
-        // Each time the tab shows: the pins and "public buses" may have changed in Settings.
         .onAppear {
             Task { await model.loadProfile() }
             openPicked()
         }
-        // A stop or line picked elsewhere (Nearby, the map): its page, over the tab's home.
         .onChange(of: app.openBuses) { openPicked() }
     }
 
-    /// The pages pushed over the first in the wide detail pane.
     private var pagesOver: Binding<[BusRoute]> {
         Binding(get: { Array(model.path.dropFirst()) }, set: { model.path = Array(model.path.prefix(1)) + $0 })
     }
@@ -77,8 +67,6 @@ struct BusesView: View {
     }
 
     #if DEBUG
-        /// TERMINUS_OPEN_STOP=<code>: a stop picked as Nearby would pick it, at
-        /// launch, before the tab has shown, for the UI tests.
         init() {
             guard let code = ProcessInfo.processInfo.environment["TERMINUS_OPEN_STOP"], !BusesView.debugOpened else { return }
             BusesView.debugOpened = true
@@ -89,8 +77,6 @@ struct BusesView: View {
     #endif
 }
 
-/// A short note at the top, where the pull was: how it went, or the pins
-/// full. On Nearby too, for its stars.
 struct NoteView: View {
     let text: String?
 
@@ -114,10 +100,7 @@ struct NoteView: View {
     }
 }
 
-/// Runs `action` now and every 15 s (longer while the server asked for a
-/// wait), only while this is on screen and the app is in front.
 struct BusRefreshing: ViewModifier {
-    /// Nil: no loop, as on the home while searching.
     let id: String?
     let action: () async -> Void
     @Environment(\.scenePhase) private var phase
@@ -143,13 +126,10 @@ extension View {
     }
 }
 
-// MARK: home
-
 struct BusesHome: View {
     @Environment(BusesModel.self) private var model
     @Environment(\.scenePhase) private var phase
     @State private var query = ""
-    /// The list of lines has been on screen: its buses out are asked for from then.
     @State private var linesSeen = false
     @FocusState private var focused: Bool
     @State private var pull = SkyPull()
@@ -160,7 +140,6 @@ struct BusesHome: View {
         ScrollView {
             VStack(spacing: 0) {
                 TabBand(title: L("Stops")).busBandEnd()
-                // Under the sky, at the top of what it searches.
                 BusSearchField(query: $query, focused: $focused)
                     .column()
                     .padding(.top, 16)
@@ -188,19 +167,12 @@ struct BusesHome: View {
         .skyPull(pull, enabled: !searching, livery: model.livery(nil), scene: { .hill($0) }) {
             await model.pullPins()
         }
-        // Not shown (the title is in the sky): the Back on a page over the home.
         .navigationTitle(L("Stops"))
         .toolbar(.hidden, for: .navigationBar)
         .busSkyChrome(strip: true)
-        // The pinned stop showing and its neighbours, at most every 15 s (the
-        // API's own cache), while the home is on screen: none while searching or
-        // with a page over it (a phone); wide, beside the open page, it's still in view.
         .busRefreshing(searching ? nil : "pins:\(model.shownPins):\(model.pinFocus ?? ""):\(model.stopBeside ?? "")") {
             await model.refreshPinned()
         }
-        // The lines' buses out, from when the list is first on screen, at most once a minute
-        // while the home is on screen (it reads every service from NUS): none with a page
-        // over it on a phone; wide, the list stays in view beside the page, so it goes on.
         .task(id: "\(phase == .active)|\(searching)|\(linesSeen)") {
             guard phase == .active, !searching, linesSeen else { return }
             while !Task.isCancelled {
@@ -213,7 +185,6 @@ struct BusesHome: View {
     }
 }
 
-/// The pinned stops, in one card that swipes; with nothing pinned, how to pin one.
 private struct PinnedStops: View {
     @Environment(BusesModel.self) private var model
 
@@ -240,18 +211,11 @@ private struct PinnedStops: View {
     }
 }
 
-/// The pinned stops' names, then one card at a time: each stop as Nearby
-/// shows it, and last, how to pin another. A swipe moves the chosen name, a
-/// tap on a name moves the card. The card is as tall as the page showing,
-/// as on Android, so a stop with two services has no gap under it; what's
-/// below moves, animated, when the page changes.
 private struct PinnedPager: View {
     let pins: [String]
     @Environment(BusesModel.self) private var model
-    /// Each page's own height, by its id: a stop's code or the last page's.
     @State private var heights: [String: CGFloat] = [:]
 
-    /// The pages' gutters: the home's own, so a page sliding in comes from the screen's edge.
     private static let gutter: CGFloat = 16
 
     var body: some View {
@@ -287,7 +251,6 @@ private struct PinnedPager: View {
                             .containerRelativeFrame(.horizontal)
                             .id(BusPinned.addPage)
                     }
-                    // The other pages are drawn past it, clipped by the scroll view.
                     .frame(height: page.flatMap { heights[$0] }, alignment: .top)
                     .animation(.snappy, value: page)
                     .scrollTargetLayout()
@@ -298,8 +261,6 @@ private struct PinnedPager: View {
             }
             .padding(.horizontal, -Self.gutter)
         }
-        // Wide, a pinned stop open beside the home (picked on Now, say, or
-        // pinned with its star while open): its card is the one showing.
         .onChange(of: model.chosen, initial: true) { showOpenPin() }
         .onChange(of: pins) { showOpenPin() }
     }
@@ -308,8 +269,6 @@ private struct PinnedPager: View {
         if case .stop(let code) = model.chosen, pins.contains(code), model.pinSelected != code { model.pinSelected = code }
     }
 
-    /// A pinned stop's page: its sign as Nearby draws it, its times counted
-    /// down while refreshes fail; or its plate alone while it's asked for.
     private func sign(_ code: String, _ cols: NearbyColumns) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let answered = model.pinnedStop(code, now: ServerClock.now)
@@ -322,7 +281,6 @@ private struct PinnedPager: View {
                     ? L("No live data")
                     : model.pinnedFailed.contains(code)
                         ? L("Couldn't reach terminus. Check your connection and try again.") : nil
-            // Still on its way: its rows in bars, a badge for each service the campus data says calls there.
             let pending = note == nil ? model.campus?.stop(code)?.services ?? [] : nil
             VStack(alignment: .leading, spacing: 8) {
                 StopSign(
@@ -332,9 +290,7 @@ private struct PinnedPager: View {
                     svc in
                     model.open(.line(svc: svc, from: code))
                 }
-                // Wide, open beside the home.
                 .chosenCard(model.chosen == .stop(code), radius: 14)
-                // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                 if cells.joined().contains(where: { $0.mark == "~" }) {
                     Text(L("~ is a guess from the timetable, not a live time."))
                         .font(.footnote)
@@ -346,9 +302,6 @@ private struct PinnedPager: View {
     }
 }
 
-/// The pinned stops' names over the card, the one showing raised, as the
-/// stop page's "This side | Across the road". Side by side, each as wide as
-/// the widest, when they fit; else in a row that scrolls, the chosen one kept in view.
 private struct PinSegments: View {
     let codes: [String]
     let names: [String]
@@ -385,7 +338,6 @@ private struct PinSegments: View {
     }
 }
 
-/// Side by side, each as wide as the widest needs, sharing any room left equally.
 private struct EvenRow: Layout {
     var spacing: CGFloat
 
@@ -417,7 +369,6 @@ private struct EvenRow: Layout {
     }
 }
 
-/// The last page: how to pin another stop.
 private struct AddPin: View {
     var body: some View {
         VStack(spacing: 8) {
@@ -441,7 +392,6 @@ private struct AddPin: View {
     }
 }
 
-/// Nothing pinned: where the star is that pins a stop.
 private struct NoPins: View {
     var body: some View {
         HStack(spacing: 12) {
@@ -462,14 +412,10 @@ private struct NoPins: View {
     }
 }
 
-/// Every shuttle service, each opening its whole line: its name, the stops
-/// it passes, and how many of its buses are out (BusesHome asks, once a minute).
 private struct ServiceList: View {
-    /// Set once the list is on screen.
     @Binding var seen: Bool
     @Environment(BusesModel.self) private var model
     @Environment(\.listPane) private var listPane
-    /// The widest badge, so every one is as wide.
     @State private var badge: CGFloat = 0
 
     var body: some View {
@@ -481,7 +427,6 @@ private struct ServiceList: View {
         .padding(.top, 28)
         .padding(.bottom, 8)
         if let campus = model.campus {
-            // The window's height, to tell when the list has come up onto it.
             let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.bounds.height ?? 800
             VStack(spacing: 0) {
                 ForEach(Array(campus.services.enumerated()), id: \.element) { i, svc in
@@ -517,8 +462,6 @@ private struct ServiceList: View {
         }
     }
 
-    /// The list's shape while the services are on their way: six rows of bars
-    /// in the loaded rows' boxes, the chevron real, as the list will have it.
     private var skeleton: some View {
         VStack(spacing: 0) {
             ForEach(0..<6, id: \.self) { i in
@@ -596,8 +539,6 @@ private struct ServiceList: View {
         .contentShape(Rectangle())
     }
 
-    /// In the 360 list pane: the name across the row on a line of its own,
-    /// the stops it passes under it beside the buses out, so neither wraps much.
     private func paneRow(_ svc: String, color: String?, name: String?, via: String?, count: LineCount?) -> some View {
         HStack(spacing: 10) {
             badge(svc, color)
@@ -621,8 +562,6 @@ private struct ServiceList: View {
     }
 }
 
-/// A stop's star, small, beside its name on the home and on Nearby's signs:
-/// filled when it's pinned. Pins or unpins it, as the star on its page does.
 struct BusStar: View {
     let code: String
     let name: String
@@ -648,7 +587,6 @@ struct BusStar: View {
     }
 }
 
-/// The search over every stop and service, in the page's colours under the sky.
 private struct BusSearchField: View {
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
@@ -682,7 +620,6 @@ private struct BusSearchField: View {
     }
 }
 
-/// What the search found: services, then stops.
 private struct BusSearchResults: View {
     let query: String
     let onPick: (BusHit) -> Void
@@ -714,13 +651,10 @@ private struct BusSearchResults: View {
                 Divider().overlay(Color.line)
             }
         }
-        // In the list pane the rows are inset, so the chosen one's tint has
-        // room around its words; they stay where a phone has them.
         .column(gutter: listPane ? 4 : 16)
         .padding(.bottom, 24)
     }
 
-    /// Whether `hit` is what's open beside the list.
     private func chosen(_ hit: BusHit) -> Bool {
         switch (hit, model.chosen) {
         case (.service(let svc), .line(let open, _)?): svc == open
@@ -754,11 +688,6 @@ private struct BusSearchResults: View {
     }
 }
 
-// MARK: a stop's page
-
-/// A stop's header, in the sky: "Pinned" when it is, its name, its code and
-/// the star. Across the road, the stop shown is the opposite stop, and the
-/// star is for that one.
 struct BusStopHeader: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let code: String
@@ -803,7 +732,6 @@ struct BusStopHeader: View {
     }
 }
 
-/// Under the sky: this side or across the road, and the board.
 struct BusStopBody: View {
     let code: String
     @Environment(BusesModel.self) private var model
@@ -816,8 +744,6 @@ struct BusStopBody: View {
         let board = model.boards[shown]
         VStack(alignment: .leading, spacing: 12) {
             if let own, let opposite {
-                // Labelled from the page's own stop, so they stay put after switching. Two
-                // stops only near each other (PGP and its Foyer) aren't sides of a road: their names.
                 Sides(
                     options: own.oppositeAcross
                         ? [L("This side"), L("Across the road")] : [own.name, own.oppositeName ?? model.stopName(opposite)],
@@ -838,8 +764,6 @@ struct BusStopBody: View {
     }
 }
 
-/// Two choices side by side, the chosen one raised: "This side | Across the road".
-/// A long stop name takes two lines, which a system segmented control can't.
 private struct Sides: View {
     let options: [String]
     let selected: Int
@@ -857,8 +781,6 @@ private struct Sides: View {
     }
 }
 
-/// One choice in a row of them, raised when it's the one chosen: the stop
-/// page's sides, the home's pinned stops. `wide`: as wide as it's given.
 private struct Segment: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let text: String
@@ -887,7 +809,6 @@ private struct Segment: View {
 }
 
 extension View {
-    /// The well a row of segments sits in.
     fileprivate func segmentTrack() -> some View {
         padding(4)
             .background(Color.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -895,7 +816,6 @@ extension View {
     }
 }
 
-/// A stop opened from the home, the search, a line or Nearby: its page, with Back.
 struct BusStopPage: View {
     let code: String
     @Environment(BusesModel.self) private var model
@@ -922,8 +842,6 @@ struct BusStopPage: View {
 }
 
 extension View {
-    /// A page pushed over the tab: its sky up under a clear bar, the back
-    /// button in the sky's ink, and `title` for the next page's Back.
     func skyPage(title: String) -> some View { modifier(SkyPage(title: title)) }
 }
 
@@ -938,22 +856,16 @@ private struct SkyPage: ViewModifier {
             content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            // The name is in the sky, large: not again in the bar.
             .toolbar { ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) } }
             .busSkyChrome(strip: false)
         if #available(iOS 26, *) {
-            // The bar's buttons are glass of their own, readable over the sky and the page alike.
             page
         } else {
-            // Over the sky the bar is clear, and scrolled it's a dark bar: the sky's ink reads on both.
             page.toolbarColorScheme(light ? .dark : nil, for: .navigationBar).tint(Inks.sky(light: light).ink)
         }
     }
 }
 
-/// Where a page's sky band is, as it scrolls: whether it has moved from
-/// where it rests, and whether it has gone under the status bar. Only the
-/// two flags change, so scrolling doesn't redraw the page every frame.
 @MainActor @Observable
 final class BandTracker {
     private(set) var moved = false
@@ -971,13 +883,8 @@ final class BandTracker {
 }
 
 extension View {
-    /// Marks the page's sky band, so the status bar knows when it has scrolled away.
     func busBandEnd() -> some View { modifier(BandMark()) }
 
-    /// The status bar over the sky in the sky's ink, and once the band has
-    /// scrolled away, the page's; with `strip`, a bar under it once the page
-    /// moves, so the board doesn't run under the clock (a pushed page has
-    /// its navigation bar).
     func busSkyChrome(strip: Bool) -> some View { modifier(BusSkyChrome(strip: strip)) }
 }
 
@@ -1001,7 +908,6 @@ private struct BusSkyChrome: ViewModifier {
     @State private var band = BandTracker()
     private let sky = SkyClock.shared
 
-    /// The status bar's height: what the strip covers.
     private var inset: CGFloat {
         (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.top ?? 0
     }
@@ -1011,8 +917,6 @@ private struct BusSkyChrome: ViewModifier {
         content
             .environment(band)
             .overlay(alignment: .top) {
-                // Under the clock, once the page has moved: a bar, frosted over the sky
-                // in its own light or dark so the clock keeps the sky's ink, then the page's.
                 if strip && band.moved {
                     Rectangle().fill(.bar)
                         .environment(\.colorScheme, band.past ? scheme : (lightSky ? .dark : .light))

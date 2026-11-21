@@ -1,8 +1,3 @@
-/**
- * The bus proxy client (src/feeds/fms.ts) on its own: one re-mint on a rejection a
- * fresh token could fix, none on one it can't, and a refusal that names the
- * endpoint it came from. worker.smoke.js covers the same through /api/arrivals.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -28,34 +23,30 @@ test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh tok
 
 test('each request a bus fetch makes to NUS is reported, the first mint on a cold token included', async () => {
   const sent = (f) => f.counts.auth + f.counts.shuttle;
-  // A cold token: a mint, then the call.
   let fetch = makeFetch({ buses: { D2: [] } });
   installGlobals(fetch);
   const env = makeEnv();
   let calls = 0;
   await getBuses(env, makeCtx(), 'D2', FROZEN_NOW, () => void calls++);
   assert.equal(fetch.counts.auth, 1);
-  assert.equal(calls, sent(fetch), 'the mint and the call');
-  // The token kept: the call alone.
+  assert.equal(calls, sent(fetch), 'a cold token: the mint and the call');
   calls = 0;
   await fetchActiveBuses(env, 'D2', FROZEN_NOW, () => void calls++);
-  assert.equal(calls, 1);
+  assert.equal(calls, 1, 'the token kept: the call alone');
   assert.equal(sent(fetch), 3);
-  // Cold, then refused: a mint, the call, a re-mint and the call again.
   fetch = makeFetch({ reject: 1, rejectCode: '10008' });
   installGlobals(fetch);
   calls = 0;
   await fetchActiveBuses(makeEnv(), 'D2', FROZEN_NOW, () => void calls++);
   assert.equal(sent(fetch), 4);
-  assert.equal(calls, 4);
-  // Two at once on a cold token share one mint: each reports only what it sent.
+  assert.equal(calls, 4, 'cold, then refused: a mint, the call, a re-mint and the call again');
   fetch = makeFetch({});
   installGlobals(fetch);
   const shared = makeEnv();
   const each = [0, 0];
   await Promise.all(each.map((_, i) => fetchActiveBuses(shared, 'D2', FROZEN_NOW, () => void each[i]++)));
-  assert.equal(fetch.counts.auth, 1);
-  assert.equal(each[0] + each[1], sent(fetch), `${each}`);
+  assert.equal(fetch.counts.auth, 1, 'two at once on a cold token share one mint');
+  assert.equal(each[0] + each[1], sent(fetch), `${each}: each reports only what it sent`);
 });
 
 test('a proxy that keeps rejecting throws UpstreamRejected naming the endpoint', async () => {
@@ -73,11 +64,10 @@ test('a proxy that keeps rejecting throws UpstreamRejected naming the endpoint',
     });
     assert.equal(fetch.counts.shuttle, 2, `${name}: one retry, not a loop`);
 
-    // A refused version: a fresh token can't fix it, so no second call.
     const refused = makeFetch({ reject: 99 });
     installGlobals(refused);
     await assert.rejects(call(makeEnv()), (err) => err instanceof UpstreamRejected && err.code === '10009');
-    assert.equal(refused.counts.shuttle, 1, `${name}: no re-mint on 10009`);
+    assert.equal(refused.counts.shuttle, 1, `${name}: no re-mint on 10009, a refused version a fresh token can't fix`);
   }
 });
 
@@ -91,7 +81,6 @@ test('without the proxy configured, nothing is asked', async () => {
 });
 
 test('the device id is made only when none is stored, and a failed read makes none', async () => {
-  // KV down: no id made up, and nothing written over the stored one.
   const kv = makeKV({ 'auth:deviceid': 'stored' });
   const get = kv.get.bind(kv);
   let down = true;
@@ -101,26 +90,23 @@ test('the device id is made only when none is stored, and a failed read makes no
   };
   const env = makeEnv(kv);
   await assert.rejects(deviceId(env), /KV unavailable/);
-  assert.equal(kv._map.get('auth:deviceid'), JSON.stringify('stored'));
+  assert.equal(kv._map.get('auth:deviceid'), JSON.stringify('stored'), 'KV down: no id made up, nothing written over the stored one');
   down = false;
   const id = await deviceId(env);
-  // Once read, it is remembered: the token's mint and its calls carry the same.
   down = true;
-  assert.equal(await deviceId(env), id);
+  assert.equal(await deviceId(env), id, "once read, it is remembered for the token's mint and calls");
 
-  // None stored: one is made, kept, and the same comes back after.
   const fresh = makeEnv();
   const made = await deviceId(fresh);
   assert.match(made, /^[0-9a-f]{16}$/);
   assert.equal(await fresh.KV.get('auth:deviceid'), made);
-  assert.equal(await deviceId(fresh), made);
+  assert.equal(await deviceId(fresh), made, 'none stored: one is made, kept, and the same comes back after');
 
-  // Two isolates both found none: the one whose write lost takes the stored id next.
   const raced = makeEnv();
   const lost = await deviceId(raced);
   await raced.KV.put('auth:deviceid', 'abcdef0123456789');
   assert.notEqual(lost, 'abcdef0123456789');
-  assert.equal(await deviceId(raced), 'abcdef0123456789');
+  assert.equal(await deviceId(raced), 'abcdef0123456789', 'the isolate whose write lost takes the stored id next');
 });
 
 test('fetchedAt is when the call that answered went out, not when the fetch began', async () => {
@@ -130,7 +116,6 @@ test('fetchedAt is when the call that answered went out, not when the fetch bega
   ]) {
     const feed = makeFetch({ reject: 1, rejectCode: '10008' });
     installGlobals(feed);
-    // Every request to NUS takes 5 s: a mint, a refused call, a re-mint, then the answer.
     let clock = FROZEN_NOW;
     Date.now = () => clock;
     globalThis.fetch = async (input, init) => {
@@ -140,7 +125,7 @@ test('fetchedAt is when the call that answered went out, not when the fetch bega
     };
     const out = await call(makeEnv());
     assert.equal(feed.counts.auth + feed.counts.shuttle, 4, name);
-    assert.equal(out.fetchedAt, FROZEN_NOW + 15_000, name);
+    assert.equal(out.fetchedAt, FROZEN_NOW + 15_000, `${name}: each request takes 5 s, and the answering call went out at 15 s`);
   }
 });
 
@@ -153,8 +138,7 @@ test('a version refused after the switch away from it does not open the breaker 
     const kv = makeKV();
     await kv.put('config:appVersion', OLD);
     const env = makeEnv(kv);
-    // This isolate read the old version; then another switched to the new one.
-    assert.equal(await appVersion(env, FROZEN_NOW), OLD);
+    assert.equal(await appVersion(env, FROZEN_NOW), OLD, 'this isolate read the old version before another switched');
     await kv.put('config:appVersion', NEW);
     const ctx = makeCtx();
     await assert.rejects(getArrivals(env, ctx, 'COM3', FROZEN_NOW), (err) => err instanceof UpstreamRejected && err.outdated);
@@ -200,11 +184,9 @@ test('a blank headcount is no count, not an empty bus', () => {
   assert.equal(crowdFromLoad(60, 50), 'high');
 });
 
-// FROZEN_NOW is 09:00:00 in Singapore.
 const stamped = (stamp, shuttles) => ({ code: '00000', msg: '', data: { TimeStamp: stamp, name: 'COM3', shuttles, hints: [] } });
 
 test("arrival times count from the reply's TimeStamp, which NUS keeps for 35 to 40 s", async () => {
-  // As the feed sends them: D2 in 185 s and 11 min, the next in 12 s, all as of 20 s before the call.
   const shuttles = [
     {
       name: 'D2',
@@ -284,11 +266,10 @@ test('a board fetched from NUS is handed on once per call, and logged bus by bus
     rows.every((r) => named(r).dest === '' && r.doubles.length === 1),
     'no destination, location or request',
   );
-  // A hook that throws costs the log, never the board.
   installGlobals(makeFetch({ byStop: { COM3 } }));
   const sa = await getArrivals(makeEnv(), makeCtx(), 'COM3', FROZEN_NOW, () => {
     throw new Error('logging broke');
   });
-  assert.equal(sa.available, true);
+  assert.equal(sa.available, true, 'a hook that throws costs the log, never the board');
   assert.equal(sa.arrivals.length >= 2, true);
 });

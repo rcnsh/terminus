@@ -1,9 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// A Buses near you widget at one moment: on the Home Screen the hour's sky
-/// with the stop's name and the time now, then the buses by its size
-/// (NearbyFit); on the Lock Screen, the next two buses plainly.
 struct NearbyWidgetView: View {
     let entry: NearbyEntry
     @Environment(\.widgetFamily) private var family
@@ -28,14 +25,10 @@ struct NearbyWidgetView: View {
         .containerBackground(for: .widget) { family.isAccessory ? Color.clear : look.page }
     }
 
-    /// Before the first board, while it's being fetched.
     static func waiting(_ entry: NearbyEntry) -> Bool {
         entry.paired && !entry.sample && (entry.stops?.isEmpty ?? true) && entry.error == WidgetFace.updating
     }
 
-    /// What's drawn: while `waiting`, the gallery's made-up stops in place of
-    /// the board, redacted to bars, so the widget has its shape; the rest is
-    /// this widget's own, so ↻ and the swap stay.
     static func shown(_ entry: NearbyEntry, family: WidgetFamily) -> NearbyEntry {
         guard waiting(entry) else { return entry }
         var e = entry
@@ -48,18 +41,11 @@ struct NearbyWidgetView: View {
 }
 
 private let pad: CGFloat = 14
-/// The sky over the buses: the line above (Now, the walk, ↻) and the stop's name.
 private let skyH: CGFloat = 72
-/// Wide enough for a badge and the gap after it ("R1"; a public bus's "95 $" a little over).
 private let badgeW: CGFloat = 36
-/// The biggest a tile grows: past this, the room is better spent on the next stop's buses.
 private let tileMax: CGFloat = 128
 private let stopHead: CGFloat = 24
 
-/// Nearby, at any size: the nearest stop's services, each with its badge,
-/// the time it's due as a clock time (and its minutes under 15), its next
-/// stop, the buses after it, Live and how full. Both sides of the road where
-/// there's a stop beside yours and room for them, under a slimmer sky.
 struct NearbyLayout: View {
     let v: NearbyModel
     let look: WidgetLook
@@ -75,7 +61,6 @@ struct NearbyLayout: View {
     }
 }
 
-/// The sky with the stop's name and Now, then the buses under it: both sides, rows, or tiles.
 private struct NearbySky: View {
     let v: NearbyModel
     let look: WidgetLook
@@ -90,20 +75,16 @@ private struct NearbySky: View {
         let ground = look.ground
         let buses = v.buses
         let besideBuses = beside.map { v.busesAt($0) } ?? []
-        // The moon clear of the words: right of the stop's name where it's wide; none in the slim sky over both sides.
         let moon = w >= 300 && beside == nil ? CGPoint(x: 110, y: 20) : CGPoint(x: -100, y: -100)
-        // The stop across the road a tap away, unless it's shown already.
         let other = beside == nil ? v.first.flatMap { WidgetSwap.offer(v.all ?? [], v.swap, now: v.now, onScreen: [$0.stop.code]) } : nil
         let area = h - skyH
         let message = v.problem(buses + besideBuses)
-        // The small square: the stop's short name, and Now without the walk, so neither is cut short.
         let narrow = w < 220
         ZStack(alignment: .topLeading) {
             SkyBackdrop(look: look, height: skyH, scale: 15 / 92, road: Road(stop: true, shuttle: false), moon: moon)
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     if beside != nil {
-                        // Slim: the stop's name, Now and ↻ on one line; each side says how far it is.
                         HStack(spacing: 6) {
                             Text(verbatim: v.title).font(.system(size: 17, weight: .bold)).foregroundStyle(sky.ink).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,7 +97,6 @@ private struct NearbySky: View {
                         HStack(spacing: 6) {
                             HeadWords(v: v, buses: buses, inks: sky, walk: !narrow).frame(maxWidth: .infinity, alignment: .leading)
                                 .standInHidden()
-                            // None for made-up stops: there's no real one to swap to yet.
                             if let other, let slot = v.slot, let nearest = v.all?.first, !v.standIn {
                                 NearbySwapButton(slot: slot, from: nearest.stop.code, other: other, inks: sky, side: 24)
                             }
@@ -155,8 +135,6 @@ private struct NearbySky: View {
     }
 }
 
-/// The line above the stop's name: "Now 9:41 · 2 min walk"; "Times may be
-/// old · 9:39" once they are; "Updating…" or the last fetch's problem.
 private struct HeadWords: View {
     let v: NearbyModel
     let buses: [StopBus]
@@ -181,8 +159,6 @@ private struct HeadWords: View {
     }
 }
 
-/// "Now 9:41", which WidgetKit keeps ticking by itself, in campus time and
-/// the account's 12- or 24-hour style, as the bus times beside it.
 struct NowClock: View {
     let inks: Inks
     var size: CGFloat = 12
@@ -196,12 +172,6 @@ struct NowClock: View {
     }
 }
 
-/// Both sides of the road, a column each: your stop (or this side) and the
-/// one beside it (across the road, or the next stop), each service a row with
-/// the time it's due, up to `rows`. Which side a bus is on says which way it
-/// goes. New to NUS heads each side with the places its buses go and gives
-/// each bus the places it passes, Live or Scheduled in words, and Packed;
-/// otherwise each row is the badge, the time and the bus after.
 private struct NearbySides: View {
     let v: NearbyModel
     let beside: NearbyStop
@@ -213,7 +183,6 @@ private struct NearbySides: View {
 
     var body: some View {
         if let first = v.first {
-            // Under the sky's full name, each side goes by its short one ("PGP Foyer", "PGP").
             let across = first.opposite == beside.stop.code && first.oppositeAcross
             HStack(alignment: .top, spacing: 0) {
                 side(
@@ -228,7 +197,6 @@ private struct NearbySides: View {
         }
     }
 
-    /// One side: its heading ("Across the road · 1 min walk"), where its buses go with New to NUS, then a row a bus.
     private func side(head: String, sub: String, stop: NearbyStop, shown: [StopBus]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
@@ -250,14 +218,12 @@ private struct NearbySides: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// A bus on its side of the road: its badge, the time it's due, and its minutes or the one after.
     private func plain(_ b: StopBus) -> some View {
         HStack(spacing: 0) {
             Badge(b: b, size: 12).frame(width: badgeW, alignment: .leading)
             TimeText(v: v, b: b, inks: inks, size: 15)
             Spacer(minLength: 4)
             if let left = v.minutes(b) {
-                // The bus after makes way for how long until this one.
                 MinutesChip(b: b, left: left, inks: inks, size: 11)
             } else if let next = b.later.first {
                 small(v.clock(next), inks.muted, 11)
@@ -266,9 +232,6 @@ private struct NearbySides: View {
         .frame(height: NearbyFit.sideRow)
     }
 
-    /// New to NUS: a bus, its time and how long until it; under them, the
-    /// places it passes (where it stops next when it passes none), then Live
-    /// or Scheduled, or Packed (only a live bus says how full it is).
     private func explained(_ b: StopBus, _ shown: [StopBus]) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 0) {
@@ -295,9 +258,6 @@ private struct NearbySides: View {
     }
 }
 
-/// Narrow widgets: a service a row, its time and minutes beside its badge,
-/// and under them its next stop (or which first bus it is) across the
-/// row: beside the time it would have room for a word.
 private struct NearbyRows: View {
     let v: NearbyModel
     let buses: [StopBus]
@@ -330,9 +290,6 @@ private struct NearbyRows: View {
     }
 }
 
-/// The stop's services as tiles, `fit.cols` across, and the rest along the
-/// bottom. Rows a stop with few services leaves empty go to the next stop's,
-/// under its name.
 private struct NearbyTiles: View {
     let v: NearbyModel
     let buses: [StopBus]
@@ -346,8 +303,6 @@ private struct NearbyTiles: View {
         let rest = Array(buses.dropFirst(rows * cols))
         let foot = fit.footer && !rest.isEmpty ? NearbyFit.footerH : 0
         let room = area - NearbyFit.bottom
-        // Spare rows: the next stop with buses, as many as fit under its name
-        // without squeezing a tile much below its smallest.
         let spare = min(fit.rows - rows, Int((room - stopHead) / (NearbyFit.tile(cols) - 4)) - rows)
         let next: (NearbyStop, [StopBus])? =
             spare > 0 && rest.isEmpty
@@ -356,7 +311,6 @@ private struct NearbyTiles: View {
                 return more.isEmpty ? nil : (st, Array(more.prefix(spare * cols)))
             }.first : nil
         let nextRows = next.map { ($0.1.count + cols - 1) / cols } ?? 0
-        // The 1 pt rules between rows count too.
         let rules = CGFloat(max(rows - 1, 0) + max(nextRows - 1, 0))
         let tileH = min((room - foot - rules - (next != nil ? stopHead : 0)) / CGFloat(max(rows + nextRows, 1)), tileMax)
         let shown = Array(buses.prefix(rows * cols))
@@ -391,7 +345,6 @@ private struct NearbyTiles: View {
     }
 }
 
-/// A row of tiles, `cols` across, the rule between them; an empty cell where there's no bus.
 struct TileRow: View {
     let v: NearbyModel
     let row: [StopBus]
@@ -414,8 +367,6 @@ struct TileRow: View {
     }
 }
 
-/// One service: its badge and the time it's due, its minutes or the next bus
-/// beside it, its next stop over up to two lines, and Live and how full.
 private struct NearbyTile: View {
     let v: NearbyModel
     let b: StopBus
@@ -450,7 +401,6 @@ private struct NearbyTile: View {
     }
 }
 
-/// Live or Scheduled, and how full; or which first bus it is.
 struct NearbyPills: View {
     let v: NearbyModel
     let b: StopBus
@@ -471,7 +421,6 @@ struct NearbyPills: View {
     }
 }
 
-/// "Seats", "Busy", "Packed", in the colour that goes with each.
 func crowdWords(_ crowd: String?, _ inks: Inks) -> (String, Color)? {
     switch crowd {
     case "low": (L("Seats"), inks.good)
@@ -481,7 +430,6 @@ func crowdWords(_ crowd: String?, _ inks: Inks) -> (String, Color)? {
     }
 }
 
-/// The time a bus is due, big: "9:42", "~9:48" for a timetable's guess; muted once the times may be old.
 struct TimeText: View {
     let v: NearbyModel
     let b: StopBus
@@ -494,7 +442,6 @@ struct TimeText: View {
     }
 }
 
-/// How long until a bus, `left` whole minutes: "6 min", "~6 min" for a timetable's time, "now" in its last minute.
 struct MinutesChip: View {
     let b: StopBus
     let left: Int
@@ -517,7 +464,6 @@ private struct Badge: View {
     var body: some View { BusBadge(svc: b.svc, color: b.color, size: size, paid: b.paid) }
 }
 
-/// A rule between two columns, `inset` short of each end.
 struct VRule: View {
     let inks: Inks
     let inset: CGFloat
@@ -531,7 +477,6 @@ struct HRule: View {
     var body: some View { Rectangle().fill(inks.line).frame(height: 1).padding(.horizontal, 12) }
 }
 
-/// Shows the stop across the road first, or the nearest one again.
 struct NearbySwapButton: View {
     let slot: String
     let from: String
@@ -549,10 +494,6 @@ struct NearbySwapButton: View {
     }
 }
 
-/// The nearest stop's services two by two under a heading, `rows` of them:
-/// the large widget's next buses, under its trip. With no `rows`, where a
-/// trip leaves no room for tiles, a line of the next three. The heading says
-/// when the times may be old, as Buses near you's line above does.
 struct NearbyPair: View {
     static let head: CGFloat = 22
     static let tile: CGFloat = 106
@@ -587,8 +528,6 @@ struct NearbyPair: View {
     }
 }
 
-/// Buses side by side on one line, each its badge, time and minutes, as
-/// many as fit: where there's no room for more.
 struct NearbyLine: View {
     let v: NearbyModel
     let buses: [StopBus]
@@ -615,7 +554,6 @@ struct NearbyLine: View {
     }
 }
 
-/// The Lock Screen: the stop, then its next two buses with their minutes, or why there are none.
 private struct NearbyRectangular: View {
     let v: NearbyModel
 

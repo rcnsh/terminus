@@ -1,7 +1,3 @@
-/**
- * Which bus a trip is about (plan.ts): the rules on their own, without the
- * API around them. The trip tests (trip.test.js) cover them end to end.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -10,10 +6,9 @@ import { WAIT_EARLY_MS } from '../src/answer/phase.ts';
 import { reachedEarly } from '../src/timetable/profile.ts';
 import { FROZEN_NOW, installGlobals, makeFetch } from './_stubs.mjs';
 
-const NOW = Date.parse('2026-08-27T01:00:00Z'); // 09:00 SGT
+const NOW = Date.parse('2026-08-27T01:00:00Z');
 const iso = (ms) => new Date(ms).toISOString();
 const min = 60_000;
-/** A plan: `board` minutes from now, leave two minutes before, arriving ten after. */
 const bus = (board, extra = {}) => ({
   svc: 'D2',
   stop: 'PGP',
@@ -74,7 +69,7 @@ test('the same bus is saved again when its times become live', () => {
 });
 
 test('from its leave-by the plan is frozen, whatever the answer says', () => {
-  const stored = bus(1, { located: true }); // left to leave a minute ago
+  const stored = bus(1, { located: true });
   assert.deepEqual(choose({ stored, made: bus(12, { svc: 'R2' }) }), { bus: stored, save: false });
   assert.deepEqual(choose({ stored, made: null, located: false }), { bus: stored, save: false });
 });
@@ -82,39 +77,70 @@ test('from its leave-by the plan is frozen, whatever the answer says', () => {
 test("without a location, the phone's plan is shown, not the device's own", () => {
   const stored = bus(30, { located: true });
   assert.deepEqual(choose({ stored, made: bus(25, { svc: 'R2' }), located: false }), { bus: stored, save: false });
-  // That same bus in this answer, its time moved on since: this answer's times, the plan unchanged.
   const same = bus(32);
-  assert.deepEqual(choose({ stored, made: same, located: false }), { bus: same, save: false });
-  // A plan made without a location is replaced by one with.
-  assert.deepEqual(choose({ stored: bus(30), made: bus(25, { svc: 'R2' }) }), { bus: bus(25, { svc: 'R2' }), save: true });
+  assert.deepEqual(
+    choose({ stored, made: same, located: false }),
+    { bus: same, save: false },
+    "the same bus, its time moved on: this answer's times, the plan unchanged",
+  );
+  assert.deepEqual(
+    choose({ stored: bus(30), made: bus(25, { svc: 'R2' }) }),
+    { bus: bus(25, { svc: 'R2' }), save: true },
+    'a plan made without a location is replaced by one with',
+  );
 });
 
 test('at the stop, the bus you were told stays while it still gets you there in time', () => {
-  const stored = bus(10, { located: true }); // leave-by in 8 minutes: within the window
+  const stored = bus(10, { located: true });
   assert.ok(NOW >= Date.parse(stored.leave) - WAIT_EARLY_MS);
   const other = bus(14, { svc: 'R2' });
   assert.deepEqual(choose({ stored, made: other }), { bus: stored, save: false });
-  // It would make you late: the other one.
-  assert.deepEqual(choose({ stored, made: other, classAtMs: NOW + 15 * min }), { bus: other, save: true });
-  // Too early to be at the stop for it: the answer's bus.
-  assert.deepEqual(choose({ stored: bus(25, { located: true }), made: other }), { bus: other, save: true });
-  // A trip home has no class to be late for: the answer's bus.
-  assert.deepEqual(choose({ stored, made: other, classAtMs: null }), { bus: other, save: true });
+  assert.deepEqual(
+    choose({ stored, made: other, classAtMs: NOW + 15 * min }),
+    { bus: other, save: true },
+    'it would make you late: the other one',
+  );
+  assert.deepEqual(
+    choose({ stored: bus(25, { located: true }), made: other }),
+    { bus: other, save: true },
+    "too early to be at the stop for it: the answer's bus",
+  );
+  assert.deepEqual(
+    choose({ stored, made: other, classAtMs: null }),
+    { bus: other, save: true },
+    "a trip home has no class to be late for: the answer's bus",
+  );
 });
 
 test('a bus you were told gives way when the phone is now too far from its stop to catch it', () => {
-  // One stray fix by KR MRT made the plan; the phone is at COM 3 now, a kilometre away.
   const stored = bus(10, { located: true });
   const other = bus(14, { svc: 'R2' });
-  assert.deepEqual(choose({ stored, made: other, walkToItsStopS: 13 * 60 }), { bus: other, save: true });
-  // From there it's a walk: the plan goes, so no device keeps it.
-  assert.deepEqual(choose({ stored, made: null, walkToItsStopS: 13 * 60 }), { bus: null, save: false, drop: true });
-  // Within reach, with the bus standing at the stop (WALK.dwellS) for a few seconds behind: kept.
-  assert.deepEqual(choose({ stored, made: other, walkToItsStopS: 10 * 60 + 20 }), { bus: stored, save: false });
-  // Waiting at its stop, the plan stands; from its leave-by it's frozen.
-  assert.deepEqual(choose({ stored, made: other, walkToItsStopS: 13 * 60, atItsStop: true }), { bus: stored, save: false });
+  assert.deepEqual(
+    choose({ stored, made: other, walkToItsStopS: 13 * 60 }),
+    { bus: other, save: true },
+    'a stray fix made the plan; the phone is now a kilometre away',
+  );
+  assert.deepEqual(
+    choose({ stored, made: null, walkToItsStopS: 13 * 60 }),
+    { bus: null, save: false, drop: true },
+    "from there it's a walk: the plan goes, so no device keeps it",
+  );
+  assert.deepEqual(
+    choose({ stored, made: other, walkToItsStopS: 10 * 60 + 20 }),
+    { bus: stored, save: false },
+    'within reach, the bus standing at the stop for WALK.dwellS: kept',
+  );
+  assert.deepEqual(
+    choose({ stored, made: other, walkToItsStopS: 13 * 60, atItsStop: true }),
+    { bus: stored, save: false },
+    'waiting at its stop, the plan stands',
+  );
   const due = bus(1, { located: true });
-  assert.deepEqual(choose({ stored: due, made: other, walkToItsStopS: 5 * 60 }), { bus: due, save: false });
+  assert.deepEqual(
+    choose({ stored: due, made: other, walkToItsStopS: 5 * 60 }),
+    { bus: due, save: false },
+    "from its leave-by it's frozen",
+  );
 });
 
 test('a class reached before it starts is where you are', () => {
@@ -128,15 +154,20 @@ test('a class reached before it starts is where you are', () => {
 });
 
 test("a plan made without a location gives way to the phone's, past its leave-by too", () => {
-  const guess = bus(1); // from where the timetable put you; its leave-by a minute ago
+  const guess = bus(1);
   const here = bus(6, { svc: 'R2', stopCode: 'COM3', located: true });
   assert.deepEqual(choose({ stored: guess, made: here }), { bus: here, save: true });
-  // Where the phone is, the answer is a walk: the guess goes, rather than stay on Today.
-  assert.deepEqual(choose({ stored: guess, made: null }), { bus: null, save: false, drop: true });
-  // Waiting at its stop, or with its bus gone (only it can say you're on it): kept.
-  assert.deepEqual(choose({ stored: guess, made: here, atItsStop: true }), { bus: guess, save: false });
+  assert.deepEqual(
+    choose({ stored: guess, made: null }),
+    { bus: null, save: false, drop: true },
+    'where the phone is, the answer is a walk: the guess goes, rather than stay on Today',
+  );
+  assert.deepEqual(choose({ stored: guess, made: here, atItsStop: true }), { bus: guess, save: false }, 'waiting at its stop: kept');
   const gone = bus(-1);
-  assert.deepEqual(choose({ stored: gone, made: here }), { bus: gone, save: false });
-  // A device without a location still says it.
-  assert.deepEqual(choose({ stored: guess, made: here, located: false }), { bus: guess, save: false });
+  assert.deepEqual(choose({ stored: gone, made: here }), { bus: gone, save: false }, "its bus gone: kept, as only it can say you're on it");
+  assert.deepEqual(
+    choose({ stored: guess, made: here, located: false }),
+    { bus: guess, save: false },
+    'a device without a location still says it',
+  );
 });

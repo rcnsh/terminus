@@ -70,7 +70,7 @@ depth. Read the bullet for the part you're changing.
     the dot, on the kerb side (left of its heading), the ones behind it
     further back; a bus that changes place slides there along the line in
     1–4 s, longer the further it goes (web `map.js` `moveTo`;
-    Android `Slides`), or jumps.
+    Android's and the iPhone's `Slides`), or jumps.
   - `test/fixtures/bus-trace.jsonl` is a real feed trace (the probe
     workflow with `trace`); `buses.test.js` replays it.
   - Each bus comes with its number plate (`plate`, shown on its card on

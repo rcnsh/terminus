@@ -1,8 +1,3 @@
-/**
- * The street map's pieces from R2 (map.ts): exact byte ranges with an empty
- * edge cache, R2's own answers when there is no cache (304, 404, ranges), and
- * a file replaced while its pieces were cached.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -14,8 +9,6 @@ const BASE = 'https://bus.example.test';
 const SIZE = 2000;
 const bytesOf = (seed) => Uint8Array.from({ length: SIZE }, (_, i) => (i * 7 + seed) % 251);
 
-// The Worker remembers the file's ETag per isolate for five minutes: each
-// test starts well past the last one's, so none sees another's file.
 let clock = FROZEN_NOW;
 function setup(files) {
   clock += 3_600_000;
@@ -32,8 +25,6 @@ function setup(files) {
 }
 const body = async (res) => new Uint8Array(await res.arrayBuffer());
 
-// First, while this isolate knows nothing of the file: with no ETag to go
-// by, a refused read can only be a 429, not a 404.
 test('reading R2 for the file is refused past RL_MAP, with a retry-after', async () => {
   const { env, get } = setup(new Map([['map/campus.pmtiles', bytesOf(7)]]));
   env.RL_MAP = { limit: async () => ({ success: false }) };
@@ -86,7 +77,6 @@ test('with no edge cache, R2 answers itself: its range, its 304, its 404', async
   assert.deepEqual(await body(part), data.slice(100, 200));
   const etag = part.headers.get('etag');
   assert.ok(etag);
-  // R2's onlyIf says the client's copy is current.
   const same = await get('/map/campus.pmtiles', { 'if-none-match': etag });
   assert.equal(same.status, 304);
   assert.equal(same.headers.get('etag'), etag);
@@ -113,14 +103,12 @@ test('a map file replaced since its pieces were cached is served new, never mixe
   assert.deepEqual(await body(old), bytesOf(5).slice(0, 100));
   const oldTag = old.headers.get('etag');
 
-  // A new upload, inside the five minutes the old ETag is trusted for.
   const fresh = bytesOf(6);
   files.set('map/campus.pmtiles', fresh);
   const other = await get('/map/campus.pmtiles', { range: 'bytes=100-199' });
   assert.equal(other.status, 206);
   assert.deepEqual(await body(other), fresh.slice(100, 200), 'R2 refused the old ETag, so the new file answered');
   assert.notEqual(other.headers.get('etag'), oldTag);
-  // The piece cached from the old file is no longer used.
   const again = await get('/map/campus.pmtiles', { range: 'bytes=0-99' });
   assert.deepEqual(await body(again), fresh.slice(0, 100));
   assert.equal(again.headers.get('content-range'), `bytes 0-99/${SIZE}`);
@@ -135,7 +123,6 @@ test('the stable site and the beta share one edge cache but never serve each oth
       ['map/campus.pmtiles', bytesOf(8)],
     ]),
   );
-  // Same cache (installed by setup above), the beta's own bucket.
   const betaEnv = {
     ...makeEnv(),
     PUBLIC_ORIGIN: 'https://beta.terminus.run',

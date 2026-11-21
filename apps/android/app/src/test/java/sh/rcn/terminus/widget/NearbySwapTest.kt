@@ -10,7 +10,6 @@ import sh.rcn.terminus.LaterBus
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.parseNearby
 
-/** The swap button on the Nearby widget: the stop across the road first. */
 class NearbySwapTest {
     private val now = 1_790_000_000_000L
 
@@ -36,21 +35,15 @@ class NearbySwapTest {
 
     @Test
     fun theButtonOnlyOffersAnOppositeStopThatIsntShown() {
-        // The large widget shows the opposite stop third: nothing to swap for.
         assertNull(NearbySwap.offer(stops, null, now, listOf("KR-MRT-OPP", "LT27", "KR-MRT")))
-        // The small one stops at LT27, so it offers the opposite stop.
         assertEquals("KR-MRT", NearbySwap.offer(stops, null, now, listOf("KR-MRT-OPP", "LT27"))?.code)
-        // Swapped, it offers the nearest stop again, even with it on screen.
         assertEquals("KR-MRT-OPP", NearbySwap.offer(stops, swap, now, listOf("KR-MRT", "KR-MRT-OPP"))?.code)
     }
 
     @Test
     fun tappedWhileSwappedItGoesBackRatherThanStoringTheNearestTwice() {
-        // Swapped, the button offers the nearest stop: from and to are the same.
         assertTrue(NearbySwap.undoes("KR-MRT-OPP", "KR-MRT-OPP", "KR-MRT-OPP", "KR-MRT"))
-        // The same swap tapped twice quickly: undone too.
         assertTrue(NearbySwap.undoes("KR-MRT-OPP", "KR-MRT", "KR-MRT-OPP", "KR-MRT"))
-        // Not swapped: a swap.
         assertFalse(NearbySwap.undoes("KR-MRT-OPP", "KR-MRT", null, null))
     }
 

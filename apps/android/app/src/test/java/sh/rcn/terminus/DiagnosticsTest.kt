@@ -47,7 +47,6 @@ class DiagnosticsTest {
         assertEquals("3 min ago", Diagnostics.ago(now - 200_000, now))
         assertEquals("5 h ago", Diagnostics.ago(now - 5 * 3_600_000L, now))
         assertEquals("3 d ago", Diagnostics.ago(now - 3 * 86_400_000L, now))
-        // Singapore's time, whatever the phone's zone.
         assertEquals("2026-10-18 13:06:40", Diagnostics.stamp(now))
     }
 

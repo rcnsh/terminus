@@ -8,7 +8,6 @@ import org.junit.Test
 import sh.rcn.terminus.LeaveAlerts.State
 import sh.rcn.terminus.LeaveAlerts.Step
 
-/** When the leave reminder posts, waits or goes: [LeaveAlerts.decide]. */
 class LeaveAlertsTest {
     init {
         TestStrings.install()
@@ -19,7 +18,6 @@ class LeaveAlertsTest {
 
     private fun iso(ms: Long) = Instant.ofEpochMilli(ms).toString()
 
-    /** A class plan leaving at [leaveAt], its reminder five minutes before, as the server words it. */
     private fun plan(
         leaveAt: Long,
         remindAt: Long? = leaveAt - 5 * 60_000,
@@ -43,7 +41,6 @@ class LeaveAlertsTest {
 
     private val fresh = State(alertsOn = true, notifiedFor = 0L)
 
-    /** Runs [decide] the way arm() does, noting the trip after a heads-up. */
     private fun run(answer: NextAnswer, state: State, at: Long, showing: Boolean = true): Pair<Step, State> {
         val step = LeaveAlerts.decide(answer, state, showing, pushActive = false, now = at)
         return step to if (step is Step.HeadsUp) state.copy(notifiedFor = step.trip) else state
@@ -62,15 +59,12 @@ class LeaveAlertsTest {
     fun aLeaveTimeThatMovesIsNotASecondHeadsUp() {
         val (first, after) = run(plan(leaveAt = now + 4 * 60_000), fresh, now)
         assertTrue(first is Step.HeadsUp)
-        // The buses moved: leave later, a new remindAt, the same class.
         val (second, _) = run(plan(leaveAt = now + 9 * 60_000), after, now + 60_000)
         assertEquals(Step.Follow(post = true, checkAt = null), second)
-        // Dismissed: not posted again.
         val (third, _) = run(plan(leaveAt = now + 9 * 60_000), after, now + 60_000, showing = false)
         assertEquals(Step.Follow(post = false, checkAt = null), third)
     }
 
-    /** The same plan with the feed down: no arrival time, so no `timing.classAt`; the trip is named by the card's actions. */
     private fun feedDownPlan(leaveAt: Long, remindAt: Long? = leaveAt - 5 * 60_000) =
         NextAnswer.parse(
             JSONObject(
@@ -84,24 +78,19 @@ class LeaveAlertsTest {
 
     @Test
     fun withTheFeedDownAMovingReminderIsStillOneHeadsUp() {
-        // No arrival time, so no classAt: the trip is the class all the same.
         val (first, after) = run(feedDownPlan(leaveAt = now + 4 * 60_000), fresh, now)
         assertTrue("$first", first is Step.HeadsUp)
-        // Dismissed, then the estimate moves (the feed is back): not posted again.
         val (second, _) = run(feedDownPlan(leaveAt = now + 7 * 60_000), after, now + 60_000, showing = false)
         assertEquals(Step.Follow(post = false, checkAt = null), second)
-        // Back with an arrival time (classAt): still the same trip.
         val actions = """[{"id":"skipped","label":"Not going","trip":"4:600:UTOWN"}]"""
         val (third, _) = run(plan(leaveAt = now + 7 * 60_000, actions = actions), after, now + 60_000, showing = false)
         assertEquals(Step.Follow(post = false, checkAt = null), third)
-        // And a heads-up noted by the class's start (an older app) still counts for it.
         val (fourth, _) = run(plan(leaveAt = now + 7 * 60_000, actions = actions), State(true, classAt), now + 60_000, showing = false)
         assertEquals(Step.Follow(post = false, checkAt = null), fourth)
     }
 
     @Test
     fun aDismissedHeadsUpStopsTheFollowUpChecks() {
-        // Dismissed: nothing will be posted for this trip again, so no alarm checks for it.
         val a = plan(leaveAt = now + 4 * 60_000, nextChangeAt = now + 5 * 60_000)
         assertEquals(Step.Follow(false, null), LeaveAlerts.decide(a, State(true, classAt), showing = false, pushActive = false, now = now))
     }
@@ -127,7 +116,6 @@ class LeaveAlertsTest {
     fun aReminderAheadFetchesFreshTimesTwoMinutesBefore() {
         val remindAt = now + 3 * 60_000
         assertEquals(Step.CheckAt(remindAt - 2 * 60_000), run(plan(leaveAt = remindAt + 5 * 60_000), fresh, now).first)
-        // Within the two minutes: post now.
         assertTrue(run(plan(leaveAt = now + 6 * 60_000), fresh, now).first is Step.HeadsUp)
     }
 
@@ -135,14 +123,12 @@ class LeaveAlertsTest {
     fun withExactAlarmsTheHeadsUpWaitsForRemindAt() {
         val exact = fresh.copy(exact = true)
         val a = plan(leaveAt = now + 6 * 60_000)
-        // Fresh times in hand a minute early: posted at remindAt, so "5 minutes before" is true.
         assertEquals(Step.PostAt(now + 60_000), run(a, exact, now).first)
         assertEquals(Step.HeadsUp(classAt, now + 6 * 60_000), run(a, exact, now + 60_000).first)
     }
 
     @Test
     fun nothingToSayIsTriedAgainThenGivenUp() {
-        // No leave time to word yet (no bus to catch): not marked as shown.
         val quiet = plan(leaveAt = now + 4 * 60_000, leaveBy = null, nextChangeAt = now + 30_000)
         assertEquals(Step.CheckAt(now + 2 * 60_000), run(quiet, fresh, now).first)
         assertEquals(
@@ -150,7 +136,6 @@ class LeaveAlertsTest {
             run(plan(leaveAt = now + 4 * 60_000, leaveBy = null, nextChangeAt = now + 5 * 60_000), fresh, now).first,
         )
         assertEquals(Step.StopChecking, run(plan(leaveAt = now + 4 * 60_000, leaveBy = null), fresh, now).first)
-        // Well past the reminder: counted as done, as a shown heads-up would be.
         val unsaid = plan(leaveAt = now + 30 * 60_000, remindAt = now - 60_000, leaveBy = null)
         assertEquals(Step.GiveUp(classAt), run(unsaid, fresh, now + 11 * 60_000).first)
     }
@@ -166,7 +151,6 @@ class LeaveAlertsTest {
         val a = plan(leaveAt = now + 4 * 60_000, nextChangeAt = change)
         val noted = State(true, classAt)
         assertEquals(Step.Follow(true, change + 2_000), LeaveAlerts.decide(a, noted, showing = true, pushActive = false, now = now))
-        // With push, the server says when.
         assertEquals(Step.Follow(true, null), LeaveAlerts.decide(a, noted, showing = true, pushActive = true, now = now))
     }
 

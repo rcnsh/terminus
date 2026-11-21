@@ -36,10 +36,6 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
 
-/**
- * Settings › Your trips: where you live, your day's hours and how you walk, as three short groups of one-line rows, each group with one
- * line of explanation under it. The same groups as the web and the Mac. Setup (Onboarding.kt) asks the same things with more words.
- */
 @Composable
 internal fun TripsSettings(profile: ProfileDoc, state: AccountState, account: AccountViewModel) {
     Groups {
@@ -51,7 +47,6 @@ internal fun TripsSettings(profile: ProfileDoc, state: AccountState, account: Ac
     }
 }
 
-/** − value +, for small steps: round buttons either side, as on the web. */
 @Composable
 private fun Stepper(text: String, less: String, more: String, canLess: Boolean, canMore: Boolean, onLess: () -> Unit, onMore: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -83,7 +78,6 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
     val scope = rememberCoroutineScope()
     val stops = profile.homeStops
     val residence = campus.residences.firstOrNull { it.stops == stops }
-    // "Off campus" can be chosen while the stops are a residence's: it stays chosen until the stops change.
     var offCampus by rememberSaveable(stops) { mutableStateOf(false) }
     var locating by remember { mutableStateOf<String?>(null) }
     val picking = offCampus || residence == null
@@ -107,7 +101,6 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 if (r == null) {
                     offCampus = true
                 } else {
-                    // The same residence again saves nothing new, so the stops don't change to reset it.
                     offCampus = false
                     account.edit {
                         it.setHomeStops(r.stops)

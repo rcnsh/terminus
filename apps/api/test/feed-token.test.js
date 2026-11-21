@@ -1,9 +1,3 @@
-/**
- * The guest token renewed by the cron before it runs out (renewToken), so
- * the first request after a quiet spell doesn't mint, and why a NUS call
- * failed kept in the logs and Analytics Engine (noteFailure), so a stop
- * that reads "No live data" while the feed is up can be explained.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -17,7 +11,6 @@ import { TTL } from '../src/config.ts';
 
 const VERSION = '0.0.0-test';
 
-/** A kept token with [leftMs] to go, as auth.ts stores it. */
 async function keep(kv, leftMs, version = VERSION) {
   await kv.put(
     'auth:session',
@@ -27,7 +20,6 @@ async function keep(kv, leftMs, version = VERSION) {
 
 const kept = async (kv) => JSON.parse(await kv.get('auth:session'));
 
-/** Runs fn with console.warn and console.error collected. */
 async function collected(fn) {
   const lines = [];
   const { warn, error, log } = console;
@@ -40,7 +32,6 @@ async function collected(fn) {
   return lines;
 }
 
-/** A JWT issued [lifeMs] before it expires, at [expMs]: NUS's carry iat and exp. */
 function jwt(expMs, lifeMs) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   return [b64({ alg: 'HS256' }), b64({ domain: 'PUBLIC', iat: (expMs - lifeMs) / 1000, exp: expMs / 1000 }), 'sig'].join('.');
@@ -69,7 +60,6 @@ test('a token without iat counts as the default lifetime, renewed in its last ha
   for (const [leftMs, mints] of [
     [halfMs + 60_000, 0],
     [halfMs - 60_000, 1],
-    // Run out, or none kept: the next request mints, as without the cron.
     [-60_000, 0],
     [null, 0],
   ]) {
@@ -127,15 +117,13 @@ test('a renewal that fails leaves the kept token in use, and is tried again next
   await keep(env.KV, 20 * 60_000);
   await assert.rejects(renewToken(env, FROZEN_NOW), /auth HTTP 400/);
   assert.equal(await env.KV.get('auth:renewed'), null, 'not counted as a renewal');
-  // The stop is still answered with the kept token, without another mint.
   const sa = await getArrivals(env, makeCtx(), 'COM3', FROZEN_NOW);
   assert.equal(sa.available, true);
-  assert.equal(fetchImpl.counts.auth, 1);
+  assert.equal(fetchImpl.counts.auth, 1, 'the stop is answered with the kept token, without another mint');
   assert.equal(fetchImpl.requests[0].headers.get('authorization'), 'Bearer kept.token.x');
-  // The next run, 15 minutes on and the token still good, tries once more.
   installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
   await assert.rejects(renewToken(env, FROZEN_NOW + 15 * 60_000), /auth HTTP 400/);
-  assert.equal(fetchImpl.counts.auth, 2);
+  assert.equal(fetchImpl.counts.auth, 2, 'the next run, with the token still good, tries once more');
 });
 
 test('a renewal NUS refused for its version or key is not tried again for that token', async () => {
@@ -149,7 +137,6 @@ test('a renewal NUS refused for its version or key is not tried again for that t
     installGlobals(fetchImpl, FROZEN_NOW + 15 * 60_000);
     assert.equal(await renewToken(env, FROZEN_NOW + 15 * 60_000), false, code);
     assert.equal(fetchImpl.counts.auth, 1, `${code}: one refused mint, not one a run`);
-    // The next token, here one for a new version, is renewed as usual.
     await keep(env.KV, 50 * 60_000, 'univus_android_9.9.9_999');
     await env.KV.put('config:appVersion', 'univus_android_9.9.9_999');
     forgetAppVersion(env);
@@ -187,7 +174,6 @@ test("a request's mint that failed a moment ago skips the renewal quietly", asyn
 });
 
 test('the stable cron renews after its health check, and not while the feed is down', async () => {
-  // Up: the check calls with the kept token, then the token step finds it near its end and renews it.
   {
     const fetchImpl = makeFetch({ byStop: { COM3: [] } });
     installGlobals(fetchImpl);
@@ -200,7 +186,6 @@ test('the stable cron renews after its health check, and not while the feed is d
     assert.equal(fetchImpl.counts.auth, 1, 'then one renewal');
     assert.notEqual((await kept(env.KV)).token, 'kept.token.x');
   }
-  // Down (NUS refusing our version): the version search mints, the token step doesn't.
   {
     const fetchImpl = makeFetch({ byStop: { COM3: [] }, reject: 99, rejectCode: '10009' });
     installGlobals(fetchImpl);
@@ -217,7 +202,6 @@ test('the stable cron renews after its health check, and not while the feed is d
 });
 
 test("a failed call is logged with its reason and counted as an 'error' row of route 'feed arrivals'", async () => {
-  // Refused with a code a new token doesn't cure: the stop fails without opening the breaker.
   installGlobals(makeFetch({ reject: 2, rejectCode: '401' }));
   resetFailureNotes();
   const ae = makeAnalytics();
@@ -257,7 +241,6 @@ test('a reason carries no credentials and stays short', () => {
   const reason = failureReason(new Error(`shuttle-service non-JSON (200): {"token":"${jwt}"} ${'x'.repeat(300)}`));
   assert.ok(!reason.includes(jwt));
   assert.ok(reason.length <= 160);
-  // Cut short at 80 characters, as proxyCall does: half a JWT, no closing quote.
   for (const cut of [
     `{"token":"${jwt.slice(0, 20)}`,
     '{"userid":"STUB-USER-ID-1234',

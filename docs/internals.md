@@ -39,7 +39,16 @@ the web app's sky: `assets/sky.css` is app.css's palette on an element,
 `assets/sky-phase.js` puts the hour on `<html data-sky>` before the page is
 drawn, and `assets/sky-page.js` draws the horizon and the night with the
 app's own `sky.js` (web-sky.test.js keeps the colours and the hours the
-same). An address the website doesn't have, asked for by a browser, gets
+same). A page asks for the horizon in its markup (`<div data-horizon>`,
+with `data-low`, `data-stop`, `data-bus="<colour> <far> live"`,
+`data-shuttle="no"` and `data-drive`) and the night with `<div
+data-stars>`. The beta's pages (`data-site="beta"`) are under a
+blueprint at every hour instead, so they're never taken for the real
+site. The fonts are served from our own domain, so no third party sees
+who opens a page; until they arrive, text is in Arial (Roboto on Android)
+scaled to the real font's measured widths and line heights (`fonts.css`),
+so nothing moves when they swap, and headings never fall back to Inter,
+which is wider. An address the website doesn't have, asked for by a browser, gets
 `/not-found/` with a 404 (`sitePage` in index.ts); anything else gets the
 plain 404. `/docs` takes its bar's band from pagesky.ts, at Singapore's
 hour.
@@ -51,7 +60,19 @@ so nothing changes once the page is up. It's `private, no-cache`, with a
 weak ETag of its own made from the file's ETag, the version, signed in or
 not and the beta (`landingEtag`), so a browser gets a 304 only while its
 copy is what it would be sent, never the file's own 304. The version carries its
-English in `data-t`, which `i18n.js` words in Chinese.
+English in `data-t`, which `i18n.js` words in Chinese. The page is filled
+by string replacement rather than HTMLRewriter, so the tests and the dev
+stub (Node, which has none) serve the same page; `landing.test.js` fails if
+`index.html` loses the markup it fills. Once `PLAY_URL` in
+`src/site/downloads.ts` is set, every Android button and link becomes
+Google Play's (its badge in each language, lazy-loaded) and the APK install
+step goes; until then it's null and the APK is offered.
+English in `data-t`, which `i18n.js` words in Chinese. `landing.js` asks
+for the version only when the Worker couldn't write it in, and closes "How
+to install" on `pointerdown` elsewhere, since iOS sends no click for a tap
+on plain text. A page that opens under the sky shows the sky's top colour
+when pulled past its top (`sky-page.js`), changed only once scrolling
+stops, since changing it mid-scroll repaints the page with a flicker.
 
 ---
 
@@ -105,7 +126,9 @@ done
 pnpm run deploy
 ```
 
-The other secrets are set the same way. Declared with `bindings.secret()` in
+The other secrets are set the same way. A secret must be declared with
+`bindings.secret()` or a `cf deploy` uploads a version without it.
+Rate-limit counters are per namespace, and the beta has its own. Declared in
 cloudflare.config.ts, besides the six above: `ALERT_EMAIL` (where outage
 alerts and feedback go), `HEALTH_TOKEN` (the operator's `x-health-token`),
 `TURNSTILE_SECRET` (Turnstile on sign-in; unset, the check is skipped; a
@@ -125,6 +148,16 @@ is set in `cloudflare.config.ts`: `ETA_MODEL`, `shadow` on the stable site
 "The operator's switches") and `off` on the beta. Unset is off too.
 Everything in [src/types.ts](../apps/api/src/types.ts)'s `Env`
 but KV is optional at run time: `/api/health` says what's missing.
+The bindings not named above: `DB` (D1, the accounts; the public API runs
+without it), `FILES` (R2, the app builds for `/download/*` and the map),
+`ASSETS` (the website, absent in tests), `AE` (Analytics Engine; without
+it logging does nothing) and `AE_DATASET` (the dataset the dashboard
+queries, `terminus` when unset), `TRIPS`, `TIMELAPSE` and `FEED_GATE` (the
+Durable Objects; without `FEED_GATE` the one-call-per-window limit holds
+per data centre only), `TURNSTILE_SITE_KEY` (public), `TIMELAPSE_ENABLED`
+(`on` lets the recorder poll; KV `config:timelapse` overrides it), and
+`PUBLIC_ORIGIN` (the site's own origin, set on the beta;
+`https://terminus.run` when unset).
 
 ## Endpoints
 
@@ -176,7 +209,10 @@ anything else (a script with an API key, a page open since before) gets a
 `/api/next`, `/api/trip`, `/api/arrivals`, `/api/buses`, `/api/line`, `/api/campus` and `/api/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
 session or device; without one they answer 401 with `WWW-Authenticate`. A key opens
-these routes only: on `/api/me/*` it is not a session, and gets 401. They're
+these routes only: on `/api/me/*` it is not a session, and gets 401. A
+bearer token starting `tk_` that is no key is still tried as a session:
+sessions are random base64url, and about 1 in 262,144 starts that way. A
+key's `last_used` is written at most every 10 minutes. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
@@ -189,6 +225,21 @@ reads R2 (`RL_MAP`, 300 a minute; past it, 429 with `Retry-After: 60`): a
 piece already in the edge cache is never refused, since the file's last
 known ETag stands in when its look at R2 would be over the limit, so a
 lecture hall can open the map at once.
+An IPv6 caller is limited by its /64 (`clientKey` in http.ts), since one
+host usually owns a whole /64 and keying on the full address would give it
+2^64 buckets; `::ffff:` addresses are keyed as the IPv4 they carry.
+
+Every response gets the same hardening (`withSecurityHeaders`). The CSP
+lists exactly what the site loads: Turnstile, the QR library from cdnjs
+(`QR_LIB`, which the account page loads with SRI from its own copy of the
+address; `test/http.test.js` keeps the two the same), the map's workers
+(MapLibre starts them from its own same-origin file, so `worker-src 'self'`)
+and Cloudflare Web Analytics; fonts are the site's own. `/docs` adds
+Stoplight Elements from unpkg, pinned (`ELEMENTS`). The CDNs are allowed
+for those files only, not their whole hosts: either serves any library ever
+published, and an old one can be made to run a page's text as script. The
+sign-in and pairing pages (`/auth/`, `/pair`) send no referrer, since their
+URLs carry a token or a code.
 
 When D1 can't be reached, checking the key or session behind a keyed
 route is tried once more, then answered 503 with `Retry-After: 30`
@@ -294,6 +345,12 @@ themselves, and drifted):
 - `toText`: `towards` as "to A, B" ("经 A，开往 B"), "to A" ("开往 A"), or
   "Ends here" ("本站为终点站").
 
+An estimate is never "now", which would pass for a bus at the stop: under
+a minute it is "~1 min" (`etaText`). `laterText` isn't called `then`: an
+object with a `then` field looks like a promise to `await`. On Nearby, a
+place in `dest` of at most 12 characters (`ONE_LINE_PLACE`) has its spaces
+made non-breaking, so "via" wraps alone rather than splitting the name.
+
 ## Personalisation
 
 Per-user trips come from the account (`/api/me/next`): a NUSMods timetable
@@ -308,6 +365,26 @@ classes don't run and the shuttles keep Sunday/PH hours. Neither the scrape
 nor the cron's merge touches that file. [`src/config.ts`](../apps/api/src/config.ts) holds the cache
 TTLs and tuning constants.
 
+What the import (`src/timetable/nusmods.ts`) relies on from NUSMods:
+- A share link is `.../timetable/sem-1/share?CS2040=TUT:W11,LEC:2&...`:
+  each module maps to comma-separated `TYPE:classNo` pairs; `hidden` and
+  `ta` are view state, not lessons. Special terms are `st-i` and `st-ii`,
+  semesters 3 and 4. A module's lessons give `lessonType` in full
+  ("Lecture"; the link abbreviates it) and times as `"HHMM"` strings.
+- NUSMods' API no longer gives venue coordinates (0 of about 600 venues
+  carried one), which is why `data/venues.json` maps each building to its
+  stop, precomputed from uNivUS's venue coordinates. A venue is looked up
+  by its full code, then the building before the `-` (`AS3-0307` is
+  `AS3`), then that without its trailing digits.
+- Module data changes a few times a semester, so each module's JSON is
+  kept a day at the edge: a class importing the same modules costs NUSMods
+  one fetch each. One import reads at most `MAX_MODULES` (15; a full load
+  is 5 to 7), and a room more than 1.5 km from any stop (Duke-NUS, the
+  hospital) is off campus.
+- A module NUSMods has no timetable for is `missing`; one it couldn't be
+  reached for is `failed`, and an import with any failed never replaces a
+  working timetable.
+
 The profile is one JSON document per account, with a version (`updated`,
 which every save moves forward). `POST /api/me/once` and `POST /api/me/import`
 change part of it: they save only if the version is still the one they read,
@@ -316,10 +393,10 @@ a one-off trip added on one phone isn't lost to a save from another.
 `PUT /api/me/profile` replaces the whole document; the version is its `ETag`
 (`GET /api/me/profile` sends it, `"0"` before the first save). A client that
 sends it back as `If-Match` is refused with 412 if another device saved
-since; without it, as the apps installed today send, the last save wins.
-The website sends it: each change made in Settings or setup is kept apart
-until it's saved, one save at a time, and on a 412 the page reads the
-profile again and makes only its own changes on that (three tries).
+since; without it the last save wins. The website and the apps send it:
+each change made in Settings or setup is kept apart until it's saved, one
+save at a time, and on a 412 the client reads the profile again and makes
+only its own changes on that (three tries).
 
 The calendar keeps itself up to date without a deploy
 ([src/timetable/calendarsync.ts](../apps/api/src/timetable/calendarsync.ts)). `data/calendar.json` is
@@ -342,7 +419,9 @@ A copy that passes is merged over what's known and kept in KV
 (`calendar:data`). Merging adds, except that a future holiday the newer copy
 covers and no longer lists is removed, so one added upstream by mistake
 doesn't stay. After a failure the cron tries again the next day, and the
-error is in the Worker's logs as `cron calendar`.
+error is in the Worker's logs as `cron calendar`. A failed KV read of the
+kept copy fails the refresh too, since writing over it as if nothing were
+kept would drop the years merged before.
 
 Every request, and the Trip object, reads that copy at most every 10 minutes
 per instance and merges it with the bundled one; the newer wins where they
@@ -355,8 +434,10 @@ the fetched copy is within 45 days of its end, that is when NUSMods doesn't
 list the next academic year yet. The end is three weeks past the last
 semester's exams, but never into the week the next academic year's first
 semester would start (52 weeks after the last one), which Special Term II
-ends a week before. Past the end, imported classes count every week, as
-before, except a timetable for a semester the data says has ended; a lesson
+ends a week before (a semester runs 17 weeks to its exams' end, a special
+term 6, with no recess). Past the end, imported classes count every week
+(failing open: a guessed class beats a timetable that goes blank because
+nobody redeployed), except a timetable for a semester the data says has ended; a lesson
 with its own dates keeps to them. A sem-1 link pasted then is read as the new
 year's, with the old one to fall back on (`termsForImport`).
 
@@ -487,8 +568,8 @@ A request without the header (the website, API keys), or with a version that
 can't be read, is never refused. Sign-in, pairing and signing out answer
 before the check, and an outdated app may still `DELETE /api/me/push` and
 `DELETE /api/me`, so it can stop its pushes or delete its account. The apps
-take a 426 as "update required": they stop polling, back off for hours,
-and offer the update (Play or the website on Android, Sparkle on the Mac).
+take a 426 as "update required": they stop polling, hold back for half
+an hour before asking again, and offer the update (Play or the website on Android, Sparkle on the Mac).
 
 ```bash
 pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.config.ts> --body '{"android":"2.6.0","mac":"2.6.0"}'
@@ -793,8 +874,22 @@ change and once the second bus has gone (`changesAt`).
     the platform runs again still wakes.
   - The wake's last writes hold the object like a POST: an `/update` asking
     for a sooner wake, or a `/clear`, that came in meanwhile stands.
-  - At the Worker's compatibility date `deleteAll()` leaves the alarm, so
-    `/clear` and midnight delete it first.
+  - At the Worker's compatibility date `deleteAll()` leaves the alarm (from
+    2026-02-24 it removes it too), so
+    `/clear` and midnight delete it first; a SQLite object's `deleteAll()`
+    inside its own alarm has failed without that.
+  - A POST to the object runs under `blockConcurrencyWhile`: it reads the
+    day, waits for its body and writes the day back, and two devices'
+    changes at once would otherwise put back a copy from before the other.
+    A day keeps at most `MAX_DAY_TRIPS` (64) trips and `STEP.maxTrips`
+    steps, so the record stays far below a stored value's size limit.
+  - A Live Activity's end, or a trip's end, that didn't go (APNs paused)
+    fails the wake, so it's tried again rather than leaving a finished trip
+    on the Lock Screen.
+  - FCM's OAuth token is signed by the Worker from `FCM_SERVICE_ACCOUNT`
+    (RS256, WebCrypto) and kept in KV for 50 minutes; each isolate keeps
+    it too, one read back from KV only for the part of its life certainly
+    left.
   - Each call to Firebase has a 5 s limit, and each device is sent to on
     its own, so one that fails or hangs doesn't keep the push from the
     rest. A token is dropped only when FCM says it's unregistered (404,
@@ -811,6 +906,11 @@ change and once the second bus has gone (`changesAt`).
 ### APNs: push to the iPhone app
 
 [src/push/apns.ts](../apps/api/src/push/apns.ts), sent by push.ts beside FCM and Web Push.
+`fixtures/live-activity.json` holds the server's Live Activity state
+(`liveActivityState`) for every golden answer the iPhone shows one for
+(`TripPrefs.tripPhases`); `apns.test.js` writes it and the iPhone's tests hold
+`ContentState.of` to it, so the Lock Screen doesn't flip between the app's
+state and the server's. Re-record it with `UPDATE_GOLDEN=1 pnpm test`.
 
 - **Tokens.** The app sends `POST /api/me/push` with `{token}`:
   - `apns:<hex>`: the device token from
@@ -903,7 +1003,14 @@ change and once the second bus has gone (`changesAt`).
   `apns-topic` (the bundle id; `<bundle id>.push-type.liveactivity` for a
   Live Activity), `apns-push-type`, `apns-priority`, `apns-expiration` and,
   for alerts, `apns-collapse-id` (`card` or `term`, as Android's
-  collapse key), 5 s per call.
+  collapse key), 5 s per call. `time-sensitive` breaks through a Focus
+  only with the app's Time Sensitive Notifications capability; without it
+  iOS treats it as `active`. A Live Activity push carries a `timestamp`, so
+  the phone drops one that arrives after a newer one, and priority 10 only
+  when the phase changed: Apple budgets those. A start sets
+  `input-push-token: 1`, which iOS 18 needs to send the new activity's
+  update token (iOS 17 sends it anyway). Apple says not to rely on a device
+  token's length (32 bytes today), and an activity's is longer.
 - **What an iPhone is sent**, where Android gets its data message:
   - time to look (due, missed, a tap on another device): an `alert` with
     the card's words (title `card.phaseText`, else its heading or title;
@@ -974,7 +1081,8 @@ change and once the second bus has gone (`changesAt`).
 - **The Live Activity's `content-state`** (`liveActivityState`, the
   `LiveActivityState` type), from `/api/me/next`'s answer and card. Every
   key is always present, null when it doesn't apply; times are whole
-  epoch seconds (`Int`, read with `Date(timeIntervalSince1970:)`):
+  epoch seconds (`Int`, read with `Date(timeIntervalSince1970:)`; not
+  `Date`, which a default decoder counts from 2001):
 
   | Key | Type | What |
   | --- | --- | --- |
@@ -1013,6 +1121,23 @@ The planner ([src/timetable/profile.ts](../apps/api/src/timetable/profile.ts), `
 - Outside your day, a location on campus but not at home gets the trip home.
 - On the trip home, `card.warning` says "Last D2 from UTown in 18 min" from
   45 minutes before the service's published end (`data/service-hours.json`).
+- In a gap longer than `gapHours` the trip is home, until `GAP_RETURN_MIN`
+  (an hour) before the next class. Not when the next class is at the home
+  stop: "Home" is no trip then.
+- Outside `dayStartMin` to `dayEndMin` the answer rests. A class that ends
+  late keeps the day open `EVENING_GRACE_MIN` (45) after it, and one
+  starting near or before the day's start opens it `MORNING_LEAD_MIN` (90)
+  early. In the morning the rest says when the day starts, since "Done for
+  today" at 05:00 beside "Next: ..., today 10:00" reads as a contradiction.
+- The next class is looked for up to `LOOKAHEAD_DAYS` (120) ahead, a whole
+  semester break. Dates are worded by hand ("Mon 28 Sep"), not with
+  `Intl`, whose output varies by runtime.
+- "On time" needs `ON_TIME_SLACK_S` (3 minutes) spare. Past
+  `MAX_VENUE_WALK_S` (20 minutes' walk) from its stop, a venue isn't
+  really the stop's (off campus, bad data), so no lateness is given.
+- Home is stops only. Exact coordinates of where someone lives are more
+  than the planner needs and not something to keep; an older client's
+  `lat`/`lon` in `home` is accepted and dropped.
 
 A location comes as `lat`/`lon`, with `acc`: how far out it may be, in
 metres, its accuracy plus a walking pace times its age (the apps and the web
@@ -1020,9 +1145,12 @@ app work this out, `Locator.uncertaintyM`). Over 200 m (`MAX_FIX_ACC_M`) the
 fix is dropped and the answer follows the timetable: a cell-tower fix, or a
 precise one from ten minutes ago, planned the trip from the wrong side of
 campus and said so with confidence. Every location is rounded to four
-decimal places, about 11 metres, as it is read (`roundCoord` in http.ts,
+decimal places, about 11 metres (what the privacy policy promises), as it is read (`roundCoord` in http.ts,
 used by `coordsFrom` and `fixOf`), whoever sends it: the apps round too,
-but a script with an API key needn't.
+but a script with an API key needn't. A missing `lat` is no location, not 0:
+`Number('')` and `Number(null)` are 0, which would put the caller in the
+Gulf of Guinea with "no stop nearby" instead of falling back to `?from=` or
+the home stop (`numParam`).
 
 `GET /api/me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
@@ -1135,7 +1263,10 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   migration 0009), five at most.
 - Every email (sign-in, a device added, feedback, the operator's alerts) is
   plain text with an HTML version from `src/site/mail.ts`, built with react-email
-  (written with htm, as the sources have no JSX build step). The plain text
+  (written with htm, as the sources have no JSX build step). Mail clients
+  keep little CSS (Gmail drops `<style>` in places, Outlook renders with
+  Word), so every style is inline and the layout is tables, in site.css's
+  light colours. The plain text
   is written where each is sent and stays the one the tests read. `mail.ts`
   is loaded with `import()` (`mail` in accounts.ts): React and its renderer
   are most of the Worker's size, and most requests send no email.
@@ -1168,6 +1299,61 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - The link in the email opens a page with a button, and only the button's
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
+- The web cookie is `__Host-tm_s`: the prefix pins it to this exact host
+  over HTTPS, so a sibling `*.terminus.run` or `*.rcn.sh` site can't set or
+  shadow it. Devices are named to the account page by a prefix of their
+  token hash, enough to revoke one and useless for signing in.
+- Addresses are plain (`normalizeEmail`): a `,`, `<` or `>` in the local
+  part is refused, since "x,blocked@example.com" is a different string from
+  a blocked address but could still reach it. Cooldowns, budgets and the
+  blocklist go by inbox (`inboxKey`: dots and `+tags` at Gmail are one
+  inbox); mail goes to the address as typed. Pairing codes leave out 0/O,
+  1/I/L and U, and every character is equally likely (rejection sampling).
+- The per-inbox hourly budget (`MAILS_PER_HOUR`), the day's wrong codes and
+  the operator's feedback mails (`OPERATOR_MAILS_PER_DAY`) are soft caps in
+  KV, which isn't atomic; each code's tries, the cooldown, a day's reports
+  and an account's API keys are counted in the same D1 statement that
+  writes, so requests at once can't all pass. An inbox over its budget is refused
+  before the global ceiling is taken, so it spends nothing of everyone's.
+- An email that fails to send deletes its link or app request, so the
+  cooldown isn't held by a message that never went. Sign-in emails put the
+  code first, in the subject too: a lone link under "Sign in to ..." is the
+  shape of a phishing mail, and filters treat it as one. A device's name
+  goes into emails, so it keeps only letters, digits and a little
+  punctuation, never a link or a line break.
+- `last_seen` is rewritten at most hourly (`touchMs`), or at once when the
+  app's `x-terminus-client` changes, so the dashboard's versions are
+  current. A failed write is logged: the cron deletes anonymous accounts by
+  `last_seen`, so one that kept failing would lose accounts in use. That
+  sweep names its index (`INDEXED BY users_anon_idle`): D1's planner
+  otherwise takes the UNIQUE email index and reads every anonymous account.
+- Every profile save's version is later than the one it replaces, even
+  within a millisecond, so a conditional write never mistakes one for
+  another. One-off trips are dropped once their day has passed. An import
+  with any module NUSMods didn't return replaces nothing, and imports are
+  limited per account (`import:` on `RL_AUTH`): each can fetch 15 modules.
+- Trip keys from a client become stored rows (signals, outcomes, choices),
+  so only the profile's own trips and a trip home are taken, and an
+  account keeps at most `MAX_PREFS` (200) trip choices, the oldest going
+  first. Answering a suggestion either way starts its count again, so the
+  same days can't suggest it twice.
+- `/api/me/day`'s plan is kept up to a minute per user (`dayCached`), keyed
+  by everything it's worked out from (profile, today's record, clock,
+  language, rough location), since a phone, a Mac and a tab each ask every
+  30 s or so.
+- A capped feedback report answers 429 with `Retry-After: 60`, not a day:
+  every client holds back all its requests until then. "This wasn't me"
+  answers app sign-ins to the address with a refusal other than 429, which
+  the apps would take as "wait" and hold back pairing too, the way in it
+  points them to.
+- Emailed links use the Worker's own site (`emailOrigin`, after
+  `linkOrigin`), whatever hostname the request came in on (a workers.dev
+  preview); only local development uses the request's origin.
+- A Turnstile site key without its secret is a broken rotation, and refuses
+  sign-in rather than quietly opening it. Turnstile not answering, or
+  refusing our secret, is logged and told to the visitor as "try again",
+  not as their failure. Deleting an account also forgets a sign-in code
+  still waiting in KV for its address.
 
 Setup and deploys: `pnpm run deploy` (and `deploy:beta`) first runs
 `scripts/deploy/predeploy.mjs`, which refuses a tree with unmerged files, conflict
@@ -1275,13 +1461,54 @@ map; and Settings. It uses the same routes as the account page, with the session
   on the account page once someone is signed in. Those `import()` every
   module they need at once, not just the top one, and touching or hovering
   the Map tab asks for `map.js` and MapLibre together (`app/map-files.js`,
-  the one place MapLibre's and PMTiles' versions are written).
+  the one place MapLibre's and PMTiles' versions are written). How the
+  files load, and why a failed one is asked for at a new address:
+  ADR 0021-web-app-loading. A store holds one value: it's set to a new
+  object, never changed in place, and tells its subscribers from a copy of
+  the list, since one may unsubscribe while told. Each page has one
+  status line for screen readers (`announce` in `ui.js`), in the page from
+  the start, since a live region speaks only a change; parts that redraw
+  often say a short line there when their meaning changes, rather than
+  being live regions read out whole on every redraw, and it's emptied
+  before it's filled so the same words twice are still heard. Markup set
+  as HTML (`Rich`, `Icon`, the map's button) is only our own constants,
+  never data. A failed request shows the server's own words when it
+  answered (`err.status`), never the browser's ("Failed to fetch").
 
 - **Tabs.** Now, Map and Settings are three views of one page (`#map`,
   `#settings` in the address, so Back and a reload keep the tab). Switching
   fades through as the Android app does (Web Animations: out in 90 ms, in
   over 210 ms from a 0.92 zoom; a plain short fade with reduced motion), and
   Now and Settings come back where they were scrolled to.
+- **When Now asks again** (`app/timing.js`, tested by web-timing.test.js).
+  Every 30 s while Now is on screen, with Today at most every 2 minutes
+  (`DAY_MS`: each is an answer per class on the server), and sooner at the
+  card's marks (`nextChangeAt`, `refreshAt`): never under 5 s from now nor
+  30 s after the last refresh a mark brought (a leave-by a late bus keeps
+  sliding would ask every 5 s; the Mac app and the trip engine wait 30 s
+  too), and a mark the answer already got past doesn't count. A timed
+  refresh waits for one on its way; the page shown again asks anyway, as
+  that call may have hung while the phone slept, and a refresh that ends
+  after a newer one started is dropped. After the service worker's kept
+  copy came instead, it tries again in 8 s, then 16 s, while Now is on
+  screen, and then leaves it to the timed refresh: a struggling server
+  isn't helped by more. Back online, only the tabs on screen ask. The card
+  goes with where the phone is only when location is already allowed: a
+  fix up to 60 s old as the browser has it, else up to 1.5 s for a fresh
+  one, else the page's last fix under 10 minutes old; a fresh one that
+  comes later brings the card again when the first went without (or with
+  one the API drops, over 200 m) or it's over 50 m away. `acc` is the
+  accuracy plus a walk's worth of the fix's age.
+- **Pull to refresh** (`app/pull.js`, numbers tested by web-pull.test.js).
+  On Now, Nearby and the Stops tab, by touch only: the sky stretches, and
+  the horizon's own bus (or one in the tab's first service's colour)
+  drives to your stop, then pulls away while the tab fetches. One fetch a
+  pull, of what the tab asks for anyway, and none when its times are
+  under 15 s old (`PULL_FRESH_MS`, the API's arrivals cache): the pill
+  says "Up to date", on Stops with when the timed refresh brings new
+  times. The Android app does the same by the same numbers. The page has
+  `overscroll-behavior-y: none`: Chrome's own pull reloads the page and
+  Safari's bounce fights this one.
 - **Settings** is the account page's own: the `Settings` component in
   `account/settings.js`, its pages in `account/settings-pages.js`. The
   account page draws it after sign-in and setup, with its widget preview; the
@@ -1327,7 +1554,11 @@ map; and Settings. It uses the same routes as the account page, with the session
   `Clock`) so the times it writes itself, and the widgets, match; `auto`
   follows the device.
 - **Which language a reply is in.** The profile's `lang`, when set, wins
-  over the request's `Accept-Language` (`useProfileLang`), and every `/api`
+  over the request's (`useProfileLang`): `?lang=`, then the website's
+  `terminus-lang` cookie, then `Accept-Language` (any `zh*` is Chinese),
+  else English. It rides in an AsyncLocalStorage set once per request, so
+  formatters call `m()` rather than pass a language down; outside a
+  request (tests, the cron) it's English. Every `/api`
   reply says what it was written in (`Content-Language`, from `index.ts`).
   An app that switches language asks again at once, before its debounced
   profile save reaches the account, so that reply is in the old language.
@@ -1353,7 +1584,14 @@ map; and Settings. It uses the same routes as the account page, with the session
   tab opens and every 30 s while it's on screen, never otherwise. A stop's
   name opens its board in the Stops tab, a row its service's line there,
   and the star on its sign pins it. Any other stop is on the Stops tab,
-  from the tab bar. Which tab an address opens is `app/tabs.js`.
+  from the tab bar. Which tab an address opens is `app/tabs.js`. A sign
+  (`app/sign.js`, also the Stops tab's pinned stops) marks an estimate
+  "~" in both languages, since in a column of figures "约" reads as part
+  of the next; a screen reader hears "about", and an estimate is never
+  "Arriving" or "now", only "~1 min". The star shows only once the pins
+  are known, so it can't read wrong or unpin. Before they are, the Stops
+  tab draws as many shapes as this browser last saw pinned for this
+  account (`keptPinCount`, in `localStorage`).
 - **Stops tab** (app/buses.js). Its home is the search, then the pinned
   stops in one card, a page each, as Nearby's signs (`/api/me/stops`,
   refreshed every 15 s while the home is on screen), then every service in
@@ -1365,11 +1603,87 @@ map; and Settings. It uses the same routes as the account page, with the session
   skeleton never holds it open. A stop opens its own page
   (`#buses/stop/<code>`), a service its line (`#buses/line/<svc>/<stop>`).
   The stops around you aren't here: they're the Nearby tab's (ADR 0014, 0017).
+  The services' counts of buses out (`/api/lines`) are asked for at most
+  once a minute, since each ask reads every service from NUS; a count a
+  service's own page got since is shown instead of the list's older one.
+  Each answer keeps `at` (when this browser fetched it, for fetching
+  again), `got` (the same on the server's clock) and `asOf` (when the
+  feed's answer is from, only for "Updated 5 s ago"): times are counted
+  down from `got`, never `asOf`, as the server has counted them to its
+  own now (`aged`). Older than two refreshes, they're faded, a long-due
+  bus has no time and a live one says "Last known". A pinned stop whose
+  page is open beside the home isn't asked for as a card (rule 2: each
+  stop once per 15 s); its card takes the page's times (`withBoard`, as
+  Android does), keeping its own words, its later timetable guesses
+  counted on past as many as the board shows, in whole seconds toward
+  zero as the apps count. A call that ends after a newer one never puts
+  back older times.
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`
   has the dark colours under both the device's dark mode (unless
   `data-theme="light"`) and `data-theme="dark"`. The map follows it too.
+  Now's sky is drawn by Now's tab, up behind the header, so it fades and
+  zooms with its hills when the tab changes; its ink reads at 4.5:1 over
+  every hour's sky (large words at 3:1), and small coloured words sit on
+  a chip of their own. `html` and `body` both have `overflow-x: clip`:
+  on `body` alone CSS hands it to the window as `hidden`, and a Settings
+  page mid-slide widens the window.
+- **Calls to the API** (`account/dom.js` `send()`, `api()`). A read gives up
+  after 20 s and a write after 60 s (an import or a save can be slow on a
+  phone, and the server may finish it after the page gave up): Wi-Fi that
+  drops everything, a lecture theatre's or a captive portal's, would
+  otherwise leave "Checking…" up for minutes under a pile of hung calls. A
+  reply that isn't a JSON object (a portal's sign-in page, a proxy's error)
+  or a body cut off part way counts as no answer; only a 204 stands for
+  `{}`. A 429, or a 503 with `Retry-After` (one without is a proxy's, a
+  plain failure), quiets its scope until then: sign-in, sign-out and
+  pairing are their own scope, so a 429 from the app's polling never stops
+  a sign-out. The API's errors are lowercase phrases for API users; the
+  page shows them as sentences.
+- **The device's clock** can be off by minutes, and every countdown
+  compares the server's times with it. Each reply's `Date` header, minus
+  this clock when it arrived, is a reading of the error; `Date` is whole
+  seconds and read late, so a reading is at most the truth, and the
+  largest of the last few is the guess (`skewOf`), ignored under 3 s. A
+  reply the service worker kept says nothing about now. `serverNow()` is
+  used wherever a server time meets now; the clock style is kept in
+  `localStorage` (`terminus.clock`) so the first paint has it.
+- **Signing out here** (`forgetAccountHere()`, also on a 401 from a session
+  ended elsewhere) drops what this browser kept of the account: the places
+  searched for, the pinned stops' count, the account's language as last
+  applied, and the push subscription, waiting at most 2 s for the push
+  service. The look (language, theme, clock, card style) is the browser's
+  and stays. `/account/?next=` only ever goes back to `/app/`, never to
+  another address.
+- **Guards in Settings.** A NUSMods link shared to the app only fills the
+  import box: any page could link there, so the person presses Import. "Pick
+  the stop nearest me" finds it in the browser and never sends the location.
+  Where a slow reply could land after a newer one (the preview after a save,
+  the choices after an Undo), only the newest asked for is drawn. A class
+  row finds its class by what it is, not its place, since every save
+  answers with the server's copy sorted its own way. A language is saved to
+  the account first, and only then applied: applying reloads the page, which
+  would hide a failed save, and the next load would follow the account's
+  old choice anyway. A pairing code is checked for use every 4 s while the
+  page is visible, at once when it's shown again, and counts down by the
+  server's clock. A problem stays in its toast until closed; a plain
+  message lasts 4 s and never replaces one with Undo.
+- **Screen readers.** The card's parts tick, but only one line speaks
+  (`Say`): the card in a sentence, minute by minute at most, and not while
+  its tab or the browser tab is hidden. The search box says how many
+  results half a second after typing stops, not at every letter; it
+  replaces `<datalist>`, which listed everything at once and couldn't say
+  where a room takes you. "Is this wrong?" keeps a reason picked earlier
+  only while the answer on screen still offers it.
+- **Small looks with a reason** (`account.css`). On the dark theme's orange
+  a switch's knob is dark (white was 2.3:1). A stop's sign is never
+  inverted: a near-white plate in the dark glared off every stop. Settings'
+  list pane is at least 20rem and wider when the card's trip line needs it,
+  as its stops don't shrink. The page's fade-in fills `backwards`, not
+  `both`: a transform kept after it would pin the widget's bar (`.peek`) to
+  `#app` instead of the screen. Windows' contrast themes get the system's
+  colours for what's on.
 
 - **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
   `assets/icons` (drawn by `apps/android/store/render.swift`), and a share
@@ -1383,7 +1697,9 @@ map; and Settings. It uses the same routes as the account page, with the session
   (`signInFirst()`, on `Sec-Fetch-Dest: document`), so the app never flashes
   up before sign-in; the service worker's own fetch of `/app/` still gets
   the page. A session ended elsewhere still reaches the app, whose first 401
-  sends it on (`signedOut()` in `dom.js`).
+  sends it on (`signedOut()` in `dom.js`). Each start asks `/api/me`,
+  which renews the session with the same token, so the installed app
+  stays signed in.
 - **Offline.** `/sw.js` fetches the app's files network-first and keeps a
   copy for offline (`SHELL_FILES`; `web-sw.test.js` fails if a module the app
   imports at startup is missing from it). On a slow connection it uses the
@@ -1396,7 +1712,18 @@ map; and Settings. It uses the same routes as the account page, with the session
   and `to`, so a searched stop's card never stands in for the plan's). When the network
   is down, the kept reply comes back with `x-terminus-cached` (when it was
   fetched), and the page dims the card and says so. Signing out, deleting the
-  account or a 401 empties the kept replies.
+  account or a 401 empties the kept replies, and a reply fetched before
+  that isn't kept after it (`dataGeneration`). Those replies wait 4 s for
+  the network on a slow connection, and a 5xx counts as no network. The
+  cache key is built with `String(params)`, since `URLSearchParams.size`
+  is undefined on Safari before 17. `/api/campus` comes from its copy at
+  once and is checked in the background, with its ETag, once the copy is
+  an hour old (the API's max-age); a change replaces it and tells the
+  pages, a 401 there is passed on, only JSON is kept (a captive portal's
+  200 would break the map for an hour), and offline a copy in the other
+  language beats none. The campus map file is kept whole, since the Cache
+  API can't keep a 206, then served in the ranges MapLibre asks for and
+  checked weekly. Mediabunny is the dashboard's and never kept.
 - **Offline, all day.** Once the kept answer has gone stale (its bus has
   left, or 15 minutes have passed) and the network is still down, every app
   falls back to the day plan it kept from `/api/me/day`: the next class's
@@ -1414,9 +1741,30 @@ map; and Settings. It uses the same routes as the account page, with the session
   Android session keeps its FCM token. So the Trip object's nudges reach both,
   through `push.ts` and `webpush.ts`. Each push is VAPID-signed with
   `VAPID_PRIVATE_KEY` (a P-256 JWK; `scripts/deploy/vapid-key.mjs` makes one) and
-  its payload encrypted with aes128gcm, using WebCrypto only. Only
+  its payload encrypted with aes128gcm, using WebCrypto only. Make the key once,
+  from `apps/api`: `node scripts/deploy/vapid-key.mjs > ../../.private/vapid-private-key.json`,
+  then `pnpm exec cf workers secrets update VAPID_PRIVATE_KEY --worker terminus
+  --type secret_text --text "$(cat ../../.private/vapid-private-key.json)"`.
+  Changing it drops every web app's subscription until each subscribes again.
+  A push service answering 401 or 403 is refusing our VAPID signature (RFC 8292
+  §2, §4.2: another key than the browser subscribed with, or a token its clock
+  reads as expired), so the push counts as failed and the subscription is kept,
+  to be renewed with the current key when the app next opens; only 404 or 410
+  drops it (RFC 8030 §7.3). Only
   subscriptions on browsers' push services are kept (FCM, Mozilla, Apple,
   Windows): the Worker POSTs to the endpoint, so any other host is refused.
+  Each push has a `Topic`, so a newer nudge replaces one not yet delivered,
+  and follows no redirect. A 404 or 410 forgets the subscription; anything
+  else keeps it. A 401 or 403 is the push service refusing our VAPID
+  signature (a key the browser didn't subscribe with, or a clock that reads
+  the token as expired): the browser's side is still good, and the web app
+  renews it with the current key when next opened. A VAPID key that won't
+  parse is logged once per isolate by the secret's name only, since a parse
+  error can quote the value.
+  On an iPhone push works only from the Home Screen, so Safari shows the
+  install card instead. Every open sends the subscription again (it
+  belongs to this sign-in, and a browser can replace it), and one made
+  with another server key is replaced.
 - **Every day, whether or not the app is open.** A Trip object only watches
   once a request asks it to. The Android app asks from its background
   refresh, but a Home Screen web app makes no requests unless it's opened. So
@@ -1436,6 +1784,11 @@ map; and Settings. It uses the same routes as the account page, with the session
   left, is the card's "Not going": the service worker posts
   `/api/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
   Android notification has the same button). A tap elsewhere opens the app.
+  The card gets 8 s (`PUSH_CARD_MS`); past that the notification is the
+  plain "Your trip has changed", since a browser allows a push only so
+  long and iOS may end a subscription that shows nothing. A worker can't
+  read `localStorage`, and `cookieStore` isn't in every browser, so it
+  takes the site's language from the cookie `i18n.js` also sets.
 - **A new semester.** In the week before semester 1 or 2 starts
   (`semesterSoon` in calendar.ts), from 10:00 Singapore time, the cron
   (`remindTerm` in monitor.ts) pushes each device of a user whose imported
@@ -1685,7 +2038,10 @@ half-wait in `transfer.ts`) use the usual one. In term the A and D lines run
 about every 7 minutes on a weekday, 10 to 15 in the late evening and 15 to
 30 at weekends; R1 and R2 every 20, K 40, P an hour. Refresh it with
 `scripts/data/measure_headways.mjs` over the recorder's day files from R2
-(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Every guess
+(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. A median is kept
+only from at least `MIN_GAPS` (20) gaps; a gap under 30 s is a bunch and one
+over 2 h a break in service, and neither counts. Hours are kept only under a
+day that has its own median, and the vacation is measured on its own days. Every guess
 comes from [`departures.ts`](../apps/api/src/answer/departures.ts), and each
 estimate counts the headway in force at the bus before it, stepping on
 from the last live bus: the card, the leave-by and Nearby guess the same
@@ -1725,7 +2081,10 @@ home stops serve, the walk to the nearest of them is your own `homeWalkMin`
 (the lift, the stairs, the far block, which a phone indoors can't see), even
 with the fix within `WALK.atStopM` of the stop, and its other stops are as
 much further as the paths say. The same walk counts on
-the card, in walking the whole way, and on the Nearby tab.
+the card, in walking the whole way, and on the Nearby tab. Nothing about
+where someone lives is stored: home is still just stops, and you count as
+home when your location is inside a residence (OpenStreetMap's outline)
+that one of your home stops serves.
 
 **In a building, the walk is by the paths from it too.** Within
 `WALK.atVenueM` of a building's point on the room map, and nearer it than to
@@ -1740,6 +2099,29 @@ from LT21, PGP is 400 m away in a straight line but nobody walks it, so the
 walk home goes by S17 and the bus from S17 wins. The same stops count for the
 bus, in walking the whole way, and on the Nearby tab. Outside every building
 and residence it's the straight line with the stop's detour, as before.
+
+**How `walk_routes.py` measures a walk.** Stops and buildings join the
+OpenStreetMap path network at every path node within `ENTRY_M` (40 m), not
+only the nearest: mapped footpaths often stop short of the road or the door,
+and with one node a stop 76 m from the library routed as 294 m. Anything
+over `SNAP_MAX_M` (120 m) from every path is off the map. Steps count 1.6
+times their length (`STEPS_FACTOR`), and a routed walk is never shorter than
+the straight line. A building's point is its rooms' mean on NUSMods' map, to
+5 decimal places (about a metre); bare room numbers ("1001") and one- or
+two-letter codes are skipped, since `venueToStop` drops trailing digits and
+"E" would catch "E9". A building whose walk comes out over twice the last
+run's (when that was above 40 m) keeps the last figures, because NUSMods
+has put the code somewhere else; a room further than twice its building's
+walk (counting that walk as at least 60 m) takes the building's walk and no
+position. A building has at most `MAX_VENUE_STOPS` (2) stops, four with
+those across the road, so leaving a class never fans out into many feed
+fetches. Each stop's `detour` is the median ratio of routed to straight
+walks to it from at least 3 buildings over 40 m away, else the median over
+all stops, held between 1 and 2. A residence is served by its nearest stop
+by path and any other within 150 m of that, two at most. The
+building-to-stop table it starts from is `data/src/venues-base.json`, so a
+run never reads back what an earlier one wrote; `--check` compares with keys
+sorted, except a `stops` list, whose order (nearest first) means something.
 
 **A room can have more than one stop.** A building between two stops is
 served by both (`stops` in `venues.json`, from `scripts/data/walk_routes.py`): its
@@ -1776,6 +2158,18 @@ data centre). Static files skip the Worker and are still served near the
 user; the cron and the Durable Objects aren't placed. Placement only
 affects `fetch`.
 
+**What never changes between deploys is built once per isolate, on first
+use.** `/api/campus` (per language), `/api/stops/pairs`, the map styles,
+the OpenAPI spec (per origin, a few at most; past that it starts again, so
+made-up hosts can't grow it) and the `/docs` page (per sky phase). Built
+at module scope instead, every cold start would pay for them whatever it
+was started for.
+
+The cron handler awaits its run rather than leaving it to `waitUntil`: a
+run that outlived the handler could be cut off partway, with the
+trigger's history still saying it succeeded. An unhandled error is logged
+with its route's path only, since a query can hold coordinates.
+
 **Fetch-on-demand with a 15-second edge cache; no poll loop.** Workers has no
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
 cache entry is keyed on the **resolved stop code**, not the request URL:
@@ -1804,7 +2198,9 @@ a waiter lets go of its timer once the answer comes. The gate keeps its claim an
 storage, since an idle object may leave memory between windows; it is
 billed only while it answers. Within a data centre, concurrent misses
 in one isolate share a fetch (the in-flight map), and the isolate fetching
-leaves a marker beside the key (`<key>/pending`): other isolates serve their
+leaves a marker beside the key (`<key>/pending`, a path of its own: the
+cache never sees a `#fragment`, so that would be the answer's own entry),
+lasting past the slowest fetch (four timeouts and 10 s): other isolates serve their
 stale answer until it's done rather than fetch too. The marker is written as
 the fetch starts, not before it; an isolate that misses it in those few ms
 fetches too and meets this one at the feed gate, which lets one call the
@@ -1821,7 +2217,9 @@ stable site.
 
 **Under failure, less load, not more.** A NUS host answering 429 or 5xx,
 not answering at all (a timeout, a failed connection, the body included:
-`timedFetch` reads it under the same timeout), or a refused version or key
+`timedFetch` reads it under the same timeout; workerd throws a plain `Error`
+for a refused connection or failed DNS lookup, not Node's `TypeError`, so any
+thrown error is no answer), or a refused version or key
 (10009, 10000), opens the feed's breaker for `breakerS`, every stop and
 service with it. A host that hangs is treated as down at once: left to each
 key's `failMemoS`, every stop and service would hold a connection for the
@@ -1893,6 +2291,44 @@ list under 20, a name with odd characters or a web address, a moved
 semester or more than 3 future holidays gone all fail, and such a change is
 committed by hand.
 
+The scrapers' thresholds, and why:
+- `scrape_lta.py`: a public stop within `SAME_SHELTER_M` (20 m) of a shuttle
+  stop is its shelter (the measured ones are under 12 m apart; the next is
+  24 m away across the stop's name). Public stops within `RADIUS_M` (200 m)
+  are kept: the terminal's on Clementi Road, the NUH stops, those opposite
+  the terminal, but not Pasir Panjang Road or the AYE, 250 m and more away.
+  BusRoutes, DataMall's largest dataset, is about 26,000 rows (53 pages of
+  500, about 200 KB each); `MAX_PAGES` (200) stops a server answering in a
+  loop. A trimmed loop keeps its closing stop so the graph sees a loop; one
+  that doesn't end at its terminal goes back round by the rest of the route.
+  A service with one campus stop is dropped, and so is a stop no kept
+  service calls at. A day whose two times are both `-` (95B, 96A and other
+  weekday-only services at weekends) is written as null, which the Worker
+  reads as "not today"; left out it would mean "hours unknown, assume
+  running", and a guessed bus would show all weekend. A day with only one
+  time missing is unknown and left out.
+- `route_shapes.py` asks only the Overpass project's own instance, since its
+  answer is committed to `main` unreviewed. Car-park aisles and
+  drive-throughs cost 3 times their length, and each metre a stop sits off
+  the road costs 3 (`OFF_ROAD_COST_PER_M`); the road node for each stop is
+  chosen to make the whole route shortest (Viterbi). Each leg is simplified
+  on its own, so every stop stays a vertex. A leg over 2.5 times the straight
+  line and over 400 m longer (`ODD_RATIO`, `ODD_EXTRA_M`) is a wrong turn in
+  the map data, and the script refuses to write it.
+- The scrapers write only when something other than `generated` changed, so
+  the weekly workflow never commits a refresh that only moves the timestamp.
+- `check_scraped.py` allows stops within 1.25–1.35° N and 103.74–103.84° E
+  (Kent Ridge, Bukit Timah and between). A list may shrink by at most 10%
+  (`MAX_DROP`); one under 20 items may lose none, since 10% of eight routes
+  would let one vanish unseen. Re-surveyed stops have moved up to 87 m
+  (UHALL, September 2026), so `MAX_MOVE_M` is 100. Semesters start on a
+  Monday, so a real change moves one by a week or more, and `MAX_SHIFT_DAYS`
+  (3) catches any. A year has about a dozen holidays, so at most 3 future
+  ones may vanish in one scrape; past years roll off each January, so only
+  this year's terms must be there. Names may hold letters (Chinese too),
+  digits, spaces and everyday punctuation (no `<`, `:` or control
+  characters), the same rules as `valid()` in calendarsync.ts.
+
 **Route lines follow the roads.** `scripts/data/route_shapes.py` routes each
 service stop to stop along OpenStreetMap's drivable roads (one-way streets
 respected, each stop joined on the side the bus drives) into
@@ -1923,6 +2359,19 @@ URL: the style's glyphs URL ends `?v=` and `GLYPHS` in `src/map/map.ts`, bumped
 when the fonts on R2 change (v2 brought the Chinese), and the edge keeps the
 versioned range apart from the old.
 
+How `src/map/map.ts` serves it:
+- A piece over 32 MB goes straight from R2, uncached (the whole file is
+  about 4 MB). What it learnt of the file (ETag, size) is kept at the edge
+  for 30 days though trusted for 5 minutes, since an older look still
+  serves when R2 may not be read or fails.
+- Cloudflare weakens an ETag when it compresses a body, so `If-None-Match`
+  with `W/` matches too; `If-Match` compares strongly, and failing it (or
+  `If-Unmodified-Since`) is 412, not 304.
+- A glyph range must be written as MapLibre writes it (`512-767`, no
+  padding) and a `?v=` other than `GLYPHS` is the old URL, so made-up
+  paths can't fill the cache or cost an R2 read. A malformed escape is a
+  404, not an error.
+
 Every client's MapLibre parses these files natively, so what goes up is
 pinned in `scripts/map-tiles.lock`: the build date, bbox and minzoom, the
 `pmtiles` version, the cut's SHA-256 and size, the basemaps-assets commit,
@@ -1936,6 +2385,24 @@ keeps serving the last upload). The workflow's manual run builds and checks
 without the token, then uploads in a separate step that downloads nothing;
 its twice-yearly schedule only runs `--check`, which fails as a reminder
 when a newer build exists.
+
+The script's modes: `--check`, `--update`, `--dry-run` (builds the locked
+files into `build/map`), none (build, check, upload) and `--upload` (uploads
+`build/map` as it is once it matches, downloading nothing: the workflow's
+second step); `CHANNEL=beta|both` picks the bucket. Zoom 12 is a level to
+spare: with 512-pixel tiles every client stops at 13, and the world-wide
+levels below would be a quarter of the file, downloaded by every phone and
+Mac for offline use and never drawn. It uses `pmtiles` from the PATH only
+at `PMTILES_VERSION` (another version cuts the same tiles into other
+bytes, which the lock refuses), else downloads that release and checks its
+hash; `build_pbf_glyphs` is the Intel build on a Mac, run by Rosetta. A cut
+outside 1 to 20 MB, or fewer than 300 glyph ranges filled with Chinese
+(the CJK ideographs alone are 82), stops it. The tiles go up last, once
+everything they draw with is there, eight files at a time. Fonts and icons
+stay at the lock's basemaps-assets commit unless `ASSETS_COMMIT=<sha>` is
+given to `--update`; they keep their paths, so changed icons go in a new
+folder (`sprites/v5`, with `SPRITES` in map.ts) and changed fonts need
+`GLYPHS` bumped. Map data © OpenStreetMap contributors, ODbL.
 
 **Public buses are more services at the same stops** ([`public.ts`](../apps/api/src/answer/public.ts),
 [`lta.ts`](../apps/api/src/feeds/lta.ts), `data/public.json`). Singapore's public buses stop
@@ -2021,6 +2488,138 @@ you are at it (`here`): no walk, no buffer, and a bus the feed had as
 arriving stays catchable for `WALK.dwellS` after the reading. Otherwise GPS
 drift plus the buffer plus a cached reading's age add up to most of a
 minute, and the bus pulling in is passed over for the one after it.
+
+**Some answer is always given.** A located request with no stop in range
+whose bus goes there gets the nearest shuttle stop, however far
+(`candidateStops`), and when no candidate reaches the destination the
+nearest one is kept, so the answer can still offer a walk rather than a
+blank card. The user's home stops (`preferStops`) join the candidates
+whenever they're within `WALK.maxRadiusM`, so a dense cluster of nearer
+stops can't push out the one they use. A destination code that is no stop
+(a food court's) is never asked of either feed, which would only refuse it
+and cost NUS a retry (`collectArrivals`); a stop whose fetch failed gets an
+entry marked `available: false`, so "the feed couldn't be reached" stays
+apart from "no bus is coming", which gets a headway guess. A request with
+no location and no origin is "Set up" (`needsSetupAnswer`), not "No buses
+running", which would be a claim about the network. At the destination
+(either side of its road, a food court's other stop, or in the room
+itself), the answer is "You're here", `quality: live` though no feed was
+read (`arrivedAnswer`); a room's other stops don't count, as one can be
+300 m from it. "Cross the road" is said whenever the stop to board isn't
+the nearest stop (`nearestStop`, any stop, one no bus there calls at
+included): that is the answer that saves the bus, and the one that looks
+wrong.
+
+**The ranking's two overrides.** `scoreOptions` sorts measured times before
+guesses, then by cost to the place itself. Two cases are then put back: a
+measured change of bus over a guessed single bus, and a live public bus
+over a guessed free one, each stand only when they beat it by what the
+change (`TRANSFER.worthS`) or the fare (`PUBLIC.fareWorthS`) is worth.
+Otherwise the single or free bus is the answer; one with no time at all
+(`unknown`) can't be compared, so it never takes the place back. The
+alternative (`pickAlt`) after a change is the single bus it beat, and
+after a single bus never a change. Changes are shuttle-only: a public
+bus's fare and its LTA feed would each need rules of their own.
+
+**How sure the stop is (`confidence`).** The margin, as the options are
+ranked, between the best option and the best at another stop: 0.5 plus
+the margin over 600 s, between 0.5 and a ceiling. The ceiling is 0.97,
+0.85 for a change of bus (two rides priced by `RIDE.secondsPerHop` and a
+wait that is a guess unless the second bus is in the feed), and 0.5 when
+the berth is ambiguous, which no margin earns back. Without coordinates
+it is at most 0.75 (the stop is exact, where you are an assumption), and
+with no option at another stop at most 0.9.
+
+**A bus often packed is a bus to leave earlier for**
+([`crowd.ts`](../apps/api/src/answer/crowd.ts)). At peak times a packed bus
+can pass a stop without room for you. Crowding is counted as the Worker
+answers, never by polling: a bus with a plate and a crowd level due at a
+stop someone asked about within 2 minutes (`NEAR_S`; its crowd is what
+you'd board into) is tallied once per stop and SGT half hour
+(`crowd_seen` stops repeats, pruned by the cron after `KEEP_SEEN_DAYS`),
+into `crowd_stats` by service, stop, kind of day and half hour. A group
+says nothing until it has `MIN_SAMPLES` (10) sightings; packed half the
+time or more (`OFTEN_PACKED`) is "often busy", and a class's leave-by
+takes the bus before unless `fullBusMargin` is off, when it only warns.
+The risk is read for up to 8 stops while the feeds are asked. A failed
+tally or lookup is logged and the answer goes on without it.
+
+**Small rules in `src/answer`, by name.**
+
+- `MAX_AGE_MS` (15 min): a card is dimmed from then even if nothing else
+  says so. `DEPARTED_GRACE_MS` (30 s): a bus shown leaving at 09:42 may
+  still be at the stop at 09:42:20. The journey's walk is left out under
+  45 s. With no bus the glance is the walk's own words, which a 12-character
+  cut of "No bus · walk 27 min" would garble. `shortClock` makes "9:38p",
+  and `clockAt` puts a no-break space before AM/PM so a line never ends
+  between them.
+- `LABEL_TARGET` (16): the answer's `label` is capped at 40 characters,
+  but a small home-screen widget shows about 12 to 16 (`fitsTile`).
+  `isoSeconds` writes whole-second ISO times: Swift's default
+  `ISO8601DateFormatter` rejects the `.000` `toISOString` adds. The whole
+  walk is worded "walking 18 min", since "walk" reads as the walk to a bus.
+  The answer is logged synchronously and swallows its own errors, so it
+  needs no `waitUntil`; answers nobody asked for (`log: false`: wakes,
+  `/api/me/day`'s leave-bys) aren't logged, as they would cost rows and
+  count as answers.
+- `phase.ts`: `AT_STOP_M` (80 m) is at the boarding stop; `CHANGE_GRACE_MS`
+  (30 s) after the second bus's time it has left with you on it; a guessed
+  second bus leaves within a headway of its time (`secondLeavesMs`), not
+  cut at the close, or a time `laterChange` pushed past it would wait for
+  the next morning. `changesOf` tries at most `MAX_MOMENTS` (64) moments,
+  far more than a day's trip has; a later moment that would need a feed
+  read this request didn't make throws `NotPlanned` and counts as a change,
+  and any other error fails the request rather than passing for one.
+- `next.ts`: `ON_CAMPUS_M` (500 m from a stop) is on campus in the evening,
+  when the answer is the way home; "Undo" stays `UNDO_MS` (10 min) after
+  "Not going"; the last-bus warning shows from `LAST_BUS_WARN_MS` (45 min)
+  before the last bus, and on a trip that changes buses counts whichever
+  bus stops first. A room's walk over `MAX_VENUE_WALK_S` is taken as no
+  walk. A ride on a public bus reads the alighting stop's arrivals from
+  LTA, so it never costs NUS a call that can't list it. Times are 12-hour
+  when the account chose so, else when the client asks (`?h12=1`).
+- `leave.ts`: a leave-by within `NOW_S` (60 s) is "now". A class's leave-by
+  looks at the two days before its latest board first (`LOOKBACK_MS`), as
+  only its last two buses matter, and the whole time only when they aren't
+  both there. `departures` counts at most `MAX_DEPARTURES` (150, a day's
+  worth) a service and stop, from `CLASS_LOOKBACK_MS` (3 h) before a
+  class's latest bus. `withSteps` looks `STEP_WALK_MS` (30 min, more than
+  any walk to a stop) past the latest leave-by.
+- `departures.ts`: no bus is looked for over a day ahead (`PROJECT_MS`)
+  unless asked up to a later time. A guess steps by at least a minute
+  (`headwayMs`), and the headway is read once an hour, since a class days
+  ahead asks for hundreds of windows; Singapore is a whole number of
+  hours ahead of UTC, so the hours line up. A chosen bus more than a day
+  ago lines up nothing. A departure's `id` is the live bus's plate
+  (`<plate>@2` for its pass after next when the feed lists both, its place
+  in the list without a plate), else the nth estimate after its anchor
+  (`<plate>+n`, `reach+n`, `opens@<ms>+n`), the same for every caller of
+  one board, so the card's bus is found among the steps.
+- `hours.ts`: in `data/service-hours.json` only a well-formed `[open,
+  close]` replaces the scrape's hours, `null` or `[null, null]` says "does
+  not run", and anything else (`["", ""]`, a typo) leaves the hours unset,
+  which counts as running: a half-filled template must not make a Worker
+  that reports no buses ever. A window that closes before it opens crosses
+  midnight, and its small hours belong to the next day.
+- `transfer.ts` times at most `ROUTES_MAX` (8) routes an answer. `trip.ts`
+  keeps a day that has only revisions left (a signal undone), since a plan
+  from revision 0 would be dropped against the stored one; a Trip object
+  that fails or is slow loses only the phase.
+- `residences.ts`: an outline counts `GPS_MARGIN_M` (30 m) around it, how
+  far off a phone's fix is indoors, measured on a flat earth (fine at this
+  scale); a residence whose first point is 1.5 km off is skipped unread.
+  `residenceList` sorts names by code unit, not `localeCompare`, which
+  starts ICU. `walk.ts`: the paces are 1.1 m/s slow, `WALK.speedMs`
+  normal, 1.5 m/s fast.
+- `graph.ts`: `data/opposites.json` pairs stops across a road the scrape
+  can't pair by name ("Opp NUSS" and "AS 5"); a listed pair unpairs each
+  stop's old opposite, so pairs stay mutual. Its `nearby` list is stops
+  close enough for a location to put you at the wrong one, offered by
+  Nearby in place of each other but kept apart for routing
+  (`oppositeOrPartner`; `oppositeOf` says `across` only for a real
+  opposite). `via.ts`: when a line passes more places than `VIA_MAX` (3)
+  holds, the higher `rank` is kept (an MRT, then where people live, then
+  the rest); a line's own list (`lineVia`) never names its ends.
 
 ## What the feed looks like
 
@@ -2115,6 +2714,67 @@ feed being down: the last answer while it's under five minutes old, then
 notice on the card. How far away the times are is not checked: after
 midnight every real arrival is the next morning's, hours away.
 
+### Reader details
+
+What `fms.ts` and `lta.ts` read, beyond the above, which the code relies on
+and nothing else records:
+
+- The envelope can nest more than one level deep (`etas` inside `result`
+  inside `data` on some endpoints), so `unwrap()` loops over
+  `WRAPPER_KEYS`, at most eight times, rather than looking one key up.
+- Raw ConnectX gives each arrival both `eta` (whole minutes) and `eta_s`
+  (seconds). `eta_s` wins: minutes rounded back to seconds turn 24055
+  into 24060.
+- One payload can report the same service, time, plate and berth twice
+  under two shapes; `normalize()` keeps the first.
+- A service name the graph doesn't know passes as the feed spells it: a
+  new route arrives before the weekly scrape adds it.
+- The proxy reports a refusal at HTTP 200 with a `code` other than
+  `00000`. Any other HTTP status is the host itself saying no (busy,
+  down), which no token fixes, so it isn't retried.
+- `TimeStamp` comes zoned (`2026-10-22T09:58:41+08:00`) or bare, and a
+  bare one is Singapore time.
+- `tryVersion()` mints a token and makes one `shuttle-service` call,
+  since a 10009 can come from either.
+- A response body cut short can leave a JWT without its last part, which
+  `failureReason()` blanks on top of `redactDetail()`.
+- `active-bus` answers `{ActiveBusCount, TimeStamp, activebus: [{vehplate,
+  lat, lng, speed, direction, loadInfo: {occupancy, crowdLevel, capacity,
+  ridership}}]}`. `RawBus.heading` is degrees clockwise from north, null
+  when the feed leaves it out; `speed` is km/h, 0 when standing.
+- `getBuses()` has no stale race: the map polls every few seconds and
+  would rather wait for fresh positions than draw a stale jump.
+- DataMall's `Load` is `SEA` (seats), `SDA` (standing) or `LSD` (limited
+  standing). Its gateway's maintenance page comes as HTML with a 200, and
+  is reported as non-JSON. A bus more than a minute past is gone; one
+  just due shows as now. A bus of a known service that matches neither
+  direction (a short working) is left out, and logged once an hour per
+  stop.
+- Google Play's uNivUS page is one large script blob; the app's own
+  versionName sits just before its target and minimum SDK levels, as
+  `[[["2.59.2"]],[[[35]],[[[23,"6.0"]]]]]` (`versionFromPlay`). Other
+  version strings on the page belong to reviews. `appversion.ts` guesses
+  versionCodes only under a name newer than ours: a page still showing
+  our name hasn't caught up, and guessing would spend NUS calls on
+  nothing.
+- A connection that fails throws whatever the runtime throws: a TypeError
+  in Node, a plain Error in workerd ("Network connection lost.",
+  "internal error; reference = ..."). `timedFetch`'s signal is its own, so
+  any throw but its timeout is the connection (`UpstreamUnreachable`).
+- `bus-stops` rows are `{name, caption, ShortName, latitude, longitude}`:
+  `name` is the code (`COM3`), `caption` the label (`COM 3`), and
+  `ShortName`, already shortened as a widget wants (`Opp KR MRT`), is the
+  display name `scrape_stops.py` keeps.
+- `pickup-point`'s `seq` is not a dense index: a route's last stop comes as
+  32767, an int16 sentinel, so stops are sorted by it and never read as
+  1..N. A code in `KNOWN_ROUTES` with no pickup points is skipped, so an
+  extra code costs one request.
+- The proxy publishes no hours; they're kept by hand in
+  `data/service-hours.json` and merged over the graph at load.
+- `scrape_stops.py` logs only a redirect's status, never its target or the
+  base URL, and sends the version token only over https (or to localhost).
+  `TERMINUS_ORIGIN` points it at another Worker.
+
 ## Data flow, confirmed
 
 As of uNivUS 2.59.2 (2026-09-28). On 2026-09-05 uNivUS stopped
@@ -2158,7 +2818,8 @@ remember the version they were minted with, so the next call mints a new one.
 Usually nobody has to: on a 10009 the cron check runs
 [`src/feeds/appversion.ts`](../apps/api/src/feeds/appversion.ts), which reads the new version from
 NUS's refusal if it names one, or takes the versionName from uNivUS's page
-on Google Play. Play doesn't show the versionCode, so it guesses the next
+on Google Play (the one just before the SDK levels: a review's version string
+appears earlier in the page). Play doesn't show the versionCode, so it guesses the next
 `CODE_GUESSES` (10) after ours, lowest first: builds that never reach Play use
 codes up (2.59.2 was 140, 2.60.3 was 144). It tries them with NUS (a token and
 one bus call each, three at most per check), writes the one NUS accepts to
@@ -2199,6 +2860,23 @@ itself, so a session can't add passkeys.
 - To remove a lost device's passkey, edit `operator:passkeys` in KV; to
   remove every passkey and session, delete the key and rotate
   `HEALTH_TOKEN`. Scripts and `curl` still send `HEALTH_TOKEN` as before.
+- Each MAC carries a label (`challenge`, `session`), so a challenge never
+  passes as a session or back, and a session is exactly `op1.<expiry>.<mac>`:
+  anything after the MAC, however well signed, is no session.
+  `?register=1` checks the token before the browser makes a passkey, so a
+  mistyped token never leaves one on the device that the server won't know.
+- Each new passkey gets a random user id, so a second one never replaces
+  the first in a password manager.
+
+The dashboard keeps its session in the tab's `sessionStorage` only, and
+refreshes the stats every minute while the tab is in front (at once when it
+comes back after longer), keeping what's drawn until they arrive. A reply
+asked for under a session since locked or replaced is dropped. Each section
+has its own address (`#/answers`), opened by 1–9 and 0; `r` refreshes, `/`
+searches. Week-on-week figures are the 7 full Singapore days to yesterday
+against the 7 before, so a morning's few hours don't read as a drop. Series
+keep their colours in a fixed order (`--s1` to `--s5`, checked for
+colour-blind separation) when another hides.
 
 ## Auth, confirmed
 
@@ -2230,6 +2908,40 @@ Four things that will bite you:
 
 A new mint doesn't end the device's earlier tokens: on 2026-11-01 a token
 still worked after a second one was minted for the same device id.
+
+What else `auth.ts` relies on:
+
+- `ipaddr` is not what the mint checks: probing with it left out entirely
+  gave the same "Invalid API KEY" as a bad key, so a Worker, which has no
+  LAN address, sends `127.0.0.1` (the app sends its own; an emulator says
+  `10.0.2.15`). There is no request signing to reproduce.
+- The real `NEXTBUS_AUTH_BASE` carries a path prefix
+  (`/univus-public/mobile`), so `authUrl` appends `/get-access-token`
+  unless the base already ends with it; used as it stands, it posts to the
+  directory. A wrong path answers HTML with a 200, which the mint reports
+  as non-JSON with the first bytes of the body.
+- Minting a fresh token on every call draws intermittent 400s, so
+  `/api/health?probe=1` goes through the ordinary cached path.
+- Cloudflare strips `X-Forwarded-Proto` from Worker subrequests anyway.
+- `jwtExpMs` decodes the JWT and doesn't verify it: we are its bearer, not
+  its audience, and a forged expiry would only cost an early refresh.
+- `force` skips both the isolate's memo and KV: clearing the memo alone
+  would read the same refused token straight back out of KV.
+- One mint per isolate at a time (`inflight`, keyed by version): on a cold
+  cache `/api/trip` fetches several stops at once, and each minting its
+  own token meant one failed mint left that stop "unknown". A forced
+  caller that joins a mint under way still gets a fresh token.
+- The device id comes from `NEXTBUS_DEVICE_ID`, else KV `auth:deviceid`,
+  kept per namespace once read. A failed KV read throws rather than making
+  an id up, which would mint for one device, call as another and overwrite
+  the stored one. A newly made id isn't remembered in the isolate: when two
+  isolates both find none, only the last write is kept, and the next call
+  reads back the winner.
+- `UpstreamRejected.detail` keeps up to 2 KB of NUS's refusal, the best
+  clue to what a new uNivUS release changed. `redactDetail` blanks the
+  envelope's token, user and device ids, any JWT, any field named like a
+  key or password, and a value cut short before its closing quote, since
+  it goes to the logs and the operator's email.
 
 The 15-minute cron renews the token on both sites while the kept one is
 still good but has under `tokenRenewShare` (half) of its lifetime left,
@@ -2299,6 +3011,22 @@ email that fails, or takes over 15 s, is sent again the next run). KV takes
 one write a second to a key, so the state is written once a run: a delivered
 alert is noted under `monitor:alerted`, and the next run clears it from the
 state. Each run puts the outage list right if an earlier write of it failed.
+
+The health check asks NUS for `COM3` (`PROBE_STOP`), served by several
+routes almost all day, and LTA for the Central Library's shelter
+(`PUBLIC_PROBE`, 16181), where the 95 and 151 call all day. One failed
+check is often a blip (NUS answers some requests with a 400), which is why
+it takes two. The public feed's state has no alerts: the shuttle is the
+product. Its cron steps each run on their own, so a KV failure doesn't stop
+D1 cleanup or the reverse; the healthchecks.io ping (`HEARTBEAT_URL`, the
+stable site only) goes last, after steps that failed too (those are on the
+dashboard), so it only notices a cron that stopped or a run that died.
+`armTrips` and `remindTerm` take at least one user a batch, since an empty
+batch would never finish the day, and a retry list keeps everything a run
+asked that failed, up to two batches. The term reminder retries only a
+send that failed: a user with no device it could go to would fail every
+time. Retried users' profiles are read 50 at a time (D1 binds at most 100
+values).
 
 **The beta's checks.** Only the stable Worker's cron asks NUS and LTA (one
 stop each, past the cache). Both Workers run the cron, and the beta asking
@@ -2488,6 +3216,474 @@ keeps the site's token and the stub's under their own keychain accounts
 saved choice of the old address, dropped in 3.6.0, falls back to
 terminus.run still signed in.
 
+### The Android app
+
+How `apps/android` behaves where the code alone doesn't say why
+(`Api.kt`, `Store.kt`, `LeaveAlerts.kt`, `LiveService.kt`, `Push.kt`,
+`MapFiles.kt`, `Buses.kt`, `MapData.kt` and their neighbours):
+
+- **Reading answers** (`Api.kt`). Each part of the card is read on its own
+  (`lenient`): a malformed part is left out and the rest still shows. A
+  reply that isn't the shape this version reads at all is a `ParseError`
+  ("unexpected response"), never taken for the network failing
+  ("Offline"); a 200 that isn't JSON is one too. An error page without the
+  API's own `error` (an HTML page from in front of the Worker) shows a
+  plain sentence, not "HTTP 502". The API's lower-case errors become
+  sentences (`sentence()`), keeping "terminus" lower case and ending
+  Chinese with a full-width stop.
+- **Deadlines.** A fast request (widgets, a push, an alarm's broadcast,
+  the live notification: anything inside the ~10 s a broadcast or a push
+  handler gets) has 2 s to connect, 7 s to read and 9 s in all
+  (`FAST_DEADLINE_MS`), across both addresses (`Servers.order`). The Worker
+  gives each NUS call up to 5 s and a cold `/api/me/next` mints a guest
+  token first, which usually fits in 7 s; the rare re-mint and retry
+  (~20 s) is left to the next refresh. The exchange runs in `blocking()`,
+  which disconnects on cancellation, so a DNS lookup (no timeout of its
+  own) can't outlive the deadline.
+- **Holding back** (`Quiet`, `Outdated`). After a 429, every request on the
+  phone (the app, its widgets, the live notification) waits out
+  `Retry-After`, at most 5 minutes; sign-in, pairing and code routes have
+  limits of their own, so a 429 from one holds back only those. A 503's
+  `Retry-After` only slows the polling loops. The wait goes by the time
+  since boot (the clock can be changed) and is kept in the settings by the
+  wall clock, so a process started for a widget or a push honours it.
+  After a 426 nothing `Outdated.gated` goes out for half an hour, as on
+  the Mac, then one request checks whether the minimum has come down; the
+  hold is kept per version, so an update ends it.
+- **Where you are.** Coordinates go out at four decimals (about 11 m:
+  enough to tell PGP from PGP Foyer, no more precise in URLs that pass
+  through logs). `Locator` uses no Play services: the last known fix of
+  the fused, network and GPS providers that could be least wrong now, its
+  accuracy plus 1.3 m/s of walking since it was taken (`acc`); a fix that
+  gives no accuracy counts as 1 km, so it never beats one that does.
+  `FirstFix` (the same on the iPhone and the web) asks with a fix under
+  60 s old at once, else waits 1.5 s for a fresh one before asking with
+  what it has, and asks once more if the fresh fix is over 50 m from the
+  one sent; a fix whose `acc` is over the API's 200 m counts as none.
+- **The phone's clock** (`ServerClock`). Every countdown compares the
+  server's times with the server's now: the skew comes from the `Date`
+  header of a reply fresh from the server (not a cached one), and under
+  3 s is taken as none (Date's one-second resolution and the trip).
+  Alarms go by the phone's clock, through `toDevice`.
+- **The token** (`Store`). Encrypted with an Android Keystore key and
+  decrypted once per process: the widget reads it on every draw. Written
+  with `commit()`, not `apply()`, so a process killed right after pairing
+  can't lose a token the server already issued. When the key is gone (a
+  restore, a reset of secure storage) the phone signs out once and says
+  why, rather than retrying on every draw. An answer, day plan or board is
+  kept only if it was asked with the token still stored (`sentWith`) and
+  wasn't asked before the one kept (`askedAtMs`), so a slow widget refresh
+  never overwrites the app's newer answer and a sign-out mid-request
+  leaves no old account's places behind. Language, theme, card style, New
+  to NUS, crash reports, the intent key and the server chosen survive a
+  sign-out (`Store.clear`). `intentKey` marks the app's own intents
+  (widgets, shortcuts): `MainActivity` is exported.
+- **The profile** (`Profile.kt`) is kept as the server's JSON, so fields
+  this version doesn't know survive a save. Saves send `If-Match`; on a 412
+  only this phone's changes are made again on the server's profile
+  (`saveChanges`), and a change to a class that has gone meanwhile is
+  dropped (`missed`) rather than landing on a neighbour.
+- **Leave alerts** (`LeaveAlerts.kt`). The server says when (`remindAt`).
+  An exact alarm two minutes before fetches a fresh answer, and that
+  answer decides: with exact alarms allowed the heads-up posts at
+  `remindAt` (so "5 minutes before you need to leave" is true); without,
+  it posts as the check lands, since an inexact post after an inexact
+  check could miss the leave time. With nothing to say yet (no bus) it
+  checks every couple of minutes until 10 minutes past `remindAt`, then
+  counts the trip done. A last alarm at the leave time turns it into
+  "Leave now". One heads-up per trip, the trip known by its action's key
+  (`4:600:UTOWN`, which stays put while the leave time moves), else a
+  class's start, else `remindAt`; afterwards the same notification follows
+  the trip only while it's showing, and with push trusted no follow-up
+  alarm is set. `exactAlarm()` wakes the phone only for the alerts, the
+  live notification and the server's `refreshAt`; a widget redraw waits
+  for the screen. The alarm's check fetches `/api/me/next` right in the
+  receiver (its idle allowance is seconds) and may start the live
+  notification, which a normal-priority push can't.
+- **The live notification** (`LiveService`) refreshes every 30 s, 2 min
+  with the screen off, backing off 1, 2, 4, then 8 minutes while refreshes
+  fail; the API's per-stop cache means it costs NUS nothing more than the
+  app open. Android lets it start from the background only from a
+  high-priority push (due, missed), an exact alarm or boot, so between
+  trips it stops and sets an exact alarm for the next reminder or
+  `refreshAt` (never the card's `nextChangeAt`, which moves at every
+  departure). It goes to the foreground before any fetch and stops rather
+  than crash when Android refuses that. On Android 16 QPR1 (API 36.1) it
+  is a Live Update with the card's glance as the status-bar chip; check
+  `SDK_INT` before `SDK_INT_FULL`, which throws on 12 to 15. On the bus
+  it's a `ProgressStyle` bar (`RideStyle`), its position the clock's
+  estimate, redrawn a second after each stop.
+- **Push** (`Push.kt`). Firebase is set up in code, so the phone works
+  without Play services or the config file. A push carries no words, so
+  none pass through Google: a `term` push fetches `/api/me/notice`. The
+  token is sent again every 12 hours (the server drops one FCM stopped
+  delivering to, and nothing tells the phone), and push is relied on alone
+  only with a token taken and a push heard within a day; otherwise the
+  alarms keep step too. A push for a trip phase starts the live
+  notification first, inside the seconds a high-priority message allows.
+- **The map's files** (`MapFiles.kt`). `/api/campus` and the style are
+  used from the kept copy at once and checked in the background once over
+  an hour old (their `max-age`). The map file is checked weekly by ETag;
+  a newer one waits for an unmetered network, the first doesn't. Each
+  version gets a file name of its own, since MapLibre keeps a file's
+  header and directories by URL, and old ones go once no map shows them;
+  a file kept from before versions had names (`campus.pmtiles`, no size)
+  is still read. A download needs 16 MB spare, must match its
+  Content-Length and start with a PMTiles v3 header (not a Wi-Fi login
+  page), and isn't tried at the other address once its body has started.
+- **The map** (`MapData.kt`). MapLibre Native limits only the camera's
+  centre, so `PanLimit` keeps the centre half a screen inside the map
+  file's extent (`MAP_BOUNDS` in map.ts) and zooms out only until the
+  screen is full, allowing the part under an open sheet to show past the
+  edge (the web's `underSheet`); the Mac's `PanLimit` is the same.
+  `coreExtent` frames campus by its stops and the whole line of every
+  service that stays on it, as the iPhone's `coreBounds` and the web's
+  `campusBounds`. Slides time on `elapsedRealtime`, which runs on while
+  the phone sleeps, so a map left asleep reads as stale.
+- **The Stops tab** (`Buses.kt`). Times count down from when the phone got
+  the answer, on the server's clock, never from the feed's `asOf` (the
+  server already took that off); once an answer is 30 s old (a refresh
+  missed) a live time reads "Last known", as the web's `aged()`. A pinned
+  stop whose page is open takes the page's times and keeps its own
+  answer's timetable guesses for the buses after them, counted rather
+  than matched by time, as the iPhone and the web do; its own answer is
+  asked again after 2 minutes. `/api/lines` reads every service from NUS,
+  so it's asked when the list comes on screen and at most once a minute
+  (`LinesPoll`).
+- **Pull to refresh** (`Pull.kt`, drawn by `ui/BusPull.kt`; the web's
+  pull runs on the same numbers). An answer under 15 s old isn't asked
+  for again (the API keeps arrivals 15 s): the pull plays and says when
+  the next update comes.
+- **Language** (`Lang.kt`). On Android 13 and later a choice is the
+  system's per-app language; on 12 every entry point (the activity, the
+  widgets, the notifications) wraps its context. The account's `lang` is
+  applied only when it changed since last applied, so it never overrides
+  a later choice made on the phone.
+- **Smaller rules.** Favourites on the widget rank by uses that halve
+  every 14 days, counted only on the phone (`Destinations`). The app
+  icon's shortcuts are four (Pixel's launcher shows four), Nearby last
+  (`Shortcuts`). The theme is the app's night mode, so Android applies it
+  from launch (`Theme`). Ink on a service's colour is white or near-black
+  by WCAG contrast (white on A2 or K was under 3.5:1; `Ink`). Crash
+  reports are written in the crash and sent at the next start, a 5xx kept
+  for the start after. A signed-out session is ended on the server by a
+  `LogoutWorker` with up to ten tries, the token in the job, not the
+  settings.
+
+### The iPhone app
+
+`apps/ios/Sources/App`, by area; the controls it draws itself, and why, are
+in [ADR 0024](adr/0024-iphone-hand-made-controls.md).
+
+- **Refreshing (rule 2).** Every loop runs only while its screen is on
+  screen and the app active. Now's answer every 30 s (`AppModel.pollS`),
+  Nearby at the same pace; the Stops tab's pinned stop showing and the one
+  either side in one `/me/stops` request every 15 s (`BusPinned.window`,
+  not again within `BusesModel.minGapS`, 10 s), an open page's board or
+  line every 15 s, the lines' buses out (`/api/lines`, which reads every
+  service from NUS) at most once a minute (`BusLines.pollS`). Wide, a stop
+  open beside the home is asked for by its page alone (`stopBeside`), and
+  by `/me/stops` only every 5 minutes for its card's timetable guesses
+  (`guessGapS`). The map: buses every 5 s while a pill is on, a stop's
+  times every 15 s while its sheet is open, your dot every 20 s, each
+  doubling on failure up to a minute and never sooner than a 429's or
+  503's `Retry-After` (`MapModel.pollDelay`). A pull within 15 s of the
+  last answer (`Pull.freshS`, the edge cache's arrivals TTL) asks nothing
+  and says when the next timed refresh is. A board or line request isn't
+  cancelled with the page that made it: the page that replaces it skips
+  the stop as just asked, so that answer is the one it shows; a request
+  cancelled because the session went counts as not asked
+  (`BusAsk.cancelled`).
+- **Pinned cards.** A pinned stop's card is its own `/me/stops` answer
+  with its page's board merged in (`BusPinned.filled`, as Android's
+  `PinnedStop.withBoard` and the web's `withBoard`): each card row takes
+  the board's row for the same service and way (`towards`), else the
+  service's first row left, so a way the board lacks never takes the other
+  way's row; it gets the board's times, crowding and running state but
+  keeps its own words ("via UTown"), then the card's later buses the board
+  doesn't cover (`guessesAfter`: counted, not matched by time, and only
+  the timetable guesses past them). The merge always starts from the
+  card's own answer, never an earlier merge, whose guesses would come
+  round again.
+- **Sessions.** `AppModel.session` moves on with every sign-in and
+  sign-out, and an answer for an older session is dropped, in every model.
+  `MapModel` and `SettingsModel` outlive the tabs, so both are reset on
+  sign-in and sign-out. Woken by a push or a background refresh before
+  the phone's first unlock, the keychain can't be read: that isn't signed
+  out, and `AppModel` looks again once it can. A 401 for this phone's own
+  token signs it out; one for a token already replaced doesn't.
+- **Saving the profile.** Settings and setup show an edit at once and save
+  0.4 s later, so a run of taps is one save; one save is in flight at a
+  time and is never cancelled (whether it saved is known only from its
+  answer); changes made meanwhile are replayed on what it saved, and a
+  refusal puts back the last saved profile with the reason. Settings sends
+  the ETag as `If-Match` and on a 412 reads the profile again and makes its
+  changes on that (`ProfileDoc.missed` says so when a class it changed was
+  changed elsewhere). Setup doesn't save during a NUSMods import, whose
+  answer replaces the timetable, and saves what's waiting before one. The
+  profile is kept as JSON, so fields this version doesn't know survive.
+  The account's language and clock follow the account: one chosen on
+  another device is applied here, one picked here before the account had
+  one goes to it (`followAccount`); `TERMINUS_LANG` pins this phone's.
+- **Location.** Only while the app is in use (`Locator`). A fix under 60 s
+  old is used without asking again; an answer waits at most 1.5 s for a
+  new one, then goes with the last fix if it's under 10 minutes old (its
+  `acc` grown by 1.3 m/s since), and asks once more when the new fix comes
+  if it's 50 m from the one sent or the one sent was dropped (`acc` over
+  200 m, `MAX_FIX_ACC_M`) (`quickFix`, `refreshAgain`).
+- **Sign-in and pairing.** Codes are six characters from
+  `23456789ABCDEFGHJKMNPQRSTVWXYZ` (no 0/O, 1/I/L), as `PAIR_ALPHABET`.
+  A paste can bring words or land after typed text: the code is the last
+  six-character word that could be one, else the last six letters and
+  digits (`SignInCode.edit`). The email sign-in asks every 3 s for 15
+  minutes and stops on any 4xx but 429. A pairing link (`/pair?code=`,
+  from terminus.run, the beta, or the stub in a debug build) shows whose
+  account it is and waits for a yes, so a link can't quietly pair the
+  phone to a stranger's account.
+  The welcome screen's livery has the services' colours built in (as
+  `ROUTE_COLORS`), since it shows before there's an account. After this
+  phone signs in with an email, which ends the setup's other sessions, a
+  watch that was signed in gets a fresh pairing code unasked
+  (`WatchLink.accountChanged`); one signed out by its own Sign out doesn't.
+- **The map's files** (`MapFiles`, as the Mac's and Android's). One folder
+  per server, out of the backup. `/api/campus` is kept per language (the
+  server words it in the one asked in) and read once by `CampusStore` for
+  every reader; a copy of any age shows at once, one over an hour old is
+  checked in the background with its ETag. The style is fetched per theme
+  and language and kept only once it parses (a Wi-Fi sign-in page answers
+  200 too), and written to a new file name each time, since MapLibre
+  doesn't reload a style URL it already shows. The street map is
+  downloaded whole, checked weekly by ETag, and kept only if it starts a
+  PMTiles v3 header and is over 64 KB; each download gets its own name
+  (`campus-<id>.pmtiles`, recorded in `campus.pmtiles.json`), since
+  MapLibre keeps a file's header and directories by URL, and the old file
+  goes once a style naming the new one has loaded. A style that fails to
+  load drops the file only when the file itself fails that check.
+- **Drawing the map** (`CampusMapView`). Stop names come from a source of
+  their own: a tile waits for every layer from its source, and the names
+  wait for their font, which offline may never come. An invisible copy of
+  each dot is placed before the names, so no name covers a stop. Routes
+  are drawn in `/api/campus`'s order (a dictionary's changes per launch),
+  and a stop's services are kept as `" A1 D2 "` so `K` never matches
+  inside another code. MapLibre Native limits only the camera's centre, so
+  `PanLimit` limits the centre to the map less half the screen, further
+  by what a sheet hides, and the zoom to where the screen is still full of
+  map (the same as Android's and the Mac's). Buses slide on
+  `CLOCK_MONOTONIC_RAW`, which counts sleep, so an answer from before the
+  phone slept is stale (`Slides.staleS`, 15 s) and every bus jumps.
+- **Push, the Live Activity, reminders and the background refresh.** Push
+  tokens are sent again every 12 hours (`Push.resend`), since the server
+  drops one Apple stopped delivering to and nothing tells the phone; one
+  send at a time, so an older one can't register a token after a newer one
+  turned the setting off. A push is a nudge: the app fetches
+  `/api/me/next` and `TripSync` brings the widgets (reloaded only when
+  what they show changes, `shownKey`), the Live Activity and the reminders
+  in line. The notification delegate is on the main actor: iOS's
+  completion handler throws when called from any other thread. The Live
+  Activity (`LiveTrip`, iPhone only) is started only by the open app or by
+  the server's push-to-start; a stale one is updated, never ended, since
+  nothing could start it again; steps run one at a time, a step overtaken
+  by a later answer skipped; one no push can reach is ended by the app once
+  its trip is over; a finished trip lingers 10 minutes, as
+  `LIVE_DISMISS_S`. Reminders are local notifications scheduled from each
+  answer; their category is registered at launch, since a pushed alert can
+  carry it on a phone that has never scheduled one; with permission not yet
+  known (a background launch) they're asked about, not cleared. The
+  background refresh is asked for at the moment the kept answer next
+  changes, no sooner than iOS's 15 minutes, and only while a widget shows
+  it (counted at most every 10 minutes).
+- **Crash reports** (`CrashReports.swift`). An uncaught Objective-C
+  exception is written to disk as the app dies (no network) with its first
+  frame in the app; MetricKit reports the same crash later as SIGABRT, and
+  the report whose stack holds that frame address is dropped, which only
+  the same launch's crash can match, since the app loads at a new address
+  each launch. A report is dropped on any answer from the server, kept on a
+  5xx or none. The OS is sent as its major version only.
+- **Links** (`Links`): `terminus://plan`, `place/<key>`,
+  `to/<code>?label=…` and the tabs, as Android's. `to` only from the
+  app's own widgets, which carry `WidgetStore.linkKey`, so another app
+  can't add places with names of its choosing.
+
+Its shared code, widgets and watch (how the widgets reload:
+[ADR 0025](adr/0025-iphone-widgets-draw-ahead.md); how it reads answers and
+the server's clock: [ADR 0026](adr/0026-apple-apps-read-answers-leniently.md)):
+
+- **What its parts share.** The app, its widgets and Live Activity, and
+  the notification service build `Sources/Shared` and share the latest
+  answer, the day plan, the board of buses near you and the settings they
+  all read through the app group (`Shared`, `TerminusGroup` in Info.plist;
+  the beta has its own). The token is in the keychain with the group as
+  its access group, readable after the first unlock (so a widget or a push
+  in the night can use it) and never backed up to another phone
+  (`AfterFirstUnlockThisDeviceOnly`). Before that first unlock the
+  keychain answers nothing at all, which isn't "signed out": the answer
+  isn't cached, and a widget asks again in 5 minutes. A build without the
+  group entitlement keeps the token in the app's own keychain, which the
+  extensions can't read. The site's token is under the account `site`,
+  the stub's under its address; builds before 3.2.0 kept it under the
+  address it was saved on, and the first read moves it over once.
+- **Sideloaded** (`scripts/sideload.sh`, `SIDELOAD.md`): the Sideload
+  configuration has the stable servers, the signer's own bundle IDs and
+  group (a free team can't use `sh.rcn.terminus`), and no push or Time
+  Sensitive entitlement. For an .ipa the script builds it unsigned, then
+  signs it ad hoc, inside out (the frameworks, the extensions, the watch
+  app's complications and the watch app, then the app), with the group
+  alone, so the group rides in the binary for the installer to re-sign. AltStore and SideStore rename the group for
+  the installer's team ("group.sh.rcn.terminus.sideload.ABCDE12345") and
+  write the new name under `ALTAppGroups` in each Info.plist: the app
+  uses the built group unless it can't be opened and a renamed one can
+  (`Shared.chooseGroup`), and never another app's group that happens to
+  open.
+- **Deadlines.** A request has 15 s, 8 s from a widget or the
+  notification service (`Api(fast:)`), which have seconds, not ten; a
+  try at the backup address fits inside the same deadline. In a debug
+  build the app hands its `TERMINUS_*` overrides to its extensions
+  through the app group (`dev.` keys), since they aren't launched with
+  the app's environment; a release build reads none. After a 429 every
+  process of the app waits out `Retry-After` (`Quiet`, kept in the app
+  group by the wall clock, sign-in apart from the rest); a 503's
+  `Retry-After` only slows the polling loops. After a 426 nothing with a
+  token goes out for half an hour (`Outdated`), then one request asks
+  again in case the minimum came down. `RequestLog` is per
+  process: the widgets' and the notification service's requests aren't
+  in the app's.
+- **The notification service** words a push's alert on the phone, so no
+  words pass through Apple: it fetches `/api/me/next` (and the semester's
+  reminder from `/api/me/notice` for `kind: term`) and says it as the leave
+  reminder and Android's notification do, keeping the answer for the
+  widgets. Whatever can't be fetched in time keeps the server's fallback
+  words. A trip's alert that arrives while this phone's leave alerts are
+  off (the server hadn't heard yet) can't be taken back, so it comes
+  passive, with no sound. A push that says it's time removes the local
+  heads-up and marks it gone for the trip, so the next answer doesn't
+  schedule it again.
+- **Leave reminders** (`TripReminders`, acted on by `TripSync`) are local
+  notifications scheduled ahead from each answer, so they go on time with
+  the app closed: a heads-up at the card's `remindAt` and "Leave now" at
+  the leave-by. The server decides which trips get one. The heads-up goes
+  once per trip, keyed by the trip and the campus day it leaves (a weekly
+  class has the same key every week); one swiped away also cancels "Leave
+  now"; with the bus gone and nothing known, neither (you may be on it).
+  One that fires after its times went stale still goes, and says so. The
+  heads-up without the "Not going" button has a category of its own, so a
+  dismissal is still heard.
+- **The Live Activity**'s state is built from the answer rule for rule as
+  the server's `liveActivityState` builds it, since the app and the
+  server's pushes update the same activity in turn and any field built
+  differently would flip on the Lock Screen; `SystemTests` checks every
+  golden against `fixtures/live-activity.json` (written by apns.test.js).
+  With no push to end it (sideloaded, or APNs off), the app ends one an
+  arrived trip after `LIVE_DISMISS_S`, as the server does, and one nothing
+  has updated an hour after its bus or leave-by. Its Turn off is a
+  `LiveActivityIntent` built into the app as well as the widgets: it runs
+  in the app's process, the only one that can end the activity and tell
+  the server. Its background tint is a fixed colour per appearance, since
+  iOS resolves a light-or-dark tint as light even on a dark Lock Screen.
+- **Where the phone was**, rounded to about 11 m as sent, is kept in the
+  app group for a widget or a push to plan from, for two hours at most and
+  then deleted. A stop link from a widget (`terminus://to/<code>`) carries
+  this phone's widget key (`k`), so only its own widgets can add a place
+  to the app's tabs.
+- **Words.** The widget intents' titles are looked up by the system in
+  the phone's language, from `Widgets.strings` (`LocalizedStringResource`),
+  not through `L`, which follows the app's own choice. The destination
+  search ranks as `fixtures/search.json` holds every client to (the web's
+  `account/search.js` is the reference), comparing by UTF-16 code units as
+  JavaScript does; the profile's length limits are UTF-16 units too, so a
+  name is cut by units and a flag or emoji is kept whole or not at all.
+  "This iPad" against "this phone" goes by the model's name, which any
+  thread and the extensions can read.
+- **Colours** are the site's (`assets/site.css`), with `warn` a shade
+  darker than the web's so small text reads on its tint; a service's badge
+  takes white or the ink, whichever has more WCAG contrast on it. watchOS
+  has no colour that follows the appearance and a watch is always dark, so
+  there each colour is its dark one (`canImport(UIKit)` can't tell, as the
+  watch has a UIKit without dynamic colours). The sky (`SkyDraw`) is the
+  web's `sky.js` and `daylight.js` and Android's `NightSky.kt` scene, from
+  the same numbers: dawn from 6:30, day from 8:30, golden hour from 4:30 PM,
+  dusk from 6:45 PM, night from 7:40 PM, by the phone's clock.
+- **The watch's hand-off** (ADR 0016): a pairing code lives 10 minutes on
+  the server, so one older than that (a transfer that waited for a watch
+  left off) isn't tried, nor one tried already, since the application
+  context stays until replaced and is read again at each start. A code that
+  comes while another is being redeemed waits its turn: the server has
+  already replaced the one in flight with it.
+
+### The Mac app
+
+Beyond what the other clients share (why it lives in the menu bar and
+refreshes as it does: [ADR 0027](adr/0027-mac-menu-bar-app.md); how it reads
+answers: [ADR 0026](adr/0026-apple-apps-read-answers-leniently.md)):
+
+- **Waiting on the server** (`Quiet`, `Outdated` in `Api.swift`). A 429's
+  `Retry-After` gates every request of its kind: sign-in and pairing
+  (`/api/auth/…`, `/api/pair`, `/api/me/pair-code`) wait apart from
+  everything else, as the server limits them apart, so a mistyped code
+  doesn't stop the menu bar. A 503's `Retry-After` gates nothing; only the
+  polling loops (the refresh, the map's) wait it out. Either is honoured
+  for 1 s to 5 minutes. A 426 stops every request the server would refuse
+  (`Outdated.gated`, KEYED in index.ts: not signing in or out, downloads,
+  `DELETE /api/me` or `DELETE /api/me/push`) for 30 minutes, then one asks
+  again in case `config:minClient` was lowered.
+- **Saving the profile** (`Api.changeProfile`, `SetupModel.edit`): the Mac
+  sends `If-Match` as the website does, makes only its own change again on
+  a 412 (three tries), shows changes at once and saves 0.4 s after the last
+  click, one save at a time, putting them back if the save fails. An import
+  replaces the profile, so edits are refused while one runs and waiting
+  saves go first.
+- **Signing in by email**: the request is polled every 3 s for its 15
+  minutes; a code typed meanwhile ends it. While an anonymous Mac adds an
+  email, a 401 isn't taken as signed out, as the merge can remove the
+  anonymous account just before the new token is handed over (#159). The device name sent is the Mac's model (`macModelName`: the
+  device tree's product name, else the family from `hw.model`, at most 40
+  characters), never the name its owner gave it.
+- **The map's files** (`MapFiles`, `CampusStore`). `/api/campus` is kept per
+  language (`campus-en.json`, `campus-zh.json`), used at once whatever its
+  age, and asked about with its ETag once over an hour old (its
+  `max-age`), one check at a time; every reader shares one parse, and a
+  changed copy reaches each in place. The street map is downloaded whole,
+  checked weekly by ETag, and kept only if it starts a PMTiles v3 header
+  and is over 64 KB (a Wi-Fi sign-in page answers 200 too), excluded from
+  backups. Each download gets a name of its own (`campus-<id>.pmtiles`,
+  named in `campus.pmtiles.json`), because MapLibre keeps a file's header
+  and directories once read; the old file goes once a style reading the
+  new one has loaded, and a file MapLibre can't read is dropped only if it
+  fails that check again. Styles are kept per theme and language, only
+  once they parse as a style, and shown under a new file name each time,
+  since MapLibre doesn't reload a URL it shows. The folder sits beside the
+  token's, so the beta and a local build keep their own.
+- **The map window** (`MapModel`, `PanLimit`, `Slides` in `MapData.swift`,
+  as the phone's `MapData.kt`) polls only while it's on screen: buses every
+  5 s, the open stop every 15 s, your dot every 20 s (never asking for
+  permission), each doubling on failure up to a minute. MapLibre Native
+  limits only the camera's centre, so `PanLimit` keeps the centre half a
+  window inside the map file's extent (`MAP_BOUNDS`) and zooms out only
+  until the window is full of map; `keepOnMap` brings the camera back after
+  a zoom out by an edge, guarded so the move it starts can't restart itself.
+  Buses slide along their line at 100 m/s, 1 to 4 s, on
+  `CLOCK_MONOTONIC_RAW` (it counts sleep, so an answer from before one is
+  stale); they jump after 15 s without an answer, past 1.5 km, when behind,
+  or with Reduce Motion. A bus at a stop sits 22 points to the left of its
+  dot, the kerb side.
+- **Crash reports** (`CrashReports.swift`). `NSApplicationCrashOnExceptions`
+  is set, or AppKit would log an exception on the main thread and carry on
+  half-broken. An uncaught exception is written to disk as the app dies;
+  its first own frame is marked so MetricKit's later SIGABRT report of the
+  same crash is dropped. MetricKit hands over the iPhone app's crashes too
+  (they share a bundle id), so a stack naming `dyld_sim` or `UIKitCore` is
+  ignored. A report is dropped on any answer (2xx or 4xx) and kept for the
+  next launch on a 5xx or none.
+- **Leave reminders** (`LeaveNotifier`): the heads-up goes once per trip
+  per Singapore day (a weekly class has the same key every week), and a
+  leave-by that moves later doesn't bring it back. Each is due on the
+  server's clock. When the refreshes stop, pending reminders keep their
+  words and add when they were last checked.
+- **Debug and test hooks**: `TERMINUS_OPEN=setup|settings|map|popover`
+  opens that window at launch (for a menu bar item hidden behind the
+  notch); `TERMINUS_SNAPSHOT=<dir>` renders every screen to PNGs, swapping
+  the native controls `ImageRenderer` can't draw for look-alikes, and
+  drawing the buttons in a window where they must look real.
+
 ### Live buses on the map
 
 `/api/buses` shows each bus at a stop or between two (`src/map/buses.ts`). The feed
@@ -2540,14 +3736,19 @@ track leaves the bus where it was, so `along` never goes back. One up to
 500 m behind (`HOLD_BACK_M`), with nowhere ahead it could be, holds it
 where it was for up to 2 minutes (`HOLD_BACK_MS`), or as long as its track
 lasts at the end of a loop: A1 and A2 leave Kent Ridge Bus Terminal along
-the road they came in by before they join the start of their line.
+the road they came in by before they join the start of their line. An A1
+was seen waiting there over two minutes, and without the hold was drawn
+261 m back.
 
 A track lasts ten minutes from the last time the feed reported the bus,
-moved or not: a bus standing still at a terminus for longer keeps its side.
+moved or not: a bus standing still at a terminus for longer keeps its side
+(the feed was seen repeating one standing bus's exact position every 15 s
+for 20 minutes).
 A bus with no track (just appeared, or nobody watched the service for ten
 minutes) is placed by its heading when moving; standing, by the stop it's
-at, if it's clearly nearer one stop than its opposite stop; otherwise
-on the nearer side. A track that started wrong gives way when the bus is
+at, if it's within 30 m of one stop and 5 m nearer it than its opposite
+stop; otherwise on the nearer side. A stretch counts as the way a bus is
+heading within 60°. A track that started wrong gives way when the bus is
 seen moving the other way twice in a row; one odd heading doesn't move it.
 A tracked bus that strays more than 50 m off its line for under 30 s (a GPS
 jump) stays at its last place; longer (`HOLD_OFF_MS`: the depot, a
@@ -2582,6 +3783,30 @@ A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back. Its card says
 where it is ("At COM 3", or "Next: COM 3" between stops) and where it's
 going ("Towards Kent Ridge MRT"), with the stops ahead from `upcoming`.
+
+On the web (`app/map.js`) a pill's buses are asked for every 5 s while the
+tab is on screen, one poll at a time, given up after 10 s, and after
+failures the wait doubles to a minute, never before the server's
+`Retry-After`. How old the last answer is goes by `Date.now()`, which
+counts a device's sleep where `performance.now()` doesn't in some
+browsers. Buses are symbol icons, not circles, so each has its own pixel
+offset that turns with the road. A stop's `services` property is
+`" A1 D2 "`, spaces round each, so K never matches inside another code.
+The first view frames the stops and the whole line of each service that
+stays on campus, leaving out P's to the Botanic Gardens, the same rule as
+the apps (`coreBounds` in MapData.swift). The view stays on the map file
+(`maxBounds`); with a sheet open the limit reaches past the file on the
+sheet's side (`underSheet`), so a line fitted beside the sheet isn't
+pushed behind it. MapLibre adds the camera's padding (a sheet's) to a
+fit's own, so `fitLine` takes it off, and keeps padding from one move to
+the next, so every side is always given; `load` never comes again once a
+source takes new data, so the code waits for `idle`. A stop opened from a
+bus's sheet pushes a history step of its own (`BACK_MARK`), so a phone's
+Back returns to the bus as Escape does. For a keyboard or screen reader
+the stops are also a list (`StopList`) that opens a stop on Open or
+Enter, not on picking, since on Windows and Linux the arrow keys pick as
+they move. Route lines and buses have an edge (dark on the light map, the
+page's colour on the dark) so a pale line still stands out at 3:1.
 
 ### The timelapse recorder
 
@@ -2701,7 +3926,15 @@ serves only release files, so the days are reachable only through
 opens these routes and nothing else, so a machine left to render the videos
 unattended (`scripts/dev/render-timelapse.mjs`) never holds the dashboard's
 key. Nothing runs the renderer on a schedule; it is run by hand from a
-checkout.
+checkout. Its selectors and button words are in `render-timelapse-ui.mjs`,
+which `apps/web/test/web-render-timelapse.test.js` checks against the drawn
+page, so a markup change fails the tests rather than the next unattended
+render. It moves the timeline's handles with their keys (an arrow is a
+minute, Shift ten), reading the time from `aria-valuetext`, the end first,
+since each handle stops a minute short of the other; a time before 06:00 is
+the next morning. A handle that stays put for two presses is at its limit (a
+slow redraw only takes longer, up to 15 s a press). `/api/timelapse/days`
+answers 404 without a good token, so a 401, 403 or 404 ends its wait at once.
 
 **Replaying it.** The dashboard's Timelapse section (`/admin/#/timelapse`,
 [`timelapse.js`](../apps/web/public/admin/timelapse/timelapse.js), loaded when
@@ -2711,7 +3944,9 @@ token signs in to the dashboard too, and opens this section alone: the
 API answers it nothing else. Mediabunny starts its workers from blob:
 URLs, so the dashboard's CSP allows blob: workers (`cspFor()` in
 `src/http.ts`); a hash route never reaches the server, so the dashboard's page
-(`/admin/`) has it, and no other. The section's state, its map (drawn into an off-screen
+(`/admin/`) has it, and no other. MapLibre starts its worker from its own file
+when that is on the page's origin (`/vendor/`), so `worker-src 'self'` is
+enough everywhere else. The section's state, its map (drawn into an off-screen
 `#stage` on `body`) and an export in progress live in its module, so
 an export keeps going while another section is open. The API's tests
 read it with the same module. Between two readings a bus moves along its
@@ -2723,7 +3958,10 @@ in the count of buses out throughout (`countBySvc`), so a service with
 one bus out doesn't blink to none at every jump (a one-way route's end).
 Before any of that, a reading the bus is back from within the next two is
 left out (`withoutFarSide`): the recorder placed it on the far side of a
-road its line takes both ways, and D1 and D2 have hundreds of those a day.
+road its line takes both ways, and D1 and D2 have hundreds of those a day
+(the tests replay two D1 buses recorded on 2026-10-27, 10:31 to 10:35: PD804L
+read on the outbound side while driving back, PD539C read at the loop's end
+as it left the terminal).
 A step back of more than 150 m counts as away too, so a bus at a loop's
 terminal read at the line's end instead of its start doesn't slide back
 round. A bus that stays away has gone there, and fades across.
@@ -2731,7 +3969,12 @@ After its last reading a bus stays for one poll, then fades. The page draws the 
 at the video's exact size with `preserveDrawingBuffer` and no label fades.
 For each frame it sets the time, gives the buses' GeoJSON source their
 places, waits for the map's `idle`, and draws the map and the overlay
-(clock, date, buses per service, wordmark, map credit) onto one canvas. With the overlay
+(clock, date, buses per service, wordmark, map credit) onto one canvas. A
+frame the map hasn't finished in 5 s is taken as it is (a tile that never
+came), and a setup whose style never loads gives up after a minute rather
+than hold every later one. The map is its own, not the app's `map.js`,
+which has stores, sheets and live polling: this one is fixed to the video's
+size and never moves. With the overlay
 off (`--clean` in `render-timelapse.mjs`) only the map credit is drawn and the
 campus is centred, for footage cut into another video
 (`marketing/videos/`).
@@ -2850,6 +4093,16 @@ noticed (an alert) rather than read as an empty board. The same goes for
 `normalizeBuses()` with `busesProblem()`, and `normalizePublic()` in
 `lta.ts` with `publicProblem()`.
 
+The test doubles in `test/_stubs.mjs` and `test/_d1.mjs` copy the platform
+where code relies on it: a cached Response body reads once, the cache ignores
+a URL's `#fragment`, `waitUntil` promises are collected (`settle()` waits for
+them), a failed `fetch` throws a plain `Error` as workerd does, a hung fetch
+keeps the event loop open (`AbortSignal.timeout` doesn't on Node 22), a
+Durable Object `transaction` is all or nothing, `blockConcurrencyWhile` runs
+one call at a time, `deleteAll` leaves the alarm, D1 runs each `batch` whole
+and one at a time, and a statement counts changed rows only for UPDATE and
+DELETE … RETURNING. `dev-stub.mjs` runs the Worker on the same doubles.
+
 ## Prior art
 
 - **NextBus NUS** — third-party iOS app, actively maintained, moved to the
@@ -2875,8 +4128,16 @@ seconds inside fixed hours, behind a kill switch. Public buses come from
 LTA DataMall, one call per stop per 15 seconds, plus one stop per health
 check. By hand only, the two probe workflows (`scripts/probes/probe_buses.py`,
 `scripts/probes/probe_arrivals.py`) measure the feed: a few services or stops
-every 5 seconds at most, for 15 minutes at most, with their own guest
+every 5 seconds at most, for 10 (buses) or 15 (arrivals) minutes at most, with their own guest
 token. Use it in line with the
+every 5 seconds at most, for 15 minutes at most, with their own guest
+token (no `NEXTBUS_DEVICE_ID`, so each mints with a fresh random device id
+and a refusal can't touch the Worker's). Their report is the run's summary
+and one annotation, readable through the API without the logs. The
+`record buses` workflow, run by hand after a deploy, reads only terminus:
+it records `/api/buses` for a few minutes with a throwaway anonymous
+account (`scripts/probes/record_buses.mjs`), and a bus that switches sides
+of the road or jumps fails the run. Use it in line with the
 [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).
 Do not commit captured credentials, do not use NUSNET credentials with it, and
 do not raise the request rate.

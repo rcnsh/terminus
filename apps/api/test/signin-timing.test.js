@@ -1,8 +1,3 @@
-/**
- * The sign-in link's clock: one email per address a minute, and a link that
- * dies after 15 minutes. Straight against requestLink()/redeemLink() at
- * chosen times, since the HTTP tests all run at one frozen moment.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -17,8 +12,6 @@ const MIN = 60_000;
 function setup() {
   const email = makeEmail();
   const env = { ...makeEnv(), DB: makeD1(), EMAIL: email, EMAIL_FROM: 'terminus@example.test' };
-  // KV's own cooldown mark is a second guard and only eventually consistent
-  // across data centres; dropping it leaves D1's check, which must hold alone.
   const forgetKvCooldown = () => {
     for (const k of env.KV._map.keys()) if (k.startsWith('mail:')) env.KV._map.delete(k);
   };

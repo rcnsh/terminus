@@ -1,20 +1,3 @@
-/**
- * LTA DataMall client: the public buses at one stop.
- *
- * This file is the only code that reads DataMall's shape. The
- * feed is documented (the DataMall API user guide), but a feed is a feed:
- * read tolerantly here, and everything downstream sees a clean Arrival[].
- *
- * Each call names a stop by LTA's five-digit code and gets the next three
- * buses per service: an arrival time, whether it's from a bus on the road or
- * the timetable, and how full it is. The feed moves every 20 s and answers
- * in about half a second. It goes through the same edge cache as the shuttle
- * feed (TTL.arrivalsMs), so a stop costs one call per 15 s however many ask.
- *
- * Contains information from LTA DataMall, under the Singapore Open Data
- * Licence.
- */
-
 import type { Arrival, Crowd, Env, Graph, StopArrivals } from '../types.ts';
 import { MAX_ETA_S, TTL } from '../config.ts';
 import { UpstreamUnreachable, timedFetch } from '../http.ts';
@@ -28,9 +11,6 @@ export function ltaConfigured(env: Env): boolean {
   return Boolean(env.LTA_ACCOUNT_KEY);
 }
 
-/** DataMall refused us: the key is wrong or revoked (401), we're over the
- *  limit (429), or it is down (5xx). Any of them trips its breaker, as the
- *  same answers from NUS trip the shuttle feed's. */
 export class LtaRefused extends Error {
   readonly status: number;
   constructor(status: number) {
@@ -39,7 +19,6 @@ export class LtaRefused extends Error {
   }
 }
 
-/** SEA (seats), SDA (standing), LSD (limited standing), as the guide names them. */
 export function parseLoad(v: unknown): Crowd | null {
   const s = String(v ?? '')
     .trim()
@@ -47,12 +26,6 @@ export function parseLoad(v: unknown): Crowd | null {
   return s === 'SEA' ? 'low' : s === 'SDA' ? 'medium' : s === 'LSD' ? 'high' : null;
 }
 
-/**
- * Which route of the graph a bus on `serviceNo` at `stopCode` is running.
- * A loop or one-way service is one route named after it. A two-way service
- * is two (`151/1`, `151/2`), and only one of them calls at most stops; where
- * both do, the bus's destination (the whole route's last stop) tells.
- */
 export function routeFor(graph: Graph, stopCode: string, serviceNo: string, destinationCode: string | null): string | null {
   const here = routesHere(graph, stopCode, serviceNo);
   if (here.length === 1) return here[0][0];
@@ -66,16 +39,8 @@ function routesHere(graph: Graph, stopCode: string, serviceNo: string) {
 
 const SLOTS = ['NextBus', 'NextBus2', 'NextBus3'];
 
-/** A time with its zone, as DataMall sends it (+08:00). Without one,
- *  Date.parse reads it in the runtime's own zone, UTC on Workers: 8 h out. */
 const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/i;
 
-/**
- * One NextBus slot, by value: when the bus comes (epoch ms), `empty` for
- * the feed's empty slot (every field "", as at night), or `unreadable`:
- * not an object, no EstimatedArrival, or one that isn't a zoned time
- * within MAX_ETA_S.
- */
 function readSlot(bus: unknown, nowMs: number): number | 'empty' | 'unreadable' {
   if (!bus || typeof bus !== 'object' || Array.isArray(bus)) return 'unreadable';
   const v = (bus as Record<string, unknown>).EstimatedArrival;
@@ -85,28 +50,10 @@ function readSlot(bus: unknown, nowMs: number): number | 'empty' | 'unreadable' 
   return Number.isFinite(at) && at - nowMs <= MAX_ETA_S * 1000 ? at : 'unreadable';
 }
 
-/**
- * Whether DataMall says the time is from a bus on the road: Monitored 1.
- * Anything else (0, false, missing, a word) is the timetable, so a change
- * in how the field is written can only make a time less sure, never pass
- * a timetabled one off as live.
- */
 const monitored = (v: unknown) => v === 1 || v === true || (typeof v === 'string' && v.trim() === '1');
 
-/**
- * DataMall's BusArrival reply -> clean Arrival[] for the graph's stop `stopCode`.
- *
- * {BusStopCode, Services: [{ServiceNo, Operator, NextBus, NextBus2, NextBus3}]},
- * each bus {EstimatedArrival (ISO, +08:00), Monitored (1 live, 0 timetable),
- * Load, Latitude, Longitude, OriginCode, DestinationCode, VisitNumber, Type}.
- * A bus with no arrival time is an empty slot (at night there may be one bus
- * left). Services the graph doesn't know are dropped: this is the campus's
- * stops, and every service that calls at them is in the graph.
- */
 export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, nowMs: number): Arrival[] {
   const out: Arrival[] = [];
-  // Buses of a known service that match neither direction (a short working
-  // to somewhere else): left out rather than guessed, and logged.
   const unplaced = new Set<string>();
   const services = (raw as { Services?: unknown })?.Services;
   if (!Array.isArray(services)) return out;
@@ -124,7 +71,6 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
         if (routesHere(graph, stopCode, serviceNo).length) unplaced.add(`${serviceNo} to ${String(b.DestinationCode ?? '?')}`);
         continue;
       }
-      // Seconds from now. A bus a minute gone is gone; one just due is "now".
       const etaS = Math.round((at - nowMs) / 1000);
       if (etaS < -60) continue;
       out.push({
@@ -142,7 +88,6 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
   return out;
 }
 
-/** When each stop last logged buses left out, in this isolate: once an hour each. */
 const warnedAt = new Map<string, number>();
 const WARN_EVERY_MS = 3_600_000;
 function warnDue(stopCode: string, nowMs: number): boolean {
@@ -152,18 +97,6 @@ function warnDue(stopCode: string, nowMs: number): boolean {
   return true;
 }
 
-/**
- * Why a reply can't be read, or null, by the values normalizePublic() reads.
- * Read as it is, a reply whose fields moved says "no bus" for a service, or
- * every one: each public answer turns into a headway guess with nobody told.
- * So every service needs its NextBus, and every slot an EstimatedArrival
- * that is a time or the empty slot's "". Where both directions of a
- * service call, each bus needs its destination to say which it is running.
- *
- * Not problems: a service the graph doesn't know (it only knows the
- * campus's, and adds new ones weekly), a bus already gone, a destination
- * the graph doesn't end a route at (a short trip).
- */
 export function publicProblem(raw: unknown, stopCode: string, graph: Graph, nowMs: number): string | null {
   const services = (raw as { Services?: unknown })?.Services;
   if (!Array.isArray(services)) return 'no Services list';
@@ -186,7 +119,6 @@ export function publicProblem(raw: unknown, stopCode: string, graph: Graph, nowM
   return null;
 }
 
-/** One stop's public buses, straight from DataMall. `code` is the graph's stop; `ltaCode` LTA's for it. */
 export async function fetchPublicArrivals(
   env: Env,
   graph: Graph,
@@ -200,8 +132,6 @@ export async function fetchPublicArrivals(
   });
   if (res.status === 401 || res.status === 429 || res.status >= 500) throw new LtaRefused(res.status);
   if (!res.ok) throw new Error(`DataMall answered HTTP ${res.status}`);
-  // A gateway's maintenance page comes as HTML with a 200: named, as fms.ts
-  // names the feed's, rather than a bare SyntaxError from the parse.
   const text = await res.text();
   let body: unknown;
   try {
@@ -215,13 +145,6 @@ export async function fetchPublicArrivals(
   return { code, arrivals, fetchedAt: nowMs, stale: false, available: true };
 }
 
-/**
- * One stop's public buses through the edge cache (edgecache.ts): one call
- * per stop per TTL.arrivalsMs, stale served while a fresh one is fetched, a
- * failed stop not asked again for failMemoS. A refused key, a 429, a 5xx
- * or no answer at all (a timeout, a failed connection) quiets every stop
- * for breakerS: no other stop would fare better.
- */
 export async function getPublicArrivals(
   env: Env,
   ctx: ExecutionContext,
@@ -240,7 +163,6 @@ export async function getPublicArrivals(
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
-    // Nothing to share from the gate yet says nothing of the next call.
     memoes: (err) => !(err instanceof GateBusy),
     breaker: {
       key: `${cacheBase()}/breaker-public`,

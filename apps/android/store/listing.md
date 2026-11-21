@@ -4,6 +4,12 @@ What goes into Play Console. The images are in this folder. Redraw the icon
 and feature graphics with `swift apps/android/store/render.swift apps/android/store`:
 `feature-graphic.png` for the main listing, `feature-graphic-zh.png` for the
 Chinese translation (Play shows the main one in every language otherwise).
+The icon is drawn full square, since Play rounds the corners and masks
+nothing, so the mark is larger than on the launcher; its corners stay
+inside the central 80% circle, so the same drawing is the web app's
+maskable icon (`render.swift` with `apps/web/public/assets/icons` as a
+second argument). The feature graphic says terminus is unofficial, since
+NUS's name is on it in large type.
 The phone screenshots are in `screenshots/`: 1080×1920, each an emulator capture at the phone's own 1280×2856
 from `captures/` (taken against `apps/api/scripts/dev/dev-stub.mjs`: fake buses and a
 test account, no real data) in a phone under a headline, drawn with
@@ -154,7 +160,7 @@ How the captures were taken (8 November 2026, from 3.10.0): the dev stub started
 
 ## Tablet screenshots
 
-Store presence → Main store listing → Tablet assets, and the same in the zh-CN translation. Four slides in each slot, in this order, framed by `node apps/android/store/frame-large.mjs` (`tablet` or `fold` for one set) from the captures in `captures/tablet/` and `captures/fold/`, in the phone set's style: the device under a headline, the four one picture going from dawn to night.
+Store presence → Main store listing → Tablet assets, and the same in the zh-CN translation. Four slides in each slot, in this order, framed by `node apps/android/store/frame-large.mjs` (`tablet` or `fold` for one set) from the captures in `captures/tablet/` and `captures/fold/`, in the phone set's style: the device under a headline, the four one picture going from dawn to night. Each slide is laid out in CSS pixels at 3/4 of its size and drawn at a device scale factor of 4/3, so the captures keep their detail.
 
 - **10-inch:** `screenshots/tablet/` (and `zh/`), 2560×1440. Pixel Tablet emulator, landscape, its own 2560×1600 screen.
 - **7-inch:** `screenshots/fold/` (and `zh/`), 1440×2560. Pixel 10 Pro Fold emulator, open, its own 2076×2152 inner screen.

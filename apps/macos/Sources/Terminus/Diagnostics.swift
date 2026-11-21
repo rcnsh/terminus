@@ -1,11 +1,7 @@
 import Foundation
 import UserNotifications
 
-/// The app's last requests to our server, kept in memory for the developer
-/// menu (Settings, About) and the diagnostics it copies. Only the path is
-/// kept, never the query: /api/me/next is asked with where you are.
 enum RequestLog {
-    /// One request: `status` nil when no answer came (`failure` says why).
     struct Entry: Equatable {
         let at: Date
         let method: String
@@ -30,7 +26,6 @@ enum RequestLog {
         }
     }
 
-    /// Newest first.
     static var entries: [Entry] { lock.withLock { list } }
 
     static func clear() { lock.withLock { list = [] } }
@@ -39,17 +34,12 @@ enum RequestLog {
         String(path.prefix { $0 != "?" && $0 != "#" })
     }
 
-    /// A URLError by its code's name (`cannotFindHost`), anything else by its type.
     static func describe(_ error: Error) -> String {
         if let e = error as? URLError { return "URLError \(e.code.rawValue)" }
         return String(describing: type(of: error))
     }
 }
 
-/// What the developer menu shows about the app's state, and the text it
-/// copies for a bug report: the version and Mac, the server and its clock,
-/// what the reminders need, and the last answer. Nothing that identifies the
-/// account, and no place.
 enum Diagnostics {
     struct Facts {
         var version: String
@@ -62,7 +52,6 @@ enum Diagnostics {
         var skewS: TimeInterval
         var signedIn: Bool
         var anonymous: Bool
-        /// Nil: not asked yet (or no app bundle to ask for).
         var notifications: Bool?
         var leaveAlerts: Bool
         var nextReminder: Date?
@@ -71,11 +60,9 @@ enum Diagnostics {
         var lastError: String?
     }
 
-    /// [facts(_:notifications:nextReminder:)], with what macOS says about notifications.
     @MainActor static func facts(_ app: AppModel) async -> Facts {
         var notifications: Bool?
         var next: Date?
-        // Run as a bare binary (swift run, tests) there's no bundle to ask for.
         if Bundle.main.bundleURL.pathExtension == "app" {
             let center = UNUserNotificationCenter.current()
             let status = await center.notificationSettings().authorizationStatus
@@ -88,7 +75,6 @@ enum Diagnostics {
         return facts(app, notifications: notifications, nextReminder: next)
     }
 
-    /// What the app knows without asking macOS: shown at once, before the notifications' answer.
     @MainActor static func facts(_ app: AppModel, notifications: Bool?, nextReminder next: Date?) -> Facts {
         Facts(
             version: Api.version ?? "dev",
@@ -110,8 +96,6 @@ enum Diagnostics {
         )
     }
 
-    /// The text Copy diagnostics puts on the clipboard: English, for the
-    /// operator, with times in Singapore's.
     static func report(_ f: Facts, requests: [RequestLog.Entry], now: Date) -> String {
         var out = ""
         func line(_ k: String, _ v: String?) { out += "\(k): \(v ?? "-")\n" }
@@ -135,19 +119,15 @@ enum Diagnostics {
         return out
     }
 
-    /// One request as a line: when, what, where, and how it went.
     static func entry(_ r: RequestLog.Entry) -> String { "\(time(r.at)) \(r.method) \(r.path) \(r.host) \(outcome(r)) \(r.tookMs) ms" }
 
-    /// The status, or why there was none.
     static func outcome(_ r: RequestLog.Entry) -> String { r.status.map(String.init) ?? r.failure ?? "no answer" }
 
-    /// "+42 s" when this Mac is behind the server, "-42 s" ahead, "right" when it's within ServerClock's noise.
     static func skew(_ s: TimeInterval) -> String {
         let n = Int(s.rounded(.towardZero))
         return n == 0 ? "right" : "\(n > 0 ? "+" : "-")\(abs(n)) s"
     }
 
-    /// How long ago `at` was, as "3 min ago" (seconds under a minute, hours over an hour).
     static func ago(_ at: Date, now: Date) -> String? {
         let s = Swift.max(0, Int(now.timeIntervalSince(at)))
         if s < 60 { return "\(s) s ago" }

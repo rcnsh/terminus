@@ -13,11 +13,9 @@ import org.junit.Test
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.TestStrings
 
-/** What every widget says, from the server's golden answers (the API's tests pin them), and how it picks a layout. */
 class WidgetFaceTest {
     private val dir = listOf("../../../fixtures/answers", "../../fixtures/answers").map(::File).first { it.isDirectory }
 
-    /** Not /api/me/next answers. */
     private val notAnswers = setOf("day.json", "nearby-list.json", "setup.json")
 
     private fun answers(sub: String = ""): Map<String, NextAnswer> =
@@ -26,7 +24,6 @@ class WidgetFaceTest {
             .sortedBy { it.name }
             .associate { it.name to NextAnswer.parse(JSONObject(it.readText())) }
 
-    /** While the answer holds: just before it goes stale, or at the goldens' morning. */
     private fun fresh(a: NextAnswer): Long = a.card?.staleAtMs?.minus(1) ?: Instant.parse("2026-08-27T01:05:00Z").toEpochMilli()
 
     private fun face(a: NextAnswer, error: String? = null, now: Long = fresh(a)) =
@@ -42,7 +39,6 @@ class WidgetFaceTest {
                 val f = face(a)
                 assertTrue("$name: headline", f.headline.isNotBlank())
                 f.accent?.let { assertTrue("$name: accent '$it' in '${f.headline}'", f.headline.contains(it)) }
-                // A bus to catch: its badge on the ground, and how sure its time is.
                 val bus = a.card?.journey?.bus
                 if (bus != null && a.card.phase != "riding" && !isOld(a, fresh(a))) {
                     assertEquals("$name: leg", bus.svc, f.leg?.svc)
@@ -61,7 +57,6 @@ class WidgetFaceTest {
         assertEquals("~09:36", f.big)
         assertEquals("Leave by", f.bigLabel)
         assertFalse(f.bigFirst)
-        // The golden's time is an estimate: Estimate, never Live.
         assertEquals(false, f.pill?.good)
         assertEquals("R2", f.leg?.svc)
         assertTrue(f.leg!!.text.contains("PGP"))
@@ -130,7 +125,6 @@ class WidgetFaceTest {
 
     @Test
     fun shapeFollowsTheSize() {
-        // One row is a bar whatever its width; narrow is the square; tall and wide is your day.
         assertEquals(WidgetShape.BAR, WidgetShape.of(340f, 100f))
         assertEquals(WidgetShape.BAR, WidgetShape.of(180f, 110f))
         assertEquals(WidgetShape.SQUARE, WidgetShape.of(170f, 170f))
@@ -141,14 +135,13 @@ class WidgetFaceTest {
 
     @Test
     fun theSkyIsRedrawnWhenItsHourChanges() {
-        // Dawn at 6:30, day at 8:30, the golden hour at 4:30 PM, dusk at 6:45 PM, night at 7:40 PM.
         assertEquals(390, minutesToNextPhase(0))
         assertEquals(1, minutesToNextPhase(389))
         assertEquals(120, minutesToNextPhase(390))
         assertEquals(55, minutesToNextPhase(1125))
         assertEquals(24 * 60 - 1180 + 390, minutesToNextPhase(1180))
         val sgt = ZoneId.of("Asia/Singapore")
-        val at = Instant.parse("2026-10-08T22:29:30Z").toEpochMilli() // 6:29:30 AM in Singapore
+        val at = Instant.parse("2026-10-08T22:29:30Z").toEpochMilli()
         assertEquals(Instant.parse("2026-10-08T22:30:00Z").toEpochMilli(), nextPhaseAt(at, sgt))
     }
 }

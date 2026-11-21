@@ -15,9 +15,6 @@ android {
         versionName = "3.12.0"
     }
 
-    // Two apps from one source: stable (sh.rcn.terminus, Google Play and the
-    // website) and beta (sh.rcn.terminus.beta, beta.terminus.run). They
-    // install side by side; each talks to its own site, with its own accounts.
     flavorDimensions += "channel"
     productFlavors {
         create("stable") {
@@ -28,18 +25,11 @@ android {
             dimension = "channel"
             applicationIdSuffix = ".beta"
             site("https://beta.terminus.run", "sh.rcn.terminus.beta", "terminus beta")
-            // Its own version line, from scripts/release/release-beta.sh: the next
-            // stable version's pre-release (2.0.1-beta.3), numbered by commit.
             providers.gradleProperty("betaVersion").orNull?.let { versionName = it }
             providers.gradleProperty("betaCode").orNull?.let { versionCode = it.toInt() }
         }
     }
 
-    // The release key lives outside the repo: its path and passwords come
-    // from ~/.gradle/gradle.properties (TERMINUS_*). Without them (CI, or
-    // anyone else building from source) release builds come out unsigned
-    // (app-*-release-unsigned.apk), never signed with the debug key, so a
-    // build that missed the key can't pass for a release.
     val keystore = providers.gradleProperty("TERMINUS_KEYSTORE").orNull
     signingConfigs {
         if (keystore != null) {
@@ -60,16 +50,9 @@ android {
             signingConfig = signingConfigs.findByName("release")
         }
     }
-    // Chinese can be chosen in the app, whatever the phone's language,
-    // so Play must not leave it out of an English phone's download.
     bundle {
         language { enableSplit = false }
     }
-    // One APK per CPU type for the website and GitHub (MapLibre's native code
-    // is about 4.5 MB per type, compressed); Play builds from the bundle and
-    // splits by itself. MapLibre ships arm64, 32-bit ARM and x86_64 (emulators).
-    // Off when building the bundle: AGP refuses a bundle while splits are on,
-    // so release.sh builds the APKs and the bundle in separate runs.
     val buildingBundle = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
     splits {
         abi {
@@ -79,7 +62,6 @@ android {
             isUniversalApk = false
         }
     }
-    // Native code compressed in the APK: a third the size, unpacked on install.
     packaging {
         jniLibs { useLegacyPackaging = true }
     }
@@ -94,11 +76,6 @@ android {
     }
 }
 
-// `-PapiBase` points a debug build's API elsewhere: `./gradlew
-// -PapiBase=http://localhost:8787 installStableDebug` plus `adb reverse
-// tcp:8787 tcp:8787` uses the dev stub. Debug builds only, so a stray
-// property (say, in ~/.gradle/gradle.properties) can never ship a release
-// that talks to a laptop.
 val apiBase = providers.gradleProperty("apiBase").orNull
 
 androidComponents {
@@ -112,13 +89,6 @@ androidComponents {
     }
 }
 
-/**
- * One channel's site and name. SITE is the address people see, the one the app's text names, and the one requests go to (API_BASE) and
- * links open (LINK_BASE): the project's own domain, which goes with it if someone else takes it over. In a debug build given `-PapiBase`
- * (above), requests go there instead. SERVERS are the site's addresses the developer menu offers too (Servers.kt): only SITE, since the old
- * address (terminus.rcn.sh) is the owner's and doesn't go with the project. A second one would be the backup a request tries when the
- * chosen address can't be reached at all.
- */
 fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String) {
     buildConfigField("String", "SITE", "\"$site\"")
     buildConfigField("String", "API_BASE", "\"$site\"")
@@ -126,9 +96,6 @@ fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packag
     buildConfigField("String", "SERVERS", "\"$site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
     resValue("string", "app_name", name)
-    // Push: this package's Firebase app from google-services.json (not in
-    // git; see apps/android/README.md). Without it the fields are empty and
-    // the app keeps its own alarms and refresh, as on a phone without Play services.
     for ((field, value) in firebaseConfig(project.file("google-services.json"), packageName)) buildConfigField(
         "String",
         field,
@@ -136,7 +103,6 @@ fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packag
     )
 }
 
-/** FIREBASE_* values for BuildConfig, empty strings when there's no config file or no app for the package in it. */
 fun firebaseConfig(json: File, packageName: String): Map<String, String> {
     val empty = mapOf("FIREBASE_APP_ID" to "", "FIREBASE_API_KEY" to "", "FIREBASE_PROJECT_ID" to "", "FIREBASE_SENDER_ID" to "")
     if (!json.exists()) return empty
@@ -154,32 +120,19 @@ fun firebaseConfig(json: File, packageName: String): Map<String, String> {
                 "FIREBASE_SENDER_ID" to project["project_number"],
             )
             .mapValues { it.value?.toString().orEmpty() }
-    // A field missing (a malformed file) leaves push off, as with no file,
-    // rather than building in the word "null" as if it were a value.
     return if (values.values.any { it.isEmpty() }) empty else values
 }
 
-// Every configuration's resolved versions are pinned in gradle.lockfile, so
-// a dependency can't change under a build without a diff to review. After
-// changing a version, write it again with the commands in the README.
 dependencyLocking {
     lockAllConfigurations()
 }
 
-// The unit tests read files at run time: the API's golden answers and the
-// other shared cases (fixtures/ at the repo root), the strings, and the
-// Kotlin sources' text. Declared, so a change to any of them runs the tests
-// again rather than taking a cached pass.
 tasks.withType<Test>().configureEach {
     inputs.dir(rootDir.resolve("../../fixtures")).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("sharedFixtures")
     inputs.dir("src/main/res").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("resources")
     inputs.dir("src/main/java").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("sources")
 }
 
-// kotlin-stdlib-common is an empty module since Kotlin 1.9.20 (kotlin-stdlib
-// replaces it), and Gradle keeps it in the graph only while the lock pins
-// kotlin-stdlib: writing the locks drops it, and the next build then refuses
-// the lock it just wrote. Left out everywhere, both agree.
 configurations.configureEach {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-common")
 }
@@ -206,9 +159,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 
-    // Lint runs from its own classpath, which brings in older versions of
-    // these, each with a published advisory; as for the plugins' classpath in
-    // ../build.gradle.kts, lint runs with the fixed ones.
     constraints {
         "androidLintTool"("org.bouncycastle:bcprov-jdk18on:1.86") {
             because("GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-c3fc-8qff-9hwx")
@@ -220,9 +170,6 @@ dependencies {
     }
 }
 
-// Resolves every configuration of the app, for `--write-locks` and
-// `--write-verification-metadata` (see the README): the build tasks alone
-// leave many unresolved (the other variants', the Android tests').
 tasks.register("resolveAll") {
     description = "Resolves every resolvable configuration, to write gradle.lockfile and verification-metadata.xml."
     notCompatibleWithConfigurationCache("reads the project's configurations when it runs")
@@ -235,18 +182,11 @@ tasks.register("resolveAll") {
                         org.gradle.api.artifacts.result.UnresolvedDependencyResult
                     >()
                 check(failed.isEmpty()) { "${configuration.name}: ${failed.joinToString { "${it.attempted}: ${it.failure.message}" }}" }
-                // The files too, so their checksums are written; lenient because
-                // some configurations hold more than one kind of artefact.
                 configuration.incoming.artifactView { lenient(true) }.files.files
             }
     }
 }
 
-// Kotlin formatting: ktfmt's kotlinlang style, at the line width in
-// ../.editorconfig. Run from its Maven Central jar rather than through the
-// ktfmt Gradle plugin, which is published only on the Gradle Plugin Portal
-// (settings.gradle.kts doesn't use it). Covers every .kt and .kts file under
-// apps/android.
 val ktfmt = configurations.create("ktfmt")
 
 dependencies {

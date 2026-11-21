@@ -2,8 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-// The account page's search ranking, the reference; the Android and Mac apps
-// follow its rules, written out in fixtures/search.json with the cases below.
 import { busesTabIndex, grouped, rank, results, samePlace, score } from '../public/account/search.js';
 
 const FIXTURE = JSON.parse(fs.readFileSync(new URL('../../../fixtures/search.json', import.meta.url), 'utf8'));
@@ -54,7 +52,6 @@ test('the Buses tab: a service before a stop that matches as well', () => {
 });
 
 test('the Buses tab: stops by their long names, found by those, their short names and codes', () => {
-  // As app/buses.js lists them: the long name as the label, the short name as an alias.
   const stops = [
     { code: 'CLB', label: 'Central Library', stopCode: 'CLB', kind: 'stop', aliases: ['clb'] },
     { code: 'YIH', label: 'Yusof Ishak House', stopCode: 'YIH', kind: 'stop', aliases: ['yih'] },
@@ -81,11 +78,9 @@ test('the box lists each kind once: groups in the order of their best result, ra
     { code: 'OPP-COM', label: 'Opp COM', stopCode: 'OPP-COM', kind: 'stop' },
     { code: 'COM2', label: 'Computing 2', stopCode: 'COM3', kind: 'building' },
   ];
-  // Ranked alone, the stops come either side of the buildings.
   const ranked = rank(index, 'com');
   assert.deepEqual(ids(ranked), ['stop:COM3', 'building:COM1', 'building:COM2', 'stop:OPP-COM']);
   assert.deepEqual(ids(grouped(ranked)), ['stop:COM3', 'stop:OPP-COM', 'building:COM1', 'building:COM2']);
-  // A group's place is its best result's; kinds this page doesn't know are one group.
   const mixed = [
     { kind: 'building', code: 'A' },
     { kind: 'stop', code: 'B' },
@@ -95,7 +90,6 @@ test('the box lists each kind once: groups in the order of their best result, ra
     { kind: 'toString', code: 'F' },
   ];
   assert.deepEqual(ids(grouped(mixed)), ['building:A', 'building:D', 'stop:B', 'shop:C', 'cafe:E', 'toString:F']);
-  // Pinned results lead as their own group.
   const pinned = [{ code: 'T1', label: 'COM2 (CS2030)', stopCode: 'COM3', kind: 'timetable' }];
   const got = ids(grouped(results('com', { source: () => index, suggestions: () => [], pinned: () => pinned })));
   assert.deepEqual(got, ['timetable:T1', 'stop:COM3', 'stop:OPP-COM', 'building:COM1', 'building:COM2']);
@@ -110,10 +104,8 @@ test('a pinned timetable row hides only the stop or food court it is, not a buil
   const row = { code: 'COM3', label: 'COM3', stopCode: 'COM3', kind: 'timetable', detail: 'CS2030' };
   const got = ids(results('com3', { source: () => index, suggestions: () => [], pinned: () => [row] }));
   assert.deepEqual(got, ['timetable:COM3', 'building:COM3']);
-  // A food court a class goes to is that row too.
   const food = { code: 'TECHNO', label: 'Techno Edge', stopCode: 'TECHNO', kind: 'timetable' };
   assert.deepEqual(ids(results('techno', { source: () => index, suggestions: () => [], pinned: () => [food] })), ['timetable:TECHNO']);
-  // Otherwise the same result is kind and code together.
   assert.ok(samePlace({ kind: 'stop', code: 'COM3' }, { kind: 'stop', code: 'COM3' }));
   assert.ok(!samePlace({ kind: 'stop', code: 'COM3' }, { kind: 'building', code: 'COM3' }));
   assert.ok(!samePlace({ kind: 'timetable', code: 'COM3' }, { kind: 'room', code: 'COM3' }));
@@ -134,12 +126,10 @@ test('fixtures/search.json: the Buses tab, its index from /campus and its result
   const built = busesTabIndex(campus);
   assert.deepEqual(ids(built), index);
   const services = built.filter((d) => d.kind === 'service');
-  // Both kinds are in the fixture: an empty box, and a query cut at the limit.
   assert.ok(queries.some(({ q }) => !q.trim()));
   assert.ok(queries.some(({ expect }) => expect.length === limit));
   for (const { q, expect } of queries) {
     const got = ids(results(q, { source: () => built, suggestions: () => services }));
-    // Typed: at most `limit`. Empty: the suggestions, every service, however many.
     if (q.trim()) assert.ok(got.length <= limit, `"${q}": at most ${limit}`);
     else assert.deepEqual(got, ids(services), `"${q}": every service`);
     assert.deepEqual(got, expect, `"${q}"`);
@@ -164,6 +154,5 @@ test('the fixture covers what the other apps need to get right', () => {
     'an unknown kind',
   );
   assert.ok(index.some((d) => d.code.includes('_')) && index.some((d) => d.code.includes('-')) && index.some((d) => / {2}/.test(d.label)));
-  // Every query has its reason, so a port that differs can tell which rule.
   for (const q of [...queries, ...FIXTURE.busesTab.queries]) assert.ok(q.why, `"${q.q}" says why`);
 });

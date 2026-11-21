@@ -1,11 +1,4 @@
 #!/bin/sh
-# Runs the UI tests against a dev stub of their own, started here and
-# stopped after (by its PID: other stubs on the Mac are left alone).
-#   scripts/ui-tests.sh [simulator-udid] [suite, e.g. NowUITests]
-# With no simulator, the booted one. Screenshots go to build/shots, to look
-# at; the results to build/ui-tests.xcresult. The stub listens on PORT
-# (8799 unless set) and logs to build/stub.log, where the sign-in tests read
-# their codes. Each suite sets the stub's clock and hours it needs itself.
 set -eu
 cd "$(dirname "$0")/.."
 SIM=${1:-booted}
@@ -35,7 +28,6 @@ TEST_RUNNER_TERMINUS_SHOTS="$PWD/build/shots" \
     -only-testing:"$ONLY" -collect-test-diagnostics never \
     -resultBundlePath build/ui-tests.xcresult -quiet || STATUS=$?
 
-# Each test, and why any failed.
 xcrun xcresulttool get test-results tests --path build/ui-tests.xcresult | python3 -I -c '
 import json, sys
 count = {}

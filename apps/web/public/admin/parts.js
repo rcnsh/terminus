@@ -1,7 +1,3 @@
-// The dashboard's pieces besides charts: how numbers and times are written,
-// tiles, sortable tables, and the small controls (segmented switches, filter
-// chips, a search box). English only, as the dashboard is.
-
 import { html, useEffect, useMemo, useRef, useState } from '/assets/ui.js';
 import { Meter, Spark } from '/admin/charts.js';
 
@@ -9,19 +5,14 @@ export const TZ = { timeZone: 'Asia/Singapore' };
 export const DAY = 86_400_000;
 
 export const fmt = (n) => Number(n ?? 0).toLocaleString('en-SG');
-/** "40%" of a share from 0 to 1; [digits] after the point. */
 export const pct = (x, digits = 0) => (x == null || Number.isNaN(x) ? '—' : `${(x * 100).toFixed(digits)}%`);
-/** [n] as a share of [d], or null without a [d]. */
 export const share = (n, d) => (d ? n / d : null);
 export const when = (iso) =>
   new Date(iso).toLocaleString('en-SG', { ...TZ, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-/** "Wed 22 Oct" for a YYYY-MM-DD day. */
 export const dayLong = (d) =>
   new Date(`${d}T12:00:00+08:00`).toLocaleDateString('en-SG', { ...TZ, weekday: 'short', day: 'numeric', month: 'short' });
-/** "22 Oct". */
 export const dayShort = (d) => new Date(`${d}T12:00:00+08:00`).toLocaleDateString('en-SG', { ...TZ, day: 'numeric', month: 'short' });
 
-/** "2 d 3 h", "14 min", "40 s": how long [ms] is, to its two largest units. */
 export function dur(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${s} s`;
@@ -32,20 +23,17 @@ export function dur(ms) {
   const d = Math.floor(h / 24);
   return `${d} d${h % 24 ? ` ${h % 24} h` : ''}`;
 }
-/** "3 min ago" for a time in the past. */
 export const ago = (iso, now = Date.now()) => {
   const ms = now - new Date(iso).getTime();
   return ms < 45_000 ? 'just now' : `${dur(ms)} ago`;
 };
 
-/** Every Singapore day from [days] ago to today, so quiet days show as gaps. */
 export function lastDays(days, nowMs = Date.now()) {
   const out = [];
   for (let i = days - 1; i >= 0; i--) out.push(new Date(nowMs - i * DAY).toLocaleDateString('en-CA', TZ));
   return out;
 }
 
-/** "+42 s" / "−1 min 5 s": how much later than said the bus came. */
 export const late = (s) => {
   if (s == null) return '—';
   const a = Math.abs(s);
@@ -63,15 +51,12 @@ export const PLATFORMS = {
 };
 export const platform = (p) => PLATFORMS[p] ?? p;
 
-/** A series colour, by its place in a fixed order (admin.css). */
 export const S = (i) => `var(--s${(i % 5) + 1})`;
 
 const still = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Whether the dashboard is opening (admin.js): only then do new numbers count up from 0. */
 export const motion = { intro: false };
 
-/** [target], counted up to from where it was over half a second. */
 export function useCount(target) {
   const [v, setV] = useState(target);
   const from = useRef(motion.intro ? 0 : target);
@@ -100,10 +85,6 @@ export function useCount(target) {
   return v;
 }
 
-/**
- * A number with what it is, and optionally a line under it, a change since
- * an earlier period (with whether up is good), a trend and a place it links to.
- */
 export function Tile({ n, show = fmt, k, sub, delta, upGood = true, spark, sparkColor, href, tone }) {
   const counted = typeof n === 'number';
   const v = useCount(counted ? n : 0);
@@ -122,24 +103,12 @@ export function Tile({ n, show = fmt, k, sub, delta, upGood = true, spark, spark
   return href ? html`<a class="tile link" href=${href}>${body}</a>` : html`<div class="tile">${body}</div>`;
 }
 
-/**
- * A row of tiles, in as many columns as fill its rows evenly when there's
- * room (admin.css), else half as many. An odd count past six can't fill
- * every row; it leaves one short.
- */
 export function Tiles({ children }) {
   const n = [children].flat(Infinity).filter(Boolean).length;
   const cols = n <= 6 ? n : Math.ceil(n / 2);
   return html`<div class="tiles" data-cols=${cols} data-alt=${cols % 2 ? null : cols / 2}>${children}</div>`;
 }
 
-/**
- * A table that sorts by any column (a click on its heading; again to turn it
- * round). [cols]: { key, label, num, fmt, sort, cell, meter }. A meter column
- * draws a bar against the column's largest value, in [meter]'s colour when
- * it's one, or the row's when it's a function of the row. Past [limit] rows, a button
- * shows the rest.
- */
 export function Table({ cols, rows, sort: initial, empty = 'None.', limit = 0, onRow, isActive, caption }) {
   const [sort, setSort] = useState(initial ?? null);
   const [all, setAll] = useState(false);
@@ -216,7 +185,6 @@ export function Table({ cols, rows, sort: initial, empty = 'None.', limit = 0, o
   `;
 }
 
-/** A row of mutually exclusive choices ([options]: [value, label]). */
 export function Segmented({ value, options, onChange, label }) {
   return html`<div class="seg" role="radiogroup" aria-label=${label}>
     ${options.map(
@@ -226,7 +194,6 @@ export function Segmented({ value, options, onChange, label }) {
   </div>`;
 }
 
-/** Filter chips, each with its count ([options]: [value, label, count]); '' is all. */
 export function Chips({ value, options, onChange, label }) {
   return html`<div class="chips" role="radiogroup" aria-label=${label}>
     ${options.map(
@@ -241,7 +208,6 @@ export function Chips({ value, options, onChange, label }) {
   </div>`;
 }
 
-/** A search box; "/" anywhere on the page jumps to it (admin.js). */
 export function Search({ value, onChange, placeholder }) {
   return html`<label class="search">
     <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5" /><path d="M13 13l4 4" /></svg>
@@ -250,7 +216,6 @@ export function Search({ value, onChange, placeholder }) {
   </label>`;
 }
 
-/** A card with a heading, an optional line under it, and controls on the right. */
 export const Card = ({ title, sub, tools, children, wide, id }) => html`
   <section class=${`card panel ${wide ? 'wide' : ''}`} id=${id}>
     ${
@@ -264,10 +229,8 @@ export const Card = ({ title, sub, tools, children, wide, id }) => html`
   </section>
 `;
 
-/** What to do when a part has nothing to show, in a box rather than a blank. */
 export const Empty = ({ children }) => html`<div class="empty">${children}</div>`;
 
-/** Copies [text], saying so on the button for a moment. */
 export function Copy({ text, label = 'Copy' }) {
   const [done, setDone] = useState(false);
   return html`<button
@@ -279,9 +242,7 @@ export function Copy({ text, label = 'Copy' }) {
         await navigator.clipboard.writeText(text);
         setDone(true);
         setTimeout(() => setDone(false), 1400);
-      } catch {
-        // Without clipboard access the text is still there to select.
-      }
+      } catch {}
     }}
   >
     ${done ? 'Copied' : label}

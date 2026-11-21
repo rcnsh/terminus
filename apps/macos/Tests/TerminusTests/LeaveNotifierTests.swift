@@ -3,7 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// What the leave reminders do with each plan: `LeaveNotifier.step`.
 private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
 private func iso(_ d: Date) -> String { ISO8601DateFormatter().string(from: d) }
@@ -29,7 +28,6 @@ private func plan(
         step == .schedule(clearFirst: false, trip: "4:600:UTOWN", soon: now.addingTimeInterval(300), leaveAt: now.addingTimeInterval(600)))
 }
 
-/// The key `update` keeps for the heads-up: the trip and the day it leaves, in campus time.
 private func key(_ trip: String = "4:600:UTOWN", leaveIn: TimeInterval) -> String {
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = TimeZone(identifier: "Asia/Singapore")!
@@ -39,12 +37,10 @@ private func key(_ trip: String = "4:600:UTOWN", leaveIn: TimeInterval) -> Strin
 
 @Test func theHeadsUpIsKeptByTheTripAndItsDay() throws {
     #expect(LeaveNotifier.soonKey(try plan(leaveIn: 600), now: now) == key(leaveIn: 600))
-    // 1_790_000_000 is 2026-09-21 22:13 in Singapore: two hours on is the next day there.
     #expect(LeaveNotifier.soonKey(try plan(leaveIn: 7_200), now: now) == "4:600:UTOWN@2026-9-22")
 }
 
 @Test func aLaterLeaveByAfterTheHeadsUpDoesNotBringItBack() throws {
-    // The heads-up went a minute ago; the buses moved and so did the leave-by.
     let gone = now.timeIntervalSince1970 - 60
     let step = LeaveNotifier.step(try plan(leaveIn: 900), soonTrip: key(leaveIn: 900), soonAt: gone, now: now)
     #expect(step == .schedule(clearFirst: false, trip: "4:600:UTOWN", soon: nil, leaveAt: now.addingTimeInterval(900)))
@@ -58,14 +54,12 @@ private func key(_ trip: String = "4:600:UTOWN", leaveIn: TimeInterval) -> Strin
 }
 
 @Test func aWeeklyClassGetsItsHeadsUpAgainNextWeek() throws {
-    // The same class last week: its heads-up went then, and this week's still comes.
     let week: TimeInterval = 7 * 86_400
     let lastWeek = key(leaveIn: 600 - week)
     #expect(lastWeek != key(leaveIn: 600))
     let step = LeaveNotifier.step(try plan(leaveIn: 600), soonTrip: lastWeek, soonAt: now.timeIntervalSince1970 - week, now: now)
     #expect(
         step == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: now.addingTimeInterval(300), leaveAt: now.addingTimeInterval(600)))
-    // A key kept by the trip alone, as an older version kept it: not taken for today's.
     let before = LeaveNotifier.step(try plan(leaveIn: 600), soonTrip: "4:600:UTOWN", soonAt: now.timeIntervalSince1970 - week, now: now)
     #expect(
         before == .schedule(clearFirst: true, trip: "4:600:UTOWN", soon: now.addingTimeInterval(300), leaveAt: now.addingTimeInterval(600)))
@@ -80,13 +74,11 @@ private func key(_ trip: String = "4:600:UTOWN", leaveIn: TimeInterval) -> Strin
 
 @Test func phasesAndMissingRemindersEndThem() throws {
     #expect(LeaveNotifier.step(try plan(leaveIn: -60, phase: "heading"), soonTrip: nil, soonAt: 0, now: now) == .heading)
-    // The bus gone and nothing known: "Leave now" goes too, as you may be on it.
     #expect(LeaveNotifier.step(try plan(leaveIn: -60, phase: "heading", gone: true), soonTrip: nil, soonAt: 0, now: now) == .over)
     for phase in ["waiting", "riding", "missed", "arrived", "skipped"] {
         #expect(LeaveNotifier.step(try plan(leaveIn: 600, phase: phase), soonTrip: nil, soonAt: 0, now: now) == .over, "\(phase)")
     }
     #expect(LeaveNotifier.step(try plan(leaveIn: 600, remind: false), soonTrip: nil, soonAt: 0, now: now) == .clear)
     #expect(LeaveNotifier.step(try plan(leaveIn: 600, reminder: false), soonTrip: nil, soonAt: 0, now: now) == .clear)
-    // The leave-by has passed.
     #expect(LeaveNotifier.step(try plan(leaveIn: 0), soonTrip: nil, soonAt: 0, now: now) == .clear)
 }

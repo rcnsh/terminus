@@ -1,10 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// The web pages' calls to the API (apps/web/public/account/dom.js): a call
-// that never answers, or a page that isn't the API's (a captive portal),
-// must fail, so the page says it couldn't update rather than waiting or
-// taking it for an answer.
 import { api, quietMs, send, sentences } from '../public/account/dom.js';
 
 globalThis.window ??= {};
@@ -19,7 +15,6 @@ const reply =
     Promise.resolve(new Response(body, { status: 200, ...init }));
 
 test('a call with no answer gives up after its time, with a sentence to show', async () => {
-  // Black-holed Wi-Fi: nothing comes back until the call is aborted.
   globalThis.fetch = (_, init) => new Promise((_, fail) => init.signal.addEventListener('abort', () => fail(init.signal.reason)));
   const started = Date.now();
   await assert.rejects(send('/api/me/next', { timeoutMs: 50 }), { message: "Couldn't reach terminus. Check your connection." });
@@ -50,7 +45,6 @@ test('JSON and an empty success still come through; an error keeps the server wo
 });
 
 test('a 200 whose body stops part way is a failure, not an empty answer', async () => {
-  // Headers arrive, then the body stalls until the call's time runs out.
   globalThis.fetch = (_, init) => {
     const body = new ReadableStream({
       start(c) {
@@ -64,8 +58,6 @@ test('a 200 whose body stops part way is a failure, not an empty answer', async 
 });
 
 test('a write waits longer than a read before giving up', async () => {
-  // The time each call is given, by default: a write must still be running
-  // at 25 s, past a read's 20 s.
   const asked = [];
   const real = AbortSignal.timeout;
   AbortSignal.timeout = (ms) => (asked.push(ms), new AbortController().signal);
@@ -135,8 +127,6 @@ test('an error with no words from the server is said plainly, not as an HTTP cod
   await assert.rejects(api('/api/me'), { message: "Couldn't reach terminus. Try again in a moment.", status: 502 });
 });
 
-// Before the 429 test below, which leaves the app quiet for a minute. The
-// clock starts at 0 here, so the wait this sets is long over afterwards.
 test('a 503 with a Retry-After quiets its scope for that long, as a 429 does; one without does not', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 0 });
   const sent = [];

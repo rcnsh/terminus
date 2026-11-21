@@ -1,8 +1,3 @@
-// The page a pairing QR code opens on a phone without terminus: the code,
-// as the account page showed it, on six split-flap tiles like a departure
-// board's (dark in light and dark, as the boards are), under the livery as
-// on sign-in. Only ever displayed, never sent anywhere.
-
 import { html, render } from '/assets/ui.js';
 import { Livery } from '/account/livery.js';
 

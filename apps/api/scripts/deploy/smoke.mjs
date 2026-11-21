@@ -1,14 +1,4 @@
 #!/usr/bin/env node
-// Checks a deployed Worker answers: `node scripts/deploy/smoke.mjs <base-url> [--account]`.
-// Runs at the end of `deploy:beta` (package.json); run it by hand after a
-// production deploy. Always: /api/health and the main pages. With
-// --account: a throwaway anonymous account (deleted after 60 days unused)
-// asks for a trip, steps to the later bus and checks the step is still
-// there on the next two answers, through the Trip object. Use --account on
-// the beta, where the accounts are test ones.
-//
-// A feed outage is a warning, not a failure: the deploy can be fine while
-// NUS is down, and the account check is skipped when no bus runs.
 
 const [base, ...flags] = process.argv.slice(2);
 if (!base || !/^https?:\/\//.test(base)) {
@@ -16,9 +6,8 @@ if (!base || !/^https?:\/\//.test(base)) {
   process.exit(2);
 }
 const account = flags.includes('--account');
-// PGP to UTown: a trip with buses most of the day.
-const AT = { lat: 1.2915, lon: 103.7805 };
-const ASK = `lat=${AT.lat}&lon=${AT.lon}&to=UTOWN`;
+const AT_PGP = { lat: 1.2915, lon: 103.7805 };
+const ASK = `lat=${AT_PGP.lat}&lon=${AT_PGP.lon}&to=UTOWN`;
 
 const failures = [];
 const fail = (what) => {
@@ -66,7 +55,7 @@ if (account) {
       const stepped = await call(`/api/me/step?${ASK}`, {
         method: 'POST',
         token,
-        body: { trip: first.json.card.step.trip, to: later, dir: 'later', ...AT },
+        body: { trip: first.json.card.step.trip, to: later, dir: 'later', ...AT_PGP },
       });
       if (stepped.status !== 200) fail(`/api/me/step is ${stepped.status}`);
       else

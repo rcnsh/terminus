@@ -3,7 +3,6 @@ package sh.rcn.terminus.ui
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The sky over Now by the hour, at the web's hours (apps/web/test/daylight.test.js). */
 class SkyTest {
     private fun at(hhmm: String) = hhmm.split(":").let { (h, m) -> phaseAt(h.toInt() * 60 + m.toInt()) }
 
@@ -45,7 +44,6 @@ class SkyTest {
 
     @Test
     fun theSunIsOnlyLowBehindTheHillsNeverOverTheWords() {
-        // Rising at dawn, low in the golden hour, setting at dusk; none by day or at night, on either theme.
         for (dark in listOf(false, true)) {
             val low = Phase.entries.filter { palette(it, dark).sun != null }
             assertEquals(listOf(Phase.DAWN, Phase.GOLDEN, Phase.DUSK), low)
@@ -54,13 +52,11 @@ class SkyTest {
 
     @Test
     fun theSkyHasDepthAsNowScrolls() {
-        // sky, far, fade: the web's cases (daylight.test.js).
         fun at(s: Float) = parallax(s).let { listOf(it.sky, it.far, it.fade).map { n -> Math.round(n * 100) / 100f } }
         assertEquals(listOf(0f, 0f, 1f), at(0f))
         assertEquals(listOf(25f, 6f, 0.69f), at(50f))
         assertEquals(listOf(75f, 18f, 0.06f), at(150f))
         assertEquals(listOf(200f, 18f, 0f), at(400f))
-        // Pulled past the top (a bounce): as at the top.
         assertEquals(at(0f), at(-20f))
     }
 }
