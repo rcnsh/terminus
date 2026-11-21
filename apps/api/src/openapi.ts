@@ -1,6 +1,7 @@
 import { RETRY_AFTER, errorResponse, slowDown } from './openapi/parts.ts';
 import { paths } from './openapi/paths.ts';
 import { components } from './openapi/components.ts';
+import { Lru } from './memo.ts';
 
 export { docsPage, docsPageFor } from './openapi/docs.ts';
 
@@ -126,13 +127,11 @@ function withUpdateRequired(spec: Record<string, unknown>): Record<string, unkno
   return spec;
 }
 
-const specMemo = new Map<string, string>();
-const SPEC_ORIGINS_KEPT = 8;
+const specMemo = new Lru<string, string>(8);
 
 export function openApiJson(origin: string): string {
   let text = specMemo.get(origin);
   if (text === undefined) {
-    if (specMemo.size >= SPEC_ORIGINS_KEPT) specMemo.clear();
     text = JSON.stringify(openApiSpec(origin));
     specMemo.set(origin, text);
   }

@@ -4,6 +4,7 @@ import { type Target, bestLeg, candidateStops, endWalkFromS, indexGraph, legRide
 import { headwayFor } from './hours.ts';
 import { isPublic } from './public.ts';
 import { stopFootM } from './walk.ts';
+import { Lru, perScope } from '../memo.ts';
 
 export interface TransferRoute {
   origin: Stop;
@@ -26,14 +27,12 @@ interface Route {
   leg2: Leg;
 }
 
-const MEMO_MAX = 500;
-const memo = new WeakMap<Graph, Map<string, Route[]>>();
+const routesFor = perScope(() => new Lru<string, Route[]>(500));
 
 const halfWay = (graph: Graph, svc: string) => headwayFor(graph, svc) / 2;
 
 export function transferRoutes(graph: Graph, origin: Stop, targets: Target[]): Route[] {
-  let byKey = memo.get(graph);
-  if (!byKey) memo.set(graph, (byKey = new Map()));
+  const byKey = routesFor(graph);
   const key = `${origin.code}|${targets.map((t) => `${t.code}:${t.crossS}:${t.costS ?? 0}`).join(',')}`;
   const hit = byKey.get(key);
   if (hit) return hit;
@@ -73,7 +72,6 @@ export function transferRoutes(graph: Graph, origin: Stop, targets: Target[]): R
     }
   }
   const out = [...best.values()].sort((a, b) => a.s - b.s).map((b) => b.route);
-  if (byKey.size >= MEMO_MAX) byKey.clear();
   byKey.set(key, out);
   return out;
 }

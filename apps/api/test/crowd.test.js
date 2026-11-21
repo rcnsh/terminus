@@ -1,8 +1,8 @@
-import test, { beforeEach } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeD1 } from './_d1.mjs';
-import { MIN_SAMPLES, dayType, forgetSent, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/answer/crowd.ts';
+import { MIN_SAMPLES, dayType, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/answer/crowd.ts';
 import { leaveBy } from '../src/answer/leave.ts';
 import { RIDE, WALK } from '../src/config.ts';
 import { answerFor } from '../src/answer/answer.ts';
@@ -13,8 +13,6 @@ const MIN = 60_000;
 
 const sighting = (plate, crowd, etaS = 60) => ({ svc: 'D2', etaS, crowd, plate, berth: null });
 const at = (stop, arrivals, fetchedAt = THU) => new Map([[stop, { code: stop, arrivals, fetchedAt, stale: false, available: true }]]);
-
-beforeEach(() => forgetSent());
 
 test('a sighting already sent from this isolate is not sent to D1 again', async () => {
   const db = makeD1();
@@ -30,6 +28,23 @@ test('a sighting already sent from this isolate is not sent to D1 again', async 
   await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')], THU + 31 * MIN), THU + 31 * MIN);
   assert.equal(batches, 2, 'the next half hour is a new sighting');
   assert.equal(db._db.prepare('SELECT SUM(n) AS n FROM crowd_stats').get().n, 2);
+});
+
+test('a full isolate memo keeps the sightings still being looked at', async () => {
+  const db = makeD1();
+  const sent = [];
+  const batch = db.batch.bind(db);
+  db.batch = async (s) => {
+    sent.push(s.length / 2);
+    return batch(s);
+  };
+  const hot = sighting('PHOT', 'high');
+  const many = Array.from({ length: 4999 }, (_, i) => sighting(`P${i}`, 'low'));
+  await recordCrowds(db, at('COM3', [hot]), THU);
+  await recordCrowds(db, at('COM3', [hot, ...many]), THU);
+  await recordCrowds(db, at('COM3', [hot, sighting('PNEW', 'low')]), THU);
+  await recordCrowds(db, at('COM3', [hot]), THU);
+  assert.deepEqual(sent, [1, 4999, 1], 'the bus seen every time is not sent again');
 });
 
 test('a bus is counted once per stop and half hour, however often it is looked at', async () => {

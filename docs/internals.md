@@ -2160,8 +2160,8 @@ affects `fetch`.
 
 **What never changes between deploys is built once per isolate, on first
 use.** `/api/campus` (per language), `/api/stops/pairs`, the map styles,
-the OpenAPI spec (per origin, a few at most; past that it starts again, so
-made-up hosts can't grow it) and the `/docs` page (per sky phase). Built
+the OpenAPI spec (per origin, eight at most; past that the origin asked
+for longest ago goes, so made-up hosts can't grow it) and the `/docs` page (per sky phase). Built
 at module scope instead, every cold start would pay for them whatever it
 was started for.
 
@@ -2171,7 +2171,8 @@ entries and drops the one used longest ago, so a full memo keeps its hot
 entries rather than starting again. `onceEvery(windowMs, maxKeys)` lets a
 log line or note through once per key per window (a failed stop, a
 breaker trip, a DataMall stop with unplaced buses); a clock gone backwards
-counts as a new window. State tied to one deployment's bindings is kept
+counts as a new window. The crowd sightings already sent to D1 (5,000) and the
+transfer routes per graph (500) are `Lru`s too. State tied to one deployment's bindings is kept
 per binding (`perScope`, keyed by `env.KV`), so a test's fresh env starts
 clean with no reset hook.
 
