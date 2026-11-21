@@ -5,9 +5,13 @@ import android.content.SharedPreferences
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-object ServerClock {
-    const val MIN_SKEW_MS = 3_000L
-    private const val KEY = "clock-skew"
+object ServerClock : ClockSkew()
+
+open class ClockSkew(private val wall: () -> Long = { System.currentTimeMillis() }) {
+    companion object {
+        const val MIN_SKEW_MS = 3_000L
+        private const val KEY = "clock-skew"
+    }
 
     @Volatile
     var skewMs = 0L
@@ -19,7 +23,7 @@ object ServerClock {
         prefs = terminusPrefs(ctx).also { skewMs = it.getLong(KEY, 0L) }
     }
 
-    fun now(): Long = System.currentTimeMillis() + skewMs
+    fun now(): Long = wall() + skewMs
 
     fun toDevice(serverMs: Long): Long = serverMs - skewMs
 
@@ -40,9 +44,5 @@ object ServerClock {
             } ?: return null
         val skew = server - localMs
         return if (kotlin.math.abs(skew) < MIN_SKEW_MS) 0L else skew
-    }
-
-    internal fun reset(skew: Long = 0L) {
-        skewMs = skew
     }
 }

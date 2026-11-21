@@ -1061,13 +1061,17 @@ private suspend fun <T> blocking(conn: HttpURLConnection, block: () -> T): T = s
     io.execute { cont.resumeWith(runCatching(block)) }
 }
 
-object Quiet {
-    private const val MAX_S = 300L
-    private const val DEFAULT_S = 60L
-    private const val KEY = "quiet-until"
+object Quiet : QuietGate()
 
-    internal var elapsed: () -> Long = { android.os.SystemClock.elapsedRealtime() }
-    internal var wall: () -> Long = { System.currentTimeMillis() }
+open class QuietGate(
+    private val elapsed: () -> Long = { android.os.SystemClock.elapsedRealtime() },
+    private val wall: () -> Long = { System.currentTimeMillis() },
+) {
+    private companion object {
+        const val MAX_S = 300L
+        const val DEFAULT_S = 60L
+        const val KEY = "quiet-until"
+    }
 
     @Volatile private var prefs: android.content.SharedPreferences? = null
     @Volatile private var untilElapsed = 0L
@@ -1107,20 +1111,18 @@ object Quiet {
     fun waitMs(): Long = maxOf(remainingMs(), laterElapsed - elapsed(), 0)
 
     internal fun auth(path: String) = path.startsWith("/api/auth/") || path.startsWith("/api/pair") || path.startsWith("/api/me/pair-code")
-
-    internal fun reset() {
-        untilElapsed = 0
-        authUntilElapsed = 0
-        laterElapsed = 0
-    }
 }
 
-object Outdated {
-    private const val HOLD_MS = 30 * 60_000L
-    private const val KEY_AT = "outdated-at"
-    private const val KEY_VERSION = "outdated-version"
+object Outdated : OutdatedGate()
 
-    internal var wall: () -> Long = { System.currentTimeMillis() }
+open class OutdatedGate(private val wall: () -> Long = { System.currentTimeMillis() }) {
+    private companion object {
+        const val HOLD_MS = 30 * 60_000L
+        const val KEY_AT = "outdated-at"
+        const val KEY_VERSION = "outdated-version"
+        val ANSWERS = setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs")
+    }
+
     @Volatile private var prefs: android.content.SharedPreferences? = null
     @Volatile private var at = 0L
 
@@ -1141,8 +1143,6 @@ object Outdated {
         return p == "/api/me" || p.startsWith("/api/me/") || p in ANSWERS
     }
 
-    private val ANSWERS = setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs")
-
     fun refused() {
         at = wall()
         prefs?.edit { putLong(KEY_AT, at).putString(KEY_VERSION, BuildConfig.VERSION_NAME) }
@@ -1152,10 +1152,6 @@ object Outdated {
         if (at == 0L) return
         at = 0
         prefs?.edit { remove(KEY_AT).remove(KEY_VERSION) }
-    }
-
-    internal fun reset() {
-        at = 0
     }
 }
 
