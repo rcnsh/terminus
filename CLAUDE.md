@@ -170,6 +170,8 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   and tests of how a guess is used run with one headway for every shuttle
   (`test/_headways.mjs`), so measuring headways again leaves them alone.
 - Account tests run the real migration SQL against `node:sqlite`.
+- `scrapers.test.js` runs the data scripts with `python3` and fails when
+  it is missing; `TERMINUS_SKIP_PYTHON=1` skips them, as a choice.
 - Website tests load its modules with `await web('app/buses.js')` from
   `apps/web/test/_web.mjs`, after importing it (a static import resolves
   before its hook maps `/assets/…` to the files); component tests draw in
