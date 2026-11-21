@@ -109,6 +109,79 @@ release.
     means updating `SPARKLE_VERSION` and that hash (check the new zip
     against the checksum in Sparkle's `Package.swift` first). The appcast
     itself is signed too, and nothing may edit it afterwards.
+  - **How the scripts work.** Pinning and the clean install are ADR
+    `0000-outside-code-pinned-by-our-own-hashes.md`; the rest:
+    - `release.sh` takes `--dry-run` and nothing else, `release-beta.sh`
+      one version and `--dry-run`: a mistyped flag (`--dryrun`) would
+      otherwise publish, with no prompt. `release.sh` unsets `CHANNEL`,
+      `BETA_VERSION` and `BETA_BUILD`, so a shell left from a beta can't
+      make it one. A version is matched whole (`[[ =~ ]]`, never
+      `echo | grep`, which passes a value with a newline in it), as it
+      names a directory that's deleted, R2 keys and the tag. Android's
+      version is read from `defaultConfig`'s literal lines only.
+    - The working tree must be clean, untracked files included (SwiftPM
+      and Gradle build whatever is on disk), and `HEAD` must be
+      `origin/main`, so the tag and the notes match GitHub. CI must have
+      passed on the commit, since the release runs only the API tests;
+      the one exception is the weekly scrape's commit, pushed with
+      `github.token`, which never starts CI: a commit with one parent, the
+      bot as author and committer, and only `SCRAPE_DATA` changed in place
+      (the same list as `scrape.yml`'s `DATA`, a test checks) counts as
+      passed when the commit under it did.
+    - The live site is read before building and again before uploading:
+      `latest.json` for the version, the appcast for the build (Sparkle
+      compares `CFBundleVersion`, Android `versionCode`, so a build not
+      above the live one reaches nobody). With no answer a real release
+      stops rather than pass for want of one. A beta's build number is the
+      commit count, so it only rises along main. A beta keeps
+      `API_VERSION` and the Worker exposes no commit id, so its live check
+      can't tell the new Worker from the old: the finished
+      `pnpm run deploy:beta` (which applies the beta D1's migrations first)
+      is what says it's up. A stable version can go out on the beta too,
+      so beta installs move onto it.
+    - Android builds twice: ABI splits are off for the bundle, and AGP
+      refuses a bundle in a run that also splits. The APKs are
+      `terminus-<v>.apk` (arm64, the name older apps and links know),
+      `-armv7` and `-x86_64`. The `.aab` is for Play Console and goes
+      nowhere else. `apksigner` prints `Signer #1 certificate SHA-256
+      digest:` in build-tools 36 and `V2 Signer: certificate SHA-256
+      digest:` (a line per scheme) in 37; both are read.
+    - The Mac app is signed by the Developer ID certificate's SHA-1, and
+      its designated requirement names the team, not the certificate, so
+      a renewed certificate keeps it: macOS ties the app's location
+      permission and login item to it, and a release under another would
+      lose them on every Mac. `package-mac.sh` (`SIGN_IDENTITY`,
+      `SIGN_KEYCHAIN`, `PUBLISH=true`, `NOTARY_PROFILE`, `CHANNEL=beta`
+      with `BETA_VERSION`/`BETA_BUILD`, `RELEASES`) refuses to publish an
+      ad-hoc signed app, checks `codesign --deep --strict`, the hardened
+      runtime on everything that runs, and that every binary links only
+      `/System`, `/usr/lib` and `@rpath`/`@executable_path`/`@loader_path`.
+      `notarytool` exits 0 when it rejects an upload, so the status is read
+      from its answer; on a locked screen it says the keychain profile is
+      missing, so that's checked first. `hdiutil` fails now and then with
+      "Resource busy", so it's tried three times. Stapling changes the
+      DMG, so the Sparkle signature is made after it, and checked with
+      `verify-sparkle.swift <public key> <signature> <file>` against the
+      app's `SUPublicEDKey`, as an installed app checks it. The appcast
+      escapes every value: one that breaks stops every Mac updating.
+    - Uploads go files first (the APKs and the DMG, which nothing links to
+      yet), then the appcast, then `latest.json`, stopping at the first
+      failure, so `/download/*` never points at a file that isn't there.
+      For stable the tag is pushed before the feeds, as the appcast links
+      to its page. They use `wrangler r2 object put` from `apps/api`, not
+      `cf r2 objects put`, which percent-encodes the key's slashes.
+    - `github-release.sh <version> [--notes]` (`CHANNEL=beta` for a beta)
+      lists the commits since the previous release past its betas
+      (`--exclude='*-*'`); only the very first release may have no previous
+      tag, or a failed lookup would publish the wrong notes.
+      `release-notes.py` drops the Conventional Commits prefix, the version
+      bump and image-bot commits, and keeps each subject's first sentence
+      ("e.g." and "i.e." end none).
+    - Shell under `set -euo pipefail`: no `| head` or `| grep -q` on a
+      pipe that may still be writing (the early close fails it); `if !
+      cmd` rather than `cmd && …` (set -e doesn't stop for a failure left
+      of `&&`); a check that may `die` isn't run inside `$(…)`, where it
+      would only leave the subshell.
   - Agents don't create GitHub releases or tags by hand; the scripts do.
   - **The iPhone app** goes to App Store Connect (app 6825759345, team
     `BUKSCHP3SV`) from the owner's Mac, by hand, after the stable release,

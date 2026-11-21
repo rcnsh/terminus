@@ -1,30 +1,4 @@
 #!/bin/sh
-# The Android app's lockfiles and dependency hashes, written again after a
-# version changes: a Dependabot PR (Dependabot edits only the build files)
-# or a hand edit to gradle/libs.versions.toml. CI fails until both are
-# written.
-#
-#   scripts/android-deps.sh 42     # Dependabot's PR #42, in its own worktree
-#   scripts/android-deps.sh        # this checkout's apps/android, as it is
-#
-# Gradle runs from an empty Gradle home, as on a fresh CI runner: it records
-# only the files it downloads, and a warm cache leaves out some that a cold
-# runner fetches, so CI would fail now and then. It
-#   1. writes the lockfiles (app/gradle.lockfile, buildscript- and settings-)
-#      and gradle/verification-metadata.xml, running every task CI runs
-#   2. checks each new hash against the repository's own and adds the aapt2
-#      jars for the other systems (scripts/android_deps.py); it stops on a
-#      hash that changed for a version already listed
-#   3. runs CI's tasks once more from another empty Gradle home, with
-#      verification on
-# and leaves the changes uncommitted for you to review, printing the
-# commands that commit and push them.
-#
-# The empty Gradle home also keeps ~/.gradle/gradle.properties (the signing
-# keys) out of the build. Gradle runs the new versions' plugin code here
-# before any hash is checked, as CI does: Dependabot's cooldown
-# (.github/dependabot.yml) is what holds back a bad release. Takes about
-# 15 minutes.
 set -eu
 
 root=$(git rev-parse --show-toplevel)
@@ -47,7 +21,6 @@ if [ -n "$pr" ]; then
   fi
   git -C "$root" fetch -q origin "$branch"
   git -C "$root" worktree add -q --detach "$work" "origin/$branch"
-  # Where the Android SDK is; local.properties is kept out of git.
   if [ -f "$root/apps/android/local.properties" ]; then
     cp "$root/apps/android/local.properties" "$work/apps/android/"
   fi
@@ -66,8 +39,6 @@ cp "$android/gradle/verification-metadata.xml" "$tmp/before.xml"
 
 ci=':app:ktfmtCheck :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin :app:assembleStableRelease :app:assembleBetaRelease'
 
-# Each run gets a Gradle home of its own and reruns every task, so nothing
-# downloaded or built before stands in for a download.
 cold() {
   home=$(mktemp -d "$tmp/gradle-home.XXXXXX")
   (cd "$android" && GRADLE_USER_HOME=$home ./gradlew --console=plain --no-daemon \
@@ -75,9 +46,6 @@ cold() {
 }
 
 echo "== Writing the lockfiles and dependency hashes"
-# One run for both, so everything is downloaded once: resolving every
-# configuration for the locks fetches POMs no CI task asks for, and the
-# release builds (R8) fetch files nothing else does.
 # shellcheck disable=SC2086 # $ci is a list of tasks
 cold :app:resolveAll buildEnvironment $ci --write-locks --write-verification-metadata sha256
 echo "== Checking them against the repositories"

@@ -1,8 +1,3 @@
-/**
- * The pinned card's height on the Stops tab (apps/web/public/app/buses.js):
- * it is as tall as the page showing, so a one-line "No buses due", or a stop
- * pinned beside a taller one, leaves no gap under it.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
@@ -11,7 +6,6 @@ import { useLang, web } from './_web.mjs';
 useLang('en');
 page({ url: 'https://terminus.run/app/#buses', html: '<div id="root"></div>' });
 
-// happy-dom has no layout: a page is as tall as the test says, the pager as its tallest page.
 const SKELETON = 300;
 const NO_BUSES = 100;
 const PIN_ANOTHER = 180;

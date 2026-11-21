@@ -1,15 +1,5 @@
-// The shuttles' livery: the stripes down a bus's side, as on sign-in, the
-// Android app's welcome and the pair page (and the Worker's own pages, drawn
-// by me.ts liveryHtml). Its own module so a page without
-// the account's code (pair/) can draw it too; styled in site.css.
 import { html } from '../assets/ui.js';
 
-/**
- * The services' colours, for the livery: before sign-in there's no
- * /api/campus to ask, so they're here, mirroring the API's ROUTE_COLORS
- * (src/map/campus.ts; web-journey.test.js keeps them the same). The landing
- * page's driving shuttles wear them too (sky-page.js).
- */
 export const LIVERY = [
   ['A1', '#d32f2f'],
   ['A2', '#d9a000'],
@@ -21,20 +11,11 @@ export const LIVERY = [
   ['P', '#8a939c'],
 ];
 
-/**
- * The stripes down a bus's side, rising to the right, as on the Android
- * app's welcome: one per service (P's grey would dull it), then a gap and a
- * thin line in the accent, with the mark sitting on the band (unless `mark`
- * is false: sign-in's band, under the header's own mark). Drawn on a
- * 400 × 180 box stretched to its box, so a wide one gets a flatter band.
- */
 export function Livery({ mark = true }) {
   const u = 180 / 300;
   const rise = 100;
-  // The band's lower edge, a fifth of the way up in the middle: the mark sits on it.
   const left = 180 - 60 * u + rise / 2;
   const right = left - rise;
-  // Each strip overlaps the next by a little, so no hairline of the card shows between them.
   const strip = (from, to, color, key) =>
     html`<path key=${key} d=${`M0 ${left - from}L400 ${right - from}L400 ${right - to - 0.6}L0 ${left - to - 0.6}Z`} fill=${color} />`;
   const colours = LIVERY.filter(([svc]) => svc !== 'P').reverse();

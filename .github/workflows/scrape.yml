@@ -2,27 +2,12 @@ name: scrape stop graph
 
 on:
   schedule:
-    # 03:00 UTC Monday = 11:00 SGT Monday. Weekly is plenty: stop locations,
-    # route order and operating hours change a few times a year.
     - cron: "0 3 * * 1"
   workflow_dispatch:
 
-# Separate jobs, so no job holds both third-party code and something worth
-# stealing. Anything running in a job can read every secret mapped into it,
-# whichever step gets them, so:
-#   scrape     has the feed and DataMall secrets and the token that reads the
-#              Worker's uNivUS version, runs only this repo's Python
-#              (standard library only), and can't push;
-#   test       runs the npm dev dependencies, with no secrets and no push;
-#   commit     can push, and runs no npm code at all;
-#   heartbeat  has only the healthchecks.io ping URL, and runs only curl.
-# The data travels between them as an artifact, checked against the hashes
-# the scrape job took, so what's pushed is exactly what was scraped and tested.
 permissions:
   contents: read
 
-# One refresh at a time; a second waits rather than cancelling one that may
-# be mid-push.
 concurrency:
   group: scrape
   cancel-in-progress: false
@@ -37,11 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # No token left in .git/config: this job never pushes.
           persist-credentials: false
 
-      # The test and commit jobs check out this same commit, so the data is
-      # tested and committed on the code that made it, even if main moves.
       - name: Note the commit
         id: head
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -50,13 +32,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Same guest-token flow and bus proxy as the Worker (see apps/api/src/feeds/auth.ts).
       - name: Scrape
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
           NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
-          # Opens one route on terminus: the version the Worker sends NUS, kept
-          # current with uNivUS releases. The secret above is then the fallback.
           TERMINUS_SCRAPE_TOKEN: ${{ secrets.TERMINUS_SCRAPE_TOKEN }}
           NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
@@ -64,17 +43,11 @@ jobs:
           NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
         run: python3 apps/api/scripts/data/scrape_stops.py
 
-      # Each service's path along OpenStreetMap roads, for the map. Overpass is
-      # often busy: on failure the committed shapes stay, and the API draws a
-      # route whose stops changed as straight lines until next week.
       - name: Route shapes
         id: shapes
         continue-on-error: true
         run: python3 apps/api/scripts/data/route_shapes.py
 
-      # The public buses at the campus's stops, from LTA DataMall (free account
-      # key, the LTA_ACCOUNT_KEY secret). Without the key, or with DataMall
-      # down, the committed public.json stays.
       - name: Public buses
         id: lta
         continue-on-error: true
@@ -82,10 +55,6 @@ jobs:
           LTA_ACCOUNT_KEY: ${{ secrets.LTA_ACCOUNT_KEY }}
         run: python3 apps/api/scripts/data/scrape_lta.py
 
-      # Semester dates (NUSMods) and public holidays (MOM). No credentials.
-      # On failure the committed calendar stays: the Worker's cron also
-      # fetches it into KV weekly (src/timetable/calendarsync.ts), so it needn't hold
-      # up the stop graph.
       - name: Refresh calendar
         id: calendar
         continue-on-error: true
@@ -111,8 +80,6 @@ jobs:
             echo "::warning title=calendar::not refreshed; calendar.json stays as committed (the cron still fetches it into KV)"
           fi
 
-      # A job's outputs can only be set by that job, so the later jobs check
-      # the artifact against these: nothing else in the run can swap the data.
       - name: Hash the data
         id: sums
         working-directory: apps/api/data
@@ -157,7 +124,6 @@ jobs:
           SUMS: ${{ needs.scrape.outputs.sums }}
         run: printf '%s\n' "$SUMS" | sha256sum --strict -c -
 
-      # Before any dependency is installed, so none can change the answer.
       - name: Compare with what's committed
         id: diff
         run: |
@@ -179,9 +145,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      # A bad graph is worse than a stale one, so the suite gates the commit.
-      # The golden answers (fixtures/answers) are worked out on the real
-      # graph, so a changed stop or route can change them with nothing wrong.
       - name: Test against the new graph
         run: |
           pnpm install --frozen-lockfile
@@ -190,9 +153,6 @@ jobs:
             exit 1
           fi
 
-      # Well-formed but wrong (stops gone, off-campus coordinates, a huge
-      # file) is caught here: this pushes to main with no review. It
-      # compares with HEAD, the commit the data was scraped on.
       - name: Sanity-check against what's committed
         run: python3 apps/api/scripts/data/check_scraped.py
 
@@ -207,12 +167,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.scrape.outputs.sha }}
-          # Only the push step gets the token, for that one command.
           persist-credentials: false
 
-      # The push step checks .git/config is still this, so nothing unpacked
-      # since (the artifact, say) can point the push elsewhere (a proxy, an
-      # insteadOf) or add a filter to it.
       - name: Fingerprint git config
         id: gitconfig
         run: echo "sum=$(sha256sum .git/config | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
@@ -228,10 +184,6 @@ jobs:
           SUMS: ${{ needs.scrape.outputs.sums }}
         run: printf '%s\n' "$SUMS" | sha256sum --strict -c -
 
-      # git runs with no hooks, none of the runner's global or system config,
-      # and .git/config as it was after checkout. Only the data files may
-      # differ, and the commit goes straight onto the commit that was tested:
-      # no rebase, which would put untested code under the new data on main.
       - name: Commit and push
         env:
           PUSH_TOKEN: ${{ github.token }}
@@ -256,14 +208,10 @@ jobs:
           sha=$(git rev-parse HEAD)
           [ "$(git rev-parse "$sha^")" = "$BASE" ] || { echo "::error::the commit's parent isn't the commit that was tested"; exit 1; }
           only_data "$(git diff --name-only "$BASE" "$sha")" || { echo "::error::the commit changes more than the data"; exit 1; }
-          # The same header actions/checkout would have stored, for these
-          # commands only.
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
           remote_main() { g -c http.https://github.com/.extraheader="$auth" ls-remote origin refs/heads/main | cut -f1; }
           moved() { echo "::warning title=not pushed::main moved since the scrape (or the run wasn't on main), so the new data wasn't pushed. Run the workflow again."; }
           [ "$(remote_main)" = "$BASE" ] || { moved; exit 0; }
-          # By hash, and a fast-forward only (no force): if main moves after
-          # the check above, GitHub refuses the push.
           if ! g -c http.https://github.com/.extraheader="$auth" push -q origin "$sha:refs/heads/main"; then
             [ "$(remote_main)" = "$BASE" ] || { moved; exit 0; }
             echo "::error::push to main failed"
@@ -271,16 +219,6 @@ jobs:
           fi
           echo "pushed $sha"
 
-  # Tells healthchecks.io how the run went, so a scrape that fails, or stops
-  # running at all, is noticed: the check expects a ping every Monday. A job
-  # of its own, for the same reason as the others: it holds the HC_SCRAPE_URL
-  # secret and nothing else, checks nothing out and runs only curl. It runs
-  # whatever happened above (always()), so it pings exactly once: success
-  # when scrape and test passed and commit passed or was skipped because the
-  # data didn't change; /fail for anything else (a failure, a cancellation).
-  # A commit that finds main moved passes with a warning, so it pings success.
-  # Without the secret (a fork, say) it skips the ping, and a healthchecks.io
-  # outage never fails the run.
   heartbeat:
     needs: [scrape, test, commit]
     if: always()

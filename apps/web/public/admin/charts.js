@@ -1,15 +1,9 @@
-// The dashboard's charts, drawn as SVG by Preact: columns (stacked or not)
-// and lines with a hover and keyboard readout, sparklines, and the small
-// bars that sit in table cells. Colours come from admin.css (--s1 … --s5 for
-// series, in a fixed order, so a series keeps its colour when others hide).
-
 import { html, useEffect, useRef, useState } from '/assets/ui.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('en-SG');
 const compactFmt = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 export const compact = (n) => compactFmt.format(n);
 
-/** Round steps from [min] (0 unless given) up past [max]: 0, 500, 1000, … */
 export function ticks(max, count = 4, whole = true, min = 0) {
   if (!(max > min)) return min === 0 ? [0, 1] : [min - 1, min, min + 1];
   const span = max - min;
@@ -21,7 +15,6 @@ export function ticks(max, count = 4, whole = true, min = 0) {
   return Array.from({ length: Math.round((top - lo) / step) + 1 }, (_, i) => +(lo + i * step).toPrecision(12));
 }
 
-/** The element's width, following it as the window changes. */
 function useWidth(ref, initial = 640) {
   const [w, setW] = useState(initial);
   useEffect(() => {
@@ -35,7 +28,6 @@ function useWidth(ref, initial = 640) {
   return w;
 }
 
-/** A column from [yBase] up to [yTop], its top corners rounded. */
 function bar(x, w, yTop, yBase, round) {
   const h = yBase - yTop;
   if (!(h > 0.4)) return '';
@@ -43,7 +35,6 @@ function bar(x, w, yTop, yBase, round) {
   return `M${x},${yBase}V${yTop + r}Q${x},${yTop} ${x + r},${yTop}H${x + w - r}Q${x + w},${yTop} ${x + w},${yTop + r}V${yBase}Z`;
 }
 
-/** The series' names, each with its colour; a click hides or shows one. */
 export function Legend({ series, hidden, onToggle, line }) {
   return html`<div class="legend">
     ${series.map(
@@ -60,11 +51,6 @@ export function Legend({ series, hidden, onToggle, line }) {
   </div>`;
 }
 
-/**
- * Columns, or lines, over [rows] ({ label, short, values: [per series] }).
- * Hovering, or the arrow keys once focused, reads out every series at that
- * place; a click (or Enter) picks it, when [onPick] is given.
- */
 export function Chart({
   rows,
   series,
@@ -96,7 +82,6 @@ export function Chart({
   const shown = series.map((_, i) => !hidden.has(i));
   const vals = (r) => r.values.map((v, i) => (shown[i] ? (v ?? 0) : 0));
   const tops = rows.map((r) => (stacked ? vals(r).reduce((a, b) => a + b, 0) : Math.max(0, ...vals(r))));
-  // A line may start above 0 (or go below it) to show the gaps between series.
   const low = fromZero ? 0 : Math.min(...rows.flatMap((r) => r.values.filter((v, i) => shown[i] && v != null)));
   const ys = ticks(fixedMax ?? Math.max(0, ...tops), 4, whole, Number.isFinite(low) ? low : 0);
   const bottom = ys[0];
@@ -233,7 +218,6 @@ export function Chart({
   `;
 }
 
-/** A small trend line for a tile, scaled to its own range. */
 export function Spark({ values, color = 'var(--accent-bright)' }) {
   const v = values.map((n) => Number(n ?? 0));
   if (v.length < 2) return null;
@@ -247,11 +231,9 @@ export function Spark({ values, color = 'var(--accent-bright)' }) {
   </svg>`;
 }
 
-/** A bar for a table cell: [n] against [max]. */
 export const Meter = ({ n, max, color }) =>
   html`<span class="meter" aria-hidden="true"><i style=${{ width: `${max > 0 ? Math.max(1.5, (n / max) * 100) : 0}%`, background: color }}></i></span>`;
 
-/** A bar either side of zero, for an error that can be early or late: [n] against ±[max]. */
 export const Diverge = ({ n, max }) => {
   const share = max > 0 && n != null ? Math.min(1, Math.abs(n) / max) * 50 : 0;
   return html`<span class="diverge" aria-hidden="true"><i class=${n > 0 ? 'late' : 'early'} style=${{
@@ -260,7 +242,6 @@ export const Diverge = ({ n, max }) => {
   }}></i></span>`;
 };
 
-/** Shares of one whole, side by side in one bar ([parts]: { name, n, color }). */
 export function Stack({ parts }) {
   const total = parts.reduce((t, p) => t + p.n, 0) || 1;
   const [hover, setHover] = useState(null);

@@ -120,7 +120,10 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   the three, and CI fails on unformatted code. The Lefthook pre-commit hook
   formats and re-stages staged JS/TS/JSON and Swift; run `pnpm format`
   before committing anyway, and `pnpm format:kotlin` for Kotlin, which the
-  hook skips. No formatter touches HTML, CSS, htm templates or
+  hook skips (ktfmt runs through Gradle, too slow for every commit). The
+  hook's `exclude` in `.lefthook.yml` mirrors `ignorePatterns` in
+  `.oxfmtrc.json`; the root `prepare` script installs it, so lefthook's own
+  postinstall is off in `pnpm-workspace.yaml`. No formatter touches HTML, CSS, htm templates or
   `cloudflare.config.ts`; keep their layout as written when you edit them:
   the Worker fills pages by their exact markup, the website translates page
   text keyed by it, tests read CSS rule by rule, and release-beta.sh and a
@@ -167,6 +170,11 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   and tests of how a guess is used run with one headway for every shuttle
   (`test/_headways.mjs`), so measuring headways again leaves them alone.
 - Account tests run the real migration SQL against `node:sqlite`.
+- Website tests load its modules with `await web('app/buses.js')` from
+  `apps/web/test/_web.mjs`, after importing it (a static import resolves
+  before its hook maps `/assets/…` to the files); component tests draw in
+  happy-dom (`_dom.mjs`), whose asserts compare DOM nodes by identity,
+  since printing a happy-dom node's getters never ends.
 - Add tests for API changes, and check each new test fails without your
   fix. Prefer tests on real data, such as the real `shapes.json` lines,
   over synthetic ones.

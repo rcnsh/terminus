@@ -1,20 +1,12 @@
-// The account page: signing in, first-time setup (onboarding.js), then
-// Settings (settings.js) with "Your widget right now" beside it. Same origin
-// as the API, so the session cookie just works. Setup and Settings load once
-// someone is signed in: the sign-in card doesn't wait for them.
-
 import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, useState, useStore } from '../assets/ui.js';
 import { api, forgetAccountHere, hour12, t } from './dom.js';
 import { Card, Message, Report } from './preview.js';
 import { Toast, campusRefused, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
 import { Livery } from './livery.js';
 
-/** Settings and first-time setup ({ Settings, Onboarding }), once loaded. */
 const parts = store(null);
 let loading = null;
 function loadParts() {
-  // With what those two import that the page hasn't loaded yet, asked for
-  // alongside: otherwise each level is found only once the one above arrives.
   loading ??= Promise.all([
     import('./settings.js'),
     import('./onboarding.js'),
@@ -28,16 +20,9 @@ function loadParts() {
 }
 
 const params = new URLSearchParams(location.search);
-/** Where to go after signing in: only the web app, never an arbitrary URL. */
 const NEXT = params.get('next') === '/app/' ? '/app/' : null;
-/** Sent from the web app's Settings to add an email. */
 const ADD = params.get('add') === '1';
 
-/**
- * What the page shows: `loading`, `signin`, `onboarding`, `settings` or
- * `error`; `me` once signed in (from /api/me); `adding` while an anonymous
- * account adds an email (the sign-in card, over Settings).
- */
 const page = store({ view: 'loading', me: null, adding: false, error: null });
 const set = (patch) => page.set((s) => ({ ...s, ...patch }));
 
@@ -52,7 +37,6 @@ const startAdding = () => {
   window.scrollTo(0, 0);
 };
 
-/** Cloudflare Turnstile, when the server has a site key. The widget is invisible, so its box takes no room. */
 function useTurnstile(box) {
   const token = useRef(null);
   const widget = useRef(null);
@@ -74,7 +58,6 @@ function useTurnstile(box) {
       if (gone || !window.turnstile || !box.current) return;
       widget.current = window.turnstile.render(box.current, {
         sitekey: turnstileSiteKey,
-        // The server accepts a pass only for this action (TURNSTILE_ACTION).
         action: 'signin',
         callback: (v) => (token.current = v),
         'expired-callback': () => (token.current = null),
@@ -114,7 +97,6 @@ function SignIn({ adding }) {
     setError('');
     setBusy(true);
     try {
-      // From the web app: the emailed link brings them back to it too.
       await api('/api/auth/login', {
         method: 'POST',
         body: { email: email.trim(), turnstile: turnstile.token.current, ...(NEXT ? { next: NEXT } : {}) },
@@ -135,7 +117,6 @@ function SignIn({ adding }) {
     setBusy(true);
     try {
       await api('/api/auth/code', { method: 'POST', body: { email: email.trim(), code: value } });
-      // The session cookie is set; start over as signed in.
       location.reload();
     } catch (err) {
       setCodeError(err.message);
@@ -144,13 +125,11 @@ function SignIn({ adding }) {
     }
   };
 
-  // Without an email: the same account an app starts with, kept by this browser.
   const noEmail = async () => {
     setError('');
     setBusy(true);
     try {
       await api('/api/auth/anon/web', { method: 'POST', body: { turnstile: turnstile.token.current } });
-      // The session cookie is set; start over, which sets up first.
       location.reload();
     } catch (err) {
       setError(err.message);
@@ -209,7 +188,6 @@ function SignIn({ adding }) {
             type="button"
             class="btn ghost wide"
             onClick=${() => {
-              // Came from the web app to add it: back there.
               if (NEXT) return location.assign(NEXT);
               set({ adding: false });
             }}
@@ -251,7 +229,6 @@ function SignIn({ adding }) {
               onInput=${(e) => {
                 const v = e.currentTarget.value;
                 setCode(v);
-                // The sixth letter or digit, typed or pasted, sends the code.
                 if (v.replace(/[^a-z0-9]/gi, '').length === 6 && !busy) verify(v);
               }}
             />
@@ -267,8 +244,6 @@ function SignIn({ adding }) {
                   type="button"
                   class="link-btn"
                   onClick=${() => {
-                    // Resending needs a fresh Turnstile pass, so it goes back to the form,
-                    // saying so only when there's a check to do.
                     setStep('login');
                     setError(turnstile.present ? t('Complete the check below, then send again.') : '');
                   }}
@@ -290,17 +265,13 @@ function SignIn({ adding }) {
   `;
 }
 
-/** The widget's answer and how to fetch it again: the preview's, which its bar (Peek) shows too. */
 const latest = store({ a: null, load: null });
 
-/** "Your widget right now": /api/me/next as the widget shows it, so changes in Settings show up. */
 export function Preview({ me }) {
   const { a } = useStore(latest);
   const setA = (x) => latest.set({ a: x, load });
   const [failed, setFailed] = useState(false);
   const saved = useStore(saves);
-  // Only the newest answer asked for lands: one asked for before a save that
-  // comes back after the save's mustn't put the old card over the new.
   const asked = useRef(0);
   const load = async () => {
     const n = ++asked.current;
@@ -335,16 +306,9 @@ export function Preview({ me }) {
   `;
 }
 
-/**
- * The widget along the foot of a Settings page on a phone, where the preview
- * at the top of the list is out of sight: the trip in one line (the server's
- * card.line, as a compact widget shows it), opening to the whole
- * card, so a change made on the page shows straight away.
- */
 function Peek() {
   const { a, load } = useStore(latest);
   const [open, setOpen] = useState(false);
-  // Escape closes it, as a tap on the page behind does.
   useEffect(() => {
     if (!open) return;
     const key = (e) => e.key === 'Escape' && setOpen(false);
@@ -363,7 +327,6 @@ function Peek() {
   `;
 }
 
-/** The header's right side: who's signed in, the app, and Sign out or Add an email. */
 function Who() {
   const { view, me } = useStore(page);
   if (view !== 'settings' || !me) return null;
@@ -384,10 +347,8 @@ function AccountPage() {
   if (view === 'loading') return null;
   if (view === 'error') return html`<p class="hint">${t('Something went wrong. {0}', error)}</p>`;
   if (view === 'signin') return html`<${SignIn} adding=${false} />`;
-  // Signed in, the parts are loaded before the view changes (start).
   if (!p) return null;
   const { Onboarding, Settings } = p;
-  // The toast too: setup says there when it couldn't be saved.
   if (view === 'onboarding') return html`<${Onboarding} onDone=${afterSetup} /><${Toast} />`;
   return html`
     ${adding && html`<${SignIn} adding=${true} />`}
@@ -398,13 +359,9 @@ function AccountPage() {
   `;
 }
 
-/** After first-time setup (or straight after sign-in): where the person was going. */
 function afterSetup() {
   const { me } = page.get();
-  // From the web app to add an email: straight to the sign-in card.
   if (ADD && me.anonymous === true) return set({ view: 'settings', adding: true });
-  // Signed in from the web app: back to it. (A NUSMods link shared to the
-  // installed app is offered there, app/app.js sharedLink.)
   if (NEXT) return location.replace(NEXT);
   set({ view: 'settings' });
 }
@@ -415,11 +372,8 @@ async function start() {
     me = await api('/api/me');
   } catch (err) {
     if (err.status === 401) {
-      // Signed out, or deleted, elsewhere: what this browser kept of it goes.
       forgetAccountHere();
       set({ view: 'signin' });
-      // Ready by the time they've signed in, without holding up the card. If
-      // they can't be had now, signing in reloads the page, which asks again.
       const warm = () => loadParts().catch(() => {});
       if (document.readyState === 'complete') warm();
       else addEventListener('load', warm, { once: true });
@@ -429,16 +383,12 @@ async function start() {
   }
   await Promise.all([loadProfile(), loadCampus(), loadParts()]);
   set({ me });
-  // First sign-in: set up before Settings appears, and before the header's
-  // buttons, which would only distract from it.
   if (me.onboarding === 'full') return set({ view: 'onboarding' });
   afterSetup();
 }
 
 render(html`<${AccountPage} />`, document.getElementById('root'));
 render(html`<${Who} />`, document.getElementById('who'));
-// The kept stops and routes were answered for an account that's since been
-// signed out elsewhere (the service worker's check behind them): as a 401 from /api/me.
 campusRefused.subscribe((refused) => {
   if (!refused) return;
   forgetAccountHere();

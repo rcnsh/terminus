@@ -1,44 +1,4 @@
 #!/bin/sh
-# The street map's files, onto R2 under map/ (served by apps/api/src/map/map.ts):
-#   campus.pmtiles   the campus cut from a Protomaps daily build of
-#                    OpenStreetMap, zoom 12 and up (about 3.3 MB)
-#   fonts/           Noto Sans label glyphs (Regular, Medium, Italic), with
-#                    Chinese from Noto Sans SC where Noto Sans has none
-#   sprites/v4/      the light and dark map icons
-#
-# What goes up is pinned in scripts/map-tiles.lock: the Protomaps build, the
-# basemaps-assets commit, and the SHA-256 of the cut and of every font and
-# icon file. Every client's MapLibre parses these files, so nothing reaches
-# R2 unless it matches the lock, and a new map is a commit someone reviewed.
-#
-#   scripts/map-tiles.sh --check      # is there a newer build than the lock's?
-#   scripts/map-tiles.sh --update     # cut the newest build, rewrite the lock
-#   scripts/map-tiles.sh --dry-run    # build the locked files into ./build/map
-#   scripts/map-tiles.sh              # build, check against the lock, upload
-#   scripts/map-tiles.sh --upload     # upload ./build/map as it is, once it
-#                                     # matches the lock (no downloads)
-#   CHANNEL=beta scripts/map-tiles.sh # the same for beta.terminus.run
-#   CHANNEL=both scripts/map-tiles.sh # both
-#
-# To refresh the map: --update, commit the lock, then upload (here or from
-# the "map tiles" workflow). Protomaps keeps its daily builds only about a
-# week, so upload within a few days of the update; once the lock's build is
-# gone, run --update again. To move the fonts and icons on, run
-#   ASSETS_COMMIT=<sha> scripts/map-tiles.sh --update
-# with a commit from
-#   git ls-remote https://github.com/protomaps/basemaps-assets HEAD
-# The fonts and icons keep their paths, and the edge and browsers keep them
-# for 30 days by URL (map.ts, edgeFile), as do the apps' map caches, so a
-# changed font or icon isn't seen until then. With changed fonts, bump
-# GLYPHS in map.ts (the style's glyphs URL ends ?v=) and deploy after
-# uploading; move changed icons to a new folder (sprites/v5, with SPRITES).
-#
-# Each site reads the map from its own R2 bucket (cloudflare.config.ts).
-# A couple of times a year is plenty: it only picks up new buildings and
-# paths. Uses `pmtiles` from the PATH if it's PMTILES_VERSION (the cut must
-# come out byte for byte the same); otherwise, on Linux or an Apple silicon
-# Mac, it downloads that release and checks its hash.
-# Map data (c) OpenStreetMap contributors, ODbL.
 set -eu
 cd "$(dirname "$0")/.."
 MODE=upload
@@ -57,16 +17,8 @@ case "${CHANNEL:-stable}" in
   *) echo "CHANNEL is stable, beta or both, not $CHANNEL"; exit 1 ;;
 esac
 BBOX=103.755,1.280,103.830,1.332
-# From zoom 12 up: every client's map stops zooming out at 13 (with
-# 512-pixel tiles, one level of tile per level of map), so the world-wide
-# levels below would be a quarter of the file, downloaded by every phone and
-# Mac for offline use and never drawn. 12 is a level to spare.
 MINZOOM=12
 PMTILES_VERSION=1.31.2
-# Chinese place names: Protomaps' Noto Sans has no Chinese, and the web's
-# answer (the device's own fonts, localIdeographFontFamily) isn't open to
-# the Android map. So the ranges Protomaps leaves empty are drawn from Noto
-# Sans SC (noto-cjk, at this tag) by Stadia Maps' build_pbf_glyphs.
 NOTO_CJK_TAG=Sans2.004
 NOTO_SC_REGULAR_SHA256=faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9
 NOTO_SC_MEDIUM_SHA256=7633f5a016d4dd95e685a69633d818aabc4644c4b08e26bd35b1b30c45ed5dda
@@ -75,10 +27,8 @@ LOCK=scripts/map-tiles.lock
 OUT="$PWD/build/map"
 
 sha256() { (sha256sum "$@" 2>/dev/null || shasum -a 256 "$@") | cut -d' ' -f1; }
-# One value from the lock (key=value lines; # starts a comment).
 locked() { sed -n "s/^$1=//p" "$LOCK"; }
 
-# The newest daily build in the last ten days.
 newest_build() {
   for i in 0 1 2 3 4 5 6 7 8 9 10; do
     d=$(date -u -d "-$i day" +%Y%m%d 2>/dev/null || date -u -v-"$i"d +%Y%m%d)
@@ -101,9 +51,6 @@ if [ "$MODE" = check ]; then
   exit 0
 fi
 
-# Hashes of what's in $OUT, the way the lock records them: the cut's
-# SHA-256 and size, and one SHA-256 over the sorted "<sha256>  <path>"
-# lines of every font and icon file (paths relative to $OUT).
 hash_out() {
   got_pmtiles_sha256=$(sha256 "$OUT/campus.pmtiles")
   got_pmtiles_bytes=$(wc -c <"$OUT/campus.pmtiles" | tr -d ' ')
@@ -113,7 +60,6 @@ hash_out() {
   got_assets_sha256=$(printf '%s\n' "$list" | (sha256sum 2>/dev/null || shasum -a 256) | cut -d' ' -f1)
 }
 
-# Refuses unless $OUT and the settings above are exactly what the lock pins.
 verify_out() {
   hash_out
   bad=0
@@ -130,9 +76,6 @@ verify_out() {
 }
 
 upload() {
-  # Wrangler, not `cf r2 objects put`: cf 1.0.0-beta.5 percent-encodes the
-  # slashes in the key, which R2 needs literal. It's installed in apps/api,
-  # so run from there, as release-lib.sh does. Eight at a time.
   cd apps/api
   export OUT
   for BUCKET in $BUCKETS; do
@@ -143,7 +86,6 @@ upload() {
         case "$file" in *.pbf) t=application/x-protobuf ;; *.png) t=image/png ;; *) t=application/json ;; esac
         pnpm exec wrangler r2 object put "$BUCKET/$key" --file "$file" --content-type "$t" --remote >/dev/null || { echo "failed: $key"; exit 255; }
       ' _ {}
-    # The tiles last, once everything they need is there.
     pnpm exec wrangler r2 object put "$BUCKET/map/campus.pmtiles" --file "$OUT/campus.pmtiles" --content-type application/vnd.pmtiles --remote >/dev/null
     echo "uploaded the map (build $build, $got_pmtiles_bytes bytes) and its fonts and icons to $BUCKET"
   done
@@ -151,8 +93,6 @@ upload() {
 
 [ "$MODE" = update ] || [ -f "$LOCK" ] || { echo "no $LOCK: run scripts/map-tiles.sh --update and commit it"; exit 1; }
 
-# The files built by an earlier --dry-run (the workflow builds in one step,
-# without the token, and uploads in the next, with it).
 if [ "$MODE" = upload-built ]; then
   [ -f "$OUT/campus.pmtiles" ] || { echo "nothing in $OUT: run scripts/map-tiles.sh --dry-run first"; exit 1; }
   build=$(locked build); ASSETS_COMMIT=$(locked assets_commit)
@@ -163,7 +103,6 @@ fi
 
 if [ "$MODE" = update ]; then
   build=$(newest_build)
-  # Fonts and icons stay where the lock has them unless asked to move.
   if [ -z "${ASSETS_COMMIT:-}" ]; then
     [ -f "$LOCK" ] || { echo "no $LOCK yet: give ASSETS_COMMIT=<basemaps-assets commit>"; exit 1; }
     ASSETS_COMMIT=$(locked assets_commit)
@@ -188,12 +127,8 @@ trap 'rm -rf "$WORK"' EXIT
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# The pinned pmtiles: another version may cut the same tiles into a file
-# with other bytes, which the lock would refuse.
 if ! command -v pmtiles >/dev/null 2>&1 ||
   ! pmtiles version 2>/dev/null | grep -q "^pmtiles $PMTILES_VERSION,"; then
-  # Each file's SHA-256, as GitHub lists it on the release; a new
-  # PMTILES_VERSION needs new ones.
   case "$(uname -s)-$(uname -m)" in
     Linux-x86_64) file=go-pmtiles_${PMTILES_VERSION}_Linux_x86_64.tar.gz
       sum=3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f ;;
@@ -217,12 +152,10 @@ fi
 pmtiles extract "https://build.protomaps.com/$build.pmtiles" "$OUT/campus.pmtiles" --bbox="$BBOX" --minzoom="$MINZOOM"
 pmtiles verify "$OUT/campus.pmtiles"
 size=$(wc -c <"$OUT/campus.pmtiles" | tr -d ' ')
-# About 3.3 MB; far off that and the cut went wrong.
 if [ "$size" -lt 1000000 ] || [ "$size" -gt 20000000 ]; then
   echo "campus.pmtiles is $size bytes; not uploading"; exit 1
 fi
 
-# Fonts and icons, from Protomaps' assets repository.
 git init -q "$WORK/assets"
 git -C "$WORK/assets" sparse-checkout set --no-cone "/fonts/Noto Sans Regular/" "/fonts/Noto Sans Medium/" "/fonts/Noto Sans Italic/" "/sprites/v4/light*" "/sprites/v4/dark*"
 git -C "$WORK/assets" fetch -q --depth 1 --filter=blob:none https://github.com/protomaps/basemaps-assets "$ASSETS_COMMIT"
@@ -236,15 +169,9 @@ for f in "Noto Sans Regular" "Noto Sans Medium" "Noto Sans Italic"; do
   [ "$n" -eq 256 ] || { echo "$f has $n glyph files, expected 256"; exit 1; }
 done
 
-# Chinese, into the same three fonts, so the style needs no other font:
-# every range Protomaps leaves empty (its file is just the font's name, under
-# 100 bytes) and Noto Sans SC fills. Medium from Medium; Regular and Italic
-# from Regular, as Chinese has no italic. The tool's binary and both fonts
-# are checked against the SHA-256s here; a new version needs new ones.
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) file=build_pbf_glyphs.x86_64-unknown-linux-gnu
     sum=8eb1a6e4e5a2977dbdb107a41dddf7d590866d160e86057c8ad5571fed5a004b ;;
-  # An Intel build, run by Rosetta on Apple silicon.
   Darwin-*) file=build_pbf_glyphs.x86_64-apple-darwin
     sum=445155e45c3f6f6d05499d13caf865ad9a8008152e41aa93e5775082ea372469 ;;
   *) echo "no build_pbf_glyphs $GLYPHS_VERSION for $(uname -s)-$(uname -m)"; exit 1 ;;
@@ -270,7 +197,6 @@ for pair in "Noto Sans Regular:NotoSansSC-Regular" "Noto Sans Medium:NotoSansSC-
     fi
   done
 done
-# Each font gets the CJK ideographs (82 ranges) and more; far fewer and it went wrong.
 [ "$filled" -ge 300 ] || { echo "Noto Sans SC filled only $filled glyph ranges; not uploading"; exit 1; }
 echo "Chinese: $filled glyph ranges from Noto Sans SC"
 

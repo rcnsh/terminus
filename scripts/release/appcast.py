@@ -17,8 +17,6 @@ if channel not in ('stable', 'beta'):
 url = f'{site}/download/releases/{version}/terminus-{version}.dmg'
 title = 'terminus beta' if channel == 'beta' else 'terminus'
 notes = site if channel == 'beta' else f'https://github.com/rcnsh/terminus/releases/tag/v{version}'
-# Every value escaped, attributes quoted: none of these should ever hold
-# '<' or '&', but an appcast that breaks would stop every Mac updating.
 title_x, site_x, notes_x = escape(title), escape(site), escape(notes)
 version_x, build_x, min_os_x = escape(version), escape(build), escape(min_os)
 print(f'''<?xml version="1.0" encoding="utf-8"?>

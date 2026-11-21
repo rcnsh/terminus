@@ -1,10 +1,3 @@
-/**
- * The web app's service worker (apps/web/public/sw.js), run in a stand-in
- * service-worker scope: its own `self`, Cache Storage held in memory, and a
- * `fetch` each test answers. Which way each address is fetched, the race
- * between the network and the kept copy, the account's kept replies (and
- * their going at sign-out), and what is never kept.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -12,15 +5,12 @@ import { read } from './_web.mjs';
 
 const ORIGIN = 'https://terminus.example';
 const SOURCE = read('sw.js');
-/** The worker's waits (SLOW_MS, 4 s) run this many times faster here. */
 const SPEED = 100;
 
 const keyOf = (req) => (typeof req === 'string' ? new URL(req, ORIGIN).href : req.url);
 
-/** What a request says for a header a reply varies by. */
 const said = (req, name) => (typeof req === 'string' ? null : req.headers.get(name));
 
-/** One cache: replies by address, each match a fresh copy, as the browser's; a reply's Vary on Accept-Language honoured unless ignoreVary. */
 function memoryCache() {
   const kept = new Map();
   const asked = new Map();
@@ -60,7 +50,6 @@ function memoryCache() {
 
 let scope;
 
-/** A fresh worker: sw.js run in its own scope, with `fetch` answering. */
 function worker({ fetch = () => Promise.reject(new TypeError('offline')), language = 'en-SG', globals = {} } = {}) {
   const listeners = {};
   const stores = new Map();
@@ -113,7 +102,6 @@ function worker({ fetch = () => Promise.reject(new TypeError('offline')), langua
   vm.createContext(ctx);
   vm.runInContext(SOURCE, ctx);
   scope = ctx;
-  /** A request through the worker: what it answered with (null: left to the browser), and what it carried on with. */
   const dispatch = (path, init = {}) => {
     let responded = null;
     const waits = [];
@@ -131,7 +119,6 @@ function worker({ fetch = () => Promise.reject(new TypeError('offline')), langua
 
 const json = (body, init = {}) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init });
-/** [p], or a failure after a while: a worker that waits for ever fails the test rather than hanging it. */
 function within(p, ms = 2_000) {
   let timer;
   const late = new Promise((_, fail) => {
@@ -139,7 +126,6 @@ function within(p, ms = 2_000) {
   });
   return Promise.race([p, late]).finally(() => clearTimeout(timer));
 }
-/** A fetch that answers only when told to: `hold.release(res)`. */
 function held() {
   let release;
   const p = new Promise((ok) => {
@@ -151,7 +137,6 @@ function held() {
 test('each address gets its way of fetching, and the live ones are left alone', () => {
   const w = worker({ fetch: () => Promise.resolve(new Response('')) });
   const calls = [];
-  // The strategies are the script's own functions: swapped for ones that only note the call.
   for (const name of ['networkFirst', 'cacheFirst', 'shellFile', 'tiles', 'networkThenKept', 'campusKept']) {
     w.ctx[name] = (req, arg) => {
       calls.push([name, typeof arg === 'string' ? arg : null]);
@@ -165,15 +150,12 @@ test('each address gets its way of fetching, and the live ones are left alone', 
   };
   const SHELL = w.get('SHELL');
   const cases = [
-    // The account's replies: the network first, the kept copy without it.
     ['/api/me', ['networkFirst', null]],
     ['/api/me/next?lat=1.3&lon=103.7&h12=1', ['networkFirst', null]],
     ['/api/me/day', ['networkFirst', null]],
-    // The app's files: from the network, the copy when it's slow.
     ['/app/', ['shellFile', '/app/']],
     ['/app/app.js', ['shellFile', '/app/app.js']],
     ['/assets/zh.js', ['shellFile', '/assets/zh.js']],
-    // Versioned in their address: the copy first, in the app's cache or the map's.
     ['/vendor/preact-10.29.8/preact.mjs', ['cacheFirst', SHELL]],
     ['/vendor/maplibre-gl@6.11.2/maplibre-gl.js', ['cacheFirst', null]],
     ['/map/fonts/Noto%20Sans%20Regular/0-255.pbf', ['cacheFirst', null]],
@@ -182,7 +164,6 @@ test('each address gets its way of fetching, and the live ones are left alone', 
     ['/app/map.js', ['networkThenKept', null]],
     ['/api/campus', ['campusKept', null]],
     ['/map/style.json', ['networkThenKept', null]],
-    // Never kept: live times, other pages, the timelapse's encoder, other sites.
     ['/api/arrivals?stop=COM3', null],
     ['/api/buses?svc=A1', null],
     ['/api/me/nearby', null],
@@ -192,9 +173,7 @@ test('each address gets its way of fetching, and the live ones are left alone', 
     ['https://elsewhere.example/app/app.js', null],
   ];
   for (const [path, expected] of cases) assert.deepEqual(way(path), expected, path);
-  // Only GETs are kept; a POST to /api/me/next goes straight through.
   assert.equal(way('/api/me/next', { method: 'POST', body: '{}' }), null);
-  // Signing in or out goes through the worker, which empties the kept replies.
   assert.deepEqual(way('/api/auth/logout', { method: 'POST' }), ['fetch']);
   assert.equal(way('/api/auth/logout'), null);
 });
@@ -214,17 +193,13 @@ test('soonest: the network when it answers in time, else the kept copy, else the
   const text = async (p) => (await p).text();
 
   assert.equal(await text(ctx.soonest(Promise.resolve(new Response('net')), copy, event(), wait)), 'net');
-  // Slow: the copy, while the network carries on in the event's lifetime.
   const e = event();
   assert.equal(await text(ctx.soonest(late(new Response('net'), 200), copy, e, wait)), 'kept');
   assert.equal(e.waits.length, 1);
-  // Slow with nothing kept: the network's answer, however long it takes.
   assert.equal(await text(ctx.soonest(late(new Response('net'), 60), none, event(), wait)), 'net');
-  // Failed: the copy at once, not after the wait.
   const started = Date.now();
   assert.equal(await text(ctx.soonest(Promise.reject(new TypeError('offline')), copy, event(), 5_000)), 'kept');
   assert.ok(Date.now() - started < 1_000);
-  // Failed with nothing kept: the failure.
   await assert.rejects(ctx.soonest(Promise.reject(new TypeError('offline')), none, event(), wait), { message: 'offline' });
 });
 
@@ -237,7 +212,6 @@ test('/api/me/next: kept with when it was fetched, and served after SLOW_MS when
   assert.equal((await first.json()).label, 'fresh');
   assert.equal(first.headers.get('x-terminus-cached'), null, 'the live reply is not marked');
 
-  // The network hangs: after SLOW_MS (here sped up), the kept copy, marked.
   const hang = held();
   answer = () => hang.promise;
   const started = Date.now();
@@ -248,7 +222,6 @@ test('/api/me/next: kept with when it was fetched, and served after SLOW_MS when
   assert.equal((await res.json()).label, 'fresh');
   const at = Number(res.headers.get('x-terminus-cached'));
   assert.ok(at >= before && at <= Date.now(), 'marked with when it was fetched');
-  // The late reply still replaces the copy, for next time.
   hang.release(json({ label: 'late' }));
   await within(Promise.all(waits));
   answer = () => Promise.reject(new TypeError('offline'));
@@ -265,12 +238,9 @@ test('/api/me/next: one copy per place, stop, clock and language, never one for 
   await w.dispatch('/api/me/next?lat=1.3&lon=103.7&acc=10', en).responded;
   await w.dispatch('/api/me/next?to=COM3', en).responded;
   online = false;
-  // Somewhere else, the same plan: its copy.
   assert.equal((await (await w.dispatch('/api/me/next?lat=1.2&lon=103.8', en).responded).json()).n, 1);
-  // A stop's card never stands in for the plan's, nor the plan's for a stop's.
   assert.equal((await (await w.dispatch('/api/me/next?to=COM3&lat=1', en).responded).json()).n, 2);
   await assert.rejects(w.dispatch('/api/me/next?to=UTOWN', en).responded);
-  // Another language or clock has no copy.
   await assert.rejects(w.dispatch('/api/me/next', { headers: { 'accept-language': 'zh-Hans' } }).responded);
   await assert.rejects(w.dispatch('/api/me/next?h12=1', en).responded);
 });
@@ -301,18 +271,15 @@ test("an app file answered with a server error gives the kept copy, as the accou
   const first = w.dispatch('/app/app.js');
   assert.equal(await (await first.responded).text(), 'good');
   await within(Promise.all(first.waits));
-  // A deploy window, an outage: the page gets the copy, not the error page.
   status = 503;
   const res = await within(w.dispatch('/app/app.js').responded);
   assert.equal(res.status, 200);
   assert.equal(await res.text(), 'good');
-  // With nothing kept, the error is all there is.
   const bare = await within(w.dispatch('/app/offline.js').responded);
   assert.equal(bare.status, 503);
 });
 
 test('/api/me/next: the copies stay apart on a browser whose URLSearchParams has no size (Safari before 17)', async () => {
-  // iOS 16.4 to 16.7, the first with web push, has no URLSearchParams.size.
   class OldParams extends URLSearchParams {
     get size() {
       return undefined;
@@ -328,7 +295,6 @@ test('/api/me/next: the copies stay apart on a browser whose URLSearchParams has
   await w.dispatch('/api/me/next?lat=1.3&lon=103.7', en).responded;
   await w.dispatch('/api/me/next?to=COM3', en).responded;
   online = false;
-  // A stop's card never stands in for the plan's, nor the plan's for a stop's.
   assert.equal((await (await w.dispatch('/api/me/next?lat=1.2&lon=103.8', en).responded).json()).n, 1);
   assert.equal((await (await w.dispatch('/api/me/next?to=COM3', en).responded).json()).n, 2);
   await assert.rejects(w.dispatch('/api/me/next?h12=1', en).responded);
@@ -347,7 +313,6 @@ test('signing in or out empties the kept replies, and a reply on its way then is
     const w = worker({ fetch: (req) => (hang && req.url.includes('/api/me/next') ? hang.promise : Promise.resolve(json({ who: 'a' }))) });
     await w.dispatch('/api/me/next').responded;
     assert.ok(await w.caches.has(w.get('DATA')));
-    // A refresh starts, then the account changes before it answers.
     hang = held();
     const { responded, waits } = w.dispatch('/api/me/next');
     await new Promise((ok) => setImmediate(ok));
@@ -356,7 +321,6 @@ test('signing in or out empties the kept replies, and a reply on its way then is
     hang.release(json({ who: 'a' }));
     await within(responded);
     await within(Promise.all(waits));
-    // The old account's reply never reaches the next one to sign in.
     const kept = await (await w.caches.open(w.get('DATA'))).keys();
     assert.deepEqual(kept, [], `${method} ${path}: nothing kept`);
   }
@@ -397,10 +361,8 @@ test("the map's versioned files: kept per version, and a retry is the same file"
   const glyphs = '/map/fonts/Noto%20Sans%20Regular/0-255.pbf';
   await w.dispatch(`${glyphs}?v=1`).responded;
   await w.dispatch(`${glyphs}?v=1`).responded;
-  // A new version of the glyphs is fetched, not answered with the old.
   await w.dispatch(`${glyphs}?v=2`).responded;
   assert.deepEqual(asked, [`${glyphs}?v=1`, `${glyphs}?v=2`]);
-  // A retry of a file kept already is answered from the copy.
   const lib = '/vendor/maplibre-gl%406.11.2/maplibre-gl.mjs';
   await w.dispatch(lib).responded;
   await w.dispatch(`${lib}?retry=1`).responded;
@@ -424,7 +386,6 @@ test('offline, the campus kept in the other language is used rather than no map'
   assert.deepEqual(await res.json(), { stops: [] });
 });
 
-/** A worker with /api/campus kept `age` ms ago (ETag "v1"), whose pages' messages land in `told`, and whose fetches are noted. */
 async function campusKeptFor(age, answer) {
   const asked = [];
   const told = [];
@@ -434,7 +395,6 @@ async function campusKeptFor(age, answer) {
       return answer(req);
     },
   });
-  // Copied out of the worker's realm, so they compare as plain objects.
   w.ctx.self.clients.matchAll = async () => [{ postMessage: (m) => told.push(JSON.parse(JSON.stringify(m))) }];
   const cache = await w.caches.open(w.get('MAP'));
   const headers = { 'content-type': 'application/json', etag: '"v1"', 'x-terminus-cached': String(Date.now() - age) };
@@ -455,7 +415,6 @@ test('/api/campus: an older kept copy answers at once; a changed one found behin
   const net = held();
   const { w, cache, asked, told } = await campusKeptFor(2 * HOUR, () => net.promise);
   const { responded, waits } = w.dispatch('/api/campus');
-  // The kept copy, while the network still hasn't answered.
   assert.deepEqual(await (await within(responded)).json(), { stops: ['old'] });
   assert.equal(asked.length, 1);
   assert.equal(asked[0].headers.get('if-none-match'), '"v1"');
@@ -464,7 +423,6 @@ test('/api/campus: an older kept copy answers at once; a changed one found behin
   assert.deepEqual(told, [{ kind: 'campus' }]);
   const now = await cache.match(new Request(new URL('/api/campus', ORIGIN)));
   assert.deepEqual(await now.json(), { stops: ['new'] });
-  // Kept as fresh: the next ask doesn't check again.
   const again = w.dispatch('/api/campus');
   assert.deepEqual(await (await within(again.responded)).json(), { stops: ['new'] });
   await Promise.all(again.waits);
@@ -501,7 +459,6 @@ test('/api/campus: offline, an older kept copy still answers and stays', async (
 
 test("/api/campus: a 200 that isn't the API's JSON (a captive portal's page) is never kept, nor told", async () => {
   const portal = () => new Response('<html>Sign in to the Wi-Fi</html>', { status: 200, headers: { 'content-type': 'text/html' } });
-  // Behind an older copy: the copy stays, still due a check.
   const { w, cache, told } = await campusKeptFor(2 * HOUR, portal);
   const { responded, waits } = w.dispatch('/api/campus');
   await within(responded);
@@ -510,7 +467,6 @@ test("/api/campus: a 200 that isn't the API's JSON (a captive portal's page) is 
   const kept = await cache.match(new Request(new URL('/api/campus', ORIGIN)));
   assert.deepEqual(await kept.json(), { stops: ['old'] });
   assert.ok(Date.now() - Number(kept.headers.get('x-terminus-cached')) >= HOUR);
-  // JSON's content type over a body that isn't JSON: the same.
   const { w: w2, cache: cache2 } = await campusKeptFor(
     2 * HOUR,
     () => new Response('<html>', { headers: { 'content-type': 'application/json' } }),
@@ -519,7 +475,6 @@ test("/api/campus: a 200 that isn't the API's JSON (a captive portal's page) is 
   await within(second.responded);
   await Promise.all(second.waits);
   assert.deepEqual(await (await cache2.match(new Request(new URL('/api/campus', ORIGIN)))).json(), { stops: ['old'] });
-  // With nothing kept: passed to the page as it came, and not kept.
   const fresh = worker({ fetch: async () => portal() });
   const first = fresh.dispatch('/api/campus');
   assert.equal((await within(first.responded)).headers.get('content-type'), 'text/html');

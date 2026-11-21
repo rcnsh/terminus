@@ -1,28 +1,4 @@
 #!/bin/sh
-# Preact, its hooks and htm for the website's pages, copied from npm into
-# apps/web/public/vendor/ and served from our own domain (no CDN, no build:
-# the site's CSP stays same-site, and the service worker keeps them for
-# offline). htm turns tagged templates into Preact elements without eval, so
-# the CSP needs no 'unsafe-eval'. Re-run with new versions to update, then
-# change the path in apps/web/public/assets/ui.js, sw.js and every page's
-# modulepreload links.
-#
-# The folder has no "@" in its name, unlike the map's: Cloudflare's static
-# assets redirect "@" to "%40", a round trip per module import.
-#
-# Browsers keep /vendor/ for a year without asking (_headers), so a folder's
-# files must never change under the same name: a new htm with the same
-# Preact is refused here.
-#
-# Each tarball is checked against the npm integrity pinned below before
-# it's unpacked (scripts/vendor/vendor-lib.sh), and the files written are recorded
-# in vendor/SHA256SUMS. Another version needs its integrity passed in:
-#
-#   scripts/vendor/vendor-preact.sh [preact-version] [htm-version]
-#   PREACT_INTEGRITY=sha512-… scripts/vendor/vendor-preact.sh 10.30.0
-#
-# (from `npm view preact@10.30.0 dist.integrity`; HTM_INTEGRITY for htm).
-# Then pin the new version and integrity here.
 set -eu
 cd "$(dirname "$0")/../.."
 . scripts/vendor/vendor-lib.sh
@@ -44,13 +20,10 @@ tar xzf "$H_TGZ" -C "$WORK/h"
 NEW="$WORK/out"
 mkdir -p "$NEW"
 cp "$WORK/p/package/dist/preact.module.js" "$NEW/preact.mjs"
-# hooks imports "preact" by its package name, which a browser can't resolve.
 sed 's/from"preact"/from".\/preact.mjs"/g' "$WORK/p/package/hooks/dist/hooks.module.js" >"$NEW/hooks.mjs"
 cp "$WORK/h/package/dist/htm.module.js" "$NEW/htm.mjs"
 licence "$WORK/p/package/LICENSE" "$NEW/LICENSE-preact"
 licence "$WORK/h/package/LICENSE" "$NEW/LICENSE-htm"
-# Source-map comments point at files not copied.
-# Two commands, not `sed && rm`: set -e doesn't stop for a failure before &&.
 sed -i.bak '/^\/\/# sourceMappingURL=/d; s#//\# sourceMappingURL=[^ ]*$##' "$NEW"/*.mjs
 rm -f "$NEW"/*.bak
 if grep -q 'from"preact' "$NEW"/*.mjs; then

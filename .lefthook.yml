@@ -1,15 +1,8 @@
-# Git hooks, installed by `pnpm install` (the root `prepare` script).
-# Skip once with `git commit --no-verify` or `LEFTHOOK=0 git commit`.
-#
-# pre-commit formats only the staged files and stages the result. Kotlin is
-# left out: ktfmt runs through Gradle, too slow for every commit. Run
-# `pnpm format:kotlin` yourself; CI's ktfmtCheck catches what you miss.
 pre-commit:
   parallel: true
   jobs:
     - name: oxfmt
       glob: '*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc,json5}'
-      # Mirrors ignorePatterns in .oxfmtrc.json, which oxfmt also applies.
       exclude:
         - 'apps/web/public/vendor/**'
         - 'apps/api/data/**'
@@ -26,6 +19,5 @@ pre-commit:
 
     - name: swift-format
       glob: '*.swift'
-      # Same invocation as scripts/format-swift.sh (pnpm format:swift).
       run: swift format format --in-place --parallel {staged_files}
       stage_fixed: true

@@ -1,11 +1,3 @@
-/**
- * The web card's journey (apps/web/public/account/journey.js): the only words
- * it works out itself are the countdowns, "Leave in 4 min" and the bus's "in
- * 4 min"; every other line is the server's, worded here only for an answer
- * from before the server sent them. Both must read as the Android app's card
- * styles do (JourneyText.kt), on every answer the apps share in
- * fixtures/answers, in English and Chinese.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,11 +5,9 @@ import { useLang, web } from './_web.mjs';
 
 const J = await web('account/journey.js');
 const { setClockPref, t } = await web('account/dom.js');
-// The fixtures' times are in the 24-hour clock.
 setClockPref('24');
 
 const ANSWERS = new URL('../../../fixtures/answers/', import.meta.url);
-/** Every shared answer with a journey, in each language: [lang, name, answer]. */
 function answers() {
   const out = [];
   for (const [lang, dir] of [
@@ -36,7 +26,6 @@ function answers() {
   return out;
 }
 
-/** The lines the server sends, by name, with the function that shows each. */
 const LINES = {
   title: (a, j) => J.to(a, j),
   walkText: (a, j) => J.walkText(j),
@@ -47,11 +36,6 @@ const LINES = {
   backupText: (a, j) => J.backup(a, j),
 };
 
-/**
- * JourneyText.kt's countdowns, as written there: whole seconds to leave
- * (none at the stop, without a leave time, or once it has passed), rounded
- * minutes from two minutes, then minutes and seconds, then seconds.
- */
 const android = {
   secondsToLeave(a, j, now) {
     if (a.card.phase === 'waiting') return null;
@@ -86,7 +70,6 @@ const android = {
   },
 };
 
-/** Seconds either side of the leave time (or the bus) the countdown is read at: each step of its wording, and the edges between them. */
 const OFFSETS_S = [-3_600, -601, -150, -149.5, -121, -120, -119.9, -90, -61, -60, -59.5, -30, -1, -0.4, 0, 0.5, 60, 600];
 
 test('there are shared answers with a journey in both languages', () => {
@@ -99,7 +82,6 @@ test('the countdowns read as the Android app reads them, on every shared answer,
   for (const [lang, name, a] of answers()) {
     useLang(lang);
     const j = a.card.journey;
-    // The leave time, else the bus, else when the answer is from.
     const mark = Date.parse(a.leave?.at ?? j.boardAt ?? a.asOf);
     for (const s of OFFSETS_S) {
       const now = mark + s * 1000;
@@ -109,7 +91,6 @@ test('the countdowns read as the Android app reads them, on every shared answer,
       assert.equal(J.leaveTime(a, j, now), android.leaveTime(a, j, now), at);
       assert.equal(J.by(a, j, now), android.by(a, j, now), at);
       assert.equal(J.busIn(j, now), android.busIn(j, now), at);
-      // The time drawn in the accent is inside its headline, in both languages.
       const time = J.leaveTime(a, j, now);
       if (time !== null) assert.ok(J.leaveIn(a, j, now).includes(time), `${at}: "${time}" in "${J.leaveIn(a, j, now)}"`);
     }
@@ -127,7 +108,6 @@ test('"Leave in 4 min", then minutes and seconds, then seconds, then "Leave now"
     [-119, 'Leave in 1 min 59 s', '1 min 59 s'],
     [-65, 'Leave in 1 min 5 s', '1 min 5 s'],
     [-45, 'Leave in 45 s', '45 s'],
-    // Under a second left still counts down, rather than a "0 s".
     [-0.4, 'Leave in 1 s', '1 s'],
     [0, 'Leave now', null],
     [3_600, 'Leave now', null],
@@ -137,7 +117,6 @@ test('"Leave in 4 min", then minutes and seconds, then seconds, then "Leave now"
     assert.equal(J.leaveIn(a, j, at + s * 1000), head, `${s} s`);
     assert.equal(J.leaveTime(a, j, at + s * 1000), time, `${s} s`);
   }
-  // "by ~09:36" under it until then, and gone with "Leave now".
   assert.equal(J.by(a, j, at - 60_000), 'by ~09:36');
   assert.equal(J.by(a, j, at), null);
 });
@@ -175,7 +154,6 @@ test('the bus\'s "in 4 min": minutes and seconds under two minutes, gone once it
   useLang('en');
   assert.equal(J.busIn(j, board - 10 * 60_000), 'in 10 min');
   assert.equal(J.busIn(j, board - 119_000), 'in 1 min 59 s');
-  // Its last minute in seconds alone, never "in 0 min 30 s".
   assert.equal(J.busIn(j, board - 30_000), 'in 30 s');
   assert.equal(J.busIn(j, board - 60_000), 'in 1 min 0 s');
   assert.equal(J.busIn(j, board), null);
@@ -193,7 +171,6 @@ test("every line the server sent is shown as it is, even when it's nothing", () 
     if (j.byText !== undefined && a.leave?.at)
       assert.equal(J.by(a, j, Date.parse(a.leave.at) - 60_000), j.byText, `${lang}/${name} byText`);
   }
-  // Said as nothing, it stays nothing: not worded here from the rest.
   assert.equal(
     J.said({ walkText: null, walk: '5 min' }, 'walkText', () => 'worded here'),
     null,
@@ -205,12 +182,9 @@ test("every line the server sent is shown as it is, even when it's nothing", () 
 });
 
 test('an answer from before the server sent its lines is worded here as the server words them', () => {
-  // The service worker's kept copy can be from an older server: without
-  // the lines, the card words them from the journey's parts, the same way.
   for (const [, name, a] of answers().filter(([l]) => l === 'en')) {
     useLang('en');
     const j = a.card.journey;
-    // A change of bus came after the lines: no answer without them has one.
     if (j.change) continue;
     const old = Object.fromEntries(Object.entries(j).filter(([k]) => !(k in LINES) && k !== 'byText'));
     for (const [key, show] of Object.entries(LINES)) {

@@ -1,24 +1,4 @@
 #!/bin/sh
-# Build, sign and package the Mac app as build/release/<version>/terminus-<version>.dmg:
-# a disk image holding terminus.app and an Applications shortcut to drag it onto.
-#
-#   SIGN_IDENTITY=<certificate SHA-1> SIGN_KEYCHAIN=<keychain> scripts/release/package-mac.sh
-#   PUBLISH=true NOTARY_PROFILE=terminus-notary ... scripts/release/package-mac.sh
-#
-# With CHANNEL=beta (and BETA_VERSION, BETA_BUILD; scripts/release/release-beta.sh
-# sets them) it packages "terminus beta.app" as
-# build/release/beta/<version>/terminus-<version>.dmg instead. RELEASES
-# moves build/release elsewhere (a dry run's build/dry-run).
-#
-# scripts/release/release.sh and scripts/release/release-beta.sh run this with PUBLISH=true
-# and the terminus Developer ID certificate from the login keychain. The app
-# and then the disk image are notarised by Apple (notarytool, with the
-# credentials stored in the keychain as NOTARY_PROFILE) and the tickets
-# stapled to them, so macOS opens a download without asking. Every version
-# carries the same code identity, the team's, so macOS keeps the app's
-# location permission and login item across updates. The stapling changes
-# the disk image, so the Sparkle signature is made after this, never before.
-# Without SIGN_IDENTITY it signs ad-hoc, for trying the packaging locally.
 set -eu
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
@@ -38,8 +18,6 @@ else
 fi
 DMG="$OUT/terminus-$VERSION.dmg"
 mkdir -p "$OUT"
-# A release that's published must be signed with the terminus certificate:
-# an ad-hoc signature would break updates and permissions on every Mac.
 if [ "${PUBLISH:-}" = true ] && [ -z "${SIGN_IDENTITY:-}" ]; then
   echo "SIGN_IDENTITY is not set; refusing to package a release to publish" >&2
   exit 1
@@ -53,9 +31,7 @@ TEAM=BUKSCHP3SV
 echo "== mac $VERSION ($CHANNEL)"
 (cd apps/macos && ./build.sh >/dev/null)
 APP="apps/macos/build/$NAME.app"
-# Every nested framework and helper too, not just the app's own seal.
 codesign --verify --deep --strict "$APP"
-# The hardened runtime on the app and everything inside it that runs (build.sh).
 for code in "$APP" "$APP/Contents/Frameworks/Sparkle.framework" "$APP/Contents/Frameworks/MapLibre.framework" \
   "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"; do
   if ! codesign -dv "$code" 2>&1 | grep -q '^CodeDirectory .*flags=.*runtime'; then
@@ -63,9 +39,6 @@ for code in "$APP" "$APP/Contents/Frameworks/Sparkle.framework" "$APP/Contents/F
     exit 1
   fi
 done
-# Every binary links only macOS's own libraries (/System, /usr/lib) and the
-# app's (@rpath, @executable_path, @loader_path): one linked from Homebrew
-# loads on the Mac that built it and nowhere else.
 find "$APP" -type f -perm +111 | while IFS= read -r bin; do
   file -b "$bin" | grep -q Mach-O || continue
   foreign=$(otool -L "$bin" | grep -v ':$' | awk '{ print $1 }' | grep -vE '^(/System/|/usr/lib/|@rpath/|@executable_path/|@loader_path/)' || true)
@@ -81,11 +54,6 @@ if [ "${PUBLISH:-}" = true ] && codesign -dv "$APP" 2>&1 | grep -q '^Signature=a
 fi
 DR=$(codesign -d -r- "$APP" 2>&1 | grep designated)
 echo "$DR"
-# Signed with a certificate, the app must be ours: macOS ties the app's
-# permissions and login item to this requirement (the bundle id, a
-# Developer ID from Apple, and the team), and a release with another would
-# lose them on every Mac. It names the team rather than the certificate, so
-# a renewed certificate keeps it.
 if [ -n "${SIGN_IDENTITY:-}" ]; then
   for want in "identifier \"$ID\"" "anchor apple generic" "certificate leaf[subject.OU] = $TEAM"; do
     echo "$DR" | grep -Fq "$want" || {
@@ -95,9 +63,6 @@ if [ -n "${SIGN_IDENTITY:-}" ]; then
   done
 fi
 
-# Apple's notary service checks the upload and issues a ticket; stapling it
-# lets macOS check a download offline. notarytool exits 0 even when it
-# rejects an upload, so the status is read from its answer.
 notarise() {
   out=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json) || {
     echo "notarytool couldn't submit $1" >&2
@@ -125,7 +90,6 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/$NAME.app"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
-# hdiutil sometimes fails with "Resource busy"; a retry does it.
 for try in 1 2 3; do
   hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" && break
   [ "$try" = 3 ] && exit 1
