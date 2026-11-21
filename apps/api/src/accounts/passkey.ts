@@ -1,5 +1,5 @@
 import type { Env } from '../types.ts';
-import { json } from '../http.ts';
+import { json, timingSafeEqual } from '../http.ts';
 import { b64url, fromB64url } from '../push/webpush.ts';
 
 export const PASSKEYS_KEY = 'operator:passkeys';
@@ -71,9 +71,7 @@ export async function challengeOk(token: string, challenge: string, nowMs: numbe
   if (b?.length !== 40) return false;
   const body = b.subarray(0, 24);
   const want = (await mac(token, 'challenge', body)).subarray(0, 16);
-  let diff = 0;
-  for (let i = 0; i < 16; i++) diff |= want[i] ^ b[24 + i];
-  return diff === 0 && Number(new DataView(body.buffer, body.byteOffset).getBigUint64(0)) > nowMs;
+  return timingSafeEqual(b.subarray(24), want) && Number(new DataView(body.buffer, body.byteOffset).getBigUint64(0)) > nowMs;
 }
 
 export async function newSession(token: string, nowMs: number): Promise<{ session: string; expires: string }> {

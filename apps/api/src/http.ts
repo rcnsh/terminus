@@ -1,6 +1,12 @@
 import { MAX_FIX_ACC_M, TTL } from './config.ts';
 import { errorText } from './i18n.ts';
 
+export function timingSafeEqual(given: Uint8Array, secret: Uint8Array): boolean {
+  let diff = given.length ^ secret.length;
+  for (let i = 0; i < secret.length; i++) diff |= (given[i] | 0) ^ secret[i];
+  return diff === 0;
+}
+
 export const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'content-type, authorization, x-api-key, if-match, x-terminus-client',

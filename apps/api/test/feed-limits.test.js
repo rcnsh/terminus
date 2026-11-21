@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch, makeKV, keyed, withApiKey } from './_stubs.mjs';
 import worker from '../src/index.ts';
 import { MIN_POLL_MS, TIMELAPSE, TTL, WALK } from '../src/config.ts';
 import { fetchArrivals, getArrivals } from '../src/feeds/fms.ts';
@@ -18,7 +18,7 @@ async function at(atMs, path, { fetchImpl, env = makeEnv() } = {}) {
   Date.now = () => atMs;
   if (fetchImpl) globalThis.fetch = fetchImpl;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path), env, ctx);
+  const res = await worker.fetch(new Request(BASE + path, keyed()), await withApiKey(env), ctx);
   await ctx.settle();
   return res;
 }

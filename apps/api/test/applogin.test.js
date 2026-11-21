@@ -607,7 +607,6 @@ test('the bus answers refuse an old app too, in Chinese for zh', async () => {
   const { env } = setup();
   const token = await anon(env);
   const strict = { ...env, KV: makeKV({ 'config:minClient': { mac: '2.6.0' } }) };
-  delete strict[Symbol.for('terminus.testOpen')];
   const old = await call(strict, '/api/campus', { token, headers: { 'x-terminus-client': 'mac/2.5.0', 'accept-language': 'zh-CN' } });
   assert.equal(old.status, 426);
   assert.deepEqual(await old.json(), { error: '请更新 terminus 以继续使用。', update: true });

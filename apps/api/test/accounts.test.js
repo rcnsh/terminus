@@ -16,7 +16,7 @@ import {
   sendMail,
   verifyTurnstile,
 } from '../src/accounts/accounts.ts';
-import { d1Unavailable } from '../src/accounts/access.ts';
+import { callerFor, d1Unavailable } from '../src/accounts/access.ts';
 import { WALK } from '../src/config.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
@@ -914,7 +914,6 @@ test('no 429 in the API goes out without a retry-after', () => {
 
 test('signed in, the map and answers are limited per account, not per IP', async () => {
   const { env, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const never = { limit: async () => ({ success: false }) };
   assert.equal((await call({ ...env, RL_PUBLIC: never }, '/api/campus', { cookie })).status, 200);
@@ -1333,7 +1332,6 @@ test('/api/me/next from inside your residence counts your own walk to your stop'
 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')];
   for (const path of [
     '/api/next?lat=1.2966&lon=103.7764',
     '/api/trip?to=UTOWN&from=PGP',
@@ -1439,7 +1437,6 @@ test('the profile comes with its limits, wherever it is sent, and they are the o
 
 test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {
   const { env, db, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const made = await (await call(env, '/api/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).json();
   assert.match(made.key, /^tk_/);
@@ -1465,9 +1462,17 @@ test('API keys: made on the account page, shown once, work anywhere, revocable',
   assert.equal((await call(env, '/api/arrivals?stop=COM3', { key: made.key })).status, 401, 'revoked');
 });
 
+test('the answers open to no one without a key or a token, whatever the env holds', async () => {
+  const { env } = setup();
+  env[Symbol.for('terminus.testOpen')] = true;
+  const req = () => new Request(`${BASE}/api/stops/pairs`);
+  assert.equal(await callerFor(env, req(), Date.now()), null);
+  assert.equal((await call(env, '/api/stops/pairs')).status, 401);
+  assert.equal((await call({ ...env, DB: undefined }, '/api/stops/pairs')).status, 401);
+});
+
 test('a session token that happens to start tk_ is still a session, not a missing key', async () => {
   const { env, db } = setup();
-  delete env[Symbol.for('terminus.testOpen')];
   const { token } = await (await call(env, '/api/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
   const unlucky = `tk_${token.slice(3)}`;
   db._db.prepare('UPDATE sessions SET token_hash = ? WHERE token_hash = ?').run(await hashToken(unlucky), await hashToken(token));
@@ -1477,7 +1482,6 @@ test('a session token that happens to start tk_ is still a session, not a missin
 
 test('/api/buses remembers who was let in for a while; /me and the other answers never do', async () => {
   const { env, db } = setup();
-  delete env[Symbol.for('terminus.testOpen')];
   const { token } = await (await call(env, '/api/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
   const prepare = env.DB.prepare.bind(env.DB);
   let lookups = 0;
@@ -1976,7 +1980,6 @@ test('a one-off trip added while another device saves is not lost, nor is the ot
 
 test('D1 down: the answers and /me say 503 with Retry-After; one dropped query is tried again', async () => {
   const { env, email } = setup();
-  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const log = console.error;
   console.error = () => {};

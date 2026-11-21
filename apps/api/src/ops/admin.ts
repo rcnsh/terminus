@@ -5,7 +5,7 @@ import { sessionOk } from '../accounts/passkey.ts';
 import { aeSql } from './analytics.ts';
 import { COL } from '../analytics-rows.ts';
 import { collectState } from './collect.ts';
-import { json } from '../http.ts';
+import { json, timingSafeEqual } from '../http.ts';
 import { etaSummary } from './eta.ts';
 import { shadowSummary } from './etashadow.ts';
 import { sgtDate } from '../timetable/calendar.ts';
@@ -32,14 +32,10 @@ export async function canReadAppVersion(env: Env, req: Request, nowMs = Date.now
 
 function sentToken(req: Request, token: string | undefined): boolean {
   const given = req.headers.get('x-health-token');
-  return Boolean(token && given && timingSafeEqual(given, token));
+  return Boolean(token && given && timingSafeEqual(enc.encode(given), enc.encode(token)));
 }
 
-export function timingSafeEqual(given: string, secret: string): boolean {
-  let diff = given.length ^ secret.length;
-  for (let i = 0; i < secret.length; i++) diff |= (given.charCodeAt(i) | 0) ^ secret.charCodeAt(i);
-  return diff === 0;
-}
+const enc = new TextEncoder();
 
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;

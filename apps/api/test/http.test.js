@@ -1,12 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CORS, UpstreamUnreachable, clientKey, coordsFrom, json, timedFetch, withSecurityHeaders } from '../src/http.ts';
+import { CORS, UpstreamUnreachable, clientKey, coordsFrom, json, timedFetch, timingSafeEqual, withSecurityHeaders } from '../src/http.ts';
 import { landmark, targetStops } from '../src/answer/landmarks.ts';
 import { termDay } from '../src/timetable/calendar.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
 
 const req = (ip) => new Request('https://x.test/', { headers: ip ? { 'cf-connecting-ip': ip } : {} });
+
+test('the constant-time compare gets every length, prefix and byte right', () => {
+  const enc = new TextEncoder();
+  for (const [given, ok] of [
+    ['secret', true],
+    ['secre', false],
+    ['secret!', false],
+    ['', false],
+    ['Secret', false],
+    ['secret\u0000', false],
+    ['xsecret', false],
+    ['secrét', false],
+  ]) {
+    assert.equal(timingSafeEqual(enc.encode(given), enc.encode('secret')), ok, JSON.stringify(given));
+  }
+  const mac = Uint8Array.from({ length: 16 }, (_, i) => i * 17);
+  assert.equal(timingSafeEqual(mac.slice(), mac), true);
+  for (let i = 0; i < 16; i++) {
+    const flipped = mac.slice();
+    flipped[i] ^= 1;
+    assert.equal(timingSafeEqual(flipped, mac), false, `byte ${i}`);
+  }
+  assert.equal(timingSafeEqual(mac.subarray(0, 15), mac), false);
+  assert.equal(timingSafeEqual(new Uint8Array(0), new Uint8Array(0)), true);
+});
 
 test('coordsFrom: a fix the phone says is hundreds of metres out is no location', () => {
   const at = (q) => coordsFrom(new URL(`https://x.test/api/me/next?${q}`));

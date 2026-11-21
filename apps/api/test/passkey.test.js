@@ -4,7 +4,17 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeAuthenticator } from './_passkey.mjs';
 import worker from '../src/index.ts';
-import { challengeOk, derToRaw, newChallenge, newSession, PASSKEYS_KEY, SESSION_MS, sessionOk } from '../src/accounts/passkey.ts';
+import {
+  CHALLENGE_MS,
+  challengeOk,
+  derToRaw,
+  newChallenge,
+  newSession,
+  PASSKEYS_KEY,
+  SESSION_MS,
+  sessionOk,
+} from '../src/accounts/passkey.ts';
+import { b64url, fromB64url } from '../src/push/webpush.ts';
 
 const BASE = 'https://bus.example.test';
 const TOKEN = 'operator-secret';
@@ -128,6 +138,21 @@ test('a passkey is refused: unknown, another site, another host, unverified, a s
     403,
     'an id the authenticator did not make',
   );
+});
+
+test('a challenge with any byte of its mac changed, cut short or past its time is refused', async () => {
+  const now = Date.now();
+  const good = await newChallenge(TOKEN, now);
+  assert.equal(await challengeOk(TOKEN, good, now), true);
+  assert.equal(await challengeOk(TOKEN, good, now + CHALLENGE_MS), false, 'expired');
+  assert.equal(await challengeOk('rotated', good, now), false);
+  const bytes = fromB64url(good);
+  for (const i of [0, 8, 23, 24, 31, 39]) {
+    const changed = bytes.slice();
+    changed[i] ^= 1;
+    assert.equal(await challengeOk(TOKEN, b64url(changed), now), false, `byte ${i}`);
+  }
+  assert.equal(await challengeOk(TOKEN, b64url(bytes.subarray(0, 39)), now), false, 'one byte short');
 });
 
 test('a session dies with its expiry, and with the token', async () => {
