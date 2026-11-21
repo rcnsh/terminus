@@ -51,7 +51,13 @@ so nothing changes once the page is up. It's `private, no-cache`, with a
 weak ETag of its own made from the file's ETag, the version, signed in or
 not and the beta (`landingEtag`), so a browser gets a 304 only while its
 copy is what it would be sent, never the file's own 304. The version carries its
-English in `data-t`, which `i18n.js` words in Chinese.
+English in `data-t`, which `i18n.js` words in Chinese. The page is filled
+by string replacement rather than HTMLRewriter, so the tests and the dev
+stub (Node, which has none) serve the same page; `landing.test.js` fails if
+`index.html` loses the markup it fills. Once `PLAY_URL` in
+`src/site/downloads.ts` is set, every Android button and link becomes
+Google Play's (its badge in each language, lazy-loaded) and the APK install
+step goes; until then it's null and the APK is offered.
 
 ---
 
@@ -105,7 +111,9 @@ done
 pnpm run deploy
 ```
 
-The other secrets are set the same way. Declared with `bindings.secret()` in
+The other secrets are set the same way. A secret must be declared with
+`bindings.secret()` or a `cf deploy` uploads a version without it.
+Rate-limit counters are per namespace, and the beta has its own. Declared in
 cloudflare.config.ts, besides the six above: `ALERT_EMAIL` (where outage
 alerts and feedback go), `HEALTH_TOKEN` (the operator's `x-health-token`),
 `TURNSTILE_SECRET` (Turnstile on sign-in; unset, the check is skipped; a
@@ -189,6 +197,21 @@ reads R2 (`RL_MAP`, 300 a minute; past it, 429 with `Retry-After: 60`): a
 piece already in the edge cache is never refused, since the file's last
 known ETag stands in when its look at R2 would be over the limit, so a
 lecture hall can open the map at once.
+An IPv6 caller is limited by its /64 (`clientKey` in http.ts), since one
+host usually owns a whole /64 and keying on the full address would give it
+2^64 buckets; `::ffff:` addresses are keyed as the IPv4 they carry.
+
+Every response gets the same hardening (`withSecurityHeaders`). The CSP
+lists exactly what the site loads: Turnstile, the QR library from cdnjs
+(`QR_LIB`, which the account page loads with SRI from its own copy of the
+address; `test/http.test.js` keeps the two the same), the map's workers
+(MapLibre starts them from its own same-origin file, so `worker-src 'self'`)
+and Cloudflare Web Analytics; fonts are the site's own. `/docs` adds
+Stoplight Elements from unpkg, pinned (`ELEMENTS`). The CDNs are allowed
+for those files only, not their whole hosts: either serves any library ever
+published, and an old one can be made to run a page's text as script. The
+sign-in and pairing pages (`/auth/`, `/pair`) send no referrer, since their
+URLs carry a token or a code.
 
 When D1 can't be reached, checking the key or session behind a keyed
 route is tried once more, then answered 503 with `Retry-After: 30`
@@ -308,6 +331,26 @@ classes don't run and the shuttles keep Sunday/PH hours. Neither the scrape
 nor the cron's merge touches that file. [`src/config.ts`](../apps/api/src/config.ts) holds the cache
 TTLs and tuning constants.
 
+What the import (`src/timetable/nusmods.ts`) relies on from NUSMods:
+- A share link is `.../timetable/sem-1/share?CS2040=TUT:W11,LEC:2&...`:
+  each module maps to comma-separated `TYPE:classNo` pairs; `hidden` and
+  `ta` are view state, not lessons. Special terms are `st-i` and `st-ii`,
+  semesters 3 and 4. A module's lessons give `lessonType` in full
+  ("Lecture"; the link abbreviates it) and times as `"HHMM"` strings.
+- NUSMods' API no longer gives venue coordinates (0 of about 600 venues
+  carried one), which is why `data/venues.json` maps each building to its
+  stop, precomputed from uNivUS's venue coordinates. A venue is looked up
+  by its full code, then the building before the `-` (`AS3-0307` is
+  `AS3`), then that without its trailing digits.
+- Module data changes a few times a semester, so each module's JSON is
+  kept a day at the edge: a class importing the same modules costs NUSMods
+  one fetch each. One import reads at most `MAX_MODULES` (15; a full load
+  is 5 to 7), and a room more than 1.5 km from any stop (Duke-NUS, the
+  hospital) is off campus.
+- A module NUSMods has no timetable for is `missing`; one it couldn't be
+  reached for is `failed`, and an import with any failed never replaces a
+  working timetable.
+
 The profile is one JSON document per account, with a version (`updated`,
 which every save moves forward). `POST /api/me/once` and `POST /api/me/import`
 change part of it: they save only if the version is still the one they read,
@@ -342,7 +385,9 @@ A copy that passes is merged over what's known and kept in KV
 (`calendar:data`). Merging adds, except that a future holiday the newer copy
 covers and no longer lists is removed, so one added upstream by mistake
 doesn't stay. After a failure the cron tries again the next day, and the
-error is in the Worker's logs as `cron calendar`.
+error is in the Worker's logs as `cron calendar`. A failed KV read of the
+kept copy fails the refresh too, since writing over it as if nothing were
+kept would drop the years merged before.
 
 Every request, and the Trip object, reads that copy at most every 10 minutes
 per instance and merges it with the bundled one; the newer wins where they
@@ -355,8 +400,10 @@ the fetched copy is within 45 days of its end, that is when NUSMods doesn't
 list the next academic year yet. The end is three weeks past the last
 semester's exams, but never into the week the next academic year's first
 semester would start (52 weeks after the last one), which Special Term II
-ends a week before. Past the end, imported classes count every week, as
-before, except a timetable for a semester the data says has ended; a lesson
+ends a week before (a semester runs 17 weeks to its exams' end, a special
+term 6, with no recess). Past the end, imported classes count every week
+(failing open: a guessed class beats a timetable that goes blank because
+nobody redeployed), except a timetable for a semester the data says has ended; a lesson
 with its own dates keeps to them. A sem-1 link pasted then is read as the new
 year's, with the old one to fall back on (`termsForImport`).
 
@@ -1013,6 +1060,23 @@ The planner ([src/timetable/profile.ts](../apps/api/src/timetable/profile.ts), `
 - Outside your day, a location on campus but not at home gets the trip home.
 - On the trip home, `card.warning` says "Last D2 from UTown in 18 min" from
   45 minutes before the service's published end (`data/service-hours.json`).
+- In a gap longer than `gapHours` the trip is home, until `GAP_RETURN_MIN`
+  (an hour) before the next class. Not when the next class is at the home
+  stop: "Home" is no trip then.
+- Outside `dayStartMin` to `dayEndMin` the answer rests. A class that ends
+  late keeps the day open `EVENING_GRACE_MIN` (45) after it, and one
+  starting near or before the day's start opens it `MORNING_LEAD_MIN` (90)
+  early. In the morning the rest says when the day starts, since "Done for
+  today" at 05:00 beside "Next: ..., today 10:00" reads as a contradiction.
+- The next class is looked for up to `LOOKAHEAD_DAYS` (120) ahead, a whole
+  semester break. Dates are worded by hand ("Mon 28 Sep"), not with
+  `Intl`, whose output varies by runtime.
+- "On time" needs `ON_TIME_SLACK_S` (3 minutes) spare. Past
+  `MAX_VENUE_WALK_S` (20 minutes' walk) from its stop, a venue isn't
+  really the stop's (off campus, bad data), so no lateness is given.
+- Home is stops only. Exact coordinates of where someone lives are more
+  than the planner needs and not something to keep; an older client's
+  `lat`/`lon` in `home` is accepted and dropped.
 
 A location comes as `lat`/`lon`, with `acc`: how far out it may be, in
 metres, its accuracy plus a walking pace times its age (the apps and the web
@@ -1020,9 +1084,12 @@ app work this out, `Locator.uncertaintyM`). Over 200 m (`MAX_FIX_ACC_M`) the
 fix is dropped and the answer follows the timetable: a cell-tower fix, or a
 precise one from ten minutes ago, planned the trip from the wrong side of
 campus and said so with confidence. Every location is rounded to four
-decimal places, about 11 metres, as it is read (`roundCoord` in http.ts,
+decimal places, about 11 metres (what the privacy policy promises), as it is read (`roundCoord` in http.ts,
 used by `coordsFrom` and `fixOf`), whoever sends it: the apps round too,
-but a script with an API key needn't.
+but a script with an API key needn't. A missing `lat` is no location, not 0:
+`Number('')` and `Number(null)` are 0, which would put the caller in the
+Gulf of Guinea with "no stop nearby" instead of falling back to `?from=` or
+the home stop (`numParam`).
 
 `GET /api/me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
@@ -1135,7 +1202,10 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   migration 0009), five at most.
 - Every email (sign-in, a device added, feedback, the operator's alerts) is
   plain text with an HTML version from `src/site/mail.ts`, built with react-email
-  (written with htm, as the sources have no JSX build step). The plain text
+  (written with htm, as the sources have no JSX build step). Mail clients
+  keep little CSS (Gmail drops `<style>` in places, Outlook renders with
+  Word), so every style is inline and the layout is tables, in site.css's
+  light colours. The plain text
   is written where each is sent and stays the one the tests read. `mail.ts`
   is loaded with `import()` (`mail` in accounts.ts): React and its renderer
   are most of the Worker's size, and most requests send no email.
@@ -1327,7 +1397,11 @@ map; and Settings. It uses the same routes as the account page, with the session
   `Clock`) so the times it writes itself, and the widgets, match; `auto`
   follows the device.
 - **Which language a reply is in.** The profile's `lang`, when set, wins
-  over the request's `Accept-Language` (`useProfileLang`), and every `/api`
+  over the request's (`useProfileLang`): `?lang=`, then the website's
+  `terminus-lang` cookie, then `Accept-Language` (any `zh*` is Chinese),
+  else English. It rides in an AsyncLocalStorage set once per request, so
+  formatters call `m()` rather than pass a language down; outside a
+  request (tests, the cron) it's English. Every `/api`
   reply says what it was written in (`Content-Language`, from `index.ts`).
   An app that switches language asks again at once, before its debounced
   profile save reaches the account, so that reply is in the old language.
@@ -1776,6 +1850,18 @@ data centre). Static files skip the Worker and are still served near the
 user; the cron and the Durable Objects aren't placed. Placement only
 affects `fetch`.
 
+**What never changes between deploys is built once per isolate, on first
+use.** `/api/campus` (per language), `/api/stops/pairs`, the map styles,
+the OpenAPI spec (per origin, a few at most; past that it starts again, so
+made-up hosts can't grow it) and the `/docs` page (per sky phase). Built
+at module scope instead, every cold start would pay for them whatever it
+was started for.
+
+The cron handler awaits its run rather than leaving it to `waitUntil`: a
+run that outlived the handler could be cut off partway, with the
+trigger's history still saying it succeeded. An unhandled error is logged
+with its route's path only, since a query can hold coordinates.
+
 **Fetch-on-demand with a 15-second edge cache; no poll loop.** Workers has no
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
 cache entry is keyed on the **resolved stop code**, not the request URL:
@@ -1804,7 +1890,9 @@ a waiter lets go of its timer once the answer comes. The gate keeps its claim an
 storage, since an idle object may leave memory between windows; it is
 billed only while it answers. Within a data centre, concurrent misses
 in one isolate share a fetch (the in-flight map), and the isolate fetching
-leaves a marker beside the key (`<key>/pending`): other isolates serve their
+leaves a marker beside the key (`<key>/pending`, a path of its own: the
+cache never sees a `#fragment`, so that would be the answer's own entry),
+lasting past the slowest fetch (four timeouts and 10 s): other isolates serve their
 stale answer until it's done rather than fetch too. The marker is written as
 the fetch starts, not before it; an isolate that misses it in those few ms
 fetches too and meets this one at the feed gate, which lets one call the
@@ -1922,6 +2010,19 @@ caches and in the web app's service worker, so changed fonts need a new
 URL: the style's glyphs URL ends `?v=` and `GLYPHS` in `src/map/map.ts`, bumped
 when the fonts on R2 change (v2 brought the Chinese), and the edge keeps the
 versioned range apart from the old.
+
+How `src/map/map.ts` serves it:
+- A piece over 32 MB goes straight from R2, uncached (the whole file is
+  about 4 MB). What it learnt of the file (ETag, size) is kept at the edge
+  for 30 days though trusted for 5 minutes, since an older look still
+  serves when R2 may not be read or fails.
+- Cloudflare weakens an ETag when it compresses a body, so `If-None-Match`
+  with `W/` matches too; `If-Match` compares strongly, and failing it (or
+  `If-Unmodified-Since`) is 412, not 304.
+- A glyph range must be written as MapLibre writes it (`512-767`, no
+  padding) and a `?v=` other than `GLYPHS` is the old URL, so made-up
+  paths can't fill the cache or cost an R2 read. A malformed escape is a
+  404, not an error.
 
 Every client's MapLibre parses these files natively, so what goes up is
 pinned in `scripts/map-tiles.lock`: the build date, bbox and minzoom, the
@@ -2151,6 +2252,17 @@ and nothing else records:
   just due shows as now. A bus of a known service that matches neither
   direction (a short working) is left out, and logged once an hour per
   stop.
+- Google Play's uNivUS page is one large script blob; the app's own
+  versionName sits just before its target and minimum SDK levels, as
+  `[[["2.59.2"]],[[[35]],[[[23,"6.0"]]]]]` (`versionFromPlay`). Other
+  version strings on the page belong to reviews. `appversion.ts` guesses
+  versionCodes only under a name newer than ours: a page still showing
+  our name hasn't caught up, and guessing would spend NUS calls on
+  nothing.
+- A connection that fails throws whatever the runtime throws: a TypeError
+  in Node, a plain Error in workerd ("Network connection lost.",
+  "internal error; reference = ..."). `timedFetch`'s signal is its own, so
+  any throw but its timeout is the connection (`UpstreamUnreachable`).
 
 ## Data flow, confirmed
 
@@ -2267,6 +2379,40 @@ Four things that will bite you:
 
 A new mint doesn't end the device's earlier tokens: on 2026-11-01 a token
 still worked after a second one was minted for the same device id.
+
+What else `auth.ts` relies on:
+
+- `ipaddr` is not what the mint checks: probing with it left out entirely
+  gave the same "Invalid API KEY" as a bad key, so a Worker, which has no
+  LAN address, sends `127.0.0.1` (the app sends its own; an emulator says
+  `10.0.2.15`). There is no request signing to reproduce.
+- The real `NEXTBUS_AUTH_BASE` carries a path prefix
+  (`/univus-public/mobile`), so `authUrl` appends `/get-access-token`
+  unless the base already ends with it; used as it stands, it posts to the
+  directory. A wrong path answers HTML with a 200, which the mint reports
+  as non-JSON with the first bytes of the body.
+- Minting a fresh token on every call draws intermittent 400s, so
+  `/api/health?probe=1` goes through the ordinary cached path.
+- Cloudflare strips `X-Forwarded-Proto` from Worker subrequests anyway.
+- `jwtExpMs` decodes the JWT and doesn't verify it: we are its bearer, not
+  its audience, and a forged expiry would only cost an early refresh.
+- `force` skips both the isolate's memo and KV: clearing the memo alone
+  would read the same refused token straight back out of KV.
+- One mint per isolate at a time (`inflight`, keyed by version): on a cold
+  cache `/api/trip` fetches several stops at once, and each minting its
+  own token meant one failed mint left that stop "unknown". A forced
+  caller that joins a mint under way still gets a fresh token.
+- The device id comes from `NEXTBUS_DEVICE_ID`, else KV `auth:deviceid`,
+  kept per namespace once read. A failed KV read throws rather than making
+  an id up, which would mint for one device, call as another and overwrite
+  the stored one. A newly made id isn't remembered in the isolate: when two
+  isolates both find none, only the last write is kept, and the next call
+  reads back the winner.
+- `UpstreamRejected.detail` keeps up to 2 KB of NUS's refusal, the best
+  clue to what a new uNivUS release changed. `redactDetail` blanks the
+  envelope's token, user and device ids, any JWT, any field named like a
+  key or password, and a value cut short before its closing quote, since
+  it goes to the logs and the operator's email.
 
 The 15-minute cron renews the token on both sites while the kept one is
 still good but has under `tokenRenewShare` (half) of its lifetime left,
@@ -2583,8 +2729,9 @@ A track lasts ten minutes from the last time the feed reported the bus,
 moved or not: a bus standing still at a terminus for longer keeps its side.
 A bus with no track (just appeared, or nobody watched the service for ten
 minutes) is placed by its heading when moving; standing, by the stop it's
-at, if it's clearly nearer one stop than its opposite stop; otherwise
-on the nearer side. A track that started wrong gives way when the bus is
+at, if it's within 30 m of one stop and 5 m nearer it than its opposite
+stop; otherwise on the nearer side. A stretch counts as the way a bus is
+heading within 60°. A track that started wrong gives way when the bus is
 seen moving the other way twice in a row; one odd heading doesn't move it.
 A tracked bus that strays more than 50 m off its line for under 30 s (a GPS
 jump) stays at its last place; longer (`HOLD_OFF_MS`: the depot, a

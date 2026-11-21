@@ -19,7 +19,8 @@ dev stub, never a typed server (`Servers.kt`, `Servers` in `Api.swift`).
 
 Pages opened on the old address go to the same page on terminus.run
 (`movedPage` in `src/site/site.ts`, on with `MOVE_PAGES`), and emailed links use
-terminus.run (`linkOrigin`). If a network refuses terminus.run,
-`cloudflare.config.ts` says how to switch both off. The
+terminus.run (`linkOrigin`). If a network refuses terminus.run, drop
+`MOVE_PAGES` and set `LINK_ORIGIN` to the old address in
+`cloudflare.config.ts`. The
 privacy contact is privacy@terminus.run, through Email Routing's catch-all,
 so it goes with the domain.

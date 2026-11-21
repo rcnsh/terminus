@@ -1,24 +1,8 @@
-/**
- * GET /api/stops/pairs -- every stop grouped with its opposite stop, and
- * which buses call at each side and where they go next.
- *
- * NUS stops come in directional pairs a few metres apart ("KR MRT" and
- * "Opp KR MRT"), well within GPS error, and the bus that goes your way only
- * stops on one side. The answers already use this to say "cross the road";
- * this is the same knowledge as data, for anyone building on it.
- *
- * A pure function of the bundled stop graph, so it only changes when a deploy
- * ships a new scrape. Distances are straight lines between the two stops,
- * deliberately not the footpath distances the answers use: those come from
- * OpenStreetMap, and publishing them as a dataset would carry its licence.
- */
-
 import { haversineM } from '../geo.ts';
 import type { Graph, Stop } from '../types.ts';
 
 export interface PairService {
   svc: string;
-  /** The stop this bus calls at next, or null when it terminates here. */
   next: string | null;
 }
 
@@ -32,16 +16,13 @@ export interface PairSide {
 }
 
 export interface PairPlace {
-  /** The code of the side that isn't "Opp", or the only side. */
   id: string;
   name: string;
-  /** Straight-line metres between the two sides; null with one side. */
   crossingM: number | null;
   sides: PairSide[];
 }
 
 export interface StopPairs {
-  /** When the stop graph was scraped. Codes can change between versions. */
   version: string;
   attribution: string;
   places: PairPlace[];
@@ -53,17 +34,14 @@ function isLoop(graph: Graph, svc: string, seq: string[]): boolean {
   return graph.loops?.[svc] ?? (seq.length > 1 && seq[0] === seq[seq.length - 1]);
 }
 
-/** Every call a service makes at each stop, with the stop after it. */
 function servicesByStop(graph: Graph): Map<string, PairService[]> {
   const out = new Map<string, PairService[]>();
   for (const [svc, seq] of Object.entries(graph.routes).sort(([a], [b]) => a.localeCompare(b))) {
     const loop = isLoop(graph, svc, seq);
-    // A loop's last entry repeats its first: one call there, not two.
     const calls = loop && seq[0] === seq[seq.length - 1] ? seq.length - 1 : seq.length;
     for (let i = 0; i < calls; i++) {
       const next = i + 1 < seq.length ? seq[i + 1] : null;
       const list = out.get(seq[i]) ?? [];
-      // A stop a route passes twice gets both calls, but not the same one twice.
       if (!list.some((c) => c.svc === svc && c.next === next)) list.push({ svc, next });
       out.set(seq[i], list);
     }
@@ -88,7 +66,6 @@ export function stopPairs(graph: Graph): StopPairs {
   for (const stop of graph.stops) {
     if (seen.has(stop.code)) continue;
     const opp = stop.opposite ? byCode.get(stop.opposite) : undefined;
-    // Only a mutual pair is a pair: a one-way pointer is a scrape oddity.
     const pair = opp && opp.opposite === stop.code ? [stop, opp] : [stop];
     pair.sort((a, b) => Number(isOpp(a)) - Number(isOpp(b)) || a.code.localeCompare(b.code));
     for (const s of pair) seen.add(s.code);

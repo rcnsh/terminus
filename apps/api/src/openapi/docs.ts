@@ -1,17 +1,9 @@
-/** The /docs page: Stoplight Elements reading /api/openapi.json, under a bar of the campus sky. */
-
 import { horizonSvg, lightInkAt, skyVars } from '../site/pagesky.ts';
 import { ELEMENTS } from '../http.ts';
 import type { Phase } from '../site/pagesky.ts';
 
-/** How wide the docs bar's hills are, in pixels: wider than any screen. */
 const HZ_W = 4000;
 
-/**
- * The docs page at the sky's hour in Singapore (pagesky.ts): its bar is a
- * slim band of that sky with the campus's hills along its foot, as at the
- * top of Settings' pages. Always the light page's sky: Elements is light.
- */
 export function docsPage(phase: Phase): string {
   return `<!doctype html>
 <html lang="en">
@@ -92,7 +84,6 @@ export function docsPage(phase: Phase): string {
 </html>`;
 }
 
-/** The docs page for each of the sky's five phases, built once each. */
 const docsMemo = new Map<Phase, string>();
 
 export function docsPageFor(phase: Phase): string {

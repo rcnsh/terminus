@@ -1,27 +1,9 @@
-/**
- * OpenAPI 3.1 description of this API. Served at /api/openapi.json and rendered
- * at /docs by Stoplight Elements.
- *
- * Kept by hand, next to the code it describes. test/worker.smoke.js asserts
- * every documented path answers (no 404s) and every route is documented;
- * test/openapi.test.js calls every operation and checks each status is
- * listed, each body fits its schema with no key left undocumented, and each
- * operation's `security` matches whether it answers 401. So the two cannot
- * silently drift.
- *
- * The paths are in openapi/paths.ts, the schemas in openapi/components.ts,
- * what both use in openapi/parts.ts and the /docs page in openapi/docs.ts.
- */
-
 import { RETRY_AFTER, errorResponse, slowDown } from './openapi/parts.ts';
 import { paths } from './openapi/paths.ts';
 import { components } from './openapi/components.ts';
 
 export { docsPage, docsPageFor } from './openapi/docs.ts';
 
-/** The apps' version (Android versionName, the Mac's CFBundleShortVersionString, the iPhone's MARKETING_VERSION):
- *  the API and the apps are released together. A test fails when a version
- *  bump leaves this behind. */
 export const API_VERSION = '3.12.0';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
@@ -60,7 +42,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       ].join('\n'),
     },
     servers: [{ url: origin }],
-    // An API key, or a signed-in session or device. Open routes (/api/health, sign-in, pairing, the map, ...) opt out with `security: []`.
     security: [{ apiKey: [] }, { bearer: [] }, { cookie: [] }],
     tags: [
       { name: 'Answers', description: 'Next-bus answers as ready-to-display text.' },
@@ -86,7 +67,6 @@ const ACCOUNT_429 = {
   ),
   headers: RETRY_AFTER,
 };
-/** /api/auth/app/merge comes before the account's limit: only a token that is no session counts. */
 const BAD_TOKEN_429 = {
   ...errorResponse('A token that is no session, sent too often from this IP. Wait for `Retry-After`.', {
     error: 'too many attempts, try again in a minute',
@@ -97,18 +77,6 @@ const CROSS_SITE = 'The request came from another site with this browser’s ses
 
 type Operation = { security?: Record<string, unknown>[]; responses?: Record<string, { description: string }> };
 
-/**
- * The responses every operation of a kind can give, added where it does not
- * list them itself, so each one says what can happen rather than only the
- * overview:
- * - the accounts-down 503 on every operation that needs a key or a session,
- *   and on sign-in and pairing, which use the account database too;
- * - on `/api/me` routes, "sign in first" (401), the account's limit (429), and a
- *   change sent with the session cookie from another site (403);
- * - the per-IP limit (429, with `Retry-After`) on the public routes that read
- *   storage: /api/health, /api/status.json, /api/admin/*, /download/* and
- *   /api/timelapse/*.
- */
 function withCommonErrors(spec: Record<string, unknown>): Record<string, unknown> {
   const paths = spec.paths as Record<string, Record<string, Operation>>;
   for (const [path, ops] of Object.entries(paths)) {
@@ -143,12 +111,6 @@ const UPDATE_REQUIRED_426 = errorResponse(
   { error: 'Update terminus to keep using it.', update: true },
 );
 
-/**
- * Lists the 426 on every operation an app reaches with its device token:
- * the bus answers and /api/me, but not sign-in, pairing or sign-out, which
- * answer before the version is checked, nor DELETE /api/me/push and DELETE /api/me,
- * which an outdated app may still do.
- */
 function withUpdateRequired(spec: Record<string, unknown>): Record<string, unknown> {
   const paths = spec.paths as Record<string, Record<string, { security?: { bearer?: unknown }[]; responses?: Record<string, unknown> }>>;
   for (const [path, ops] of Object.entries(paths)) {
@@ -157,7 +119,6 @@ function withUpdateRequired(spec: Record<string, unknown>): Record<string, unkno
     for (const [method, op] of Object.entries(ops)) {
       if (!op || typeof op !== 'object' || !op.responses) continue;
       if (method === 'delete' && (path === '/api/me' || path === '/api/me/push')) continue;
-      // The overview's default security takes a bearer token; an operation's own must list one.
       const bearer = op.security === undefined || op.security.some((s) => s && 'bearer' in s);
       if (bearer) op.responses['426'] ??= UPDATE_REQUIRED_426;
     }
@@ -165,12 +126,6 @@ function withUpdateRequired(spec: Record<string, unknown>): Record<string, unkno
   return spec;
 }
 
-/**
- * The spec as sent, kept per origin: it is a few hundred kilobytes built and
- * stringified from the same constants every time. A few origins at most (the
- * site, the beta, workers.dev); past that it starts again, so a stream of
- * made-up hosts can't grow it.
- */
 const specMemo = new Map<string, string>();
 const SPEC_ORIGINS_KEPT = 8;
 
