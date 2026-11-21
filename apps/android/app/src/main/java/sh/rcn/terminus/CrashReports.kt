@@ -41,6 +41,13 @@ internal object CrashReports {
         sendPending(app)
     }
 
+    fun caught(ctx: Context, e: Throwable) {
+        val app = ctx.applicationContext
+        if (!enabled(app)) return
+        runCatching { save(app, e, fatal = false) }
+        sendPending(app)
+    }
+
     fun sendPending(ctx: Context) {
         val app = ctx.applicationContext
         if (!enabled(app)) {

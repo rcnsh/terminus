@@ -250,8 +250,10 @@ object LeaveAlerts {
             sh.rcn.terminus.widget.redrawWidgets(ctx)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
-        } catch (e: Exception) {
-            if (e is ApiError && e.status == 401) Session.rejected(ctx, token)
+        } catch (e: ApiError) {
+            if (e.status == 401) Session.rejected(ctx, token)
+        } catch (_: java.io.IOException) {} catch (_: ParseError) {} catch (e: Exception) {
+            CrashReports.caught(ctx, e)
         }
     }
 
@@ -292,7 +294,7 @@ class LeaveReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             LeaveAlerts.ACTION_CHECK ->
-                finishAsync(Dispatchers.IO) {
+                finishAsync(context, Dispatchers.IO) {
                     val answer = Refresher.refresh(context, fast = true, extras = false)
                     if (answer?.card?.phase in LiveService.TRIP_PHASES) LiveService.start(context)
                 }
@@ -301,7 +303,7 @@ class LeaveReceiver : BroadcastReceiver() {
             LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
             LeaveAlerts.ACTION_SKIP -> {
                 val trip = intent.getStringExtra(LeaveAlerts.EXTRA_TRIP) ?: return
-                finishAsync(Dispatchers.IO) { LeaveAlerts.skip(context, trip) }
+                finishAsync(context, Dispatchers.IO) { LeaveAlerts.skip(context, trip) }
             }
         }
     }

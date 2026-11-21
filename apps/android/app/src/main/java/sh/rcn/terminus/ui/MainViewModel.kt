@@ -20,6 +20,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.CardAction
+import sh.rcn.terminus.CrashReports
 import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.Destination
@@ -540,7 +541,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 redrawWidgets(ctx)
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                CrashReports.caught(ctx, e)
+            }
         }
     }
 

@@ -3111,7 +3111,9 @@ off when unset or unreadable):
   [eta-model.md](eta-model.md) has the design and what it needs first.
 - `errors` ([`src/ops/apperrors.ts`](../apps/api/src/ops/apperrors.ts)): `POST /api/errors`.
   The Android app saves an uncaught crash to a file and sends it on the next
-  start; the Mac and iPhone apps send MetricKit's crash diagnostics and
+  start, and sends at once, as not fatal, a failure that ends a widget
+  redraw or a widget or alert broadcast (`CrashReports.caught`; a network
+  failure there isn't one); the Mac and iPhone apps send MetricKit's crash diagnostics and
   saved Objective-C exceptions on the next launch; the website's
   `/assets/errors.js` reports uncaught errors and rejections from its own
   scripts, five a page at most. None sends a token, cookie or device id,

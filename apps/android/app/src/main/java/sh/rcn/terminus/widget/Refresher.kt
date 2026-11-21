@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.CrashReports
 import sh.rcn.terminus.L
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
@@ -432,26 +433,26 @@ class RefreshReceiver : BroadcastReceiver() {
                     if (!alarm) Refresher.armFromCache(context, store)
                     Refresher.schedule(context)
                     when {
-                        live -> finishAsync(Dispatchers.Default) { Refresher.redrawWhileWaiting(context) }
+                        live -> finishAsync(context, Dispatchers.Default) { Refresher.redrawWhileWaiting(context) }
                         alarm && Refresher.online(context) ->
-                            finishAsync(Dispatchers.IO) {
+                            finishAsync(context, Dispatchers.IO) {
                                 Refresher.refresh(context, fast = true, extras = false)
                             }
                         else -> {
                             Refresher.refreshSoon(context)
-                            finishAsync(Dispatchers.Default) { Refresher.redrawWhileWaiting(context) }
+                            finishAsync(context, Dispatchers.Default) { Refresher.redrawWhileWaiting(context) }
                         }
                     }
                 }
             }
             Refresher.ACTION_REDRAW ->
-                finishAsync(Dispatchers.Default) {
+                finishAsync(context, Dispatchers.Default) {
                     redrawWidgets(context)
                     val store = Store(context)
                     Refresher.armRedraw(context, store, before = store.refreshAlarmAt.takeIf { it > System.currentTimeMillis() })
                 }
             Refresher.ACTION_REDRAW_CHOSEN ->
-                finishAsync(Dispatchers.IO) {
+                finishAsync(context, Dispatchers.IO) {
                     if (Store(context).paired && Refresher.online(context)) {
                         Refresher.chosen(context, staleOnly = true)
                         NearbyShared.refreshIfDue(context, onRedraw = true)
@@ -461,11 +462,11 @@ class RefreshReceiver : BroadcastReceiver() {
                 }
             Intent.ACTION_TIME_CHANGED -> {
                 if (Refresher.active(context)) Refresher.refreshSoon(context)
-                finishAsync(Dispatchers.Default) { redrawWidgets(context) }
+                finishAsync(context, Dispatchers.Default) { redrawWidgets(context) }
             }
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_LOCALE_CHANGED ->
-                finishAsync(Dispatchers.Default) {
+                finishAsync(context, Dispatchers.Default) {
                     redrawWidgets(context)
                 }
             NotificationManager.ACTION_APP_BLOCK_STATE_CHANGED,
@@ -483,9 +484,13 @@ class RefreshReceiver : BroadcastReceiver() {
     }
 }
 
-internal fun BroadcastReceiver.finishAsync(dispatcher: CoroutineDispatcher, block: suspend () -> Unit) {
+internal fun BroadcastReceiver.finishAsync(context: Context, dispatcher: CoroutineDispatcher, block: suspend () -> Unit) {
     val pending = goAsync()
-    CoroutineScope(dispatcher + CoroutineExceptionHandler { _, e -> Log.w("terminus", "widget broadcast failed", e) }).launch {
+    val failed = CoroutineExceptionHandler { _, e ->
+        Log.w("terminus", "widget broadcast failed", e)
+        if (e !is java.io.IOException) CrashReports.caught(context, e)
+    }
+    CoroutineScope(dispatcher + failed).launch {
         try {
             block()
         } finally {
