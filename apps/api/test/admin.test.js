@@ -19,6 +19,7 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
   for (const i of [0, 3]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) AS day/);
   assert.match(asked[0].sql, /INTERVAL '15' DAY/);
+  assert.ok(asked[0].sql.includes(`if(${COL.error.kind} = 'error' AND NOT startsWith(${COL.error.route}, '/'), 'background'`));
   assert.match(asked[4].sql, /blob1 = 'active'/, 'the daily active counts');
   assert.match(asked[5].sql, /blob1 = 'apperror'/, 'the error reports, by fingerprint');
   assert.match(asked[7].sql, /blob1 = 'legacy'/, 'what still uses the old address and paths');

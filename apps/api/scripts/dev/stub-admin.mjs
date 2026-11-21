@@ -35,6 +35,7 @@ export function fakeAeRows(q, nowMs) {
       return [
         { day, kind: 'answer', n },
         { day, kind: 'error', n: Math.round(n * (0.004 + rand(`e${day}`) * 0.012)) },
+        { day, kind: 'background', n: Math.round(rand(`b${day}`) * 40) },
       ];
     });
   }

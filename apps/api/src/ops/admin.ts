@@ -236,7 +236,9 @@ async function analyticsStats(env: Env, nowMs: number, fetchImpl: typeof fetch):
     ] = await Promise.all([
       dismissedCrashes(env),
       Promise.all([
-        sql(`SELECT ${SG_DAY} AS day, ${answer.kind} AS kind, SUM(_sample_interval) AS n FROM ${dataset}
+        sql(`SELECT ${SG_DAY} AS day,
+                  if(${error.kind} = 'error' AND NOT startsWith(${error.route}, '/'), 'background', ${answer.kind}) AS kind,
+                  SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '15' DAY AND ${answer.kind} IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
         sql(`SELECT ${answer.quality} AS quality, SUM(_sample_interval) AS n FROM ${dataset}
