@@ -31,15 +31,10 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.redrawWidgets
 
-/**
- * The card style: Steps or Route as pills, like the theme's, and the chosen one drawn under them with a made-up trip, so the choice is made
- * by looking without a card for each. The pick holds for the card and the widgets.
- */
 @Composable
 internal fun CardStylePicker() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Read again when it changes, so the pill and the sample move at once.
     var chosen by remember { mutableStateOf(CardStyle.pref(ctx)) }
     val sample = sampleAnswer()
     Group(stringResource(R.string.card_style), stringResource(DeviceKind.word(R.string.card_style_hint))) {
@@ -77,7 +72,6 @@ private fun hint(style: String) =
         else -> R.string.card_style_route_hint
     }
 
-/** A D2 from PGP to UTown, leaving in a few minutes, in the phone's clock style. */
 @Composable
 private fun sampleAnswer(): NextAnswer {
     val ctx = LocalContext.current

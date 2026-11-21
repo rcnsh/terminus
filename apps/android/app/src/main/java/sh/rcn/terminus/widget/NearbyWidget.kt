@@ -42,10 +42,6 @@ import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseNearby
 import sh.rcn.terminus.ui.MainActivity
 
-/**
- * "Buses near you": the nearest stop's services at any size, from 2×1 up ([NearbyFit]). Draws the board kept in [Store] ([NearbyShared]),
- * which every widget showing it shares.
- */
 class NearbyWidget : GlanceAppWidget() {
 
     override val sizeMode = SizeMode.Exact
@@ -57,7 +53,6 @@ class NearbyWidget : GlanceAppWidget() {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val boards = Latest<Long, Board>()
         provideContent {
-            // Read again when redrawWidgets() bumps VERSION, as BaseWidget does.
             val version = currentState(VERSION) ?: 0L
             val board = boards.get(version) { Board(store) }
             val swap =
@@ -68,7 +63,6 @@ class NearbyWidget : GlanceAppWidget() {
         }
     }
 
-    /** The kept board, read once per redraw. */
     private class Board(store: Store) {
         val paired = store.paired
         val fetchedAt = store.nearbyFetchedAt.takeIf { it > 0L }
@@ -104,27 +98,19 @@ class NearbyWidget : GlanceAppWidget() {
 
 class NearbyWidgetReceiver : BusWidgetReceiver(NearbyWidget())
 
-/** ↻ on a Nearby widget: a fresh location fix where location is allowed, which a tap may start. */
 internal fun nearbyRefresh(ctx: Context, appWidgetId: Int): Action =
     if (Locator.hasForeground(ctx)) actionStartService(WidgetModeService.nearbyIntent(ctx, appWidgetId), isForegroundService = true)
     else actionRunCallback<NearbyRefreshAction>()
 
-/** ↻ without location permission: asks with none, and the widget says to turn it on. */
 class NearbyRefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         NearbyShared.refresh(context, fresh = false, tapped = true)
     }
 }
 
-/**
- * The board of buses near you that the Nearby widgets and the big widget's next buses share: fetched by a tap on ↻, and in the background
- * at most once a minute while a widget shows it. The background has no location of its own (the app doesn't ask for "Allow all the time"),
- * so it asks only with a recent fix from the app, through the same cached arrivals as everything else.
- */
 internal object NearbyShared {
     private const val REFETCH_MS = 60_000L
 
-    /** The board's widgets: every Nearby widget, and the others while one is big enough for its next buses. */
     suspend fun wanted(ctx: Context): Boolean {
         val mgr = GlanceAppWidgetManager(ctx)
         if (mgr.getGlanceIds(NearbyWidget::class.java).isNotEmpty()) return true
@@ -133,10 +119,6 @@ internal object NearbyShared {
         }
     }
 
-    /**
-     * Whether a background fetch would ask for anything now: wanted, a minute since the last, and a fix to ask with. [onRedraw]: from the
-     * widgets' redraw alarm, which also fetches only at [NearbyBoard.boardRefetchAt], not at each minute it redraws for.
-     */
     suspend fun due(ctx: Context, onRedraw: Boolean = false): Boolean {
         val store = Store(ctx)
         val now = System.currentTimeMillis()
@@ -153,16 +135,11 @@ internal object NearbyShared {
 
     private fun board(store: Store): List<NearbyStop>? = store.nearbyJson?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() }
 
-    /** When the redraw alarm next fetches the board ([NearbyBoard.boardRefetchAt]); null with no board, so any time. */
     private fun refetchAt(store: Store): Long? {
         val at = store.nearbyFetchedAt.takeIf { it > 0L } ?: return null
         return NearbyBoard.boardRefetchAt(board(store) ?: return null, at, sh.rcn.terminus.ServerClock.skewMs)
     }
 
-    /**
-     * Fetches the board and redraws. [fresh]: a new location fix (only in [WidgetModeService], which a tap started). [tapped]: says
-     * "Updating…" meanwhile and what went wrong after; the background keeps quiet.
-     */
     suspend fun refresh(ctx: Context, fresh: Boolean, tapped: Boolean) {
         val store = Store(ctx)
         val token = store.token ?: return
@@ -182,7 +159,6 @@ internal object NearbyShared {
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: ApiError) {
-                    // The token refused: the phone signs out, and the widget says so.
                     if (e.status == 401 && sh.rcn.terminus.Session.rejected(ctx, token)) return
                     if (e.status == 400) L.s(R.string.turn_on_location) else e.message ?: L.s(R.string.couldnt_load)
                 } catch (e: ParseError) {
@@ -193,7 +169,6 @@ internal object NearbyShared {
             if (tapped) store.nearbyError = error
         } finally {
             withContext(NonCancellable) {
-                // Stopped before an answer: "Updating…" mustn't stay.
                 if (store.nearbyError == UPDATING) store.nearbyError = null
                 redrawWidgets(ctx)
                 WidgetModes.armChosen(ctx)
@@ -201,10 +176,6 @@ internal object NearbyShared {
         }
     }
 
-    /**
-     * When the board's widgets next look different with nothing new, on the phone's clock: a shown bus going ([NearbyBoard.GONE_MS] after
-     * it's due), a minute ticking off its count with exact alarms, or the times turning old. Null with no board.
-     */
     fun redrawAt(ctx: Context, now: Long): Long? {
         val store = Store(ctx)
         val at = store.nearbyFetchedAt.takeIf { it > 0L } ?: return null

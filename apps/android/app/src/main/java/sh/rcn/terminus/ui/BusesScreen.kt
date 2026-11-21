@@ -112,7 +112,6 @@ import sh.rcn.terminus.Line
 import sh.rcn.terminus.LineBus
 import sh.rcn.terminus.LineItem
 import sh.rcn.terminus.LineRow
-import sh.rcn.terminus.LinesPoll
 import sh.rcn.terminus.PinPages
 import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Pull
@@ -132,12 +131,6 @@ import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.runningFirst
 import sh.rcn.terminus.searchBuses
 
-/**
- * The Stops tab: a search, then the pinned stops in one card, a stop at a time as Nearby shows it, then every service. A row opens its
- * service's line; a stop's name, a stop on a line, or one found in the search, opens its board. Stops near you are the Nearby tab's.
- *
- * Only the times the API gives are shown: the next bus and its `later` buses. A timetabled time says so; no time is guessed.
- */
 @Composable
 internal fun BusesScreen(
     vm: BusesViewModel,
@@ -150,24 +143,17 @@ internal fun BusesScreen(
     pinLimit: Int = sh.rcn.terminus.Limits.DEFAULT.pinnedStops,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    // Before the boards below ask, so the first ones have them too.
     vm.publicBuses = publicBuses
     vm.pinLimit = pinLimit
     LaunchedEffect(Unit) { vm.loadCampus() }
-    // The sky runs up under the status bar; each page keeps the room for it inside its band.
     val bar = insets.calculateTopPadding()
     val pane = Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())
-    // The home's search, here so a back on a wide window clears it before it closes the page beside it.
     var query by rememberSaveable { mutableStateOf("") }
     val wide = windowWidth() == Width.Wide
-    // Wide, the stop open beside the home is asked for by its page: its pinned card takes the page's times rather than asking again.
     val open = (state.stack.lastOrNull() as? BusRoute.Stop)?.code?.takeIf { wide }
     SideEffect { vm.openStop = open }
-    // A page opened or closed beside the home leaves the search field as it was: unfocused, with no cursor or raised label in it.
     val focus = LocalFocusManager.current
     LaunchedEffect(state.stack.lastOrNull()) { if (wide) focus.clearFocus() }
-    // The home and each page keep where they were scrolled to under their own key, as the window goes from one pane to two (a fold, a
-    // resize) and back, rather than by where they sit in either layout.
     val scrolls = rememberPaneScrolls()
     scrolls.keep(state.stack.mapIndexed { i, r -> pageKey(i + 1, r) }.toSet() + HOME)
     val route: @Composable (BusRoute) -> Unit = { top ->
@@ -179,15 +165,11 @@ internal fun BusesScreen(
         }
     }
     if (!wide) {
-        // Each stop or line opened slides over the last, and a back gesture can seek between them.
         PageStack(state.stack, onBack = vm::back, pane) { top ->
             if (top == null) Keeps(scrolls, HOME) { Home(state, vm, query, { query = it }, pins, pinsKnown, onPin, bar) } else route(top)
         }
         return
     }
-    // Wide: the home in a pane on the leading side, and what's opened from it beside it, where the pages opened from that one stack, with
-    // Back. Each pane has its own band of the sky, so the sky reads across the window.
-    // The two bands of the sky end at the same height, and only the page's has the moon.
     val skies = remember { PaneSkies() }
     val list = remember(skies) { SkyPane(skies, leading = true) }
     val page = remember(skies) { SkyPane(skies, leading = false) }
@@ -206,20 +188,16 @@ internal fun BusesScreen(
             }
         }
     }
-    // After the page's own back, so it's asked first: a search open in the home is cleared before the page beside it closes.
     BackHandler(enabled = query.isNotEmpty()) {
         query = ""
         focus.clearFocus()
     }
 }
 
-/** The home's key in BusesScreen's [PaneScrolls]. */
 private const val HOME = "home"
 
-/** A page's key in BusesScreen's [PaneScrolls]: its place in the stack ([LocalPageDepth]) and what it is. */
 private fun pageKey(depth: Int, route: BusRoute) = "$depth:$route"
 
-/** The page pane when wide, with nothing open in it yet: its band of the sky, and what to do. */
 @Composable
 private fun NothingOpen(top: Dp) {
     Column(Modifier.fillMaxSize()) {
@@ -234,10 +212,6 @@ private fun NothingOpen(top: Dp) {
     }
 }
 
-/**
- * Runs [refresh] now and every 15 s (longer while the server asked for a wait) while this is on screen and the app is in front, telling
- * [next] when it runs again (for a pull's "next update in 9 s").
- */
 @Composable
 private fun Refreshing(vararg keys: Any?, next: (Long) -> Unit, refresh: suspend () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -255,7 +229,6 @@ private fun Refreshing(vararg keys: Any?, next: (Long) -> Unit, refresh: suspend
     }
 }
 
-/** The clock, a tick a second, for "Updated 5 s ago". */
 @Composable
 private fun ticking(): Long {
     val now by
@@ -281,27 +254,19 @@ private fun Home(
     chosen: BusRoute? = null,
 ) {
     val focus = LocalFocusManager.current
-    // Back, or a result tapped, empties the search and leaves the field: no cursor left in it.
     val clear = {
         onQuery("")
         focus.clearFocus()
     }
     BackHandler(enabled = query.isNotEmpty(), onBack = clear)
     val pinned = Pins.shown(pins, vm.pinLimit)
-    // A page per pinned stop, then "Pin another stop"; laid out again when the pins change, on the stop that was showing.
     val pager = remember(pinned) { PagerState(vm.pinPage(pinned)) { pinned.size + 1 } }
     LaunchedEffect(pager) {
-        // Before the profile has come there's only the last page, which isn't a choice.
         if (pinned.isNotEmpty()) snapshotFlow { pager.currentPage }.collect { vm.pinShown = PinPages.at(pinned, it) }
     }
     val showing = PinPages.at(pinned, pager.currentPage).takeIf { it != PinPages.ADD }
-    // Asked for by the page settled on, so a tap on a far name doesn't ask for each page passed on the way.
     val around = PinPages.around(pinned, pager.settledPage)
     val phase = skyPhase()
-    // Pulled down, the pinned stop showing asks again, as its 15 s refresh does; not while searching.
-    // The sky stretches over the title, and the stop's first service drives to a sign on the hill.
-    // The band, the search, then the card or the search's results, scroll as
-    // one, so the sky goes up with the page rather than staying over it.
     val scroll = rememberPaneScroll()
     BusPull(
         showing?.let { pinLivery(state, it) },
@@ -313,7 +278,6 @@ private fun Home(
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
                 TitleBand(stringResource(R.string.tab_buses), phase, top)
-                // Under the horizon, at the top of what it searches, in the page's colours.
                 SearchBox(query, onQuery, Modifier.column().padding(horizontal = 16.dp).padding(top = 12.dp))
                 if (query.isNotBlank()) {
                     SearchResults(state, query) { hit ->
@@ -327,12 +291,10 @@ private fun Home(
                     }
                     return@Column
                 }
-                // The stop showing and its neighbours, so a swipe has the next one ready.
                 Refreshing(pinned, pager.settledPage, next = { vm.pinsTimedAt = it }) { vm.refreshPinned(around) }
                 LinesPolling(vm)
                 Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     Label(stringResource(R.string.buses_pinned), Modifier.padding(top = 16.dp, bottom = 4.dp))
-                    // Before the profile has come, "nothing pinned" may not be true.
                     when {
                         !pinsKnown -> PinnedSkeleton()
                         pinned.isEmpty() -> NoPins()
@@ -356,10 +318,6 @@ private fun Home(
     }
 }
 
-/**
- * Asks how many buses each service has out when the list of lines comes on screen, then once a minute ([LinesPoll]) while it stays there
- * and the app is in front.
- */
 @Composable
 private fun LinesPolling(vm: BusesViewModel) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -373,10 +331,8 @@ private fun LinesPolling(vm: BusesViewModel) {
     }
 }
 
-/** The scene for a pull on a band's low horizon (Stops, Nearby), [width] dp across: the sign on the near hill, the bus in from the left. */
 internal fun hillScene(width: Float) = PullScene(width, Pull.hillSign(width))
 
-/** The pull's bus for the page of stop [code]: the first service on the board it shows, in its colour; null before there's one. */
 private fun boardLivery(state: BusesUi, code: String): Long? {
     val opposite = state.boards[code]?.opposite
     val shown = if (code in state.across && opposite != null) opposite else code
@@ -384,20 +340,13 @@ private fun boardLivery(state: BusesUi, code: String): Long? {
     return row.color?.let(::parseColor) ?: state.campus?.routes?.get(row.svc)?.color
 }
 
-/** The pull's bus on the home: the first service at the pinned stop showing, in its colour; null before there's one. */
 private fun pinLivery(state: BusesUi, code: String): Long? {
     val row = state.pinned[code]?.stop?.board?.firstOrNull { it.running } ?: return null
     return row.color?.let(::parseColor) ?: state.campus?.routes?.get(row.svc)?.color
 }
 
-/** A pinned stop's short name, as on its plate: from its answer, else the campus data, else its code. */
 private fun pinName(state: BusesUi, code: String) = state.pinned[code]?.stop?.name ?: state.campus?.stop(code)?.name ?: code
 
-/**
- * The pinned stops in one card, one at a time: their names above it, which say which is showing and switch to it, and the card, swiped
- * sideways from stop to stop. Each is its Nearby sign; the last page says how to pin another. The card is as tall as the tallest page seen,
- * so nothing under it jumps while swiping.
- */
 @Composable
 private fun PinnedCard(
     state: BusesUi,
@@ -426,16 +375,13 @@ private fun PinnedCard(
     ) {
         scope.launch { pager.animateScrollToPage(it) }
     }
-    // Refreshes failing: the times counted down, none passed off as live.
     val now = ticking()
-    // The sign's rows are the services running; those that aren't are listed under it only when none is.
     val all = pinned.mapNotNull { code -> state.pinned[code]?.let { code to it.aged(now) } }
     val loaded = all.map { (code, s) -> code to s.copy(board = s.board.filter { it.running }) }
     val stopped = all.associate { (code, s) -> code to s.board.filterNot { it.running } }
     var tallest by remember(pinned) { mutableIntStateOf(0) }
     val tallestDp = with(density) { tallest.toDp() }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Every stop's columns measured together, so the times line up from one page to the next.
         val signs = nearbySigns(loaded.map { it.second }, maxWidth)
         HorizontalPager(
             pager,
@@ -446,15 +392,12 @@ private fun PinnedCard(
         ) { page ->
             val code = PinPages.at(pinned, page)
             val i = loaded.indexOfFirst { it.first == code }
-            // Only answers hold the card open: a skeleton (a row per service) or the last page would leave a gap under a one-line
-            // "No buses". The pager is as tall as the pages on screen anyway.
             val measured = if (i >= 0) Modifier.onSizeChanged { if (it.height > tallest) tallest = it.height } else Modifier
             Box(Modifier.fillMaxWidth().then(measured)) {
                 when {
                     code == PinPages.ADD -> PinAnother(tallestDp)
                     i >= 0 ->
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Wide, the stop open beside the home is marked on its card.
                             NearbySign(
                                 signs,
                                 i,
@@ -463,7 +406,6 @@ private fun PinnedCard(
                                 stopped = stopped[code].orEmpty(),
                                 modifier = Modifier.chosenCard(code == chosen, 14.dp),
                             )
-                            // As under Nearby's signs and the web's pinned card: what a "~" means, only while one is showing.
                             if (signs.cells[i].any { row -> row.any { it.mark.isNotEmpty() } }) {
                                 Text(
                                     L.s(R.string.nearby_guess),
@@ -481,7 +423,6 @@ private fun PinnedCard(
     }
 }
 
-/** A pinned stop before its answer has come: its plate, and checking, or that it couldn't be got. */
 @Composable
 private fun PinnedWaiting(state: BusesUi, code: String, failed: Boolean, act: NearbyActions) {
     val name = pinName(state, code)
@@ -506,13 +447,11 @@ private fun PinnedWaiting(state: BusesUi, code: String, failed: Boolean, act: Ne
     }
 }
 
-/** The services that call at [code], with their colours, from the campus's stops: what a board skeleton can draw as itself. */
 private fun stopServices(state: BusesUi, code: String): List<Pair<String, Long>> {
     val campus = state.campus ?: return emptyList()
     return campus.stop(code)?.services.orEmpty().map { it to (campus.routes[it]?.color ?: GREY) }
 }
 
-/** Before the profile has come, whether anything's pinned isn't known: a pinned stop's shape, its tabs and its sign. */
 @Composable
 private fun PinnedSkeleton() {
     Skeleton(stringResource(R.string.checking), Modifier.fillMaxWidth().padding(top = 4.dp)) {
@@ -540,7 +479,6 @@ private fun PinnedSkeleton() {
     }
 }
 
-/** The card's last page: how to pin another stop, in the outline of a card, as tall as the stops' ([height]). */
 @Composable
 private fun PinAnother(height: Dp) {
     val c = MaterialTheme.colorScheme
@@ -561,7 +499,6 @@ private fun PinAnother(height: Dp) {
     }
 }
 
-/** The dashed outline of a card not there yet: no pins, or another to pin. */
 private fun Modifier.dashed(line: Color): Modifier = drawBehind {
     val d = 1.dp.toPx()
     drawRoundRect(
@@ -573,7 +510,6 @@ private fun Modifier.dashed(line: Color): Modifier = drawBehind {
     )
 }
 
-/** Nothing pinned: where the star is, in an outline the size of a pinned stop. */
 @Composable
 private fun NoPins() {
     val c = MaterialTheme.colorScheme
@@ -587,10 +523,6 @@ private fun NoPins() {
     }
 }
 
-/**
- * Every shuttle service, as /api/campus lists them, a row each: its badge (all as wide as the widest), its name and the stops it goes by,
- * and how many of its buses are out. A row opens its line.
- */
 @Composable
 private fun Services(state: BusesUi, chosen: String?, onOpen: (String) -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -601,13 +533,11 @@ private fun Services(state: BusesUi, chosen: String?, onOpen: (String) -> Unit) 
             ServicesSkeleton()
             return@Column
         }
-        // From an older server without each service's stops: the codes alone.
         val routes = campus.lines.ifEmpty { campus.serviceCodes.map { ServiceRoute(it, emptyList(), false) } }
         val rows = routes.map { route -> LineRow.of(route, state.out[route.svc]) { campus.stop(it)?.fullName ?: it } }
         val badge = badgeWidth(rows.map { it.svc })
         for ((i, row) in rows.withIndex()) {
             if (i > 0) HorizontalDivider(color = c.outlineVariant)
-            // Wide, the line open beside the list is marked as chosen.
             val on = row.svc == chosen
             Row(
                 Modifier.fillMaxWidth()
@@ -643,7 +573,6 @@ private fun Services(state: BusesUi, chosen: String?, onOpen: (String) -> Unit) 
     }
 }
 
-/** The services list before /api/campus has come: six rows of its shape. */
 @Composable
 private fun ServicesSkeleton() {
     val c = MaterialTheme.colorScheme
@@ -661,17 +590,12 @@ private fun ServicesSkeleton() {
                     TextBar(MaterialTheme.typography.bodyMedium, fraction = barFraction(i, 1))
                 }
                 TextBar(MaterialTheme.typography.bodyMedium, width = 44.dp)
-                // Where the chevron goes, so the rows keep their width.
                 Spacer(Modifier.width(20.dp))
             }
         }
     }
 }
 
-/**
- * The star that pins stop [code] or unpins it, said with the stop's [name] when it's away from the stop's own header; with [limit] pinned
- * already, a pin says so instead.
- */
 @Composable
 internal fun PinStar(
     code: String,
@@ -703,7 +627,6 @@ internal fun PinStar(
     }
 }
 
-/** A stop's name before its board is here: from the campus data, else its code. */
 private fun stopName(state: BusesUi, code: String) = state.boards[code]?.name ?: state.campus?.stop(code)?.fullName ?: code
 
 @Composable
@@ -712,7 +635,6 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
     TextField(
         value = query,
         onValueChange = onQuery,
-        // A label, not only a placeholder: it keeps the field's name once something's typed.
         label = { Text(stringResource(R.string.buses_search)) },
         leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.size(20.dp)) },
         trailingIcon =
@@ -749,7 +671,6 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
     val index = remember(campus) { campus?.let(::busesTabIndex).orEmpty() }
     val hits = remember(index, query) { SearchRank.grouped(searchBuses(query, index)) { it is BusHit.Service } }
     val colors = campus?.routes?.mapValues { it.value.color }.orEmpty()
-    // In the tab's own scroll, under the field.
     Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
         if (hits.isEmpty() && campus != null) {
             Text(
@@ -802,10 +723,8 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
     }
 }
 
-/** Whether the top page has one under it to go back to: always on a phone; wide, the first page is the pane's own, opened from the list. */
 @Composable private fun canGoBack(state: BusesUi): Boolean = windowWidth() != Width.Wide || state.stack.size > 1
 
-/** A stop opened from the search or a line: its page, with Back. */
 @Composable
 private fun StopRoute(
     state: BusesUi,
@@ -822,10 +741,8 @@ private fun StopRoute(
     BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }, nextUpdateAt = { vm.pageNextAt(code) }) { pull ->
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                // Back, and the stop, in the sky, as on the tab's own pages; it scrolls away with the board.
                 SkyBand(phase, top, moonLow = true) {
                     Column {
-                        // Wide, a page opened from the list is the first in its pane: nothing to go back to there.
                         if (canGoBack(state)) BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
                         PullRoom(below = 8.dp)
                         val label = if (code in pins) stringResource(R.string.buses_pinned) else null
@@ -881,10 +798,6 @@ private fun BackRow(
     }
 }
 
-/**
- * A stop's header, in the sky: "Pinned" when it is, its name, its code and the star. Across the road, the stop shown is the opposite stop,
- * and the star is for that one.
- */
 @Composable
 private fun StopHeader(
     state: BusesUi,
@@ -914,7 +827,6 @@ private fun StopHeader(
             )
             Text(shownCode, style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant, letterSpacing = 0.8.sp)
         }
-        // A pane of the sky's glass, as the search is.
         if (pinsKnown)
             PinStar(
                 shownCode,
@@ -926,7 +838,6 @@ private fun StopHeader(
     }
 }
 
-/** Under the sky: this side or across the road, and the board. */
 @Composable
 private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
     val own = state.boards[code]
@@ -936,8 +847,6 @@ private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
     val board = state.boards[shownCode]
     if (opposite != null) {
         Segmented(
-            // Labelled from the page's own stop, so they stay put after switching. Two
-            // stops only near each other (PGP and its Foyer) aren't sides of a road: their names.
             if (own.oppositeAcross) listOf(stringResource(R.string.buses_this_side), stringResource(R.string.buses_across))
             else listOf(own.name, own.oppositeName ?: stopName(state, opposite)),
             if (across) 1 else 0,
@@ -958,7 +867,6 @@ private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
     board?.let { Foot(it) }
 }
 
-/** Two choices side by side, the chosen one raised: "This side | Across the road". [label] names the choice for a screen reader. */
 @Composable
 internal fun Segmented(
     options: List<String>,
@@ -976,21 +884,15 @@ internal fun Segmented(
     ) {
         for ((i, text) in options.withIndex()) {
             Box(Modifier.weight(1f).fillMaxHeight().segment(i == selected) { onSelect(i) }, contentAlignment = Alignment.Center) {
-                // A long stop name takes two lines, centred; both halves keep one height.
                 SegmentText(text, i == selected, maxLines = 2)
             }
         }
     }
 }
 
-/**
- * The pinned stops' names, in [Segmented]'s look: the one showing ([selected], none on the card's last page) raised. They share the width
- * while they fit; more than fit scroll sideways, the one showing kept in view.
- */
 @Composable
 private fun PinTabs(names: List<String>, selected: Int?, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val scroll = rememberScrollState()
-    // Where each name is along the row, in pixels, to bring the one showing into view once it's laid out.
     val spans = remember(names) { mutableStateMapOf<Int, IntRange>() }
     val span = selected?.let { spans[it] }
     LaunchedEffect(span) {
@@ -1021,12 +923,10 @@ private fun PinTabs(names: List<String>, selected: Int?, modifier: Modifier = Mo
     }
 }
 
-/** The ground the segments sit in, as one group of choices. */
 @Composable
 private fun Modifier.segments(): Modifier =
     clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.secondaryContainer).padding(4.dp).selectableGroup()
 
-/** One segment: raised when [on], a tab to a screen reader. [side]: the room either side of its words. */
 @Composable
 private fun Modifier.segment(on: Boolean, side: Dp = 8.dp, onClick: () -> Unit): Modifier =
     clip(RoundedCornerShape(10.dp))
@@ -1049,7 +949,6 @@ private fun SegmentText(text: String, on: Boolean, maxLines: Int) {
     )
 }
 
-/** The board: a row per service, sorted as the API sorts them. */
 @Composable
 private fun BoardCard(
     got: Board?,
@@ -1059,7 +958,6 @@ private fun BoardCard(
     onRow: (BoardRow) -> Unit,
 ) {
     val c = MaterialTheme.colorScheme
-    // Refreshes failing: the times counted down, none passed off as live.
     val board = got?.aged(ticking())
     val shape = RoundedCornerShape(18.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.outlineVariant, shape)) {
@@ -1086,10 +984,6 @@ private fun BoardCard(
     }
 }
 
-/**
- * A board before its times have come: a row per service that calls here, from the campus's stops (three when they aren't known), each with
- * its own chip; where it's going and the times are bars, in [BoardRowView]'s places.
- */
 @Composable
 private fun BoardSkeleton(services: List<Pair<String, Long>>) {
     val c = MaterialTheme.colorScheme
@@ -1118,13 +1012,6 @@ private fun BoardSkeleton(services: List<Pair<String, Long>>) {
     }
 }
 
-/**
- * A board's rows with lines between them: the Stops tab's card, and smaller ([compact]) the map's stop sheet, so a stop reads the same in
- * both. A row tapped is [onRow], said as [clickLabel] (its line, by default).
- *
- * The two do different things when tapped, so they look different too: on the Stops tab a row opens its line's page and has a chevron
- * saying so; on the map ([picked] set) a row picks its line, and the line picked there ([picked]'s value) has its row washed in its colour.
- */
 @Composable
 internal fun BoardRows(
     rows: List<BoardRow>,
@@ -1139,7 +1026,6 @@ internal fun BoardRows(
     for ((i, row) in rows.withIndex()) {
         if (i > 0 || dividerFirst) HorizontalDivider(color = c.outlineVariant)
         val color = row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY
-        // A public bus has no line page: /api/line is the shuttles'.
         val open = if (row.paid) null else ({ onRow(row) })
         val label = clickLabel(row.svc)
         val look = RowLook(chevron = picked == null && open != null, picked = picked?.let { it.svc == row.svc })
@@ -1147,18 +1033,14 @@ internal fun BoardRows(
     }
 }
 
-/** On the map: the service picked there, null for none. */
 internal class Picked(val svc: String?)
 
-/** A row's chevron (it opens a page), and on the map whether its line is the one picked (null off the map). */
 private class RowLook(val chevron: Boolean, val picked: Boolean?)
 
-/** A row's ground: its line's colour, lightly, when picked on the map; else [base]. */
 private fun Modifier.rowGround(look: RowLook, color: Long, base: Color): Modifier =
     background(if (look.picked == true) Color(color.toInt()).copy(alpha = 0.16f) else base)
         .then(if (look.picked != null) Modifier.semantics { selected = look.picked } else Modifier)
 
-/** The "opens a page" mark, at a row's end. */
 @Composable
 private fun RowScope.RowChevron(look: RowLook) {
     if (look.chevron)
@@ -1189,7 +1071,6 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
     ) {
         SvcChip(row.svc, color, paid = row.paid, small = compact)
         Column(Modifier.weight(1f)) {
-            // Where it ends up, bold and on one line: what tells the rows apart.
             destination(row)?.let {
                 Text(
                     it,
@@ -1199,8 +1080,6 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            // Under it, the next stop, and only what's out of the ordinary: a time
-            // that isn't live, a full bus. Live is the dot by the time.
             @OptIn(ExperimentalLayoutApi::class)
             FlowRow(
                 Modifier.padding(top = 2.dp),
@@ -1237,20 +1116,12 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, cli
     }
 }
 
-/**
- * A row not running: why, and when it's back, from the clock as it ticks. Once that time has passed it says only why, until the board's
- * next refresh brings the row's times.
- */
 @Composable
 private fun StoppedRow(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean, look: RowLook) {
     val stopped = Stopped.of(running = false, row.stopped, row.resumesAtMs, ticking()) ?: return
     StoppedRowView(row, color, stopped, onClick, clickLabel, compact, look)
 }
 
-/**
- * A service that calls here but isn't running: its words greyed, and where the minutes go, why and when it's back. No time, no Live, no
- * crowd.
- */
 @Composable
 private fun StoppedRowView(
     row: BoardRow,
@@ -1277,7 +1148,6 @@ private fun StoppedRowView(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Its badge in full colour: the row still opens the line, so it mustn't look switched off.
         SvcChip(row.svc, color, paid = row.paid, small = compact)
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
@@ -1296,7 +1166,6 @@ private fun StoppedRowView(
     }
 }
 
-/** Where a row's bus ends up: the last of its places, "Ends here" at the end of the line, the server's words from an older server. */
 @Composable
 private fun destination(row: BoardRow): String? =
     when {
@@ -1305,7 +1174,6 @@ private fun destination(row: BoardRow): String? =
         else -> row.toText
     }
 
-/** Scheduled (amber) or the last time known, or why there's no time; nothing for a live time, which has [LiveDot] by it. */
 @Composable
 private fun QualityTag(row: BoardRow) {
     val c = MaterialTheme.colorScheme
@@ -1322,7 +1190,6 @@ private fun QualityTag(row: BoardRow) {
     }
 }
 
-/** A time seen on the road: by each live time, and once under the board saying so. */
 @Composable
 private fun LiveDot(said: Boolean = true) {
     val good = goodColor()
@@ -1367,14 +1234,8 @@ private fun crowdWord(crowd: String?): String? =
         else -> null
     }
 
-/** The number in the server's words for a time ("4" in "~4 min"). */
 private val DIGITS = Regex("\\d+")
 
-/**
- * "4 min" with the number large ([size]), or "Arriving"; nothing without a time (the tag says why). The words are the server's ([eta]: "4
- * min", "~6 min", "约 6 分钟", "now"), with its number drawn large; worked out here for an older server, or one that said "now" for an
- * estimate, which is "~1 min".
- */
 @Composable
 private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, words: String? = null, size: TextUnit = 34.sp) {
     val c = MaterialTheme.colorScheme
@@ -1399,7 +1260,6 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, words: Strin
                 },
                 color = if (arriving) c.primary else if (quality == "live") c.onSurface else c.onSurfaceVariant,
                 maxLines = 1,
-                // "about 6 minutes", not "tilde 6 min": the tag beside it says live or timetable.
                 modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: eta },
             )
         arriving -> Text(stringResource(R.string.map_arriving), fontSize = size, fontWeight = FontWeight.ExtraBold, color = c.primary)
@@ -1407,12 +1267,10 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, words: Strin
             val unit = stringResource(R.string.buses_min)
             Text(
                 buildAnnotatedString {
-                    // "~" for an estimate, as the server writes one.
                     if (quality != "live") withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append("~") }
                     withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append("${BusTimes.minutes(etaS)}") }
                     withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(" $unit") }
                 },
-                // A timetabled time isn't drawn as boldly as a bus seen.
                 color = if (quality == "live") c.onSurface else c.onSurfaceVariant,
                 maxLines = 1,
                 modifier =
@@ -1424,7 +1282,6 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, words: Strin
     }
 }
 
-/** "then 12, ~20 min", as the server words it, from the later buses it gave; worked out here for an older server. */
 private fun thenText(row: BoardRow): String? {
     row.laterText?.let {
         return it
@@ -1435,7 +1292,6 @@ private fun thenText(row: BoardRow): String? {
     return L.s(if (BusTimes.laterScheduled(row)) R.string.buses_then_scheduled else R.string.buses_then, list)
 }
 
-/** Under the board: the services ending within two hours, and how old the times are. */
 @Composable
 private fun Foot(board: Board) {
     val ctx = LocalContext.current
@@ -1458,7 +1314,6 @@ private fun Foot(board: Board) {
             }
         }
         board.asOfMs?.let {
-            // The rows' dot, said once: "● Live · Updated just now".
             val live = board.available && board.rows.any { r -> r.running && r.etaS != null && r.quality == "live" }
             Row(Modifier.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (live) {
@@ -1475,7 +1330,6 @@ private fun Foot(board: Board) {
     }
 }
 
-/** "Updated just now" for the first few seconds, as the web app says, never "0 s ago". */
 private fun updated(asOfMs: Long, now: Long): String {
     val s = BusTimes.ageS(asOfMs, now)
     return when {
@@ -1485,10 +1339,8 @@ private fun updated(asOfMs: Long, now: Long): String {
     }
 }
 
-/** An instant as the clock on campus shows it, 12- or 24-hour as the account chose. */
 private fun clock(ms: Long, h12: Boolean): String = BusTimes.campusMinute(ms).let { if (h12) hhmm12(it) else hhmm(it) }
 
-/** A service as it's painted on the bus, larger, for the board's rows and the line's heading. */
 @Composable
 private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false, small: Boolean = false) {
     val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
@@ -1523,24 +1375,17 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     val key = lineKey(route.svc, route.from)
     Refreshing(key, next = { vm.pageTimedAt = it }) { vm.refreshLine(route.svc, route.from) }
     val now = ticking()
-    // Refreshes failing: your stop's time counted down, not passed off as live.
     val line = state.lines[key]?.aged(now)
     val c = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val h12 = remember { hour12(ctx) }
     val color = line?.color ?: state.campus?.routes?.get(route.svc)?.color ?: GREY
     val scroll = rememberPaneScroll()
-    // Opened from a stop: scrolled to it once, so your stop is in view with the buses coming to it.
-    // Its place is on the page under the band, which scrolls too: the band's height comes first.
     var hereY by remember { mutableStateOf<Int?>(null) }
     var band by remember { mutableStateOf(0) }
     var scrolled by rememberSaveable(key) { mutableStateOf(false) }
     val gap = with(LocalDensity.current) { 160.dp.roundToPx() }
-    // Not running, the banner at the top says it all: no scrolling past it.
     val running = line?.running != false
-    // The line drawn from the campus data scrolls to your stop before /api/line says whether the service runs: when its first answer says
-    // it
-    // doesn't, back to the top once, to the banner.
     var arrived by rememberSaveable(key) { mutableStateOf(false) }
     LaunchedEffect(line != null) {
         if (line == null || arrived) return@LaunchedEffect
@@ -1555,7 +1400,6 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
         }
     }
     val phase = skyPhase()
-    // Pulled down, the line asks again, its bus in the service's colour.
     BusPull(
         color,
         ::hillScene,
@@ -1564,11 +1408,9 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     ) { pull ->
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-                // Back, the service and how many buses it has out, in the sky, scrolling away with the line.
                 Box(Modifier.onSizeChanged { band = it.height }) {
                     SkyBand(phase, top, moonLow = true) {
                         Column {
-                            // Back says where it goes: the page under this one, else the tab's home.
                             BackRow(
                                 back = canGoBack(state),
                                 text =
@@ -1599,7 +1441,6 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                             ) {
                                 SvcChip(route.svc, color, big = true)
                                 Column {
-                                    // Still coming: how many buses are out is the server's to say.
                                     if (line == null && key !in state.lineFailed)
                                         Skeleton(stringResource(R.string.checking)) {
                                             TextBar(MaterialTheme.typography.titleMedium, width = 150.dp, sky = true)
@@ -1629,7 +1470,6 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                     }
                 }
                 Column(Modifier.column().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-                    // Not running: why and when it's back, over the stops (it has no buses to show).
                     line
                         ?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }
                         ?.let { st ->
@@ -1645,7 +1485,6 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                                 back?.let { Text(it, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
                             }
                         }
-                    // Worked out once per campus and line, not on every tick of the clock.
                     val routeColors = remember(state.campus) { state.campus?.routes?.mapValues { it.value.color }.orEmpty() }
                     val known =
                         remember(state.campus, route.svc, route.from) { state.campus?.let { Line.fromCampus(it, route.svc, route.from) } }
@@ -1658,7 +1497,6 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                                 modifier = Modifier.padding(vertical = 16.dp),
                             )
                         line == null -> {
-                            // The campus data has the line: its stops drawn for real, only the server's words as bars.
                             if (known == null) LineSkeleton(Color(color))
                             else
                                 Skeleton(stringResource(R.string.checking), real = true) {
@@ -1717,7 +1555,6 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     }
 }
 
-/** The line top to bottom in the service's colour: a node per stop, the buses on it at a stop or between two. */
 @Composable
 private fun LineList(
     line: Line,
@@ -1778,10 +1615,6 @@ private fun LineList(
     }
 }
 
-/**
- * A service's line before it has come, when the campus data doesn't have it: six stops' shape on a rail in the service's colour, faded. No
- * buses: a placeholder bus would read as a real one.
- */
 @Composable
 private fun LineSkeleton(color: Color) {
     val faded = lerp(MaterialTheme.colorScheme.background, color, 0.3f)
@@ -1799,7 +1632,6 @@ private fun LineSkeleton(color: Color) {
     }
 }
 
-/** The plates and how full each bus is. */
 @Composable
 private fun BusesOnLine(buses: List<LineBus>, where: String) {
     @OptIn(ExperimentalLayoutApi::class)
@@ -1832,7 +1664,6 @@ private fun Plate(text: String) {
     )
 }
 
-/** Where your stop's time goes on its line (the line from the campus data, [waiting] for /api/line): bars in [HereTime]'s places. */
 @Composable
 private fun HereTimeWaiting() {
     Column(horizontalAlignment = Alignment.End) {
@@ -1841,7 +1672,6 @@ private fun HereTimeWaiting() {
     }
 }
 
-/** Your stop's time on the line, from its board row: the only time on the page. */
 @Composable
 private fun HereTime(row: BoardRow) {
     Column(horizontalAlignment = Alignment.End) {
@@ -1853,7 +1683,6 @@ private fun HereTime(row: BoardRow) {
     }
 }
 
-/** The line's stretch beside one row: the line through it, and its stop's node or a bus. */
 @Composable
 private fun Rail(color: Color, first: Boolean, last: Boolean, bus: Boolean, here: Boolean) {
     val paper = MaterialTheme.colorScheme.surface

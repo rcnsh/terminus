@@ -34,10 +34,6 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
 
-/**
- * A trip's steps on the ground of the big widget, under the headline the sky already shows, in the card style chosen in Settings ›
- * Appearance: Steps down the side with the ride in its service's colour, or the Route across. How tall each is: [journeyHeight].
- */
 @Composable
 internal fun WidgetJourney(journey: Journey, style: String, inks: Inks, page: ColorProvider) {
     when (style) {
@@ -46,39 +42,25 @@ internal fun WidgetJourney(journey: Journey, style: String, inks: Inks, page: Co
     }
 }
 
-/** The room [WidgetJourney] takes in [style]: Steps a row a step, the Route its line. */
 internal fun journeyHeight(journey: Journey, style: String): Dp =
     when (style) {
         CardStyle.ROUTE -> 52.dp
-        // The rows Steps draws: leave (only with a walk first), the bus, and
-        // where you end up; the last is shorter with nothing under its name.
         else -> STEP * stepRows(journey) - (if (lastUnder(journey) == null) 12.dp else 0.dp)
     }
 
-/**
- * How many steps [Steps] draws: leave when there's a walk first, the bus when there is one, the second bus of a change, and where you end
- * up.
- */
 internal fun stepRows(journey: Journey): Int =
     (if (journey.walk != null) 1 else 0) + (if (journey.bus != null) 1 else 0) + (if (journey.change != null) 1 else 0) + 1
 
-/** Under the last step: "2 min walk from UTown", or a class's "9 min early". */
 private fun lastUnder(journey: Journey): String? = journey.walkEnd?.let { JourneyText.arriveWhere(journey) } ?: journey.slack
 
 private fun solid(argb: Long) = ColorProvider(Color(argb))
 
-/** The big line's lines: one, or two when the phone's text is scaled up, so it wraps rather than cuts. */
 @Composable internal fun headLines(): Int = if (LocalContext.current.resources.configuration.fontScale > 1.15f) 2 else 1
 
-/** How much wider a column of times is with the phone's text scaled up. */
 @Composable private fun widen(): Float = LocalContext.current.resources.configuration.fontScale.coerceIn(1f, 1.8f)
 
-/** A step's height: its name and the line under it. */
 private val STEP = 38.dp
 
-/**
- * Steps: leave, the bus at its stop, and where you get off, down a line drawn as the trip goes (dotted on foot, the ride in its colour).
- */
 @Composable
 private fun Steps(journey: Journey, inks: Inks, page: ColorProvider) {
     val bus = journey.bus
@@ -150,7 +132,6 @@ private fun Step(
         Column(GlanceModifier.width(16.dp).padding(top = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             when (dot) {
                 Dot.YOU -> Box(GlanceModifier.size(12.dp).cornerRadius(6.dp).background(inks.accent)) {}
-                // A ring: the stop in ink, where you're going in the accent.
                 else ->
                     Box(
                         GlanceModifier.size(12.dp).cornerRadius(6.dp).background(if (dot == Dot.THERE) inks.accent else inks.ink),
@@ -196,11 +177,9 @@ private fun Step(
     }
 }
 
-/** Route: you, the stop and where you're going on a line across, the ride in its service's colour. */
 @Composable
 private fun Route(journey: Journey, inks: Inks) {
     val bus = journey.bus
-    // A change of bus takes the room of the walk to the stop, and of the walk on at the end.
     val change = journey.change != null && bus != null
     val four = journey.walkEnd != null && !change && LocalSize.current.width >= 300.dp
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -217,7 +196,6 @@ private fun Route(journey: Journey, inks: Inks) {
         Point(bus.stop, bus.board, inks.ink, w, inks)
         val change = journey.change
         Stretch(change?.firstRide ?: journey.ride.orEmpty(), bus, solid(bus.color), 4.dp, inks)
-        // A change of bus: the stop the second bus goes from, then its ride, as on the app's line.
         if (change != null) {
             Point(change.stop, change.bus.board, inks.ink, w, inks)
             Stretch(change.ride, change.bus, solid(change.bus.color), 4.dp, inks)
@@ -249,7 +227,6 @@ private fun Point(name: String, time: String, dot: ColorProvider, width: Dp, ink
     }
 }
 
-/** Between two points: the walk's minutes, or the bus and its ride, over a bar. */
 @Composable
 private fun RowScope.Stretch(caption: String, bus: JourneyBus?, color: ColorProvider, thick: Dp, inks: Inks) {
     Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {

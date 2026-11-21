@@ -58,15 +58,6 @@ import androidx.core.net.toUri
 import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.R
 
-/*
- * The parts every page of Settings is made of, as on the web
- * (settings-pages.js, account.css): a small grey heading in capitals, a card
- * of rows, a grey line under it. A row is a name, maybe a line under it, and
- * one control on the right. Two or three choices are pills; the main action
- * is a pill in the ink; red is only for deleting the account.
- */
-
-/** A group's heading, its rows in one card, and at most one line under them. */
 @Composable
 internal fun Group(title: String?, hint: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column {
@@ -82,13 +73,11 @@ internal fun Group(title: String?, hint: String? = null, content: @Composable Co
     }
 }
 
-/** Groups down a page, with room under the band. */
 @Composable
 internal fun Groups(content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.padding(top = 16.dp), content = content)
 }
 
-/** One setting: its name (and a line under it), then its control. */
 @Composable
 internal fun FieldRow(label: String, modifier: Modifier = Modifier, sub: String? = null, control: @Composable () -> Unit) {
     Row(
@@ -106,11 +95,9 @@ internal fun FieldRow(label: String, modifier: Modifier = Modifier, sub: String?
 
 @Composable internal fun RowDivider() = HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-/** Two or three choices as pills on one track, across the row. */
 @Composable
 internal fun <T> Pills(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val c = MaterialTheme.colorScheme
-    // The chosen pill a step lighter than the track: in the dark, the card's own colour would barely show.
     val chosen = if (c.background.luminance() < 0.5f) c.onSurface.copy(alpha = 0.14f).compositeOver(c.surface) else c.surface
     Row(modifier.fillMaxWidth().clip(CircleShape).background(c.surfaceContainerHighest).padding(3.dp).selectableGroup()) {
         for ((value, text) in options) {
@@ -139,7 +126,6 @@ internal fun <T> Pills(options: List<Pair<T, String>>, selected: T, onSelect: (T
     }
 }
 
-/** The page's main action: a pill in the ink, as the chosen chip on Now is. */
 @Composable
 internal fun InkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val c = MaterialTheme.colorScheme
@@ -159,7 +145,6 @@ internal fun InkButton(text: String, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
-/** The last row of a list: "+ Add …". */
 @Composable
 internal fun AddRow(text: String, onClick: () -> Unit) {
     val c = MaterialTheme.colorScheme
@@ -178,7 +163,6 @@ internal fun AddRow(text: String, onClick: () -> Unit) {
     }
 }
 
-/** Remove, quietly: grey, not the accent. */
 @Composable
 internal fun RemoveButton(onClick: () -> Unit, text: String? = null) {
     TextButton(onClick = onClick, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
@@ -186,7 +170,6 @@ internal fun RemoveButton(onClick: () -> Unit, text: String? = null) {
     }
 }
 
-/** A row that opens something: in the app (›) or [away] in the browser (↗). [color] for Delete account. */
 @Composable
 internal fun LinkRow(title: String, onClick: () -> Unit, sub: String? = null, away: Boolean = false, color: Color = Color.Unspecified) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -212,10 +195,6 @@ internal fun LinkRow(title: String, onClick: () -> Unit, sub: String? = null, aw
     }
 }
 
-/**
- * One choice from a long list (your residence, your stop): its name, then what's chosen and a chevron, opening the list. `null` is the
- * [blank] option; [headings] go before the option at their index.
- */
 @Composable
 internal fun <T> ValueRow(
     label: String,
@@ -282,7 +261,6 @@ internal fun <T> ValueRow(
     }
 }
 
-/** Opens [url] in the browser, out of the app; with no browser on the phone, says so rather than crashing. */
 internal fun Context.openWeb(url: String) {
     try {
         startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -292,10 +270,6 @@ internal fun Context.openWeb(url: String) {
     }
 }
 
-/**
- * Where this install updates: its Play listing (the Play Store app, else the web page), or the website's APK built for this phone's CPU
- * (the site falls back to arm64).
- */
 internal fun Context.openUpdate() {
     if (installedFromPlay(this)) {
         val market = Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri())
@@ -306,6 +280,5 @@ internal fun Context.openUpdate() {
     }
 }
 
-/** The system's page for this app, where a permission refused twice can still be allowed. */
 internal fun Context.openAppSettings() =
     startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))

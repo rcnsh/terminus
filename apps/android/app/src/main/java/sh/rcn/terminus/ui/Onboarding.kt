@@ -92,13 +92,6 @@ import sh.rcn.terminus.hour12
 
 private const val STEPS = 4
 
-/**
- * The in-app setup for a new account, one step at a time, the same four things the account page asks: home, timetable, pace, then
- * notifications and location. Each step saves as it goes and can be skipped; so can the lot.
- *
- * Each step shows what its choice does (your stops' signs, your week, a lap of a track at your pace, the alert you'd get), and its buttons
- * stay at the foot of the screen, under the thumb, while the step scrolls above them.
- */
 @Composable
 internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, main: MainViewModel, onDone: () -> Unit) {
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -107,7 +100,6 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
         account.finishSetup()
         onDone()
     }
-    // A link shared from NUSMods goes straight to the timetable step.
     LaunchedEffect(state.sharedLink) { if (state.sharedLink != null && step == 0) step = 1 }
 
     Column(Modifier.fillMaxSize()) {
@@ -117,7 +109,6 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
         }
         val profile = state.profile
         if (profile == null) {
-            // The first step's question is known: the picker under it waits as its shape.
             if (state.message == null && step == 0) {
                 Column(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
                     Title(stringResource(R.string.where_live), stringResource(R.string.where_live_sub))
@@ -148,10 +139,6 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
     }
 }
 
-/**
- * Where you are in setup, drawn as a route: a stop per step, the line done so far in the accent, the stop you're at ringed, and each stop's
- * name under it.
- */
 @Composable
 private fun StepLine(step: Int, modifier: Modifier = Modifier) {
     val names = listOf(R.string.step_home, R.string.step_classes, R.string.step_pace, R.string.step_alerts)
@@ -195,7 +182,6 @@ private fun StepLine(step: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** A step: what it asks, scrolling, and its buttons pinned under it. */
 @Composable
 private fun ColumnScope.StepPage(message: String?, buttons: @Composable () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 12.dp)) {
@@ -212,9 +198,6 @@ private fun ColumnScope.StepPage(message: String?, buttons: @Composable () -> Un
     buttons()
 }
 
-/**
- * Back on the left; the step's one big button filling the rest. With nothing to continue with yet, the big button is the skip, and says so.
- */
 @Composable
 private fun StepButtons(next: () -> Unit, back: (() -> Unit)?, nextLabel: String? = null, skip: String? = null, enabled: Boolean = true) {
     Row(
@@ -233,7 +216,6 @@ private fun StepButtons(next: () -> Unit, back: (() -> Unit)?, nextLabel: String
     }
 }
 
-/** A step's title, a heading; a screen reader's focus moves to it when the step changes. */
 @Composable
 private fun Title(text: String, sub: String) {
     val focus = remember { FocusRequester() }
@@ -249,10 +231,8 @@ private fun Title(text: String, sub: String) {
     Spacer(Modifier.height(18.dp))
 }
 
-/** Where do you live? A residence brings all its stops; off campus, pick one. */
 @Composable
 private fun ColumnScope.HomeStep(profile: ProfileDoc, state: AccountState, account: AccountViewModel, next: () -> Unit) {
-    // Continue means a home is set; with none yet it's a skip, said as one.
     val home = profile.homeStops.isNotEmpty()
     StepPage(state.message, { StepButtons(next = next, back = null, skip = if (home) null else stringResource(R.string.later)) }) {
         Title(stringResource(R.string.where_live), stringResource(R.string.where_live_sub))
@@ -261,7 +241,6 @@ private fun ColumnScope.HomeStep(profile: ProfileDoc, state: AccountState, accou
     }
 }
 
-/** The home picker before the campus's residences have come: its tiles' shape, two to a row, with nothing to choose yet. */
 @Composable
 private fun HomePickerSkeleton() {
     val c = MaterialTheme.colorScheme
@@ -280,7 +259,6 @@ private fun HomePickerSkeleton() {
     }
 }
 
-/** The residence menu's groups: where most students live, then the rest (residences come common first). */
 @Composable
 internal fun residenceHeadings(residences: List<Residence>): Map<Int, String> {
     val common = residences.count { it.common }
@@ -288,22 +266,15 @@ internal fun residenceHeadings(residences: List<Residence>): Map<Int, String> {
     return mapOf(0 to stringResource(R.string.most_common), common to stringResource(R.string.other_residences))
 }
 
-/** How many of the other residences show before "All 15 halls and colleges". */
 private const val FEW_RESIDENCES = 4
 private const val MORE = "more"
 private const val OFF = "off"
 
-/**
- * Residences as tiles: where most students live on their own at the top, then a few of the others (the chosen one always among those
- * showing) and off campus. Your stops follow as their signs, with the buses that call there, so the choice shows what it does.
- */
 @Composable
 internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountViewModel) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val stops = profile.homeStops
-    // The residence whose stops these are, if they're exactly one residence's.
-    // The common ones come first, so stops several share (UTOWN) find the likelier.
     val residence = campus.residences.firstOrNull { it.stops == stops }
     var offCampus by rememberSaveable { mutableStateOf(stops.isNotEmpty() && residence == null) }
     var all by rememberSaveable { mutableStateOf(false) }
@@ -427,11 +398,6 @@ internal fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = s
     dLat * dLat + dLon * dLon
 }
 
-/**
- * "Pick the stop nearest me": the stop nearest the phone becomes your home stop, as choosing it from the list does (the first replaced, the
- * rest kept after it), and what to say about it. The stops are read when it's found, so an edit made while waiting for the location isn't
- * undone.
- */
 internal suspend fun pickNearestHome(ctx: Context, campus: Campus, account: AccountViewModel): String {
     val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
     val near = loc?.let { l -> nearestStop(campus.stops, l.latitude, l.longitude) } ?: return L.s(R.string.no_location)
@@ -442,7 +408,6 @@ internal suspend fun pickNearestHome(ctx: Context, campus: Campus, account: Acco
 @Composable
 private fun ColumnScope.TimetableStep(state: AccountState, account: AccountViewModel, next: () -> Unit, back: () -> Unit) {
     var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: state.profile?.share.orEmpty()) }
-    // Continue imports a link that was pasted but not imported yet, then moves on once it has.
     var waiting by remember { mutableStateOf(false) }
     LaunchedEffect(state.importing, state.imported, waiting) {
         if (waiting && !state.importing) {
@@ -463,7 +428,6 @@ private fun ColumnScope.TimetableStep(state: AccountState, account: AccountViewM
                     } else next()
                 },
                 back = back,
-                // As on the home step: Continue means there's a timetable; with none, it's the skip.
                 skip = if (classes.isEmpty() && !pending) stringResource(R.string.later) else null,
                 enabled = !state.importing && (pending || classes.isNotEmpty()),
             )
@@ -475,16 +439,11 @@ private fun ColumnScope.TimetableStep(state: AccountState, account: AccountViewM
     }
 }
 
-/**
- * The week as imported: each day's classes in order, each beside the stop terminus will take you to, so a wrong one is easy to spot before
- * going on.
- */
 @Composable
 private fun Week(classes: List<TimetableClass>, campus: Campus?) {
     if (classes.isEmpty()) return
     val h12 = hour12(LocalContext.current)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    // Monday first, as a timetable is read.
     val days = classes.sortedWith(compareBy({ (it.day + 6) % 7 }, { it.arriveByMin })).groupBy { it.day }
     Column(Modifier.padding(top = 18.dp)) {
         for ((day, list) in days) {
@@ -514,7 +473,6 @@ private fun Week(classes: List<TimetableClass>, campus: Campus?) {
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                                // The room, unless the name already says it ("MA1521 @ LT27").
                                 if (t.venue.isNotEmpty() && t.venue !in t.label)
                                     Text(
                                         t.venue,
@@ -533,7 +491,6 @@ private fun Week(classes: List<TimetableClass>, campus: Campus?) {
     }
 }
 
-/** A stop's name on a little plate, as on its sign. */
 @Composable
 internal fun StopChip(name: String) {
     Text(
@@ -547,7 +504,6 @@ internal fun StopChip(name: String) {
     )
 }
 
-/** The classes an import couldn't place, each with a stop to pick or Skip. Shared by setup and settings. */
 @Composable
 internal fun Unplaced(state: AccountState, account: AccountViewModel) {
     if (state.unplaced.isEmpty()) return
@@ -559,7 +515,6 @@ internal fun Unplaced(state: AccountState, account: AccountViewModel) {
         color = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(top = 8.dp),
     )
-    // Keyed, so the search typed for one class doesn't pass to the next when it's placed or skipped.
     for (u in state.unplaced) key(u) {
         Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -574,10 +529,6 @@ internal fun Unplaced(state: AccountState, account: AccountViewModel) {
     }
 }
 
-/**
- * Import from NUSMods: the link, Import, and what came of it. Shared by setup and Settings; [inSettings], Import is the ink pill beside the
- * link, and the page says how to get one under its group.
- */
 @Composable
 internal fun TimetableImport(
     state: AccountState,
@@ -648,7 +599,6 @@ private fun ColumnScope.PaceStep(profile: ProfileDoc, state: AccountState, accou
     }
 }
 
-/** Each pace, and how long a lap of a 400 m track takes at it. */
 private val PACES =
     listOf(
         Triple("slow", R.string.pace_slow, 6),
@@ -656,10 +606,6 @@ private val PACES =
         Triple("fast", R.string.pace_fast, 4),
     )
 
-/**
- * The pace as a lap of a running track (400 m, something people have walked round), with the chosen pace's time in the middle; then the
- * three paces; then "allow for busy buses", with the trade it makes drawn under it.
- */
 @Composable
 private fun PacePicker(profile: ProfileDoc, account: AccountViewModel) {
     val lap = PACES.firstOrNull { it.first == profile.walkPace }?.third ?: 5
@@ -686,7 +632,6 @@ private fun PacePicker(profile: ProfileDoc, account: AccountViewModel) {
     BusyBuses(profile, account)
 }
 
-/** A running track, from above: the lap's time at your pace in the infield. */
 @Composable
 private fun Track(lapMin: Int) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -706,9 +651,7 @@ private fun Track(lapMin: Int) {
                 style = Stroke(1.dp.toPx()),
             )
             drawRoundRect(infield, Offset(lane, lane), Size(size.width - 2 * lane, size.height - 2 * lane), CornerRadius(r - lane))
-            // The finish line, and you on the far bend.
             drawLine(Color.White, Offset(size.width / 2, 0f), Offset(size.width / 2, lane), 3.dp.toPx())
-            // On the middle of the lane, part way round the far bend.
             val bend = Math.toRadians(-50.0)
             val you = Offset(size.width - r + (r - lane / 2) * Math.cos(bend).toFloat(), r + (r - lane / 2) * Math.sin(bend).toFloat())
             drawCircle(Color.White, 9.dp.toPx(), you)
@@ -732,10 +675,8 @@ private fun Track(lapMin: Int) {
     }
 }
 
-/** A running track's own red, the same in light and dark. */
 private val TRACK = Color(0xFFB4533A)
 
-/** "Allow for packed buses", with an example of what it does: the earlier R2 instead of the packed one. */
 @Composable
 private fun BusyBuses(profile: ProfileDoc, account: AccountViewModel) {
     val c = MaterialTheme.colorScheme
@@ -803,10 +744,6 @@ internal fun SwitchRow(title: String, hint: String, on: Boolean, onChange: (Bool
     }
 }
 
-/**
- * 12- or 24-hour, as two halves of one switch, each an example time. The phone's own style shows picked until another is (Settings has
- * "follow the phone").
- */
 @Composable
 private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
     val ctx = LocalContext.current
@@ -833,24 +770,15 @@ private fun ClockSwitch(profile: ProfileDoc, account: AccountViewModel) {
     }
 }
 
-/**
- * Notifications, location and "Alarms & reminders", each showing what it gives before asking: the leave-by alert itself, your dot finding
- * its nearest stop, and the widget's minutes until each bus.
- */
 @Composable
 private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel, next: () -> Unit, back: () -> Unit) {
     val ctx = LocalContext.current
     val mainState by main.state.collectAsStateWithLifecycle()
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
-    // Allowed only on a system page, so checked again on coming back from it.
     var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
-    // After two refusals Android stops showing the dialog: then the app's settings page, as on Now.
     var blocked by rememberSaveable { mutableStateOf(false) }
     val activity = ctx as? android.app.Activity
     val rationale = { activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == true }
-    // Whether Android would have explained itself before this ask, and whether
-    // its dialog came up (it pauses the app): a dialog closed with Back leaves
-    // no explanation either, just as a refusal for good does, but it was shown.
     var rationaleBefore by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
     var dialogShown by remember { mutableStateOf(false) }
@@ -858,11 +786,8 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             hasLocation = Locator.hasForeground(ctx)
             asking = false
-            // Blocked: no dialog came up at all, or this was the second refusal.
-            // A first dialog closed without an answer is asked again.
             blocked = !hasLocation && !rationale() && (!dialogShown || rationaleBefore)
         }
-    // Allowed in the phone's settings meanwhile: says so on coming back.
     LifecycleResumeEffect(Unit) {
         hasLocation = Locator.hasForeground(ctx)
         exact = LeaveAlerts.canBeExact(ctx)
@@ -885,7 +810,6 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
             when {
                 LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL) -> main.setLeaveAlerts(true)
                 LeaveAlerts.needsPermission(ctx) -> @Suppress("InlinedApi") askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
-                // Off in the phone's settings: only there can they be turned on.
                 else -> ctx.openAppSettings()
             }
         }
@@ -952,7 +876,6 @@ private fun PermissionCard(
     }
 }
 
-/** The leave-by alert, as it shows on the phone: an example class. */
 @Composable
 private fun AlertPreview() {
     val c = MaterialTheme.colorScheme
@@ -985,7 +908,6 @@ private fun AlertPreview() {
     }
 }
 
-/** Two buses on the Buses near you widget, each with how many minutes until it. */
 @Composable
 private fun MinutesPreview() {
     val c = MaterialTheme.colorScheme
@@ -1016,7 +938,6 @@ private fun MinutesPreview() {
     }
 }
 
-/** A few roads, a route line, a stop, and you: a dashed walk from your dot to the stop. */
 @Composable
 private fun LocationPreview() {
     val c = MaterialTheme.colorScheme

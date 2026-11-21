@@ -33,16 +33,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 
-/**
- * A home screen and the pages opened over it, [stack] the open pages (the last on top, empty for home). [content] draws the top page, or
- * home for null, each on its own opaque background. Back pops one.
- *
- * Back is Android's own animation between screens ([Peel]), drawn here rather than by a transition, so the swipe and the release each have
- * their own curve. While a back swipe is held, the page is a card that follows it over the dimmed page underneath; let go, and the release
- * starts from wherever the card is ([onBack] is told then); cancel, and it grows back. A back that isn't a swipe plays the same release
- * from a full-size page. Opening a page fades it in over the last, which stays solid under it. With [stack] empty, back is left to whoever
- * handles it outside.
- */
 @Composable
 internal fun <T> PageStack(
     stack: List<T>,
@@ -53,7 +43,6 @@ internal fun <T> PageStack(
     val back by rememberUpdatedState(onBack)
     val motion = remember { Motion(stack) }
     motion.follow(stack)
-    // Read here so a peel or a fade starting or ending changes which pages are drawn.
     motion.version
     val peel = motion.peel
     val enter = motion.enter
@@ -86,7 +75,6 @@ internal fun <T> PageStack(
         when (phase) {
             PeelPhase.Released -> {
                 p.release.animateTo(1f, tween(Peel.RELEASE_MS, easing = LinearEasing)) {
-                    // Gone by a fifth of the way: stop drawing it, so it takes no taps meant for the page under it.
                     if (value >= 0.2f) p.cardGone = true
                 }
                 motion.end(p)
@@ -111,8 +99,6 @@ internal fun <T> PageStack(
 
     val background = MaterialTheme.colorScheme.background
     val dimMost = if (background.luminance() < 0.5f) Peel.DIM_DARK else Peel.DIM_LIGHT
-    // One flat, keyed list of what's drawn, bottom first, so a page keeps its
-    // state as it goes from card to plain or from under to top.
     val layers = buildList {
         if (peel != null) {
             add(
@@ -169,10 +155,6 @@ internal fun <T> PageStack(
     }
 }
 
-/**
- * How deep in its [PageStack] the page being drawn is: 1 for the first page over home, 0 for home. Its own through a back swipe, as it
- * peels away after leaving the stack.
- */
 internal val LocalPageDepth = compositionLocalOf { 0 }
 
 private class Layer<T>(val depth: Int, val key: T?, val modifier: Modifier, val page: Boolean = true)
@@ -183,7 +165,6 @@ private enum class PeelPhase {
     Cancelled,
 }
 
-/** A page coming off: [card] at [depth] over the pages [under], from a swipe that started at [startY]. */
 private class Peeling<T>(val under: List<T>, val card: T, val depth: Int, val fromRight: Boolean, val startY: Float) {
     var phase by mutableStateOf(PeelPhase.Held)
     var progress by mutableFloatStateOf(0f)
@@ -206,17 +187,14 @@ private class Peeling<T>(val under: List<T>, val card: T, val depth: Int, val fr
         }
 
     companion object {
-        /** A back that wasn't a swipe: a full-size page, already let go. */
         fun <T> tapped(under: List<T>, card: T, depth: Int) = Peeling(under, card, depth, false, 0f).apply { phase = PeelPhase.Released }
     }
 }
 
-/** A page opened over [from], fading in. */
 private class Entering<T>(val from: List<T>) {
     val alpha = Animatable(0f)
 }
 
-/** What [PageStack] is drawing besides its top page, and the stack it last saw. */
 private class Motion<T>(private var seen: List<T>) {
     var version by mutableIntStateOf(0)
     var peel: Peeling<T>? = null
@@ -225,14 +203,12 @@ private class Motion<T>(private var seen: List<T>) {
     var enter: Entering<T>? = null
         private set
 
-    /** Called as [PageStack] composes: what the stack changing since it last looked means. */
     fun follow(stack: List<T>) {
         if (stack == seen) return
         val was = seen
         seen = stack
         val p = peel
         when {
-            // A swipe's own back: its release is already under way.
             p != null && p.phase == PeelPhase.Released && stack == p.under -> Unit
             stack.size > was.size && stack.take(was.size) == was -> {
                 peel = null
