@@ -236,7 +236,7 @@ export class TimelapseRecorder {
 
   private async poll(meta: Meta, svc: string, now: number): Promise<number | null> {
     const env = this.env;
-    if (await breakerOpen()) {
+    if (await breakerOpen(this.env)) {
       logPoll(env, 'skipped', svc, 0);
       return null;
     }

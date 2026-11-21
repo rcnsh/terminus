@@ -425,6 +425,7 @@ export async function getArrivals(
   onFetched?: (sa: StopArrivals) => void,
 ): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
+    env,
     ctx,
     nowMs,
     key: `${cacheBase()}/arrivals/${encodeURIComponent(code)}`,
@@ -476,7 +477,7 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
 }
 
 export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
-  if (!fmsConfigured(env) || (await breakerOpen())) return false;
+  if (!fmsConfigured(env) || (await breakerOpen(env))) return false;
   return renewAhead(env, nowMs).catch((err) => {
     if (err instanceof MintQuiet) return false;
     throw err;
@@ -485,8 +486,8 @@ export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
 
 const breaker = () => ({ key: `${cacheBase()}/breaker`, opens: opensBreaker, maxAgeS: TTL.breakerS });
 
-export async function breakerOpen(): Promise<boolean> {
-  return flagged(breaker().key);
+export async function breakerOpen(env: Env): Promise<boolean> {
+  return flagged(env, breaker().key);
 }
 
 const inflight = new Map<string, Promise<StopArrivals>>();
@@ -550,6 +551,7 @@ export async function getBuses(
   onUpstream?: () => void,
 ): Promise<ActiveBuses> {
   return cachedFetch<ActiveBuses>({
+    env,
     ctx,
     nowMs,
     key: `${cacheBase()}/buses/${encodeURIComponent(svc)}`,

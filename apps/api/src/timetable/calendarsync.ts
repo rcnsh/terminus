@@ -1,6 +1,7 @@
 import { BUNDLED, type CalendarData, currentCalendar, holidaySpan, mergeCalendars, sgtDate, useCalendar } from './calendar.ts';
 import type { Env } from '../types.ts';
 import { kvMemo } from '../memo.ts';
+import { lost, noteLost } from '../besteffort.ts';
 
 export const NUSMODS_CALENDAR =
   'https://raw.githubusercontent.com/nusmodifications/nusmods/master/packages/nusmods-academic-calendar/academic-calendar.json';
@@ -19,7 +20,9 @@ const calendarLoads = kvMemo(RELOAD_MS, async (env: Pick<Env, 'KV'>, nowMs: numb
   try {
     const kept = (await env.KV.get(CALENDAR_DATA_KEY, 'json')) as CalendarData | null;
     if (kept && valid(kept)) useCalendar(withBundled(kept, nowMs));
-  } catch {}
+  } catch (err) {
+    noteLost(env, 'calendar load', err, nowMs);
+  }
 });
 
 export function withBundled(kept: CalendarData | null, nowMs: number = Date.now()): CalendarData {
@@ -145,7 +148,7 @@ export async function refreshCalendar(env: Pick<Env, 'KV'>, nowMs: number): Prom
     useCalendar(withBundled(next, nowMs));
     return 'updated';
   } catch (err) {
-    await env.KV.put(CALENDAR_NEXT_KEY, String(nowMs + RETRY_MS)).catch(() => {});
+    await env.KV.put(CALENDAR_NEXT_KEY, String(nowMs + RETRY_MS)).catch(lost(env, 'calendar retry mark'));
     throw err;
   }
 }

@@ -2256,6 +2256,16 @@ breaker leaves no other trace, so this is where to look when a site says
 once per 10 minutes per stop or service, and none is noted when no call
 was made (a mint memo, `MintQuiet`).
 
+A best-effort write that fails leaves the answer as it is, and is logged
+and written as an `error` row too (`noteLost` in
+[src/besteffort.ts](../apps/api/src/besteffort.ts)), once per 10 minutes
+per route: `edge cache write` and `edge cache read` (the answer, the
+failure memos, the breaker, the pending marker), `feed failure note` (a
+failure note that threw), `breaker note` (the beta's `monitor:seen`),
+`calendar load` and `calendar retry mark`. An Analytics Engine row the
+dataset refuses is only logged (`analytics row <kind> lost`), once per 10
+minutes per kind, since counting it would need another row.
+
 **KV holds small, slow-changing state; arrivals stay in the edge cache.** The guest token
 and device id, the `config:appVersion` override and the `config:timelapse`
 switch, the fetched calendar (`calendar:data`), the monitor's view of the

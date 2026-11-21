@@ -158,12 +158,12 @@ export async function getSession(
   let minting = inflight.get(version);
   if (!minting) {
     minting = (async () => {
-      if (await flagged(mintFailedKey())) throw new MintQuiet('token mint failed a moment ago');
+      if (await flagged(env, mintFailedKey())) throw new MintQuiet('token mint failed a moment ago');
       onMint?.();
       return mint(env, nowMs, version).catch(async (err) => {
         await markIfOutdated(env, err);
         if (!(err instanceof UpstreamRejected && err.outdated))
-          await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
+          await flag(env, mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
         throw err;
       });
     })().finally(() => {
@@ -221,8 +221,8 @@ export async function renewSession(env: Env, nowMs: number, rejected: Session, o
     memos.set(env.KV, kept);
     return kept;
   }
-  if (await flagged(remintedKey())) return null;
-  await flag(remintedKey(), 'reminted', TTL.remintGapS);
+  if (await flagged(env, remintedKey())) return null;
+  await flag(env, remintedKey(), 'reminted', TTL.remintGapS);
   return getSession(env, nowMs, { force: true, onMint }).catch(() => null);
 }
 

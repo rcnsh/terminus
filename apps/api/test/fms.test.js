@@ -143,16 +143,16 @@ test('a version refused after the switch away from it does not open the breaker 
     const ctx = makeCtx();
     await assert.rejects(getArrivals(env, ctx, 'COM3', FROZEN_NOW), (err) => err instanceof UpstreamRejected && err.outdated);
     await ctx.settle();
-    assert.equal(await breakerOpen(), false, `mint refused: ${mintRefused}`);
-    assert.equal(await flagged('https://terminus.internal/mint-failed'), false, 'nor the mint memo');
-    assert.equal(await flagged('https://terminus.internal/failed/COM3'), false, 'nor the stop');
+    assert.equal(await breakerOpen(env), false, `mint refused: ${mintRefused}`);
+    assert.equal(await flagged(env, 'https://terminus.internal/mint-failed'), false, 'nor the mint memo');
+    assert.equal(await flagged(env, 'https://terminus.internal/failed/COM3'), false, 'nor the stop');
     assert.equal(await appVersion(env, FROZEN_NOW), NEW);
 
     const env2 = makeEnv(makeKV());
     const ctx2 = makeCtx();
     await assert.rejects(getArrivals(env2, ctx2, 'PGP', FROZEN_NOW), (err) => err instanceof UpstreamRejected && !err.outdated);
     await ctx2.settle();
-    assert.equal(await breakerOpen(), true);
+    assert.equal(await breakerOpen(env), true);
   }
 });
 

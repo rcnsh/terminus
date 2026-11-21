@@ -1,8 +1,10 @@
 import type { Env, FeedState } from '../types.ts';
 import { isBeta } from '../origin.ts';
 import { TTL } from '../config.ts';
+import { lost, noteLost } from '../besteffort.ts';
 
 export interface CachedOptions<T> {
+  env: Env;
   ctx: ExecutionContext;
   nowMs: number;
   key: string;
@@ -31,18 +33,21 @@ export function scopeCache(env: Env): void {
 const memo = (reason: string, maxAgeS: number) =>
   new Response(reason.slice(0, 200), { headers: { 'cache-control': `max-age=${maxAgeS}` } });
 
-export async function flagged(key: string): Promise<boolean> {
+export async function flagged(env: Env, key: string): Promise<boolean> {
   try {
     return Boolean(await caches.default.match(new Request(key)));
-  } catch {
+  } catch (err) {
+    noteLost(env, 'edge cache read', err);
     return false;
   }
 }
 
-export async function flag(key: string, reason: string, maxAgeS: number): Promise<void> {
+export async function flag(env: Env, key: string, reason: string, maxAgeS: number): Promise<void> {
   try {
     await caches.default.put(new Request(key), memo(reason, maxAgeS));
-  } catch {}
+  } catch (err) {
+    noteLost(env, 'edge cache write', err);
+  }
 }
 
 const PENDING_S = Math.ceil((4 * TTL.upstreamTimeoutMs) / 1000) + 10;
@@ -77,7 +82,8 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
 
   let job = o.inflight.get(o.key);
   if (!job) {
-    const marked = cache.put(pendingKey, memo('fetching', PENDING_S)).catch(() => {});
+    const unwritten = lost(o.env, 'edge cache write');
+    const marked = cache.put(pendingKey, memo('fetching', PENDING_S)).catch(unwritten);
     let writes: Promise<unknown> = Promise.resolve();
     const mine: Promise<T> = (async () => o.fetch())().then(
       (fresh) => {
@@ -91,19 +97,21 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
               },
             }),
           )
-          .catch(() => {});
+          .catch(unwritten);
         return fresh;
       },
       (err) => {
         const reason = String((err as Error)?.message ?? err);
         try {
           o.onFail?.(err);
-        } catch {}
+        } catch (noteErr) {
+          noteLost(o.env, 'feed failure note', noteErr);
+        }
         const memos: Promise<void>[] = [];
-        if (o.memoes?.(err) ?? true) memos.push(cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {}));
+        if (o.memoes?.(err) ?? true) memos.push(cache.put(o.failKey, memo(reason, o.failMemoS)).catch(unwritten));
         if (o.breaker?.opens(err)) {
-          memos.push(cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {}));
-          if (o.breaker.onOpen) o.ctx.waitUntil(o.breaker.onOpen(err).catch(() => {}));
+          memos.push(cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(unwritten));
+          if (o.breaker.onOpen) o.ctx.waitUntil(o.breaker.onOpen(err).catch(lost(o.env, 'breaker note')));
         }
         writes = Promise.all(memos);
         throw err;
@@ -117,7 +125,7 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
         .then(() => Promise.all([marked, writes]))
         .then(() => {
           if (o.inflight.get(o.key) === mine) o.inflight.delete(o.key);
-          return cache.delete(pendingKey).catch(() => false);
+          return cache.delete(pendingKey).catch(unwritten);
         }),
     );
   }
