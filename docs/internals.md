@@ -2165,6 +2165,16 @@ made-up hosts can't grow it) and the `/docs` page (per sky phase). Built
 at module scope instead, every cold start would pay for them whatever it
 was started for.
 
+**What an isolate remembers is bounded, through
+[src/memo.ts](../apps/api/src/memo.ts).** `Lru` keeps a fixed number of
+entries and drops the one used longest ago, so a full memo keeps its hot
+entries rather than starting again. `onceEvery(windowMs, maxKeys)` lets a
+log line or note through once per key per window (a failed stop, a
+breaker trip, a DataMall stop with unplaced buses); a clock gone backwards
+counts as a new window. State tied to one deployment's bindings is kept
+per binding (`perScope`, keyed by `env.KV`), so a test's fresh env starts
+clean with no reset hook.
+
 The cron handler awaits its run rather than leaving it to `waitUntil`: a
 run that outlived the handler could be cut off partway, with the
 trigger's history still saying it succeeded. An unhandled error is logged

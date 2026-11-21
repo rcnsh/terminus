@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV, named } from './_stubs.mjs';
-import { failureReason, getArrivals, noteFailure, renewToken, resetFailureNotes } from '../src/feeds/fms.ts';
+import { failureReason, getArrivals, noteFailure, renewToken } from '../src/feeds/fms.ts';
 import { scopeCache } from '../src/feeds/edgecache.ts';
 import { GateBusy } from '../src/feeds/feedgate.ts';
 import { MintQuiet, UpstreamRejected, forgetAppVersion } from '../src/feeds/auth.ts';
@@ -203,7 +203,6 @@ test('the stable cron renews after its health check, and not while the feed is d
 
 test("a failed call is logged with its reason and counted as an 'error' row of route 'feed arrivals'", async () => {
   installGlobals(makeFetch({ reject: 2, rejectCode: '401' }));
-  resetFailureNotes();
   const ae = makeAnalytics();
   const env = makeEnv(makeKV(), ae);
   scopeCache(env);
@@ -220,7 +219,6 @@ test("a failed call is logged with its reason and counted as an 'error' row of r
 });
 
 test('the gate having nothing to share yet, a version switched away from, or no call made, is not noted; a repeat is noted once', async () => {
-  resetFailureNotes();
   const ae = makeAnalytics();
   const env = makeEnv(makeKV(), ae);
   const outdated = new UpstreamRejected('10009', 'refused');
@@ -251,4 +249,18 @@ test('a reason carries no credentials and stays short', () => {
     assert.ok(!r.includes(cut.split('"')[3]), r);
     assert.ok(r.includes('[redacted]'), r);
   }
+});
+
+test('a failure noted a moment ago stays quiet however many other failures came since', async () => {
+  const ae = makeAnalytics();
+  const env = makeEnv(makeKV(), ae);
+  const note = (stop, at) => noteFailure(env, 'buses', stop, new TypeError('x is undefined'), at);
+  await collected(() => {
+    for (let i = 0; i < 500; i++) note(`S${i}`, FROZEN_NOW);
+    note('HOT', FROZEN_NOW);
+    note('S500', FROZEN_NOW);
+  });
+  const again = await collected(() => note('HOT', FROZEN_NOW + 1000));
+  assert.deepEqual(again, [], 'the failure noted just now is still remembered');
+  assert.equal(ae.rows('error').length, 502);
 });

@@ -12,7 +12,7 @@ import {
   runCron,
   sawTrip,
 } from '../src/ops/monitor.ts';
-import { lastBreakerOpen, noteBreakerOpen, resetNotes } from '../src/feeds/feedwatch.ts';
+import { lastBreakerOpen, noteBreakerOpen } from '../src/feeds/feedwatch.ts';
 import { scopeCache } from '../src/feeds/edgecache.ts';
 import { getArrivals } from '../src/feeds/fms.ts';
 import { getPublicArrivals } from '../src/feeds/lta.ts';
@@ -68,7 +68,6 @@ test('the beta cron makes no feed call to NUS or LTA; the stable one asks each o
 
 test('a breaker trip on the beta is noted for its cron; on the stable site it is not', async () => {
   for (const beta of [false, true]) {
-    resetNotes();
     installGlobals(makeFetch({ proxyStatus: 503, publicStatus: 503 }));
     const env = site(beta);
     scopeCache(env);
@@ -91,7 +90,6 @@ test('a breaker trip on the beta is noted for its cron; on the stable site it is
 });
 
 test('a note is written at most once a minute per isolate', async () => {
-  resetNotes();
   const env = site(true);
   let writes = 0;
   const put = env.KV.put.bind(env.KV);
@@ -109,7 +107,6 @@ test('a note is written at most once a minute per isolate', async () => {
 });
 
 test('the beta goes down on trips in two runs in a row, and back up after two without; no email, but logged and counted', async () => {
-  resetNotes();
   installGlobals(makeFetch());
   const ae = [];
   const env = site(true, ae);
@@ -119,7 +116,6 @@ test('the beta goes down on trips in two runs in a row, and back up after two wi
     await noteBreakerOpen(env, 'nus', new Error('bus-proxy HTTP 503'), t0 - 60_000);
     await runCron(env, t0);
     assert.equal((await readUpstream(env)).up, true, 'one failed check is a blip');
-    resetNotes();
     await noteBreakerOpen(env, 'nus', new Error('bus-proxy HTTP 503'), t0 + CHECK_EVERY_MS - 60_000);
     await runCron(env, t0 + CHECK_EVERY_MS);
     assert.equal((await readUpstream(env)).up, false);
@@ -137,7 +133,6 @@ test('the beta goes down on trips in two runs in a row, and back up after two wi
 });
 
 test('a version refusal the beta saw runs the automatic update, with the fix in the beta store', async () => {
-  resetNotes();
   installGlobals(makeFetch());
   const env = site(true);
   const refusal = () => {
@@ -153,7 +148,6 @@ test('a version refusal the beta saw runs the automatic update, with the fix in 
   };
   const logged = await quietly(async () => {
     await checkUpstream(env, FROZEN_NOW, sawTrip(env, 'nus', FROZEN_NOW), fix);
-    resetNotes();
     await noteBreakerOpen(env, 'nus', refusal(), FROZEN_NOW + CHECK_EVERY_MS - 60_000);
     await checkUpstream(env, FROZEN_NOW + CHECK_EVERY_MS, sawTrip(env, 'nus', FROZEN_NOW + CHECK_EVERY_MS), fix);
   });
@@ -167,20 +161,18 @@ test('a version refusal the beta saw runs the automatic update, with the fix in 
 });
 
 test('a refusal of a version switched away from since is not counted', async () => {
-  resetNotes();
-  const env = site(true);
   const err = new UpstreamRejected('10009', 'auth rejected: code=10009', '');
   err.version = 'univus_android_3.0.0_300';
-  await noteBreakerOpen(env, 'nus', err, FROZEN_NOW - 60_000);
-  await sawTrip(env, 'nus', FROZEN_NOW)();
+  const before = site(true);
+  await noteBreakerOpen(before, 'nus', err, FROZEN_NOW - 60_000);
+  await sawTrip(before, 'nus', FROZEN_NOW)();
   err.version = VERSION;
-  resetNotes();
-  await noteBreakerOpen(env, 'nus', err, FROZEN_NOW - 60_000);
-  await assert.rejects(sawTrip(env, 'nus', FROZEN_NOW)(), (e) => e instanceof UpstreamRejected && e.code === '10009');
+  const now = site(true);
+  await noteBreakerOpen(now, 'nus', err, FROZEN_NOW - 60_000);
+  await assert.rejects(sawTrip(now, 'nus', FROZEN_NOW)(), (e) => e instanceof UpstreamRejected && e.code === '10009');
 });
 
 test('the beta records the public feed from its own trips too', async () => {
-  resetNotes();
   const env = site(true);
   await checkPublicFeed(env, FROZEN_NOW, sawTrip(env, 'lta', FROZEN_NOW));
   assert.equal((await readPublicFeed(env)).up, true);
