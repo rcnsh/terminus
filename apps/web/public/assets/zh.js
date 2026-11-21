@@ -1,7 +1,3 @@
-// Simplified Chinese for the website, keyed by the English it
-// replaces: text as it appears on the page, or a whole element's HTML where
-// a sentence has a link or a name inside it. i18n.js puts it in place.
-// Place and bus names stay English, as on the signs.
 window.TERMINUS_ZH = {
   ' (off campus)': '（校外）',
   ' or ': ' 或 ',
@@ -574,7 +570,6 @@ window.TERMINUS_ZH = {
   '{0} min a lap': '一圈 {0} 分钟',
   'instead of': '而不是',
   'busy': '很挤',
-  // Settings' pages as one family (settings-pages.js).
   'One minute less': '少一分钟',
   'One minute more': '多一分钟',
   '1 hour': '1 小时',
@@ -646,7 +641,6 @@ window.TERMINUS_ZH = {
   'No bus stops here.': '这里没有巴士停靠。',
   "This page isn't on any route. It may have moved, or the link has a typo.": '这个页面不在任何路线上。它可能已经移走了，或者链接打错了。',
   'Go home': '回首页',
-  // The Stops tab (app/buses.js).
   'Services': '线路',
   'Stops need a connection.': '车站页面需要联网。',
   "Tap the star on any stop to keep it here: in Nearby, on the stop's page, or after searching for it.":

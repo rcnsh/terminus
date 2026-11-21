@@ -39,7 +39,16 @@ the web app's sky: `assets/sky.css` is app.css's palette on an element,
 `assets/sky-phase.js` puts the hour on `<html data-sky>` before the page is
 drawn, and `assets/sky-page.js` draws the horizon and the night with the
 app's own `sky.js` (web-sky.test.js keeps the colours and the hours the
-same). An address the website doesn't have, asked for by a browser, gets
+same). A page asks for the horizon in its markup (`<div data-horizon>`,
+with `data-low`, `data-stop`, `data-bus="<colour> <far> live"`,
+`data-shuttle="no"` and `data-drive`) and the night with `<div
+data-stars>`. The beta's pages (`data-site="beta"`) are under a
+blueprint at every hour instead, so they're never taken for the real
+site. The fonts are served from our own domain, so no third party sees
+who opens a page; until they arrive, text is in Arial (Roboto on Android)
+scaled to the real font's measured widths and line heights (`fonts.css`),
+so nothing moves when they swap, and headings never fall back to Inter,
+which is wider. An address the website doesn't have, asked for by a browser, gets
 `/not-found/` with a 404 (`sitePage` in index.ts); anything else gets the
 plain 404. `/docs` takes its bar's band from pagesky.ts, at Singapore's
 hour.
@@ -58,6 +67,12 @@ stub (Node, which has none) serve the same page; `landing.test.js` fails if
 `src/site/downloads.ts` is set, every Android button and link becomes
 Google Play's (its badge in each language, lazy-loaded) and the APK install
 step goes; until then it's null and the APK is offered.
+English in `data-t`, which `i18n.js` words in Chinese. `landing.js` asks
+for the version only when the Worker couldn't write it in, and closes "How
+to install" on `pointerdown` elsewhere, since iOS sends no click for a tap
+on plain text. A page that opens under the sky shows the sky's top colour
+when pulled past its top (`sky-page.js`), changed only once scrolling
+stops, since changing it mid-scroll repaints the page with a flicker.
 
 ---
 
@@ -1446,13 +1461,54 @@ map; and Settings. It uses the same routes as the account page, with the session
   on the account page once someone is signed in. Those `import()` every
   module they need at once, not just the top one, and touching or hovering
   the Map tab asks for `map.js` and MapLibre together (`app/map-files.js`,
-  the one place MapLibre's and PMTiles' versions are written).
+  the one place MapLibre's and PMTiles' versions are written). How the
+  files load, and why a failed one is asked for at a new address:
+  ADR 0000-web-app-loading. A store holds one value: it's set to a new
+  object, never changed in place, and tells its subscribers from a copy of
+  the list, since one may unsubscribe while told. Each page has one
+  status line for screen readers (`announce` in `ui.js`), in the page from
+  the start, since a live region speaks only a change; parts that redraw
+  often say a short line there when their meaning changes, rather than
+  being live regions read out whole on every redraw, and it's emptied
+  before it's filled so the same words twice are still heard. Markup set
+  as HTML (`Rich`, `Icon`, the map's button) is only our own constants,
+  never data. A failed request shows the server's own words when it
+  answered (`err.status`), never the browser's ("Failed to fetch").
 
 - **Tabs.** Now, Map and Settings are three views of one page (`#map`,
   `#settings` in the address, so Back and a reload keep the tab). Switching
   fades through as the Android app does (Web Animations: out in 90 ms, in
   over 210 ms from a 0.92 zoom; a plain short fade with reduced motion), and
   Now and Settings come back where they were scrolled to.
+- **When Now asks again** (`app/timing.js`, tested by web-timing.test.js).
+  Every 30 s while Now is on screen, with Today at most every 2 minutes
+  (`DAY_MS`: each is an answer per class on the server), and sooner at the
+  card's marks (`nextChangeAt`, `refreshAt`): never under 5 s from now nor
+  30 s after the last refresh a mark brought (a leave-by a late bus keeps
+  sliding would ask every 5 s; the Mac app and the trip engine wait 30 s
+  too), and a mark the answer already got past doesn't count. A timed
+  refresh waits for one on its way; the page shown again asks anyway, as
+  that call may have hung while the phone slept, and a refresh that ends
+  after a newer one started is dropped. After the service worker's kept
+  copy came instead, it tries again in 8 s, then 16 s, while Now is on
+  screen, and then leaves it to the timed refresh: a struggling server
+  isn't helped by more. Back online, only the tabs on screen ask. The card
+  goes with where the phone is only when location is already allowed: a
+  fix up to 60 s old as the browser has it, else up to 1.5 s for a fresh
+  one, else the page's last fix under 10 minutes old; a fresh one that
+  comes later brings the card again when the first went without (or with
+  one the API drops, over 200 m) or it's over 50 m away. `acc` is the
+  accuracy plus a walk's worth of the fix's age.
+- **Pull to refresh** (`app/pull.js`, numbers tested by web-pull.test.js).
+  On Now, Nearby and the Stops tab, by touch only: the sky stretches, and
+  the horizon's own bus (or one in the tab's first service's colour)
+  drives to your stop, then pulls away while the tab fetches. One fetch a
+  pull, of what the tab asks for anyway, and none when its times are
+  under 15 s old (`PULL_FRESH_MS`, the API's arrivals cache): the pill
+  says "Up to date", on Stops with when the timed refresh brings new
+  times. The Android app does the same by the same numbers. The page has
+  `overscroll-behavior-y: none`: Chrome's own pull reloads the page and
+  Safari's bounce fights this one.
 - **Settings** is the account page's own: the `Settings` component in
   `account/settings.js`, its pages in `account/settings-pages.js`. The
   account page draws it after sign-in and setup, with its widget preview; the
@@ -1528,7 +1584,14 @@ map; and Settings. It uses the same routes as the account page, with the session
   tab opens and every 30 s while it's on screen, never otherwise. A stop's
   name opens its board in the Stops tab, a row its service's line there,
   and the star on its sign pins it. Any other stop is on the Stops tab,
-  from the tab bar. Which tab an address opens is `app/tabs.js`.
+  from the tab bar. Which tab an address opens is `app/tabs.js`. A sign
+  (`app/sign.js`, also the Stops tab's pinned stops) marks an estimate
+  "~" in both languages, since in a column of figures "约" reads as part
+  of the next; a screen reader hears "about", and an estimate is never
+  "Arriving" or "now", only "~1 min". The star shows only once the pins
+  are known, so it can't read wrong or unpin. Before they are, the Stops
+  tab draws as many shapes as this browser last saw pinned for this
+  account (`keptPinCount`, in `localStorage`).
 - **Stops tab** (app/buses.js). Its home is the search, then the pinned
   stops in one card, a page each, as Nearby's signs (`/api/me/stops`,
   refreshed every 15 s while the home is on screen), then every service in
@@ -1540,11 +1603,32 @@ map; and Settings. It uses the same routes as the account page, with the session
   skeleton never holds it open. A stop opens its own page
   (`#buses/stop/<code>`), a service its line (`#buses/line/<svc>/<stop>`).
   The stops around you aren't here: they're the Nearby tab's (ADR 0014, 0017).
+  The services' counts of buses out (`/api/lines`) are asked for at most
+  once a minute, since each ask reads every service from NUS; a count a
+  service's own page got since is shown instead of the list's older one.
+  Each answer keeps `at` (when this browser fetched it, for fetching
+  again), `got` (the same on the server's clock) and `asOf` (when the
+  feed's answer is from, only for "Updated 5 s ago"): times are counted
+  down from `got`, never `asOf`, as the server has counted them to its
+  own now (`aged`). Older than two refreshes, they're faded, a long-due
+  bus has no time and a live one says "Last known". A pinned stop whose
+  page is open beside the home isn't asked for as a card (rule 2: each
+  stop once per 15 s); its card takes the page's times (`withBoard`, as
+  Android does), keeping its own words, its later timetable guesses
+  counted on past as many as the board shows, in whole seconds toward
+  zero as the apps count. A call that ends after a newer one never puts
+  back older times.
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`
   has the dark colours under both the device's dark mode (unless
   `data-theme="light"`) and `data-theme="dark"`. The map follows it too.
+  Now's sky is drawn by Now's tab, up behind the header, so it fades and
+  zooms with its hills when the tab changes; its ink reads at 4.5:1 over
+  every hour's sky (large words at 3:1), and small coloured words sit on
+  a chip of their own. `html` and `body` both have `overflow-x: clip`:
+  on `body` alone CSS hands it to the window as `hidden`, and a Settings
+  page mid-slide widens the window.
 
 - **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
   `assets/icons` (drawn by `apps/android/store/render.swift`), and a share
@@ -1558,7 +1642,9 @@ map; and Settings. It uses the same routes as the account page, with the session
   (`signInFirst()`, on `Sec-Fetch-Dest: document`), so the app never flashes
   up before sign-in; the service worker's own fetch of `/app/` still gets
   the page. A session ended elsewhere still reaches the app, whose first 401
-  sends it on (`signedOut()` in `dom.js`).
+  sends it on (`signedOut()` in `dom.js`). Each start asks `/api/me`,
+  which renews the session with the same token, so the installed app
+  stays signed in.
 - **Offline.** `/sw.js` fetches the app's files network-first and keeps a
   copy for offline (`SHELL_FILES`; `web-sw.test.js` fails if a module the app
   imports at startup is missing from it). On a slow connection it uses the
@@ -1571,7 +1657,18 @@ map; and Settings. It uses the same routes as the account page, with the session
   and `to`, so a searched stop's card never stands in for the plan's). When the network
   is down, the kept reply comes back with `x-terminus-cached` (when it was
   fetched), and the page dims the card and says so. Signing out, deleting the
-  account or a 401 empties the kept replies.
+  account or a 401 empties the kept replies, and a reply fetched before
+  that isn't kept after it (`dataGeneration`). Those replies wait 4 s for
+  the network on a slow connection, and a 5xx counts as no network. The
+  cache key is built with `String(params)`, since `URLSearchParams.size`
+  is undefined on Safari before 17. `/api/campus` comes from its copy at
+  once and is checked in the background, with its ETag, once the copy is
+  an hour old (the API's max-age); a change replaces it and tells the
+  pages, a 401 there is passed on, only JSON is kept (a captive portal's
+  200 would break the map for an hour), and offline a copy in the other
+  language beats none. The campus map file is kept whole, since the Cache
+  API can't keep a 206, then served in the ranges MapLibre asks for and
+  checked weekly. Mediabunny is the dashboard's and never kept.
 - **Offline, all day.** Once the kept answer has gone stale (its bus has
   left, or 15 minutes have passed) and the network is still down, every app
   falls back to the day plan it kept from `/api/me/day`: the next class's
@@ -1609,6 +1706,10 @@ map; and Settings. It uses the same routes as the account page, with the session
   renews it with the current key when next opened. A VAPID key that won't
   parse is logged once per isolate by the secret's name only, since a parse
   error can quote the value.
+  On an iPhone push works only from the Home Screen, so Safari shows the
+  install card instead. Every open sends the subscription again (it
+  belongs to this sign-in, and a browser can replace it), and one made
+  with another server key is replaced.
 - **Every day, whether or not the app is open.** A Trip object only watches
   once a request asks it to. The Android app asks from its background
   refresh, but a Home Screen web app makes no requests unless it's opened. So
@@ -1628,6 +1729,11 @@ map; and Settings. It uses the same routes as the account page, with the session
   left, is the card's "Not going": the service worker posts
   `/api/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
   Android notification has the same button). A tap elsewhere opens the app.
+  The card gets 8 s (`PUSH_CARD_MS`); past that the notification is the
+  plain "Your trip has changed", since a browser allows a push only so
+  long and iOS may end a subscription that shows nothing. A worker can't
+  read `localStorage`, and `cookieStore` isn't in every browser, so it
+  takes the site's language from the cookie `i18n.js` also sets.
 - **A new semester.** In the week before semester 1 or 2 starts
   (`semesterSoon` in calendar.ts), from 10:00 Singapore time, the cron
   (`remindTerm` in monitor.ts) pushes each device of a user whose imported
@@ -3124,6 +3230,30 @@ A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back. Its card says
 where it is ("At COM 3", or "Next: COM 3" between stops) and where it's
 going ("Towards Kent Ridge MRT"), with the stops ahead from `upcoming`.
+
+On the web (`app/map.js`) a pill's buses are asked for every 5 s while the
+tab is on screen, one poll at a time, given up after 10 s, and after
+failures the wait doubles to a minute, never before the server's
+`Retry-After`. How old the last answer is goes by `Date.now()`, which
+counts a device's sleep where `performance.now()` doesn't in some
+browsers. Buses are symbol icons, not circles, so each has its own pixel
+offset that turns with the road. A stop's `services` property is
+`" A1 D2 "`, spaces round each, so K never matches inside another code.
+The first view frames the stops and the whole line of each service that
+stays on campus, leaving out P's to the Botanic Gardens, the same rule as
+the apps (`coreBounds` in MapData.swift). The view stays on the map file
+(`maxBounds`); with a sheet open the limit reaches past the file on the
+sheet's side (`underSheet`), so a line fitted beside the sheet isn't
+pushed behind it. MapLibre adds the camera's padding (a sheet's) to a
+fit's own, so `fitLine` takes it off, and keeps padding from one move to
+the next, so every side is always given; `load` never comes again once a
+source takes new data, so the code waits for `idle`. A stop opened from a
+bus's sheet pushes a history step of its own (`BACK_MARK`), so a phone's
+Back returns to the bus as Escape does. For a keyboard or screen reader
+the stops are also a list (`StopList`) that opens a stop on Open or
+Enter, not on picking, since on Windows and Linux the arrow keys pick as
+they move. Route lines and buses have an edge (dark on the light map, the
+page's colour on the dark) so a pale line still stands out at 3:1.
 
 ### The timelapse recorder
 
