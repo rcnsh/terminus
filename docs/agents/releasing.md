@@ -164,8 +164,10 @@ release.
       `/System`, `/usr/lib` and `@rpath`/`@executable_path`/`@loader_path`.
       `notarytool` exits 0 when it rejects an upload, so the status is read
       from its answer; on a locked screen it says the keychain profile is
-      missing, so that's checked first. `hdiutil` fails now and then with
-      "Resource busy", so it's tried three times. Stapling changes the
+      missing, so that's checked first. `hdiutil create` runs once, with no
+      retry: its "Resource busy" is a fault of GitHub's macOS runners that
+      doesn't show on the owner's Mac, so a failure is real and stops with
+      hdiutil's error and `hdiutil info` (what's attached). Stapling changes the
       DMG, so the Sparkle signature is made after it, and checked with
       `verify-sparkle.swift <public key> <signature> <file>` against the
       app's `SUPublicEDKey`, as an installed app checks it. The appcast

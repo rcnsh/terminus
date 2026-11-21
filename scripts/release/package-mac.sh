@@ -90,11 +90,12 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/$NAME.app"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
-for try in 1 2 3; do
-  hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" && break
-  [ "$try" = 3 ] && exit 1
-  sleep 5
-done
+if ! made=$(hdiutil create -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" 2>&1); then
+  echo "hdiutil couldn't make $DMG:" >&2
+  echo "$made" >&2
+  hdiutil info >&2
+  exit 1
+fi
 TS=--timestamp=none
 [ "${PUBLISH:-}" = true ] && TS=--timestamp
 codesign --force "$TS" --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$DMG"
