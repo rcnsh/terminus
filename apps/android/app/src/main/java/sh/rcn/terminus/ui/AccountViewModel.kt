@@ -37,72 +37,45 @@ import sh.rcn.terminus.Store
 import sh.rcn.terminus.deviceName
 import sh.rcn.terminus.saveChanges
 
-/** Where an email sign-in is. */
 sealed interface SignIn {
-    /** Typing the address. */
     data object Email : SignIn
 
-    /** The email is sent: show [match] and wait for the approval. */
     data class Waiting(val email: String, val match: Int) : SignIn
 
-    /** Approved, and both this phone and the account have a setup: which one stays? */
     data class Choose(val email: String) : SignIn
 }
 
 data class AccountState(
-    /** The account's email; null for an account without one. */
     val email: String? = null,
     val profile: ProfileDoc? = null,
     val campus: Campus? = null,
     val devices: List<Device>? = null,
-    /** A pairing code for another device, while it's shown. */
     val pairCode: String? = null,
     val signIn: SignIn? = null,
     val busy: Boolean = false,
-    /** A problem, or a result, to show once. */
     val message: String? = null,
     val importing: Boolean = false,
     val imported: ImportResult? = null,
-    /** A NUSMods link shared into the app, waiting to be imported. */
     val sharedLink: String? = null,
-    /** Classes with a bus earlier or no reminders. */
     val choices: List<sh.rcn.terminus.TripChoice> = emptyList(),
-    /** Trips remembered (the last 35 days), which "Clear trip history" forgets. */
     val history: Int = 0,
-    /** The language just changed: on Android 12 the activity is recreated to show it. */
     val langChanged: Boolean = false,
-    /**
-     * Counts saves that changed the account's language. The server writes the card and the day in the account's language, not the one asked
-     * in, so what was fetched between the switch and this save is in the old one.
-     */
     val langSaved: Int = 0,
-    /** The timetable is for a semester that has ended (/api/me needsReimport), and which one. */
     val needsReimport: Boolean = false,
     val term: String? = null,
-    /** Imported classes whose room couldn't be placed, until each gets a stop or is skipped. */
     val unplaced: List<sh.rcn.terminus.Unplaced> = emptyList(),
-    /**
-     * /api/me, unanswered at sign-in, has since said the account was never set up: the app switches to setup ([setupShown] once it has).
-     */
     val setupDue: Boolean = false,
 )
 
-/** Everything about the account rather than the answer: starting without one, signing in, the in-app setup, settings and devices. */
 class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(AccountState(email = store.email))
     val state: StateFlow<AccountState> = _state
 
-    /**
-     * The parent of every request made for the account signed in: all cancelled together on signing out or into another account
-     * ([endAccount]), so a reply for the last one isn't written into the next one's settings, devices or timetable.
-     */
     private val account = SupervisorJob(viewModelScope.coroutineContext[Job])
 
     init {
-        // Signed out by a refused token (here or anywhere else): nothing of the account stays on screen.
         viewModelScope.launch { Session.signedOut.collect { reset() } }
-        // A newer campus found in the background: the pickers take it in place.
         viewModelScope.launch {
             MapFiles.onCampusChange({ _state.value.campus != null }, Campus::parse) { c -> _state.update { it.copy(campus = c) } }
         }
@@ -113,26 +86,16 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun fail(e: Throwable): String =
         when (e) {
             is ApiError -> e.message ?: L.s(R.string.something_wrong)
-            // The server answered, with something this version can't read.
             is ParseError -> L.s(R.string.unexpected_answer)
             else -> L.s(R.string.cant_reach)
         }
 
-    /**
-     * What to say about [e], or null for nothing: a 401 for [sent], this phone's token, signs the phone out ([Session.rejected]) and the
-     * welcome screen says why. Cancellation goes on up.
-     */
     private suspend fun failure(e: Throwable, sent: String?): String? {
         if (e is CancellationException) throw e
         if (e is ApiError && e.status == 401 && Session.rejected(getApplication(), sent)) return null
         return fail(e)
     }
 
-    /**
-     * Runs [block]; a failure is said in the message (the server's words for a refusal, else that it can't be reached), with [failed]
-     * putting back what was under way (busy, importing). With [session], a request for the account signed in: a 401 is this phone's token
-     * refused, which signs it out, and it ends with the account ([endAccount]). Off for the requests that carry another token, or none.
-     */
     private fun attempt(failed: (AccountState) -> AccountState = { it }, session: Boolean = true, block: suspend () -> Unit) {
         val sent = store.token.takeIf { session }
         viewModelScope.launch(if (session) account else EmptyCoroutineContext) {
@@ -149,13 +112,11 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearMessage() = _state.update { it.copy(message = null) }
 
-    /** "Get started": an account with no email, made for this phone. */
     fun start(onDone: () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
         attempt({ it.copy(busy = false) }, session = false) {
             val token = Api(null).anon(deviceName())
-            // Off the main thread: a Keystore round trip and a write to disk.
             withContext(Dispatchers.IO) {
                 store.token = token
                 store.email = null
@@ -167,7 +128,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Who this phone is signed in as, and the profile, for settings and setup. */
     fun refresh() {
         val token = store.token ?: return
         _state.update { it.copy(message = null) }
@@ -179,13 +139,11 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 settle(me)
                 _state.update { it.copy(email = me.email, needsReimport = me.needsReimport, term = me.term) }
             } catch (e: Exception) {
-                // Said below, with the profile, unless it signed the phone out.
                 if (failure(e, token) == null) return@launch
             }
             try {
                 val tagged = Api(token).profile()
                 val p = ProfileDoc(tagged.json)
-                // A change still being saved stays on screen.
                 if (!saving) {
                     confirmed = p
                     version = tagged.version
@@ -201,7 +159,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Unknown since sign-in: settled now, and setup shown only if /api/me says so. */
     private fun settle(me: Me) {
         if (!store.setupUnknown) return
         store.setupUnknown = false
@@ -213,10 +170,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     private var settleJob: Job? = null
 
-    /**
-     * Whether the account needs setup, while sign-in left it unknown: /api/me alone, one ask at a time, rather than the whole of [refresh]
-     * (the profile and the campus too) each time an answer comes through.
-     */
     fun settleSetup() {
         val token = store.token ?: return
         if (!store.setupUnknown || settleJob?.isActive == true) return
@@ -226,9 +179,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                     settle(Api(token).me())
                 } catch (e: CancellationException) {
                     throw e
-                } catch (_: Exception) {
-                    // Still unknown: the next answer that comes through asks again.
-                }
+                } catch (_: Exception) {}
             }
     }
 
@@ -236,43 +187,26 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.campus != null) return
         viewModelScope.launch {
             try {
-                // The kept copy the Stops and Map tabs use, so a picker opens with it at once.
                 val json = MapFiles.campus(getApplication(), Api(store.token)) ?: return@launch
                 val c = withContext(Dispatchers.Default) { Campus.parse(json) }
                 _state.update { it.copy(campus = c) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ParseError) {
-                // Offline, the pickers wait for the next try; a reply this version can't read is said.
                 _state.update { it.copy(message = fail(e)) }
-            } catch (e: Exception) {
-                // Tried again when a picker opens.
-            }
+            } catch (e: Exception) {}
         }
     }
 
-    /** The 0.4 s wait before a save, so a run of taps goes as one. */
     private var saveJob: Job? = null
-    /**
-     * The save on its way. Another edit doesn't cancel it: whether it saved is only known from its answer, and a change sent must not be
-     * made twice. In [saves], so leaving the app straight after a tap doesn't cancel it either.
-     */
     private var sending: Job? = null
     private val saves = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    /** The profile as the server last had it, to go back to if a save fails, and its version (the ETag) for If-Match. */
     private var confirmed: ProfileDoc? = null
     private var version: String? = null
-    /** The changes made since the last save was sent, shown already, to send next. */
     private val pending = mutableListOf<ProfileChange>()
-    /** Whether a change is waiting or on its way: the profile shown is ahead of the server's. */
     private val saving: Boolean
         get() = saveJob != null || sending != null || pending.isNotEmpty()
 
-    /**
-     * Changes the profile and saves it. Shown straight away and saved a moment later, so a run of taps is one save, as on the web; if the
-     * server refuses, the saved one comes back with the reason. Only [change] is sent, made again on the profile as the server has it, so a
-     * save never puts back what another device changed since this one loaded it.
-     */
     fun edit(change: ProfileChange) {
         val current = _state.value.profile ?: return
         if (!saving) confirmed = current
@@ -287,15 +221,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Sends the changes waiting, made on the profile as the server last had it. One save at a time: changes made meanwhile wait for its
-     * answer and go next, on what it saved. None while an import runs: they go on top of its answer.
-     */
     private fun send() {
         if (sending != null || _state.value.importing || pending.isEmpty()) return
         val token = store.token ?: return
         val base = confirmed ?: return
-        // Left (onCleared), and signed into another account before the last save came back: these were the last account's.
         if (leftWith != null && token != leftWith) return pending.clear()
         val changes = pending.toList()
         pending.clear()
@@ -306,10 +235,8 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 val r = saveChanges(base, from, changes, load = { api.profile() }, save = { json, tag -> api.saveProfile(json, tag) })
                 sending = null
                 version = r.version
-                // The card and the day come in the account's language: what came since the switch is in the old one.
                 if (r.doc.lang != confirmed?.lang) _state.update { it.copy(langSaved = it.langSaved + 1) }
                 confirmed = r.doc
-                // Changes made since this was sent stay on screen, on top of what it saved.
                 val shown = r.doc.copy().also { d -> pending.forEach { it(d) } }
                 _state.update { it.copy(profile = shown, message = if (r.missed) L.s(R.string.class_changed_elsewhere) else it.message) }
                 if (saveJob == null) send()
@@ -318,7 +245,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 sending = null
                 val message = failure(e, token) ?: return@launch
-                // What failed goes back; changes made since stay on screen, and go in a save of their own.
                 val shown = (confirmed ?: base).copy().also { d -> pending.forEach { it(d) } }
                 _state.update { it.copy(profile = shown, message = L.s(R.string.not_saved, message)) }
                 if (saveJob == null) send()
@@ -326,10 +252,8 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The account's token when the app was left: [saves] outlives the view model, but not into another account. */
     private var leftWith: String? = null
 
-    /** Leaving Settings straight after a tap: the change is still saved, one still waiting after the one on its way. */
     override fun onCleared() {
         leftWith = store.token
         saveJob?.cancel()
@@ -337,14 +261,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         send()
     }
 
-    /** An import on its way: in [saves] too, so leaving the app doesn't cancel it, and the edits waiting for its answer are still saved. */
     private var importJob: Job? = null
 
     fun import(share: String) {
         val link = share.trim()
         if (link.isEmpty() || _state.value.importing) return
         val token = store.token ?: return
-        // A change still waiting goes first, so it isn't saved over the import.
         if (saveJob != null) {
             saveJob?.cancel()
             saveJob = null
@@ -353,8 +275,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(importing = true, imported = null, message = null) }
         importJob = saves.launch {
             try {
-                // The save on its way lands before the import, not over it. Changes made from here wait for the import's answer, then go
-                // on top of it.
                 while (true) (sending ?: break).join()
                 val r = Api(token).import(link)
                 val saved = ProfileDoc(r.result.profile)
@@ -384,7 +304,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** An unplaced class given a stop: added by hand at that stop, as the account page does. */
     fun place(u: sh.rcn.terminus.Unplaced, to: String) {
         edit {
             it.addManual(
@@ -396,15 +315,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun skip(u: sh.rcn.terminus.Unplaced) = _state.update { it.copy(unplaced = it.unplaced - u) }
 
-    /** NUSMods' Share sheet, pointed at terminus. */
     fun shared(link: String) = _state.update { it.copy(sharedLink = link) }
 
     fun dismissShared() = _state.update { it.copy(sharedLink = null) }
 
-    /**
-     * The account's language and this phone's: a language picked here before the account had one (on the welcome screen) goes to the
-     * account; one chosen on another device since is applied here.
-     */
     private fun syncLang(p: ProfileDoc) {
         val app = getApplication<Application>()
         val local = Lang.pref(app)
@@ -416,7 +330,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Settings → Language: this phone, and the account so the Mac, the web and emails follow. */
     fun setLang(pref: String) {
         val app = getApplication<Application>()
         Lang.set(app, pref)
@@ -427,7 +340,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun langShown() = _state.update { it.copy(langChanged = false) }
 
-    /** Settings or setup: 12- or 24-hour times on every device; the widgets redraw in it. */
     fun setClock(pref: String) {
         val app = getApplication<Application>()
         Clock.keep(app, pref)
@@ -435,7 +347,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         sh.rcn.terminus.widget.Refresher.refreshSoon(app)
     }
 
-    /** Setup finished or skipped: never shown again, on any device. */
     fun finishSetup() {
         store.needsSetup = false
         val p = _state.value.profile
@@ -444,13 +355,11 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     private var pollJob: Job? = null
     private var request: SignInRequest? = null
-    /** This phone's anonymous token while a sign-in may fold it into another account. */
     private var anonToken: String? = null
     private var approvedToken: String? = null
 
     fun beginSignIn() = _state.update { it.copy(signIn = SignIn.Email, message = null) }
 
-    /** The code from the email, typed in: signs in straight away when it's right. */
     fun enterCode(code: String, onSignedIn: () -> Unit) {
         val r = request ?: return
         if (_state.value.busy) return
@@ -464,7 +373,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** "Use a different email": back to the address, dropping the request sent. */
     fun differentEmail() {
         pollJob?.cancel()
         request = null
@@ -477,10 +385,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(signIn = null, busy = false) }
     }
 
-    /**
-     * Emails an approval link. Sent with this phone's anonymous token (if it has one), so its setup is kept or offered when the account has
-     * its own.
-     */
     fun sendSignIn(email: String, onSignedIn: () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
@@ -493,7 +397,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Every 3 seconds while the number is on screen, for up to the request's 15 minutes. */
     private fun poll(onSignedIn: () -> Unit) {
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
@@ -507,11 +410,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        continue // Offline for a moment: keep waiting.
+                        continue
                     }
                 when (p.status) {
                     "pending" -> continue
-                    // Approved always comes with both; one without is an answer this version can't use.
                     "approved" -> {
                         val token = p.token
                         val email = p.email
@@ -529,9 +431,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun approved(token: String, email: String, outcome: String?, onSignedIn: () -> Unit) {
         request = null
         if (outcome == "choose") {
-            // Both have a setup: keep the old token until the choice is made.
-            // Not busy: a typed code leaves it set, and the choice's buttons
-            // are off while it is.
             approvedToken = token
             _state.update { it.copy(signIn = SignIn.Choose(email), busy = false) }
             return
@@ -539,7 +438,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         signedIn(token, email, onSignedIn)
     }
 
-    /** After "choose": the account's setup, or this phone's. */
     fun choose(keepPhone: Boolean, onSignedIn: () -> Unit) {
         val token = approvedToken ?: return
         val anon = anonToken
@@ -554,22 +452,15 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun signedIn(token: String, email: String, onSignedIn: () -> Unit) {
         approvedToken = null
         anonToken = null
-        // Maybe another account than this phone's (a guest signing in with an email): nothing of that one's stays or lands later. The
-        // page stays as it is, busy, until the app moves on.
         endAccount()
         _state.update { AccountState(campus = it.campus, signIn = it.signIn, busy = true) }
         viewModelScope.launch {
-            // Off the main thread: a Keystore round trip and a write to disk.
             withContext(Dispatchers.IO) {
                 store.token = token
                 store.email = email
                 store.anonymous = false
             }
             Session.signedIn(getApplication())
-            // A new account, or one that was never set up, goes through setup:
-            // only on /api/me's word, asked once more after a moment. Unanswered,
-            // no setup now (its pickers save the whole profile, which could
-            // overwrite a real one); the next /api/me decides ([refresh]).
             val me =
                 runCatching { Api(token).me() }.getOrNull()
                     ?: run {
@@ -591,7 +482,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 val (c, history) = Api(sent).choices()
                 _state.update { it.copy(choices = c, history = history) }
             } catch (e: Exception) {
-                // Left as it was; a refused token still signs the phone out.
                 failure(e, sent)
             }
         }
@@ -611,7 +501,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Send feedback; [onSent] clears the box once it's gone. */
     fun sendFeedback(note: String, onSent: () -> Unit) {
         attempt({ it.copy(busy = false) }) {
             _state.update { it.copy(busy = true) }
@@ -621,7 +510,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Download my data, into the file the person picked. */
     fun exportTo(uri: android.net.Uri) {
         attempt {
             val json = api().export().toString(2)
@@ -629,7 +517,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) {
                     getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
                 }
-            // No file to write to (the provider gave none): nothing was saved.
             _state.update { it.copy(message = L.s(if (written != null) R.string.export_saved else R.string.export_not_saved)) }
         }
     }
@@ -657,14 +544,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         attempt {
             api().removeDevice(d.id)
             if (d.current) {
-                // This phone's session is gone with it: signed out here too.
                 reset()
                 onSelf()
             } else loadDevices()
         }
     }
 
-    /** For an account with no email: everything goes, then the app starts over. */
     fun deleteAccount(onDone: () -> Unit) {
         attempt {
             api().deleteAccount()
@@ -673,17 +558,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The app has switched to setup after [AccountState.setupDue]. */
     fun setupShown() = _state.update { it.copy(setupDue = false) }
 
-    /** After signing out: forget everything about the account. */
     fun reset() {
         pollJob?.cancel()
         endAccount()
         _state.value = AccountState()
     }
 
-    /** Everything under way for the account ends: its requests, an import, and a Settings edit still waiting or on its way. */
     private fun endAccount() {
         account.cancelChildren()
         importJob?.cancel()

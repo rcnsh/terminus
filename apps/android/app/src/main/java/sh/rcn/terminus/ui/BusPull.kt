@@ -90,57 +90,27 @@ import sh.rcn.terminus.PullOutcome
 import sh.rcn.terminus.PullScene
 import sh.rcn.terminus.R
 
-/*
- * Pull to refresh, drawn: "the sky stretches". Pulled down at the top of its
- * content, the screen's own sky grows: the room above the card's words (or
- * the stop's name) opens by the pull ([PullRoom]), the header and chips
- * come down a little with it ([pullLead]), and the sky's gradient runs on
- * down to the horizon's new place, so the top of the screen is the sky's
- * own colour throughout and there is no edge anywhere. A pill in the sky's
- * ink in the middle of the room says what's happening. The horizon is the
- * animation: on Now a bus drives along its road to your stop's sign
- * ([pullRoad]); on Buses a sign grows out of the near hill and the bus
- * drives along the hilltop to it ([pullHill]). The motion and its rules are
- * PullMotion (Pull.kt); the web's pull draws the same.
- */
-
 private val LIT = Color(0xFFFB923C)
 private val GOOD = Color(0xFF22C55E)
 
-/**
- * A pull in progress, for what's drawn and laid out with it: the room, the pill, the header's lead, and the horizon. Reading [read] while
- * drawing or laying out follows it frame by frame without composing.
- */
 @Stable
 internal class PullView(val motion: PullMotion) {
     internal var frame by mutableIntStateOf(0)
 
-    /** The pill's words; null at rest, so it's only composed while pulling. */
     var hint by mutableStateOf<PullHint?>(null)
-    /** With [PullHint.UpToDate]: the seconds until new times come, when the screen knows ([Pull.inS]). */
     var nextInS by mutableStateOf<Int?>(null)
-    /** The bus's paint; with no service of its own, the horizon's shuttle ([SHUTTLE]). */
     var livery = SHUTTLE
 
-    /** The motion, read so that whatever reads it redraws (or lays out again) each frame. */
     fun read(): PullMotion {
         frame
         return motion
     }
 
-    /** The stripe along its bottom: white on a service's colour, red on the shuttle. */
     fun band() = if (livery == SHUTTLE) SHUTTLE_BAND else Color.White.copy(alpha = 0.85f)
 }
 
-/** The pull around what's shown; null where there's none (Settings' bands). */
 internal val LocalPull = staticCompositionLocalOf<PullView?> { null }
 
-/**
- * [content] with pull to refresh: [onRefresh] asks again (or not, inside [Pull.FRESH_MS]) and says how it went; when it didn't ask,
- * [nextUpdateAt] (null: unknown) is when the screen's timed refresh brings new times, for the pill to say. The bus is in [livery] (null:
- * the horizon's shuttle), going round again while it asks. [scene] gives the horizon's places for the screen's width in dp. [content] lays
- * out the room ([PullRoom]) and draws the horizon with the [PullView] it's given (also in [LocalPull]). Off when not [enabled].
- */
 @Composable
 internal fun BusPull(
     livery: Long?,
@@ -170,14 +140,11 @@ internal fun BusPull(
         fun kick() {
             pv.frame++
             pv.hint = motion.hint
-            // A job rather than an effect keyed on a flag: the loop ending and a touch starting it again inside one frame leave the flag
-            // where it was, so no effect would run and a pull let go would stay at "Checking…" for good.
             if (!motion.moving || frames[0]?.isActive == true) return
             frames[0] = scope.launch {
                 var last = withFrameNanos { it }
                 while (motion.moving) {
                     withFrameNanos { now ->
-                        // The card's bus may have moved with the answer: it comes back to where it is now.
                         motion.scene = sceneOf(width)
                         motion.step((now - last) / 1e9f)
                         last = now
@@ -190,7 +157,6 @@ internal fun BusPull(
             remember(motion) {
                 object : NestedScrollConnection {
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        // Back up: the sky closes first, then the content scrolls.
                         if (source != NestedScrollSource.UserInput || available.y >= 0f) return Offset.Zero
                         val used = motion.takeBack(available.y / density)
                         if (used == 0f) return Offset.Zero
@@ -199,7 +165,6 @@ internal fun BusPull(
                     }
 
                     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                        // Down, with the content at its top since the finger went down: the sky stretches with the finger.
                         if (source == NestedScrollSource.UserInput && consumed.y != 0f) motion.contentScrolled()
                         if (!on || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
                         if (!motion.canGrab && motion.phase != PullMotion.Phase.Drag) return Offset.Zero
@@ -227,7 +192,6 @@ internal fun BusPull(
                             }
                         }
                         kick()
-                        // The pull took this drag: the content doesn't fling with it.
                         return available
                     }
                 }
@@ -235,7 +199,6 @@ internal fun BusPull(
         CompositionLocalProvider(LocalPull provides pv) {
             Box(
                 Modifier.fillMaxSize()
-                    // Each touch starts afresh: seen before the content takes it, and left for it.
                     .pointerInput(motion) {
                         awaitEachGesture {
                             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -250,14 +213,12 @@ internal fun BusPull(
     }
 }
 
-/** A light tick as the bus reaches the stop: the gesture's own where the phone has it. */
 private fun tick(view: View) {
     view.performHapticFeedback(
         if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE else HapticFeedbackConstants.CLOCK_TICK
     )
 }
 
-/** The phone's "Remove animations" is on (checked again on coming back to the app). */
 @Composable
 internal fun animationsOff(): Boolean {
     val ctx = LocalContext.current
@@ -268,14 +229,9 @@ internal fun animationsOff(): Boolean {
     return off
 }
 
-/** What's above the room comes down a little with the pull ([Pull.LEAD]). */
 internal fun Modifier.pullLead(pv: PullView?): Modifier =
     if (pv == null) this else graphicsLayer { translationY = pv.read().lead * density }
 
-/**
- * The room in the sky above the words: [base] at rest, and taller by the pull, with the pill in the middle of what opened, between what's
- * [above] it (its gap over the room) and the words [below]. Outside a pull, just [base]. In the sky's ink ([SkyInk]).
- */
 @Composable
 internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
     val pv = LocalPull.current
@@ -304,10 +260,6 @@ internal fun PullRoom(base: Dp = 0.dp, above: Dp = 0.dp, below: Dp = 0.dp) {
     }
 }
 
-/**
- * The pill: "Pull to refresh" with an arrow down, "Let go to refresh" with it up, "Checking…" turning, then how it went with a dot: green,
- * or amber for "Couldn't update". Only what changes on its own is read out.
- */
 @Composable
 private fun Pill(hint: PullHint, calm: Boolean, nextInS: Int?) {
     val ink = LocalContentColor.current
@@ -351,7 +303,6 @@ private fun Pill(hint: PullHint, calm: Boolean, nextInS: Int?) {
     }
 }
 
-/** An arrow down, turning to point up once letting go will ask. */
 @Composable
 private fun Arrow(ink: Color, up: Boolean, calm: Boolean) {
     val turn by animateFloatAsState(if (up) 180f else 0f, if (calm) tween(0) else tween(200), label = "arrow")
@@ -372,11 +323,6 @@ private fun Arrow(ink: Color, up: Boolean, calm: Boolean) {
     }
 }
 
-/**
- * The pull on Now's horizon, in place of the road's own sign and bus: the sign at [sign] (faded in by the pull when the road has none,
- * [ownSign]), the puffs, and the bus on the road. [top] is the horizon's top and [d] its px a unit; an estimate's bus stays an outline (not
- * [live]). [lights]: after dark, its headlight on as it drives.
- */
 internal fun DrawScope.pullRoad(
     v: PullView,
     p: Palette,
@@ -393,10 +339,6 @@ internal fun DrawScope.pullRoad(
     pullBus(v, m, p, top, d, road, slope = false, band = live, lights = lights)
 }
 
-/**
- * The pull on the low horizon (Buses), from its strip's [top], [d] px a unit, [width] units across: a sign growing out of the near hill,
- * and the bus along the hilltop to it, tilting with the slope.
- */
 internal fun DrawScope.pullHill(v: PullView, p: Palette, top: Float, d: Float, width: Float, lights: Boolean) {
     val m = v.read()
     val hill = { x: Float -> nearY(x) + 0.6f }
@@ -405,10 +347,6 @@ internal fun DrawScope.pullHill(v: PullView, p: Palette, top: Float, d: Float, w
     pullBus(v, m, p, top, d, hill, slope = true, band = true, lights = lights)
 }
 
-/**
- * The stop's sign, its foot at [o], [u] px a unit, its post [post] tall: lit in the accent with a ring going out from it while letting go
- * would ask and while it asks, green once the answer's in. [grow] (0–1) fades it in, or with [rise] grows it up out of the ground.
- */
 private fun DrawScope.pullSign(m: PullMotion, p: Palette, o: Offset, u: Float, post: Float, grow: Float, rise: Boolean) {
     if (grow <= 0f) return
     val alpha = if (rise) 1f else grow
@@ -435,11 +373,6 @@ private fun DrawScope.pullSign(m: PullMotion, p: Palette, o: Offset, u: Float, p
     }
 }
 
-/**
- * The bus at the motion's place on [ground] (units down the strip at x), its puffs behind it: the body bobbing and pitching on its
- * suspension over wheels that turn, along the [slope] of the hill, the door lit as it opens, and a honk. Without a [band] it's an outline,
- * as an estimate is on the horizon.
- */
 private fun DrawScope.pullBus(
     v: PullView,
     m: PullMotion,
@@ -466,7 +399,6 @@ private fun DrawScope.pullBus(
     fun at(bx: Float, by: Float) = Offset(o.x + bx * d, o.y + by * d)
     val angle = if (slope) (atan2(ground(x + 30) - ground(x + 8), 22f) * 180f / PI.toFloat()) else 0f
     val faded = m.alpha < 1f
-    // Room round the bus for its slope, bob and tilt, so no corner is cut off while it fades.
     if (faded) drawIntoCanvas { it.saveLayer(Rect(at(-14f, -22f), at(76f, 32f)), Paint().apply { alpha = m.alpha }) }
     rotate(angle, pivot = at(19f, 13f)) {
         translate(top = m.bob * d) {

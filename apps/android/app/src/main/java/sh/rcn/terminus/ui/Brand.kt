@@ -34,15 +34,6 @@ import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.R
 
-/**
- * The site's tokens (apps/web/public/assets/site.css), so the app, the widget and the web look like one product rather than taking the
- * wallpaper's colours. `tertiary` is the warning amber: "tight" must not look like "on time".
- *
- * Keep surfaceVariant different from the container colours: Material picks a card's text colour by matching its background against the
- * scheme, and a tie with surfaceVariant turns every card's text grey.
- *
- * The inverse colours are the other mode's, not Material's purple, should anything still draw in them; the app's own bars are NoticeBar's.
- */
 val BrandLight =
     lightColorScheme(
         primary = Color(0xFFC2410C),
@@ -105,7 +96,6 @@ val BrandDark =
         inversePrimary = Color(0xFFC2410C),
     )
 
-/** "termi" + "nus" in the accent, as on the site. */
 @Composable
 fun Wordmark(style: TextStyle) {
     val accent = MaterialTheme.colorScheme.primary
@@ -113,7 +103,6 @@ fun Wordmark(style: TextStyle) {
         buildAnnotatedString {
             append("termi")
             withStyle(SpanStyle(color = accent)) { append("nus") }
-            // The beta app says so wherever the name is, like the beta site.
             if (BuildConfig.FLAVOR == "beta")
                 withStyle(SpanStyle(color = accent, fontSize = style.fontSize * 0.45f, fontWeight = FontWeight.SemiBold)) {
                     append(" BETA")
@@ -123,14 +112,9 @@ fun Wordmark(style: TextStyle) {
     )
 }
 
-/**
- * The mark, as the site draws it (assets/mark.svg): an orange T and a white stop on the dark stone, the same in both modes, like the
- * launcher icon. Decoration only: the wordmark beside it says the name.
- */
 @Composable
 fun BrandMark(modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        // mark.svg's 64-unit grid.
         val u = size.minDimension / 64f
         val orange = Color(0xFFFB923C)
         drawRoundRect(Color(0xFF1C1917), cornerRadius = CornerRadius(15 * u))
@@ -140,16 +124,11 @@ fun BrandMark(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * The row at the top of every tab: one height and place on each, so switching tabs doesn't move the title. Now has the wordmark, Nearby,
- * Stops and Settings their titles ([TitleBand]), a page a back arrow and its title.
- */
 @Composable
 fun TabHeader(content: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically, content = content)
 }
 
-/** A page's [TabHeader]: a back arrow, sitting in the margin so the title lines up with the list's, then the title. */
 @Composable
 internal fun BackHeader(title: String, onBack: () -> Unit) {
     TabHeader {
@@ -160,12 +139,6 @@ internal fun BackHeader(title: String, onBack: () -> Unit) {
     }
 }
 
-/**
- * The top of Nearby, Stops and Settings, and of a settings page beside the list: [title] in a [TabHeader] in the slim band of the sky
- * ([SkyBand]), the moon beside it at night, so the band is one height on each and the title in one place. A tab's title is large and extra
- * bold; a page's ([page]) is a page's size, as [BackHeader]. In a pull ([BusPull]), the room for its pill opens over the title and the
- * title comes down with it.
- */
 @Composable
 internal fun TitleBand(title: String, phase: Phase, top: Dp, page: Boolean = false) {
     SkyBand(phase, top) {
@@ -183,6 +156,5 @@ internal fun TitleBand(title: String, phase: Phase, top: Dp, page: Boolean = fal
     }
 }
 
-/** "On time": green, not the brand orange, which reads as a warning. */
 val GoodLight = Color(0xFF166534)
 val GoodDark = Color(0xFF4ADE80)

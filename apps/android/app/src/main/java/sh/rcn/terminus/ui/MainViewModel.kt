@@ -55,17 +55,13 @@ import sh.rcn.terminus.widget.redrawWidgets
 data class UiState(
     val paired: Boolean = false,
     val target: Target = Target.Plan,
-    /** Last answer per view, so switching views never blanks the screen. */
     val answers: Map<Target, NextAnswer> = emptyMap(),
-    /** Each answer as the server sent it, for an "Is this wrong?" report. */
     val rawAnswers: Map<Target, String> = emptyMap(),
-    /** The Nearby tab: the stops around you as last answered, and how its own asking is going, apart from the card's. */
     val nearby: List<NearbyStop>? = null,
     val nearbyLoading: Boolean = false,
     val nearbyError: String? = null,
     val nearbyFetchedAt: Long? = null,
     val places: List<Place> = emptyList(),
-    /** Places added from "Go somewhere else", a tab each until removed (Destinations). */
     val added: List<Destinations.Dest> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
@@ -73,38 +69,24 @@ data class UiState(
     val pairing: Boolean = false,
     val pairError: String? = null,
     val destinations: List<Destination> = emptyList(),
-    /** A code from a pairing link, waiting for the user to confirm whose account it is. */
     val pendingPair: PendingPair? = null,
-    /** A newer released version, when there is one. */
     val update: String? = null,
-    /** "Notify me when to leave for class". */
     val leaveAlerts: Boolean = false,
-    /** The live notification during your day. */
     val liveUpdates: Boolean = false,
-    /** An "Is this wrong?" report on its way, why it failed, and whether it went: its sheet says so. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
     val reportSent: Boolean = false,
-    /** Today's timeline (/api/me/day), for under the planned answer. */
     val day: DayPlan? = null,
-    /** Just taken off Today: its row says so where it was, with Undo (or why it didn't go). */
     val removed: TodayNote? = null,
-    /** A card button's signal on its way. */
     val signalling: Boolean = false,
-    /** The server no longer serves this version (426): the update is offered in place of the answer's error. */
     val updateRequired: Boolean = false,
 ) {
     val answer: NextAnswer?
         get() = answers[target]
 
-    /**
-     * There's a day to show beside the card when wide: its items, or the one just taken off with its Undo. A removal left over from a day
-     * that's gone isn't one, or the pane beside the card would be empty.
-     */
     val hasDay: Boolean
         get() = day != null && (day.items.isNotEmpty() || removed != null)
 
-    /** Signed in, maybe to another account than the last: nothing it was shown stays on screen. */
     fun withoutAccount() =
         copy(
             answers = emptyMap(),
@@ -119,11 +101,6 @@ data class UiState(
         )
 }
 
-/**
- * An entry just taken off Today, kept in its place as a row saying so ("GEA1000 removed from today · Undo"), or, [failed], why it's still
- * there. [before] is the entry that followed it (null: it was last), so a refresh meanwhile doesn't move the row; [at] is where it was,
- * should that one go too.
- */
 data class TodayNote(val item: DayItem, val at: Int, val before: String?, val failed: Boolean = false)
 
 data class PendingPair(val code: String, val account: String)
@@ -131,20 +108,12 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
 
-    /**
-     * The parent of every request made for the account (answers, Today, the card's buttons): all cancelled together on signing out
-     * ([endAccount]), so none still out lands afterwards on the welcome screen.
-     */
     private val account = SupervisorJob(viewModelScope.coroutineContext[Job])
     private val _state: MutableStateFlow<UiState>
 
     init {
-        // Why the phone was signed out while the app was closed (a refused
-        // token, a lost Keystore key), said once on the welcome screen.
         val signedOut = Session.message(store.takeSignedOut())
         val paired = store.paired
-        // Signed out with the account's things still here (a sign-out cut
-        // short, a token that can't be read): they go now.
         if (!paired && store.hasLeftovers()) Session.clearLocal(app)
         val last = if (paired) store.lastAnswer() else null
         _state =
@@ -161,7 +130,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     .let { s -> seen(last)?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s }
             )
-        // Signed out by a refused token while open (here, the widget, a push): the welcome screen, saying why.
         viewModelScope.launch {
             Session.signedOut.collect {
                 endAccount()
@@ -170,10 +138,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * The last plan this phone was shown, while it still holds (before its staleAt): drawn at once on opening the app, then refreshed,
-     * rather than an empty card until the first answer arrives.
-     */
     private fun seen(last: Pair<NextAnswer, Long>?): Pair<NextAnswer, Long>? {
         val (a, at) = last ?: return null
         return if (!isOld(a, ServerClock.now())) a to at else null
@@ -182,40 +146,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
 
-    /** The Nearby tab's ask, apart from the card's: each tab asks only while it's the one on screen. */
     private var nearbyJob: Job? = null
 
-    /** The fresh fix on its way, shared by every load meanwhile so none asks for a second; and the last one that came. */
     private var freshFix: Deferred<Location?>? = null
     private var lastFresh: Location? = null
 
-    /** After an answer asked for before the fresh fix came: waits for it, to ask again if it puts you somewhere else. */
     private var refixJob: Job? = null
     private var nearbyRefixJob: Job? = null
 
-    /** When each target's answer last came back, for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
     private val answeredAt = mutableMapOf<Target, Long>()
 
-    /** The same for Nearby's stops; null before the first. */
     private var nearbyAnsweredAt: Long? = null
 
     fun pair(code: String) {
-        // Once at a time: the sixth character pairs, and Done straight after mustn't send the code again.
         if (_state.value.pairing) return
         _state.update { it.copy(pairing = true, pairError = null, pendingPair = null) }
         viewModelScope.launch {
             try {
                 val token = Api(null).pair(code.trim(), deviceName())
-                // Kept off the main thread: a Keystore round trip and a write to disk.
                 withContext(Dispatchers.IO) {
                     store.token = token
-                    // Pairing codes come from accounts with an email.
                     store.anonymous = false
                 }
                 Session.signedIn(getApplication())
                 _state.update { it.copy(paired = true, pairing = false).withoutAccount() }
                 Refresher.schedule(getApplication())
-                // A new session: this phone's push address goes to it.
                 Push.sync(getApplication())
                 load()
             } catch (e: ApiError) {
@@ -226,10 +181,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * A pairing link opens the app with a code someone generated. Show whose account it is and wait for a yes: otherwise any link could
-     * quietly pair this phone to a stranger's account.
-     */
     fun checkPairLink(code: String) {
         if (_state.value.paired) return
         _state.update { it.copy(pairing = true, pairError = null) }
@@ -245,7 +196,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Turned on only after notification permission was granted. */
     fun setLeaveAlerts(on: Boolean) {
         val ctx = getApplication<Application>()
         store.leaveAlerts = on
@@ -256,14 +206,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             load(restart = true)
         } else {
             LeaveAlerts.cancel(ctx)
-            // Nothing else needs the chain without a widget.
             if (!Refresher.active(ctx)) Refresher.cancel(ctx)
         }
-        // Push is only asked for while it has something to show.
         Push.sync(ctx)
     }
 
-    /** Turned on only after notification permission was granted. */
     fun setLiveUpdates(on: Boolean) {
         val ctx = getApplication<Application>()
         store.liveUpdates = on
@@ -276,11 +223,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!Refresher.active(ctx)) Refresher.cancel(ctx)
         }
         Push.sync(ctx)
-        // The widget's refresh button comes and goes with this setting.
         redrawLater(ctx)
     }
 
-    /** "Go later today": a one-off trip to the place on screen, planned like a class. The plan comes back, so show it. */
     fun goLater(atMin: Int) {
         val token = store.token ?: return
         val target = _state.value.target
@@ -288,12 +233,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
-                // Where the phone is, as for the card: otherwise the first plan starts where the timetable puts you.
                 val (loc, _) = locate(ctx)
                 val json = Api(token, hour12 = hour12(ctx)).once(target, atMin, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 val now = System.currentTimeMillis()
-                // Read before it's kept: one this version can't read leaves the last good one.
-                // Signed out meanwhile: none of it is this phone's any more.
                 Refresher.scheduleNext(ctx, store.saveAnswer(json, now, sentWith = token) ?: return@launch, now)
                 redrawWidgets(ctx)
                 select(Target.Plan)
@@ -310,21 +252,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }
 
-    /** A token was just stored (a new account, or a sign-in): start showing answers. */
     fun signedIn() {
-        // Maybe into another account than this phone's (a guest signing in with an email): a request still out for that one isn't shown.
         endAccount()
         _state.update { it.copy(paired = true, pairError = null).withoutAccount() }
         Refresher.schedule(getApplication())
-        // A new session: this phone's push address goes to it.
         Push.sync(getApplication())
         load(restart = true)
     }
 
-    /**
-     * Back in the app: notifications may have been blocked or allowed in the phone's settings meanwhile. The switches, the alerts' alarms,
-     * the live notification and push follow.
-     */
     fun recheckNotifications() {
         val ctx = getApplication<Application>()
         val leave = store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)
@@ -341,40 +276,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (store.paired) Push.sync(ctx)
     }
 
-    /** The account was deleted on the server, or this phone removed from it: only local state is left to clear. */
     fun signedOut() {
         endAccount()
         Session.clearLocal(getApplication())
         _state.value = UiState(paired = false)
     }
 
-    /** Local state goes first, so the screen reacts at once even offline; the server is told when there's a network. */
     fun unpair() {
         endAccount()
         Session.signOut(getApplication())
         _state.value = UiState(paired = false)
     }
 
-    /**
-     * Every request still out for the account, cancelled. One past its save already is kept from the phone by [Store.saveAnswer]'s token
-     * check.
-     */
     private fun endAccount() {
         account.cancelChildren()
-        // A request cancelled says nothing: what it had under way would otherwise stay so, its buttons off.
         _state.update { it.copy(loading = false, nearbyLoading = false, signalling = false, reportSending = false) }
     }
 
-    /**
-     * A 401 for [token]: signed out ([Session.rejected]), and the screen follows through [Session.signedOut]. True when [e] was that; false
-     * for a token replaced meanwhile (signed in again), which the caller treats as any failed request, so its state is reset.
-     */
     private suspend fun rejected(e: ApiError, token: String): Boolean = e.status == 401 && Session.rejected(getApplication(), token)
 
-    /**
-     * "Is this wrong?": sends `answer` (the raw answer that was on screen when the sheet opened; the 30 s refresh may have replaced it
-     * since) with a `reason` (REPORT_REASONS), a note, or both. Once sent, the sheet says so; a failure is said in the sheet instead.
-     */
     fun report(reason: String?, note: String, answer: String?, appVersion: String) {
         val token = store.token ?: return
         _state.update { it.copy(reportSending = true, reportResult = null) }
@@ -394,14 +314,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** A fresh sheet: no failure or "sent" from the last one. */
     fun reportOpened() = _state.update { it.copy(reportResult = null, reportSent = false) }
 
-    /**
-     * A card button: "Not going", "Not on campus today", "Back on campus" or "Undo" (skipped, away, back, reset). The server records it for
-     * every device and answers with the new planned answer. "Not going" is the × on Today by another name, so it goes the same way: off the
-     * list at once, with Undo in its place.
-     */
     fun signal(action: CardAction) {
         val token = store.token ?: return
         if (action.id == "skipped")
@@ -415,11 +329,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         send(token, Target.Plan) { api, _ -> api.signal(action.id, action.trip) }
     }
 
-    /**
-     * "Earlier bus" or "Later bus" under the card's bus ([to] that side's, going [dir]), or "Best bus" ([to] null) back to the one terminus
-     * chose. Kept for every device, like a signal, and answered with the new answer for the trip on screen (the plan, a favourite or a
-     * stop), from where the phone was a moment ago as the card was.
-     */
     fun step(step: Step, to: StepTarget?, dir: String?) {
         val token = store.token ?: return
         send(token, _state.value.target) { api, ctx ->
@@ -428,10 +337,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * A card button's request, one at a time: its reply is the new answer for [target], shown, and for the plan cached for the widget and
-     * its refresh moved.
-     */
     private fun send(token: String, target: Target, call: suspend (Api, Application) -> org.json.JSONObject) {
         if (_state.value.signalling) return
         _state.update { it.copy(signalling = true, error = null) }
@@ -444,7 +349,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val answer =
                     (if (plan) store.saveAnswer(json, now, sentWith = token) else NextAnswer.parse(json))
                         ?: run {
-                            // Signed out, or into another account, meanwhile: nothing to show, but the buttons work again.
                             _state.update { it.copy(signalling = false) }
                             return@launch
                         }
@@ -474,7 +378,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** "Leave earlier" or "No thanks" on a suggestion; the card then comes back without it. */
     fun choose(s: sh.rcn.terminus.Suggestion, accept: Boolean) {
         val token = store.token ?: return
         if (_state.value.signalling) return
@@ -493,15 +396,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * The × on Today (or a swipe), or "Not going" on the card: taken off today, whatever it is (a timetabled class, one you added, a
-     * one-off trip, the trip home). Gone from the list at once, its row saying so with Undo. Should the server refuse, it's back, with why
-     * just above it.
-     */
     fun removeFromToday(item: DayItem) {
         val token = store.token ?: return
         val items = _state.value.day?.items.orEmpty()
-        // Already gone from the list (removed a moment ago): nothing to take off.
         val at = items.indexOfFirst { it.key == item.key }.takeIf { it >= 0 } ?: return
         _state.update { s ->
             s.copy(
@@ -515,10 +412,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key), token)
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: ParseError) {
-                // The server took it (a 2xx), with a reply this version can't
-                // read: it's off the list, as today's reload below shows.
-            } catch (e: Exception) {
+            } catch (_: ParseError) {} catch (e: Exception) {
                 if (e is ApiError && rejected(e, token)) return@launch
                 _state.update { s ->
                     val back =
@@ -534,7 +428,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Undo on its row: back on today's list. */
     fun undoRemove() {
         val item = _state.value.removed?.takeIf { !it.failed }?.item ?: return
         val token = store.token ?: return
@@ -552,13 +445,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Its time is up: only for the entry it was for, not a newer one that replaced it. */
     fun dismissRemoved(key: String) = _state.update { if (it.removed?.item?.key == key) it.copy(removed = null) else it }
 
-    /**
-     * A new plan from /api/me/signal, asked for with [token]: shown, cached for the widget, and the alarms moved. False, and none of it,
-     * when the phone signed out (or into another account) while it was asked for.
-     */
     private fun applyPlan(ctx: Application, json: org.json.JSONObject, token: String): Boolean {
         val now = System.currentTimeMillis()
         val answer = store.saveAnswer(json, now, sentWith = token) ?: return false
@@ -575,18 +463,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var dayJob: Job? = null
-    /** The language [dayJob] asked in. */
     private var dayJobLang: String? = null
 
-    /**
-     * Today's timeline; kept as it was when offline. [restart]: one already on its way was asked for too early (before the account had the
-     * new language).
-     */
     fun loadDay(restart: Boolean = false) {
         val token = store.token ?: return
         val lang = L.header()
-        // One already on its way is enough, unless it was asked in the language
-        // just switched from: its titles would stay in that one.
         if (dayJob?.isActive == true) {
             if (!restart && dayJobLang == lang) return
             dayJob?.cancel()
@@ -594,29 +475,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         dayJobLang = lang
         dayJob =
             viewModelScope.launch(account) {
-                // Where the phone was a moment ago (no new fix): the next class from there, as the card has it.
                 val loc = Locator.lastKnown(getApplication(), maxAgeMs = 60_000)
                 try {
-                    // In the language the server wrote it in, which can be the old one for
-                    // a moment after a switch (Api.dayJson): then the next refresh asks again.
                     val (json, written) =
                         Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
-                    // Kept for when the phone goes offline (OfflineDay); one this version can't read isn't.
-                    // Signed out meanwhile: the old account's day, kept nowhere.
                     val day = store.saveDay(json, System.currentTimeMillis(), sentWith = token, lang = written) ?: return@launch
                     _state.update { it.copy(day = day) }
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
-                    // Kept as it was: the answer's own load says what's wrong.
-                }
+                } catch (e: Exception) {}
             }
     }
 
-    /**
-     * At most once a day: is there a newer release than this one? Not for an install from Google Play, which updates it itself (and gets a
-     * release only after review, so the website's version would be announced early).
-     */
     fun checkForUpdate(current: String) {
         if (installedFromPlay(getApplication())) return
         val now = System.currentTimeMillis()
@@ -634,18 +504,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun select(picked: Target) {
         val places = _state.value.places
-        // Somewhere that's a favourite already is that favourite's tab.
         val target =
             (picked as? Target.Code)?.let { c ->
                 places.find { it.label.equals(c.label, ignoreCase = true) }?.let { Target.SavedPlace(it.key) }
             } ?: picked
         when (target) {
-            // The widget ranks favourites by how often you ask for them.
             is Target.SavedPlace ->
                 places
                     .find { it.key == target.key }
                     ?.let { store.noteDestination(Destinations.Dest(Destinations.placeId(it.key), it.label)) }
-            // Anywhere else gets a tab of its own, and a widget button, until removed.
             is Target.Code ->
                 setAdded(Destinations.add(store.addedPlaces, Destinations.Dest(Destinations.stopId(target.code), target.label), places))
             Target.Plan -> {}
@@ -654,7 +521,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         load(restart = true)
     }
 
-    /** The X on an added place's tab: gone from the tabs and the widget; showing it, back to Next. */
     fun removeAdded(dest: Destinations.Dest) {
         setAdded(store.addedPlaces.filter { it.id != dest.id })
         val showing = (_state.value.target as? Target.Code)?.let { Destinations.stopId(it.code) == dest.id } == true
@@ -668,10 +534,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         redrawLater(getApplication())
     }
 
-    /**
-     * The widgets redrawn in the background. Glance can throw (a widget removed while they're gone through): the next refresh redraws them,
-     * so that mustn't crash the app.
-     */
     private fun redrawLater(ctx: Application) {
         viewModelScope.launch {
             try {
@@ -682,11 +544,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Where to ask from: a fix from the last minute at once; else a fresh one, waited for [FirstFix.FIX_GRACE_MS], then the best from the
-     * last ten minutes or none. Also the fresh fix still on its way when it didn't come in time: it isn't cancelled (capped at 6 s by
-     * [Locator.fresh]), so the next ask has it.
-     */
     private suspend fun locate(ctx: Application): Pair<Location?, Deferred<Location?>?> {
         val now = System.currentTimeMillis()
         val recent = lastFresh?.takeIf { now - it.time < FirstFix.RECENT_MS } ?: Locator.lastKnown(ctx, maxAgeMs = FirstFix.RECENT_MS)
@@ -698,7 +555,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return loc to (if (got == null) fresh else null)
     }
 
-    /** Once [fresh] comes, [again] asks once more if [sent] wasn't where it puts you. That ask doesn't wait for another. */
     private fun refixLater(fresh: Deferred<Location?>, sent: Location?, again: () -> Unit): Job {
         val sentAccM = Locator.accOf(sent)
         return viewModelScope.launch(account) {
@@ -707,16 +563,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Fetch the card for the chip chosen on Now. Safe to call repeatedly; only one runs. `restart` drops a fetch in flight, so a newly
-     * chosen view loads now rather than after the one it replaced. `refix` false: this is the ask again after a fresh fix ([refixLater]),
-     * which doesn't set up another.
-     */
     fun load(restart: Boolean = false, refix: Boolean = true) {
         val token = store.token
         if (token == null) {
-            // Signed out while this screen was alive (by a 401 elsewhere, or
-            // a lost key). Don't sit on a paired screen forever.
             if (_state.value.paired) _state.value = UiState(paired = false, pairError = Session.message(store.takeSignedOut()))
             return
         }
@@ -724,7 +573,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!restart) return
             loadJob?.cancel()
         }
-        // This load sends its own fix; one waited for by an earlier load, or by Nearby's, is no longer the one on screen.
         refixJob?.cancel()
         nearbyRefixJob?.cancel()
         loadJob =
@@ -738,19 +586,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 try {
                     val json = api.nextJson(s.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                     val now = System.currentTimeMillis()
-                    // The planned answer is read as it's kept (only once read); another, only read.
-                    // Signed out meanwhile: the screen has moved on, and the answer was the old account's.
                     val answer =
                         (if (s.target == Target.Plan) store.saveAnswer(json, now, sentWith = token) else NextAnswer.parse(json))
                             ?: return@launch _state.update { it.copy(loading = false) }
-                    // The planned answer is exactly what the widget shows, so
-                    // keep the widget in step while the app is open.
                     if (s.target == Target.Plan) {
-                        // The timeline moves when the answer's trip does.
                         val before = _state.value.answers[Target.Plan]
-                        // And when the kept one is over two minutes old, as on the Mac: the
-                        // copy from disk counts as loaded, so Today's leave-by times could
-                        // be hours old beside a fresh card. And when it's in the other language.
                         val dayAge = now - store.dayFetchedAt
                         if (
                             _state.value.day == null ||
@@ -779,17 +619,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: UpdateRequired) {
-                    // The banner says it, and the way to update: not the footer
-                    // too, nor the offline day plan in the card's place.
                     _state.update { it.copy(loading = false, error = null, updateRequired = true) }
                 } catch (e: ApiError) {
-                    // A 401 for a token replaced meanwhile (signed in again) says
-                    // nothing about the new one: Session.rejected leaves it, and
-                    // the screen says nothing of it either.
                     if (rejected(e, token) || e.status == 401) _state.update { it.copy(loading = false) }
                     else _state.update { it.copy(loading = false, error = e.message) }
                 } catch (e: ParseError) {
-                    // Not the network: the server said something this version can't read.
                     _state.update {
                         it.copy(
                             loading = false,
@@ -802,19 +636,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
     }
 
-    /**
-     * The stops around you, for the Nearby tab, which asks when it opens and then at the card's pace ([POLL_MS]) while it's the tab on
-     * screen. As [load]: only one runs, `restart` drops the one in flight, and `refix` false is the ask again after a fresh fix. A failed
-     * ask leaves the last stops up, under the time they came and what went wrong.
-     */
     fun loadNearby(restart: Boolean = false, refix: Boolean = true) {
-        // Signed out meanwhile: Now's load says so and leaves the tabs.
         val token = store.token ?: return load()
         if (nearbyJob?.isActive == true) {
             if (!restart) return
             nearbyJob?.cancel()
         }
-        // As in [load]: the card's ask again would be for a tab that has left the screen.
         nearbyRefixJob?.cancel()
         refixJob?.cancel()
         nearbyJob =
@@ -834,10 +661,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: UpdateRequired) {
-                    // Now's banner has the way to update; here, why there's nothing new.
                     _state.update { it.copy(nearbyLoading = false, nearbyError = L.s(R.string.update_to_continue), updateRequired = true) }
                 } catch (e: ApiError) {
-                    // As for the card: a 401 for a token replaced meanwhile says nothing about the new one.
                     failed(if (rejected(e, token) || e.status == 401) null else e.message)
                 } catch (e: ParseError) {
                     failed(if (_state.value.update != null) L.s(R.string.update_to_continue) else L.s(R.string.unexpected_answer))
@@ -847,15 +672,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
     }
 
-    /**
-     * Now pulled down: its card asked for again, exactly as the 30 s refresh asks ([load]), or the one already on its way waited for. Not
-     * asked within [Pull.FRESH_MS] of the last answer: the server would send the same. Says how it went, for the chip.
-     */
     suspend fun pull(): PullOutcome {
         val start = System.currentTimeMillis()
         if (loadJob?.isActive != true && !Pull.shouldFetch(answeredAt[_state.value.target], start)) return PullOutcome.UpToDate
         load()
-        // A chip chosen meanwhile drops the load for the new one's: that's the one to wait for.
         while (true) {
             val job = loadJob ?: break
             job.join()
@@ -864,12 +684,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return Pull.outcome(fetched = true, ok = (answeredAt[_state.value.target] ?: 0) >= start)
     }
 
-    /** Nearby pulled down, as Now is ([pull]). */
     suspend fun pullNearby(): PullOutcome {
         val start = System.currentTimeMillis()
         if (nearbyJob?.isActive != true && !Pull.shouldFetch(nearbyAnsweredAt, start)) return PullOutcome.UpToDate
         loadNearby()
-        // An ask again after a fresh fix drops this one for its own: that's the one to wait for.
         while (true) {
             val job = nearbyJob ?: break
             job.join()
@@ -889,19 +707,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-/** Installed by the Play Store, rather than the APK from the website. */
 internal fun installedFromPlay(ctx: android.content.Context): Boolean = runCatching {
     ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName == "com.android.vending"
 }
     .getOrDefault(false)
 
-/**
- * The answer on Now, and Nearby's stops, are fetched again this often while their tab is on screen: the API caches 15 s, so sooner shows
- * nothing new. Not sooner at the server's own moments (the card's `nextChangeAt`, the plan's `refreshAt`) either: a leave time that keeps
- * sliding (a late bus) moves them a few seconds on with every answer, so following them would poll every 5 s. The countdown ticks on the
- * phone in between; the Mac and the server's trip engine wait 30 s too.
- */
 internal const val POLL_MS = 30_000L
 
-/** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L

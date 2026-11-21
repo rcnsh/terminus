@@ -42,10 +42,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** The bar at the foot of the screen, for a page to offer Undo in (null outside the tabs). */
 internal val LocalNotices = staticCompositionLocalOf<SnackbarHostState?> { null }
 
-/** What a [NoticeBar] says: with [error], it's why something didn't take, marked in red rather than the accent. */
 internal class Notice(
     override val message: String,
     override val actionLabel: String? = null,
@@ -56,18 +54,12 @@ internal class Notice(
         get() = false
 }
 
-/**
- * The bar a SnackbarHost shows, drawn as the app's own pieces are (a card with a hairline round it, Transit.kt) rather than Material's
- * inverted slab: a stop's dot in the accent, the message, the action as a soft orange pill, and a line along the foot running down to when
- * it goes. It still comes and goes as a snackbar does, waits longer for accessibility services, and can be swiped away either way.
- */
 @Composable
 internal fun NoticeBar(data: SnackbarData) {
     val c = MaterialTheme.colorScheme
     val visuals = data.visuals
     val accent = if ((visuals as? Notice)?.error == true) c.error else c.primary
     val action = visuals.actionLabel
-    // As long as the host will wait (SnackbarHost's own sums), so the line ends when the bar goes.
     val a11y = LocalAccessibilityManager.current
     val millis =
         remember(data) {
@@ -101,7 +93,6 @@ internal fun NoticeBar(data: SnackbarData) {
                 .background(c.surface)
                 .border(1.dp, c.outlineVariant, shape)
                 .drawBehind {
-                    // What's left of the wait, along the foot.
                     val h = 2.dp.toPx()
                     drawRect(accent.copy(alpha = 0.55f), Offset(0f, size.height - h), Size(size.width * left.value, h))
                 }

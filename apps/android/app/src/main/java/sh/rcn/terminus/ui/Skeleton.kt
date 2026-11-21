@@ -49,27 +49,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import kotlinx.coroutines.delay
 
-/*
- * Skeletons: the shape of what's coming, while it comes, so nothing moves when it lands. Bars stand where the server's words will be,
- * centred in the line box of the text they stand for; what's known already (headings, a service's badge) draws as itself. One soft
- * highlight sweeps across every bar on the screen together, and stands still with the phone's animations off.
- */
-
-/** The sweep's progress, 0 to 1, shared by every bar under one [Skeleton]; null when it stands still. */
 private val LocalSweep = staticCompositionLocalOf<State<Float>?> { null }
 
-/** How far the bars have faded in; what's real inside a skeleton draws at once. */
 private val LocalFade = staticCompositionLocalOf<State<Float>?> { null }
 
 private const val SWEEP_MS = 1_600L
 
-/** Before this, nothing shows: a quick answer never flashes grey. */
 private const val SHOW_AFTER_MS = 150L
 
-/**
- * A skeleton: [content]'s bars, said as [said] (the screen's own "Checking…") and nothing else, its shapes hidden from a screen reader.
- * With [real], what's real in it (a line's stops from the campus data) is read and can be tapped as usual, and [said] is said beside it.
- */
 @Composable
 internal fun Skeleton(
     said: String,
@@ -95,17 +82,9 @@ internal fun Skeleton(
     }
 }
 
-/**
- * The sweep's phase from the frame clock itself (one monotonic clock for the whole app), so skeletons that appear at different moments
- * still sweep in step.
- */
 @Composable
 private fun sweep(): State<Float> = produceState(0f) { while (true) withFrameMillis { value = (it % SWEEP_MS) / SWEEP_MS.toFloat() } }
 
-/**
- * One placeholder shape. On the ground, a shade off the surface (darker in light, lighter in dark); in the sky ([sky]), the sky's ink
- * thinly, so the hour's colours show through.
- */
 @Composable
 internal fun Bar(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(6.dp), sky: Boolean = false) {
     val c = MaterialTheme.colorScheme
@@ -132,7 +111,6 @@ internal fun Bar(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShap
             .drawBehind {
                 drawRect(base)
                 val p = sweep?.value ?: return@drawBehind
-                // The band is the screen's width, its middle the highlight, crossing from off the left to off the right.
                 val band = maxOf(screen, size.width)
                 val start = -band + FastOutSlowInEasing.transform(p) * (screen + band) - x
                 drawRect(
@@ -148,10 +126,6 @@ internal fun Bar(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShap
     )
 }
 
-/**
- * A bar standing for a line of [style]'s text: the line's height, with a bar about as tall as its letters in the middle. [width] fixed, or
- * a [fraction] of the room.
- */
 @Composable
 internal fun TextBar(
     style: TextStyle = LocalTextStyle.current,
@@ -172,7 +146,6 @@ internal fun TextBar(
     }
 }
 
-/** Bar widths for rows of a list, so it reads as names of different lengths rather than a barcode: the same every time. */
 internal fun barFraction(row: Int, set: Int = 0): Float = WIDTHS[set % WIDTHS.size].let { it[row % it.size] }
 
 private val WIDTHS =

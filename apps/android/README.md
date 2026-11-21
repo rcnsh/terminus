@@ -103,6 +103,84 @@ refresh, no push. The dev stub pushes for real when
 `.private/fcm-service-account.json` is present, and `GET /__stub/push` lists
 the devices that registered.
 
+## How it's built
+
+When the widgets and alerts refresh, and how often the app asks: ADR
+[0000-android-refresh-on-alarms](../../docs/adr/0000-android-refresh-on-alarms.md).
+What else looks odd but is deliberate:
+
+- **The activity is never recreated for dark mode or the language**
+  (`onConfigurationChanged`), so Compose redraws with no blank screen.
+  Android 12 has no per-app language: there `Lang.wrap` applies it in
+  `attachBaseContext` and the activity restarts (`recreateOn12`).
+- **Links.** The activity is exported, so a `terminus://to` link (a place
+  looked up) is taken only from the app's own widgets; another app could
+  otherwise add places with names of its choosing.
+- **Updates.** At most once a day the app asks the website for a newer
+  version, but not when Play installed it (`installedFromPlay`): Play
+  updates it itself, and gets a release only after review, so the site's
+  version would be announced early.
+- **Theme** (`ui/Brand.kt`). `surfaceVariant` differs from every container
+  colour: Material picks a card's text colour by matching its background in
+  the scheme, and a tie with `surfaceVariant` turns every card's text grey.
+  The theme's content sits in a `Surface`, without which a `Text` with no
+  colour is black in the dark. Every colour over the sky (`SkyInk`), the
+  late red and warning amber too, reads at 4.5:1 over any hour's sky (large
+  words 3:1).
+- **The map** (`ui/MapScreen.kt`) is a TextureView, not a SurfaceView, so
+  it fades with the tab. The pan limits (`PanLimit`) are worked out for the
+  zoom the map is at, so they're loosened while the code moves the camera
+  (`MapCover.loosened`): from further out, on a window wider than a phone,
+  they'd hold the centre away from campus. A bus is an icon, not a circle,
+  so a bus at a stop can sit beside the dot, turning with the road. Only
+  `BusLayers` reads the frame clock, so a sliding bus redraws three layers
+  and not the map. A screen reader can't reach the stops or buses, so the
+  map says so and offers the same as a list on the Stops tab.
+- **Back** between a page and the one under it is Android's own
+  cross-activity animation (AOSP's `DefaultCrossActivityBackAnimation`),
+  drawn by `PageStack` (`ui/Peel.kt`) rather than by a transition, so the
+  swipe and the release each keep their own curve.
+- **Scroll across layouts.** Stops and Settings share each page's
+  `ScrollState` by key between the one-pane and two-pane layouts
+  (`PaneScrolls`): the other layout draws the page in the same frame the
+  first lets it go, before saved state would be handed over.
+- **Pull to refresh** (`ui/BusPull.kt`) runs its loop as a job, not an
+  effect keyed on a flag: the loop ending and a touch starting it again
+  inside one frame leave the flag as it was, and a pull would stay at
+  "Checking…" for good.
+- **Location.** After two refusals Android stops showing its dialog. The
+  app tells that from a dialog closed with Back by whether Android would
+  have explained itself before the ask and whether the dialog paused the
+  app (`Onboarding.kt`, `LocationAsk.kt`), and then sends you to the app's
+  settings page.
+- **Signing out** cancels every request for the account together (one
+  `SupervisorJob` per view model), and `Store.saveAnswer` drops a reply
+  asked for with a token that's gone, so nothing of the old account lands
+  after.
+
+Glance, which draws the widgets, has limits the layouts work round:
+
+- A `Row` or `Column` holds at most 10 children, so gaps are padding
+  rather than Spacers, long lists sit in nested Columns, and a row has at
+  most 8 buttons (`WidgetModes.MAX_BUTTONS`) or pager dots.
+- It can't measure text: how many buttons fit a row is estimated at
+  7.2 dp a character, 28 dp of padding each and 6 dp between
+  (`WidgetModes.fitting`), as a button cut in half is worse than one
+  fewer. It can't colour part of a line either, so the headline is three
+  Texts in a row.
+- A weighted `Text` beside the clock's RemoteViews gets no width, so it
+  sits in a `Box`. The home screen's sizes come a fraction short of whole
+  dp, so a layout counts a dp to spare (`NearbyFit.of`).
+- `SizeMode.Exact` composes once per size, so what's read is shared
+  between sizes (`Latest`). A running Glance session only sees a new answer
+  through its state, so `redrawWidgets()` bumps `VERSION`.
+- A widget's pictures share a memory budget: the sky is drawn at most
+  2.5 px per dp. Its words' colours are fixed per theme rather than
+  following the phone's, since the sky is a picture drawn for one theme
+  and the words must change with it at the same redraw.
+- Each button's PendingIntent has a URI of its own per widget and mode,
+  or they'd share one.
+
 ## Where things are
 
 | | |

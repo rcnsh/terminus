@@ -30,10 +30,6 @@ import sh.rcn.terminus.SearchRank
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.rankDestinations
 
-/**
- * "Go somewhere else", opened by the search button at the end of the chips: a field under them, focused, with the results below. Picking
- * one shows its card under a chip of its own and closes the search; so does Back.
- */
 @Composable
 internal fun Search(state: UiState, vm: MainViewModel, onClose: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -58,7 +54,6 @@ private fun SearchField(
     modifier: Modifier,
     onPicked: () -> Unit,
 ) {
-    // Walk times at the user's pace, as the server last said it (1.3 m/s before any answer).
     val walkSpeed = state.answer?.walkSpeedMs ?: 1.3
     OutlinedTextField(
         value = query,
@@ -72,7 +67,6 @@ private fun SearchField(
         modifier = modifier.fillMaxWidth(),
     )
     if (q.isEmpty()) return
-    // Once per query, not on every recomposition (the screen refreshes every 30 s).
     val matches = remember(state.destinations, q) { SearchRank.grouped(rankDestinations(state.destinations, q)) { it.kind } }
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
     val groups =
@@ -104,7 +98,6 @@ private fun SearchField(
             val meta =
                 when (d.kind) {
                     "stop" -> L.s(R.string.bus_stop)
-                    // Served by more than one stop: the quicker one is used at the time.
                     "landmark" ->
                         listOfNotNull(d.detail, L.s(R.string.stop_suffix, d.stops.joinToString(L.s(R.string.or_list)) { stopName(it) }))
                             .joinToString(" · ")

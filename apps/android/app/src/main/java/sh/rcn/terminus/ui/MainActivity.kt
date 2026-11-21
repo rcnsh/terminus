@@ -98,13 +98,10 @@ class MainActivity : ComponentActivity() {
     private val map: MapViewModel by viewModels()
     private val buses: BusesViewModel by viewModels()
 
-    // Android 12 has no per-app language: the chosen one is applied here (Lang).
     override fun attachBaseContext(base: Context) = super.attachBaseContext(Lang.wrap(base))
 
-    /** The tab a link just asked for ([Tab.ofLink]), until the tabs have gone to it. */
     private var linkTab by mutableStateOf<Tab?>(null)
 
-    /** The dark mode and language the screen was last drawn in, to tell which one changed. */
     private var shown: Configuration? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,14 +109,11 @@ class MainActivity : ComponentActivity() {
         keepUpright(resources.configuration)
         enableEdgeToEdge()
         shown = Configuration(resources.configuration)
-        // A recreation (rotation) must not re-apply the link
-        // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
         setContent { TerminusTheme { ProvideWindowWidth { App(vm, account, map, buses, linkTab) { linkTab = null } } } }
     }
 
-    /** A phone stays upright ([Widths.upright]); a tablet or an open foldable turns freely. */
     private fun keepUpright(c: Configuration) {
         val want =
             if (Widths.upright(c.smallestScreenWidthDp)) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -127,21 +121,14 @@ class MainActivity : ComponentActivity() {
         if (requestedOrientation != want) requestedOrientation = want
     }
 
-    /**
-     * Light or dark, or the language, changed (in Settings or the phone's): the activity stays and Compose redraws in it, with no blank
-     * screen between. What recreating it did besides is done here.
-     */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // A fold or unfold changes the screen, and with it whether it may turn.
         keepUpright(newConfig)
         val before = shown
         shown = Configuration(newConfig)
         if (before == null) return
         val night = Configuration.UI_MODE_NIGHT_MASK
-        // The navigation bar's icons, light or dark, are set once by enableEdgeToEdge.
         if (before.uiMode and night != newConfig.uiMode and night) enableEdgeToEdge()
-        // The answer and the day are written by the server in the app's language.
         if (before.locales != newConfig.locales) {
             vm.load(restart = true)
             vm.loadDay()
@@ -150,8 +137,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Notifications blocked or allowed in the phone's settings meanwhile;
-        // push asked for, or sent again when due (Push.sync).
         vm.recheckNotifications()
     }
 
@@ -160,24 +145,18 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
-    /** App shortcuts and notifications open the app on the plan or a place, on Now, or on the Nearby tab. */
     private fun handle(intent: Intent?) {
-        // Share in NUSMods, then terminus: the timetable link, to import.
         if (intent?.action == Intent.ACTION_SEND) {
             nusmodsLink(intent.getStringExtra(Intent.EXTRA_TEXT))?.let(account::shared)
             return
         }
         val data = intent?.data ?: return
-        // https://terminus.run/pair?code=… (or the beta's, or either's old
-        // address) from the account page's QR code.
         if (data.scheme == "https" && data.host in Servers.siteHosts && data.path?.startsWith("/pair") == true) {
             val code = data.getQueryParameter("code")?.filter { it.isLetterOrDigit() }?.uppercase()
             if (code != null && code.length == 6 && !vm.state.value.paired) vm.checkPairLink(code)
             return
         }
         if (data.scheme != "terminus") return
-        // From a long-press shortcut (notifications send no action): tell
-        // the launcher, which ranks the shortcuts people use.
         if (intent.action == Intent.ACTION_VIEW) {
             val id =
                 when (data.host) {
@@ -191,9 +170,6 @@ class MainActivity : ComponentActivity() {
             when (data.host) {
                 "plan" -> Target.Plan
                 "place" -> data.lastPathSegment?.let { Target.SavedPlace(it) }
-                // A stop or place looked up, from the widget showing it.
-                // Only from this app's own widgets: another app could otherwise add
-                // places with names of its choosing (the activity is exported).
                 "to" ->
                     data.lastPathSegment
                         ?.takeIf { intent.getStringExtra(EXTRA_KEY) == Store(this).intentKey }
@@ -201,7 +177,6 @@ class MainActivity : ComponentActivity() {
                 else -> null
             }
         target?.let(vm::select)
-        // Nearby is a tab, which asks for its stops as it opens; a card's link shows it on Now, whichever tab was up.
         if (target != null || data.host == "nearby") linkTab = Tab.ofLink(data.host)
     }
 
@@ -209,7 +184,6 @@ class MainActivity : ComponentActivity() {
         private const val EXTRA_KEY = "sh.rcn.terminus.KEY"
         private const val MAX_LABEL = 40
 
-        /** Distinct URIs, so each shortcut gets its own intent. */
         fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false, to: String? = null, label: String? = null): Intent =
             Intent(ctx, MainActivity::class.java).apply {
                 data =
@@ -227,17 +201,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun TerminusTheme(content: @Composable () -> Unit) {
-    // The Surface sets the default text colour to onBackground. Without it,
-    // any Text with no explicit colour is black, invisible in dark mode.
     MaterialTheme(colorScheme = fading(if (isSystemInDarkTheme()) BrandDark else BrandLight), typography = TerminusType) {
         Surface(color = MaterialTheme.colorScheme.background, content = content)
     }
 }
 
-/**
- * Material's type with tabular digits, so a countdown or a clock time keeps its width as it ticks; headings wrap into even lines rather
- * than leaving one word alone, and body text avoids a one-word last line.
- */
 private val TerminusType =
     Typography().run {
         fun TextStyle.digits() = copy(fontFeatureSettings = "tnum")
@@ -262,7 +230,6 @@ private val TerminusType =
         )
     }
 
-/** The colours, fading from light to dark or back rather than swapping in one frame. */
 @Composable
 private fun fading(to: ColorScheme): ColorScheme {
     @Composable fun Color.fade() = animateColorAsState(this, tween(350), label = "theme").value
@@ -297,14 +264,12 @@ private fun fading(to: ColorScheme): ColorScheme {
     )
 }
 
-/** Which screen is up, apart from the tabs. */
 private enum class Screen {
     Main,
     SignIn,
     Pair,
 }
 
-/** [linkTab]: the tab a link asked for, gone to here and then [onLinkTab] says so. */
 @Composable
 private fun App(
     vm: MainViewModel,
@@ -319,7 +284,6 @@ private fun App(
     val ctx = LocalContext.current
     val store = remember { Store(ctx) }
     var screen by rememberSaveable { mutableStateOf(Screen.Main) }
-    // Opened by a link: on its tab from the first frame, so Now doesn't ask for a card nobody sees.
     var tab by rememberSaveable { mutableStateOf(linkTab ?: Tab.Now) }
     LaunchedEffect(linkTab) {
         if (linkTab != null) {
@@ -340,29 +304,21 @@ private fun App(
         screen = Screen.Main
         tab = Tab.Now
     }
-    // Paired with a code: off the Pair screen, to the account's setup if it
-    // needs one, else the tabs.
     LaunchedEffect(state.paired) {
         if (state.paired && screen == Screen.Pair) {
             setup = store.needsSetup
             screen = Screen.Main
         }
     }
-    // Signed in while /api/me couldn't be asked: asked again, and if it says the
-    // account was never set up, setup takes over (AccountState.setupDue).
-    // Asked again after each answer that came through, so a connection that
-    // returns while the phone stays on Now settles it too.
     LaunchedEffect(state.paired, state.fetchedAt) {
         if (state.paired && store.setupUnknown) account.settleSetup()
     }
-    // Not while signing in (the screen isn't Main): it waits until that's done.
     LaunchedEffect(acct.setupDue, state.paired, screen) {
         if (acct.setupDue && state.paired && screen == Screen.Main) {
             setup = true
             account.setupShown()
         }
     }
-    // Signed in and set up: Now · Nearby · Stops · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(
             tab,
@@ -379,11 +335,9 @@ private fun App(
             onSignedOut = signedOut,
         )
     } else if (!state.paired && screen == Screen.Main) {
-        // Edge to edge for its livery: it keeps the insets itself.
         WelcomeScreen(
             busy = acct.busy,
             message = acct.message ?: state.pairError,
-            // start() has already set needsSetup, off the main thread.
             onStart = { account.start { signedIn() } },
             onSignIn = {
                 account.beginSignIn()
@@ -396,7 +350,6 @@ private fun App(
             },
         )
     } else if (screen == Screen.SignIn) {
-        // Edge to edge for its band of the sky: it keeps the insets itself.
         BackHandler {
             account.cancelSignIn()
             screen = Screen.Main
@@ -416,8 +369,7 @@ private fun App(
             },
         )
     } else
-    // Pairing and setup in the page's column at every width, as sign-in is.
-    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().column().padding(horizontal = 16.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().column().padding(horizontal = 16.dp)) {
             when {
                 !state.paired && screen == Screen.Pair -> {
                     BackHandler { screen = Screen.Main }
@@ -430,22 +382,18 @@ private fun App(
                     }
             }
         }
-    // A language chosen here or on another device: Android 13+ redraws in it by itself.
     LaunchedEffect(acct.langChanged) {
         if (acct.langChanged) {
             account.langShown()
             recreateOn12(ctx)
         }
     }
-    // The new language has reached the account: the card and the day asked for
-    // before it did were written in the old one.
     LaunchedEffect(acct.langSaved) {
         if (acct.langSaved > 0) {
             vm.load(restart = true)
             vm.loadDay(restart = true)
         }
     }
-    // A timetable shared from NUSMods once set up: import it after a yes.
     acct.sharedLink?.let { link ->
         if (state.paired && !setup) {
             AlertDialog(
@@ -477,10 +425,6 @@ private fun App(
     }
 }
 
-/**
- * Now · Nearby · Stops · Map · Settings. Now scrolls under the status bar (its sky reaches the top), and the map runs under it, with its
- * pills below it. Nearby, Stops and Settings are edge to edge too, keeping the insets inside.
- */
 @Composable
 private fun Tabs(
     tab: Tab,
@@ -496,19 +440,14 @@ private fun Tabs(
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbars = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    // Settings tapped while already on it: back to its list of all settings.
     val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
-    // The pinned stops are the profile's, starred on the Stops tab or on Nearby.
     val pins = acct.profile?.pinnedStops.orEmpty()
-    // Until the profile has come, nothing is known to be pinned: no stars to tap, no "nothing pinned".
     val pinsKnown = acct.profile != null
     val pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops
     val onPin = { code: String ->
-        // Pin or unpin as the tap meant on the pins shown, also when it's saved on a newer profile.
         val on = code !in account.state.value.profile?.pinnedStops.orEmpty()
         account.edit { it.pinnedStops = sh.rcn.terminus.Pins.set(it.pinnedStops, code, on, it.limits.pinnedStops) }
     }
-    // A page of the Stops tab, over its home, as if opened there: Back goes to the home.
     val openStops = { route: BusRoute? ->
         buses.home()
         route?.let(buses::open)
@@ -525,13 +464,10 @@ private fun Tabs(
     val choose = { t: Tab ->
         if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
         if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
-        // Stops tapped while on it: back to its home, from a line or a stop.
         if (t == Tab.Buses && tab == Tab.Buses) buses.home()
-        // Map tapped while on it: the whole campus, nothing open or chosen.
         if (t == Tab.Map && tab == Tab.Map) map.home()
         onTab(t)
     }
-    // From 600 wide the same five tabs are a rail on the leading edge, as Material has it on a large screen.
     val rail = windowWidth().rail
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
@@ -568,13 +504,10 @@ private fun Tabs(
                             )
                         }
                     }
-                    // The status bar runs over the rail too: while a dark sky has set its icons light, the rail's strip of it is
-                    // that sky's top colour, so the clock there reads as it does over the sky.
                     val strip = StatusSky.color
                     val statusTop = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
                     if (strip != null) Box(Modifier.matchParentSize().drawBehind { drawRect(strip, size = Size(size.width, statusTop)) })
                 }
-            // Beside the rail, clear of a camera cutout or the navigation buttons on the far side of a phone on its side.
             Box(
                 Modifier.weight(1f)
                     .fillMaxHeight()
@@ -586,27 +519,17 @@ private fun Tabs(
                         else Modifier
                     )
             ) {
-                // Back from Nearby, Stops, Map or Settings goes to Now, as from any other tab bar.
                 BackHandler(enabled = tab != Tab.Now) {
                     onTab(Tab.Now)
                     vm.load(restart = true)
                 }
-                // Switching tabs fades through (out, then in with a slight zoom), and
-                // each tab keeps its saved state while it's away: where Now and
-                // Settings were scrolled to, which page of Settings was open, where
-                // the map was looking.
                 val saved = rememberSaveableStateHolder()
                 AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
                     saved.SaveableStateProvider(t.name) {
                         when (t) {
                             Tab.Map ->
-                                // Over the bottom bar, the map stops at it; beside the rail it runs to the window's foot, and keeps
-                                // its credit, buttons and sheet clear of the system's bar there itself.
                                 Box(Modifier.fillMaxSize().padding(bottom = if (rail) 0.dp else inner.calculateBottomPadding())) {
-                                    // The account's places, for "Save as place" on a stop.
                                     LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                                    // Before the stop sheet asks, so its board has them too: after
-                                    // each composition, rather than written during it.
                                     val publicBuses = acct.profile?.publicBuses == true
                                     SideEffect { map.publicBuses = publicBuses }
                                     MapScreen(
@@ -624,7 +547,6 @@ private fun Tabs(
                                                     }
                                                 },
                                                 save = { code, name -> account.edit { it.addPlace(name, code) } },
-                                                // Taken off with its usual times, so Undo in the bar at the foot, as in Settings.
                                                 remove = { code ->
                                                     var removed: RemovedPlace? = null
                                                     account.edit { removed = it.removePlaceAt(code) }
@@ -656,7 +578,6 @@ private fun Tabs(
                                 }
                             Tab.Buses ->
                                 Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                                    // The pinned stops are the profile's.
                                     LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
                                     BusesScreen(
                                         buses,
@@ -672,10 +593,8 @@ private fun Tabs(
                                         },
                                     )
                                 }
-                            // Edge to edge too, the insets inside, so the list's sky can reach the top.
                             Tab.Settings ->
                                 Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                                    // Its pages offer Undo in the same bar as Today's.
                                     CompositionLocalProvider(LocalNotices provides snackbars) {
                                         SettingsScreen(
                                             acct,
@@ -692,19 +611,14 @@ private fun Tabs(
                                         )
                                     }
                                 }
-                            // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                             Tab.Now ->
                                 Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
-                                    // The account's own settings (its clock, language and email), asked for as the app opens.
                                     LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
                                     MainScreen(state, vm, insets = inner, email = acct.email, onAddEmail = onAddEmail)
                                 }
-                            // Edge to edge, as Stops is: its band of the sky reaches the top.
                             Tab.Nearby ->
                                 Box(Modifier.fillMaxSize().consumeWindowInsets(inner)) {
-                                    // The stars need the profile's pins.
                                     LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                                    // A stop or a row tapped: its board or its line, on the Stops tab.
                                     NearbyScreen(
                                         state,
                                         vm,
@@ -728,13 +642,11 @@ private fun Tabs(
     }
 }
 
-/** Material's fade through, between tabs: the old one fades out quickly, the new one fades in with a slight zoom. */
 private fun fadeThrough(): ContentTransform =
     (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) +
             scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f))
         .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
 
-/** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */
 private fun recreateOn12(ctx: Context) {
     if (android.os.Build.VERSION.SDK_INT < 33) (ctx as? android.app.Activity)?.recreate()
 }

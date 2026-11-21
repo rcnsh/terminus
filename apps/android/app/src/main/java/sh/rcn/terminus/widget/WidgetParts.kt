@@ -35,7 +35,6 @@ import sh.rcn.terminus.Ink
 import sh.rcn.terminus.L
 import sh.rcn.terminus.R
 
-/** The sky picture at the top of a widget, [height] tall, stretched across it. */
 @Composable
 internal fun SkyImage(bitmap: Bitmap, height: Dp) {
     Image(
@@ -46,10 +45,6 @@ internal fun SkyImage(bitmap: Bitmap, height: Dp) {
     )
 }
 
-/**
- * The headline, with [Face.accent] (the time to leave) in the accent colour, as on Now. Late: all of it in the late colour; old: all of it
- * muted.
- */
 @Composable
 internal fun Headline(face: Face, inks: Inks, size: TextUnit) {
     val base =
@@ -68,7 +63,6 @@ internal fun Headline(face: Face, inks: Inks, size: TextUnit) {
         Text(face.headline, style = style(base), maxLines = headLines())
         return
     }
-    // Glance can't colour part of a line: the headline in three pieces, in a row.
     val at = face.headline.indexOf(accent)
     Row(verticalAlignment = Alignment.Bottom) {
         face.headline.substring(0, at).takeIf { it.isNotEmpty() }?.let { Text(it, style = style(base), maxLines = 1) }
@@ -77,10 +71,6 @@ internal fun Headline(face: Face, inks: Inks, size: TextUnit) {
     }
 }
 
-/**
- * Where the headline will be, before there is one: a bar centred in a line of [size] text, said as [said]. Still: a widget can't animate.
- * Rounded from Android 12; before it, square.
- */
 @Composable
 internal fun HeadlineBar(said: String, inks: Inks, size: TextUnit, width: Dp = 150.dp) {
     Box(
@@ -91,7 +81,6 @@ internal fun HeadlineBar(said: String, inks: Inks, size: TextUnit, width: Dp = 1
     }
 }
 
-/** One placeholder shape, in the pill's ground, which reads on the sky and on the ground alike. */
 @Composable
 internal fun WidgetBar(width: Dp, height: Dp, inks: Inks) {
     Box(GlanceModifier.width(width).height(height).cornerRadius(6.dp).background(inks.chip)) {}
@@ -99,7 +88,6 @@ internal fun WidgetBar(width: Dp, height: Dp, inks: Inks) {
 
 private fun solid(argb: Long) = ColorProvider(Color(argb))
 
-/** A service's code on its colour, the code in white or near-black, whichever reads there ([Ink]); a public bus has its "$". */
 @Composable
 internal fun Badge(svc: String, color: Long, paid: Boolean = false, big: Boolean = false) {
     Box(
@@ -116,7 +104,6 @@ internal fun Badge(svc: String, color: Long, paid: Boolean = false, big: Boolean
     }
 }
 
-/** "Live" in green on its tint, or a plain one ("Scheduled", "Busy"). */
 @Composable
 internal fun PillText(text: String, color: ColorProvider, inks: Inks) {
     Box(GlanceModifier.cornerRadius(10.dp).background(inks.chip).padding(horizontal = 8.dp, vertical = 2.dp)) {
@@ -128,7 +115,6 @@ internal fun PillText(text: String, color: ColorProvider, inks: Inks) {
 internal fun PillOf(pill: Pill, inks: Inks) =
     PillText(if (pill.good) "● ${pill.text}" else pill.text, if (pill.good) inks.good else inks.muted, inks)
 
-/** A line of small words, in [color]. */
 @Composable
 internal fun Small(
     text: String,
@@ -146,7 +132,6 @@ internal fun Small(
     )
 }
 
-/** The line under the headline, with how sure its time is beside it. */
 @Composable
 internal fun SubLine(face: Face, inks: Inks) {
     if (face.sub == null && face.pill == null) return
@@ -159,7 +144,6 @@ internal fun SubLine(face: Face, inks: Inks) {
     }
 }
 
-/** The leg on the ground: the service's badge, then where it goes from and to. */
 @Composable
 internal fun LegRow(leg: Leg, inks: Inks, size: TextUnit = 13.sp) {
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +155,6 @@ internal fun LegRow(leg: Leg, inks: Inks, size: TextUnit = 13.sp) {
     }
 }
 
-/** Refreshes what the widget shows (a tap anywhere else opens the app): a round button, as the app's own. */
 @Composable
 internal fun RefreshButton(action: Action, inks: Inks, side: Dp = 32.dp) {
     Box(
@@ -189,14 +172,8 @@ internal fun RefreshButton(action: Action, inks: Inks, side: Dp = 32.dp) {
     }
 }
 
-/**
- * Timetable, Nearby, then the places you usually go, as the app's chips: each switches this widget in place, without opening the app. The
- * one showing is filled.
- */
 @Composable
 internal fun ModeChips(chips: List<Mode>, showing: Mode, inks: Inks, action: (Mode) -> Action) {
-    // Gaps as padding, not Spacers: a Glance Row holds at most 10 children,
-    // and a wide widget fits up to WidgetModes.MAX_BUTTONS of them.
     Row(GlanceModifier.fillMaxWidth()) {
         chips.forEachIndexed { i, m ->
             val on = m.id == showing.id
@@ -204,7 +181,6 @@ internal fun ModeChips(chips: List<Mode>, showing: Mode, inks: Inks, action: (Mo
                 Box(
                     GlanceModifier.cornerRadius(18.dp)
                         .background(if (on) inks.chipOn else inks.chip)
-                        // 14 dp each side, as WidgetModes.fitting counts; tall enough for a fingertip.
                         .padding(horizontal = 14.dp, vertical = 9.dp)
                         .semantics {
                             contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label)
@@ -227,7 +203,6 @@ internal fun ModeChips(chips: List<Mode>, showing: Mode, inks: Inks, action: (Mo
     }
 }
 
-/** Done for the day: the next class in a pane of glass on the sky, as on Now. */
 @Composable
 internal fun TileBox(tile: Tile, inks: Inks) {
     androidx.glance.layout.Column(GlanceModifier.cornerRadius(14.dp).background(inks.chip).padding(horizontal = 12.dp, vertical = 7.dp)) {
