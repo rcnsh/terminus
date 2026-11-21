@@ -636,12 +636,18 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   const key = 'home:660';
   const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
   const dayOf = async () => (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
-  const plan = (await dayOf()).plans?.[key];
+  const before = await dayOf();
+  const plan = before.plans?.[key];
   assert.equal(plan?.svc, 'D2');
   const seen = { ...plan, seen: true };
   await trip.fetch('https://trip/update', {
     method: 'POST',
-    body: JSON.stringify({ date: sgtDate(Date.now()), plans: { [key]: seen }, deleteAt: endOfDayMs(Date.now()) }),
+    body: JSON.stringify({
+      date: sgtDate(Date.now()),
+      plans: { [key]: seen },
+      basis: { [key]: before.revs?.[key] ?? 0 },
+      deleteAt: endOfDayMs(Date.now()),
+    }),
   });
   const arrive = Date.parse(plan.arrive);
   clock(arrive + 60_000);
@@ -891,7 +897,16 @@ test("a deleted account's trip state goes at once, and a request still under way
     (await post('update', { date, items: [{ key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW } }], deleteAt })).ok,
     'what a /api/me/next that read the account just before it went would still send',
   );
-  assert.ok((await post('update', { date, plans: { [FIRST]: { svc: 'D2', stop: 'PGP', board: null, arrive: null } }, deleteAt })).ok);
+  assert.ok(
+    (
+      await post('update', {
+        date,
+        plans: { [FIRST]: { svc: 'D2', stop: 'PGP', board: null, arrive: null } },
+        basis: { [FIRST]: 0 },
+        deleteAt,
+      })
+    ).ok,
+  );
   assert.ok((await post('update', { date, watch: { userId, at: FROZEN_NOW + 60_000 }, deleteAt })).ok);
   assert.equal(await (await obj.fetch(`https://trip/day?date=${date}`)).json(), null);
   assert.deepEqual([...inst.storage._map.keys()].sort(), ['deleteAt', 'gone'], 'only the mark is kept');
@@ -1361,7 +1376,12 @@ test('a plan and a watch sent at once by two devices both stick (the Trip object
   const post = (path, body) =>
     s.fetch(`https://trip${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   await Promise.all([
-    post('/update', { date, plans: { k: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() } }, deleteAt }),
+    post('/update', {
+      date,
+      plans: { k: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() } },
+      basis: { k: 0 },
+      deleteAt,
+    }),
     post('/update', { date, watch: { userId: 'u1', at: FROZEN_NOW + 60_000 }, deleteAt }),
   ]);
   const day = await (await s.fetch(`https://trip/day?date=${date}`)).json();

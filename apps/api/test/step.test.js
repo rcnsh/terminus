@@ -298,7 +298,7 @@ test('with no live times the buses fall a headway apart from the chosen one, how
 test("a step drops the trip's plan, so the bus chosen becomes it on every device", async () => {
   const { env } = await setup();
   const plan = { svc: 'R2', stop: 'PGP', board: '2026-08-27T01:42:00Z', arrive: '2026-08-27T01:51:30Z', located: true };
-  await updateTrip(env, 'u1', { plans: { [FIRST]: plan, other: plan } }, FROZEN_NOW);
+  await updateTrip(env, 'u1', { plans: { [FIRST]: plan, other: plan }, basis: { [FIRST]: 0, other: 0 } }, FROZEN_NOW);
   const to = { svc: 'D2', stop: 'PGP', board: '2026-08-27T01:50:00Z' };
   const day = await updateTrip(env, 'u1', { steps: { [FIRST]: to } }, FROZEN_NOW);
   assert.deepEqual(day.steps, { [FIRST]: to });
