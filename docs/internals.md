@@ -393,10 +393,10 @@ a one-off trip added on one phone isn't lost to a save from another.
 `PUT /api/me/profile` replaces the whole document; the version is its `ETag`
 (`GET /api/me/profile` sends it, `"0"` before the first save). A client that
 sends it back as `If-Match` is refused with 412 if another device saved
-since; without it, as the apps installed today send, the last save wins.
-The website sends it: each change made in Settings or setup is kept apart
-until it's saved, one save at a time, and on a 412 the page reads the
-profile again and makes only its own changes on that (three tries).
+since; without it the last save wins. The website and the apps send it:
+each change made in Settings or setup is kept apart until it's saved, one
+save at a time, and on a 412 the client reads the profile again and makes
+only its own changes on that (three tries).
 
 The calendar keeps itself up to date without a deploy
 ([src/timetable/calendarsync.ts](../apps/api/src/timetable/calendarsync.ts)). `data/calendar.json` is
@@ -568,8 +568,8 @@ A request without the header (the website, API keys), or with a version that
 can't be read, is never refused. Sign-in, pairing and signing out answer
 before the check, and an outdated app may still `DELETE /api/me/push` and
 `DELETE /api/me`, so it can stop its pushes or delete its account. The apps
-take a 426 as "update required": they stop polling, back off for hours,
-and offer the update (Play or the website on Android, Sparkle on the Mac).
+take a 426 as "update required": they stop polling, hold back for half
+an hour before asking again, and offer the update (Play or the website on Android, Sparkle on the Mac).
 
 ```bash
 pnpm exec cf kv keys put config:minClient --namespace-id <KV id in cloudflare.config.ts> --body '{"android":"2.6.0","mac":"2.6.0"}'
@@ -3215,6 +3215,160 @@ keeps the site's token and the stub's under their own keychain accounts
 (`TokenStore`). The site's addresses are one server with one token, so a
 saved choice of the old address, dropped in 3.6.0, falls back to
 terminus.run still signed in.
+
+### The Android app
+
+How `apps/android` behaves where the code alone doesn't say why
+(`Api.kt`, `Store.kt`, `LeaveAlerts.kt`, `LiveService.kt`, `Push.kt`,
+`MapFiles.kt`, `Buses.kt`, `MapData.kt` and their neighbours):
+
+- **Reading answers** (`Api.kt`). Each part of the card is read on its own
+  (`lenient`): a malformed part is left out and the rest still shows. A
+  reply that isn't the shape this version reads at all is a `ParseError`
+  ("unexpected response"), never taken for the network failing
+  ("Offline"); a 200 that isn't JSON is one too. An error page without the
+  API's own `error` (an HTML page from in front of the Worker) shows a
+  plain sentence, not "HTTP 502". The API's lower-case errors become
+  sentences (`sentence()`), keeping "terminus" lower case and ending
+  Chinese with a full-width stop.
+- **Deadlines.** A fast request (widgets, a push, an alarm's broadcast,
+  the live notification: anything inside the ~10 s a broadcast or a push
+  handler gets) has 2 s to connect, 7 s to read and 9 s in all
+  (`FAST_DEADLINE_MS`), across both addresses (`Servers.order`). The Worker
+  gives each NUS call up to 5 s and a cold `/api/me/next` mints a guest
+  token first, which usually fits in 7 s; the rare re-mint and retry
+  (~20 s) is left to the next refresh. The exchange runs in `blocking()`,
+  which disconnects on cancellation, so a DNS lookup (no timeout of its
+  own) can't outlive the deadline.
+- **Holding back** (`Quiet`, `Outdated`). After a 429, every request on the
+  phone (the app, its widgets, the live notification) waits out
+  `Retry-After`, at most 5 minutes; sign-in, pairing and code routes have
+  limits of their own, so a 429 from one holds back only those. A 503's
+  `Retry-After` only slows the polling loops. The wait goes by the time
+  since boot (the clock can be changed) and is kept in the settings by the
+  wall clock, so a process started for a widget or a push honours it.
+  After a 426 nothing `Outdated.gated` goes out for half an hour, as on
+  the Mac, then one request checks whether the minimum has come down; the
+  hold is kept per version, so an update ends it.
+- **Where you are.** Coordinates go out at four decimals (about 11 m:
+  enough to tell PGP from PGP Foyer, no more precise in URLs that pass
+  through logs). `Locator` uses no Play services: the last known fix of
+  the fused, network and GPS providers that could be least wrong now, its
+  accuracy plus 1.3 m/s of walking since it was taken (`acc`); a fix that
+  gives no accuracy counts as 1 km, so it never beats one that does.
+  `FirstFix` (the same on the iPhone and the web) asks with a fix under
+  60 s old at once, else waits 1.5 s for a fresh one before asking with
+  what it has, and asks once more if the fresh fix is over 50 m from the
+  one sent; a fix whose `acc` is over the API's 200 m counts as none.
+- **The phone's clock** (`ServerClock`). Every countdown compares the
+  server's times with the server's now: the skew comes from the `Date`
+  header of a reply fresh from the server (not a cached one), and under
+  3 s is taken as none (Date's one-second resolution and the trip).
+  Alarms go by the phone's clock, through `toDevice`.
+- **The token** (`Store`). Encrypted with an Android Keystore key and
+  decrypted once per process: the widget reads it on every draw. Written
+  with `commit()`, not `apply()`, so a process killed right after pairing
+  can't lose a token the server already issued. When the key is gone (a
+  restore, a reset of secure storage) the phone signs out once and says
+  why, rather than retrying on every draw. An answer, day plan or board is
+  kept only if it was asked with the token still stored (`sentWith`) and
+  wasn't asked before the one kept (`askedAtMs`), so a slow widget refresh
+  never overwrites the app's newer answer and a sign-out mid-request
+  leaves no old account's places behind. Language, theme, card style, New
+  to NUS, crash reports, the intent key and the server chosen survive a
+  sign-out (`Store.clear`). `intentKey` marks the app's own intents
+  (widgets, shortcuts): `MainActivity` is exported.
+- **The profile** (`Profile.kt`) is kept as the server's JSON, so fields
+  this version doesn't know survive a save. Saves send `If-Match`; on a 412
+  only this phone's changes are made again on the server's profile
+  (`saveChanges`), and a change to a class that has gone meanwhile is
+  dropped (`missed`) rather than landing on a neighbour.
+- **Leave alerts** (`LeaveAlerts.kt`). The server says when (`remindAt`).
+  An exact alarm two minutes before fetches a fresh answer, and that
+  answer decides: with exact alarms allowed the heads-up posts at
+  `remindAt` (so "5 minutes before you need to leave" is true); without,
+  it posts as the check lands, since an inexact post after an inexact
+  check could miss the leave time. With nothing to say yet (no bus) it
+  checks every couple of minutes until 10 minutes past `remindAt`, then
+  counts the trip done. A last alarm at the leave time turns it into
+  "Leave now". One heads-up per trip, the trip known by its action's key
+  (`4:600:UTOWN`, which stays put while the leave time moves), else a
+  class's start, else `remindAt`; afterwards the same notification follows
+  the trip only while it's showing, and with push trusted no follow-up
+  alarm is set. `exactAlarm()` wakes the phone only for the alerts, the
+  live notification and the server's `refreshAt`; a widget redraw waits
+  for the screen. The alarm's check fetches `/api/me/next` right in the
+  receiver (its idle allowance is seconds) and may start the live
+  notification, which a normal-priority push can't.
+- **The live notification** (`LiveService`) refreshes every 30 s, 2 min
+  with the screen off, backing off 1, 2, 4, then 8 minutes while refreshes
+  fail; the API's per-stop cache means it costs NUS nothing more than the
+  app open. Android lets it start from the background only from a
+  high-priority push (due, missed), an exact alarm or boot, so between
+  trips it stops and sets an exact alarm for the next reminder or
+  `refreshAt` (never the card's `nextChangeAt`, which moves at every
+  departure). It goes to the foreground before any fetch and stops rather
+  than crash when Android refuses that. On Android 16 QPR1 (API 36.1) it
+  is a Live Update with the card's glance as the status-bar chip; check
+  `SDK_INT` before `SDK_INT_FULL`, which throws on 12 to 15. On the bus
+  it's a `ProgressStyle` bar (`RideStyle`), its position the clock's
+  estimate, redrawn a second after each stop.
+- **Push** (`Push.kt`). Firebase is set up in code, so the phone works
+  without Play services or the config file. A push carries no words, so
+  none pass through Google: a `term` push fetches `/api/me/notice`. The
+  token is sent again every 12 hours (the server drops one FCM stopped
+  delivering to, and nothing tells the phone), and push is relied on alone
+  only with a token taken and a push heard within a day; otherwise the
+  alarms keep step too. A push for a trip phase starts the live
+  notification first, inside the seconds a high-priority message allows.
+- **The map's files** (`MapFiles.kt`). `/api/campus` and the style are
+  used from the kept copy at once and checked in the background once over
+  an hour old (their `max-age`). The map file is checked weekly by ETag;
+  a newer one waits for an unmetered network, the first doesn't. Each
+  version gets a file name of its own, since MapLibre keeps a file's
+  header and directories by URL, and old ones go once no map shows them;
+  a file kept from before versions had names (`campus.pmtiles`, no size)
+  is still read. A download needs 16 MB spare, must match its
+  Content-Length and start with a PMTiles v3 header (not a Wi-Fi login
+  page), and isn't tried at the other address once its body has started.
+- **The map** (`MapData.kt`). MapLibre Native limits only the camera's
+  centre, so `PanLimit` keeps the centre half a screen inside the map
+  file's extent (`MAP_BOUNDS` in map.ts) and zooms out only until the
+  screen is full, allowing the part under an open sheet to show past the
+  edge (the web's `underSheet`); the Mac's `PanLimit` is the same.
+  `coreExtent` frames campus by its stops and the whole line of every
+  service that stays on it, as the iPhone's `coreBounds` and the web's
+  `campusBounds`. Slides time on `elapsedRealtime`, which runs on while
+  the phone sleeps, so a map left asleep reads as stale.
+- **The Stops tab** (`Buses.kt`). Times count down from when the phone got
+  the answer, on the server's clock, never from the feed's `asOf` (the
+  server already took that off); once an answer is 30 s old (a refresh
+  missed) a live time reads "Last known", as the web's `aged()`. A pinned
+  stop whose page is open takes the page's times and keeps its own
+  answer's timetable guesses for the buses after them, counted rather
+  than matched by time, as the iPhone and the web do; its own answer is
+  asked again after 2 minutes. `/api/lines` reads every service from NUS,
+  so it's asked when the list comes on screen and at most once a minute
+  (`LinesPoll`).
+- **Pull to refresh** (`Pull.kt`, drawn by `ui/BusPull.kt`; the web's
+  pull runs on the same numbers). An answer under 15 s old isn't asked
+  for again (the API keeps arrivals 15 s): the pull plays and says when
+  the next update comes.
+- **Language** (`Lang.kt`). On Android 13 and later a choice is the
+  system's per-app language; on 12 every entry point (the activity, the
+  widgets, the notifications) wraps its context. The account's `lang` is
+  applied only when it changed since last applied, so it never overrides
+  a later choice made on the phone.
+- **Smaller rules.** Favourites on the widget rank by uses that halve
+  every 14 days, counted only on the phone (`Destinations`). The app
+  icon's shortcuts are four (Pixel's launcher shows four), Nearby last
+  (`Shortcuts`). The theme is the app's night mode, so Android applies it
+  from launch (`Theme`). Ink on a service's colour is white or near-black
+  by WCAG contrast (white on A2 or K was under 3.5:1; `Ink`). Crash
+  reports are written in the crash and sent at the next start, a 5xx kept
+  for the start after. A signed-out session is ended on the server by a
+  `LogoutWorker` with up to ten tries, the token in the job, not the
+  settings.
 
 ### Live buses on the map
 

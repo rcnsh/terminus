@@ -23,22 +23,11 @@ import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.redrawWidgets
 
-/**
- * Push: the server says when the card changes, so the phone doesn't have to keep asking.
- *
- * Firebase Cloud Messaging, only on a phone with Google Play services and a build that has the Firebase config (BuildConfig.FIREBASE_*). A
- * push is a nudge (`{kind: 'card', phase}`); the app fetches /api/me/next itself and redraws the widgets and the trip's notification from
- * it. Everything else (the heads-up alarm, the widget refresh) still works without it. The one other kind, `term`, is the reminder to
- * import a new semester's timetable, worded by the server in both languages. The push carries no words, so none pass through Google: the
- * app fetches them (GET /api/me/notice).
- */
 object Push {
-    /** This build has Firebase, and the phone has Play services. */
     fun available(ctx: Context): Boolean =
         BuildConfig.FIREBASE_APP_ID.isNotEmpty() &&
             GoogleApiAvailabilityLight.getInstance().isGooglePlayServicesAvailable(ctx) == ConnectionResult.SUCCESS
 
-    /** Sets up Firebase in code (there's no google-services plugin). False when push isn't available. */
     fun init(ctx: Context): Boolean {
         if (!available(ctx)) return false
         if (FirebaseApp.getApps(ctx).isEmpty()) {
@@ -55,25 +44,12 @@ object Push {
         return true
     }
 
-    /**
-     * The same token is sent again after this long: the server drops one that Firebase stopped delivering to, and nothing tells the phone.
-     * At most twice a day, one small request.
-     */
     private const val RESEND_MS = 12 * 60 * 60_000L
 
-    /** Push is relied on alone only with a token sent and a push heard within this. */
     private const val TRUST_MS = 24 * 60 * 60_000L
 
-    /**
-     * Pushes are asked for while something they move on can be seen: the leave alert, the live notification, or the new semester's
-     * reminder, which only comes by push.
-     */
     fun wanted(ctx: Context): Boolean = Store(ctx).paired && (follows(ctx) || LeaveAlerts.canNotify(ctx, TermReminder.CHANNEL))
 
-    /**
-     * What push's timing reads from [Store]: the token sent, when the server took it, when a push last arrived, and the [tag]s of the
-     * session it was sent with ([sentFor]) and of the session now ([session]).
-     */
     data class State(
         val token: String?,
         val sentAt: Long,
@@ -87,32 +63,21 @@ object Push {
         }
     }
 
-    /**
-     * A card push only moves the leave alert and the live notification on (the widgets keep their own alarms): with neither on and seen,
-     * it's left alone rather than fetched for.
-     */
     fun follows(ctx: Context): Boolean {
         val store = Store(ctx)
         return (store.leaveAlerts && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) ||
             (store.liveUpdates && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
     }
 
-    /** Which session a token was sent with, without keeping the session token in plain prefs. */
     internal fun tag(session: String): String =
         java.security.MessageDigest.getInstance("SHA-256").digest(session.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
 
-    /** No token sent for this session yet (a new sign-in or pairing, whatever was sent before it), or not for [RESEND_MS]. */
     fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean = store.token != null && due(State.of(store), now)
 
     fun due(state: State, now: Long): Boolean = state.token == null || state.sentFor != state.session || now - state.sentAt >= RESEND_MS
 
-    /** [sync] would change something: a token to send, or one to take back. */
     fun stale(ctx: Context): Boolean = if (wanted(ctx)) due(Store(ctx)) else Store(ctx).pushToken != null
 
-    /**
-     * Sends this phone's token when [wanted] and new or [due], or takes it back from the server when no longer wanted. Call when the
-     * session changes, when the alerts or notifications are turned on or off, at start, and from refreshes.
-     */
     fun sync(ctx: Context) {
         val app = ctx.applicationContext
         if (!Store(app).paired || !init(app)) return
@@ -126,7 +91,6 @@ object Push {
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { Api(auth).registerPush(token) }
                 .onSuccess {
-                    // Signed in again meanwhile: the new session hasn't got it.
                     if (store.token != auth) return@onSuccess
                     store.pushToken = token
                     store.pushFor = tag(auth)
@@ -135,7 +99,6 @@ object Push {
         }
     }
 
-    /** Not wanted any more: the server stops sending to this session. */
     private fun drop(ctx: Context) {
         val store = Store(ctx)
         if (store.pushToken == null) return
@@ -148,35 +111,26 @@ object Push {
         }
     }
 
-    /**
-     * This phone hears about changes by push: a token this session sent and the server took, and a push that arrived, both within
-     * [TRUST_MS]. Otherwise the alarms keep the trip in step too (LeaveAlerts.followUp), in case the server has dropped the token.
-     */
     fun active(ctx: Context): Boolean {
         val store = Store(ctx)
         return store.token != null && active(State.of(store), System.currentTimeMillis()) && available(ctx)
     }
 
-    /** [active], apart from whether this phone can have push at all. */
     fun active(state: State, now: Long): Boolean =
         state.token != null && state.sentFor == state.session && now - state.sentAt < TRUST_MS && now - state.heardAt < TRUST_MS
 }
 
-/** Firebase is ready before anything else runs, including a push that starts the process. */
 class TerminusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         L.init(this)
         DeviceKind.init(this)
         Servers.init(this)
-        // Crashes are written down from here on; earlier ones are sent now, in the background.
         CrashReports.install(this)
         ServerClock.init(this)
         Quiet.init(this)
         Outdated.init(this)
         Push.init(this)
-        // The token is read once per process, through the Keystore: started
-        // here, off the main thread, so the first screen rarely waits for it.
         val app = this
         Thread { Store(app).token }.start()
         nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
@@ -184,10 +138,6 @@ class TerminusApp : Application() {
 
     private var nightMode = 0
 
-    /**
-     * The phone's theme changed while the app is running: the widgets' sky is a picture drawn for one theme, so they're drawn again now
-     * rather than at their next redraw.
-     */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
@@ -203,46 +153,30 @@ class PushService : FirebaseMessagingService() {
         Push.send(applicationContext, token)
     }
 
-    /** The card changed: fetch it, and let the widgets and the trip's notification follow. */
     override fun onMessageReceived(message: RemoteMessage) {
         Store(applicationContext).pushHeardAt = System.currentTimeMillis()
         if (message.data["kind"] == "term") {
             val ctx = applicationContext
-            // Words in the push (an older server), or fetched: one request, on this background thread.
             val words = if (message.data["title"] != null) message.data else runBlocking { TermReminder.fetch(ctx) }
             if (words != null) TermReminder.post(ctx, words)
             return
         }
         val ctx = applicationContext
         if (message.data["kind"] != "card" || !Push.follows(ctx)) return
-        // The live notification runs from "due" until you're there. Started
-        // first: a high-priority push ("due", "missed") lets it start only
-        // for a few seconds. It fetches the answer itself, and stops if the
-        // trip is over.
         if (message.data["phase"] in LiveService.TRIP_PHASES && LiveService.start(ctx, force = true)) return
-        // A background thread with a few seconds to spare: only the answer
-        // here, one request; the rest of a refresh follows in a job. Asked
-        // for even just after another refresh: the card changed since.
         runBlocking { Refresher.refresh(ctx, fast = true, extras = false, force = true) }
     }
 }
 
-/** A new semester starts within the week and the account's timetable is last semester's. */
 object TermReminder {
     const val CHANNEL = "term"
     private const val NOTIFICATION_ID = 3
 
-    /** The reminder's words from the server, or null (signed out, offline, or no reminder due). */
     suspend fun fetch(ctx: Context): Map<String, String>? {
         val token = Store(ctx).token ?: return null
-        // Fast timeouts: this runs inside the few seconds Firebase gives a message.
         return runCatching { Api(token, fast = true).notice() }.getOrNull()
     }
 
-    /**
-     * The title and body in the app's language, from /api/me/notice, or from the push from an older server; null with no title to show,
-     * rather than a blank notification.
-     */
     fun words(data: Map<String, String>, zh: Boolean): Pair<String, String>? {
         val title = (if (zh) data["zhTitle"] else data["title"])?.takeIf { it.isNotBlank() } ?: return null
         return title to (if (zh) data["zhBody"] else data["body"]).orEmpty()

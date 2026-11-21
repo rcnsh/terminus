@@ -3,7 +3,6 @@ package sh.rcn.terminus.widget
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** A failed background refresh is tried again soon, then less often, never more than 15 minutes apart. */
 class RetryTest {
     @Test
     fun backsOffToFifteenMinutes() {
@@ -20,7 +19,6 @@ class RetryTest {
         val now = 1_790_000_000_000L
         assertEquals(now + 60_000, retryAt(now, 0, 0))
         assertEquals(now + 8 * 60_000, retryAt(now, 3, 0))
-        // A 429's two minutes beat the first minute's back-off.
         assertEquals(now + 120_000, retryAt(now, 0, 120_000))
     }
 }

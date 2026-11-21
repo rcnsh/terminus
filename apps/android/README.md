@@ -76,7 +76,18 @@ leaves the changes for you to review, printing the commands that commit and
 push them.
 
 A release build without the `TERMINUS_*` key properties comes out unsigned,
-never signed with the debug key.
+never signed with the debug key, so a build that missed the key can't pass
+for a release. `-PapiBase` only changes debug builds, so a stray property in
+`~/.gradle/gradle.properties` can never ship a release that talks to a
+laptop. The beta's `versionName` comes from release-beta.sh (`-PbetaVersion`,
+the next stable version's pre-release, numbered by commit).
+
+The Play bundle keeps every language (`bundle.language.enableSplit = false`):
+Chinese can be chosen in the app whatever the phone's language. The APKs are
+split per CPU type (MapLibre's native code is about 4.5 MB a type) with native
+code compressed (a third the size), and the split is off while building the
+bundle, since AGP refuses a bundle with splits on, so release.sh builds them
+in separate runs.
 
 The unit tests read the same answer fixtures as the API's tests
 (`fixtures/answers`).

@@ -13,7 +13,6 @@ import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.TestStrings
 import sh.rcn.terminus.widget.BaseWidget.Tap
 
-/** The widget's frame: the offline fallback, the refresh button and where a tap goes. */
 class WidgetFrameTest {
     init {
         TestStrings.install()
@@ -23,7 +22,6 @@ class WidgetFrameTest {
     private val day = DayPlan.parse(JSONObject(File(dir, "day.json").readText()))
     private val plan = NextAnswer.parse(JSONObject(File(dir, "class-bus.json").readText()))
     private val staleAt = plan.card!!.staleAtMs!!
-    // 09:05 in Singapore on the day the goldens are for: before the first leave-by.
     private val morning = Instant.parse("2026-08-27T01:05:00Z").toEpochMilli()
 
     private fun frame(
@@ -38,20 +36,16 @@ class WidgetFrameTest {
     @Test
     fun offlineWithThePlanOldTheDayPlanTakesOver() {
         assertNotNull(frame(now = maxOf(staleAt, morning)).offline)
-        // No plan kept at all: the same.
         assertNotNull(frame(answer = null, now = morning).offline)
     }
 
     @Test
     fun theAnswerStaysWhileItHolds() {
-        // Still fresh, or no error, or only updating: the answer, not the day plan.
         assertNull(frame(now = staleAt - 1).offline)
         assertNull(frame(error = null).offline)
         assertNull(frame(error = UPDATING).offline)
-        // Not on the timetable, or not signed in.
         assertNull(frame(mode = Mode.Nearby).offline)
         assertNull(frame(paired = false).offline)
-        // No day plan kept: nothing to fall back on.
         assertNull(BaseWidget.frame(true, Mode.Timetable, plan, "No connection", false, staleAt) { null }.offline)
     }
 
@@ -69,7 +63,6 @@ class WidgetFrameTest {
     fun theLiveNotificationKeepsThePlanSoNoRefreshButton() {
         assertEquals(false, frame(live = true).refreshButton)
         assertEquals(true, frame(live = false).refreshButton)
-        // A place shown still has one: the live notification doesn't fetch it.
         assertEquals(true, frame(live = true, mode = Mode.Nearby).refreshButton)
         assertEquals(false, frame(paired = false).refreshButton)
     }

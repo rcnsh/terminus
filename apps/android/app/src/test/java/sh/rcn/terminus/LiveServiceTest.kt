@@ -9,7 +9,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** What the live notification's header counts down to. */
 class LiveServiceTest {
     init {
         TestStrings.install()
@@ -43,7 +42,6 @@ class LiveServiceTest {
 
     @Test
     fun atTheStopItIsTheBusNotTheLeaveTime() {
-        // A class's leave-by is behind you at the stop: the bus the headline names.
         val json =
             JSONObject(
                 File(
@@ -58,7 +56,6 @@ class LiveServiceTest {
         assertNotNull(board)
         assertNotEquals(a.leaveAtMs, board)
         assertEquals(board, LiveService.countdownAt(a))
-        // A trip at the stop: its journey's bus too.
         val t = golden("last-bus-warning")
         assertEquals("waiting", t.card?.phase)
         assertEquals(t.card?.journey?.boardAtMs, LiveService.countdownAt(t))
@@ -73,7 +70,6 @@ class LiveServiceTest {
         assertNotNull(wake)
         assertTrue("not at the card's next change", wake != change)
         assertEquals(listOfNotNull(a.card?.remindAtMs, a.refreshAtMs).filter { it > now }.min(), wake)
-        // Never within a minute.
         val r =
             NextAnswer.parse(
                 JSONObject(

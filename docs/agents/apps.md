@@ -26,6 +26,24 @@ iPhone changes reach users only through a release
   It leaves the changes uncommitted and prints the commands that push them.
   How the workflow keeps Gradle away from its push token: ADR
   `0000-ci-jobs-split-by-what-they-hold.md`.
+  - `kotlin-stdlib-common` is excluded from every configuration: it's an
+    empty module since Kotlin 1.9.20, and Gradle keeps it in the graph
+    only while the lock pins `kotlin-stdlib`, so writing the locks drops it
+    and the next build refuses the lock it just wrote. `resolveAll`
+    resolves every configuration (lenient, for their files' hashes), which
+    the build tasks alone leave out.
+  - `settings.gradle.kts` asks each group of the repository that publishes
+    it (Google's Maven for Android, Google and androidx; Maven Central for
+    the rest, the Kotlin plugin markers included; never the Gradle Plugin
+    Portal), and lists them twice, since `pluginManagement` runs first:
+    keep the two alike. ktfmt runs from its Maven Central jar for that
+    reason, not through its plugin. The root `build.gradle.kts` applies
+    the Kotlin Android plugin `apply false` only to pin the Kotlin version
+    AGP's built-in Kotlin support uses, and pins a few of the plugins' and
+    lint's dependencies above AGP's for advisories (issue #171).
+  - The unit tests declare the files they read at run time (`fixtures/`,
+    the strings, the Kotlin sources' text) as inputs, so a change to one
+    reruns them rather than taking a cached pass.
 - Mac (CI, macOS runner): `swift build && swift test`, then
   `swift build -c release --arch arm64` in `apps/macos`.
 - iPhone (CI, macOS runner), in `apps/ios`: `python3 -I scripts/strings.py

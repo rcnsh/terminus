@@ -6,7 +6,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The ride on the bus: parsed from card.ride, placed by the clock. */
 class RideTest {
     init {
         TestStrings.install()
@@ -61,7 +60,6 @@ class RideTest {
 
     @Test
     fun theBusMovesStopByStopWithTheClock() {
-        // Three hops, three minutes each.
         val r = Ride("D2", listOf("PGP", "KR MRT", "LT27", "UTown"), board, arrive)
         assertEquals(0f, r.progress(board - 60_000))
         assertEquals("Next: KR MRT · 3 stops to go", r.nextText(board + 60_000))

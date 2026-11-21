@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import sh.rcn.terminus.ui.deviceIcon
 
-/** Settings › Devices names a watch from the server's `watch`, not its platform ("ios", as for an iPhone). */
 class DevicesTest {
     private fun device(platform: String?, watch: Boolean = false) = Device("a", "Apple Watch", platform, 0, 0, false, watch)
 

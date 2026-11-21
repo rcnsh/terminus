@@ -4,19 +4,11 @@ import kotlin.math.pow
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Where you go, for the app's tabs and the widget's buttons: favourites, ranked by how often you've asked for them lately, then the places
- * added from "Go somewhere else", newest first. Both the counts and the added places stay on the phone, never sent anywhere.
- */
 object Destinations {
-    /** A count halves over this many days, so last month's routine gives way to this month's. */
     private const val HALF_LIFE_DAYS = 14.0
-    /** Kept at most this many, dropping the least used. */
     private const val MAX_KEPT = 30
-    /** Added places kept: a new one past this drops the oldest. */
     const val MAX_ADDED = 5
 
-    /** A place to go: `place:<key>` for a favourite, `stop:<code>` for a stop or place looked up. */
     data class Dest(val id: String, val label: String)
 
     data class Use(val label: String, val count: Double, val lastMs: Long)
@@ -25,10 +17,6 @@ object Destinations {
 
     fun stopId(code: String) = "stop:$code"
 
-    /**
-     * The widget's buttons after Timetable and Nearby: favourites, the most used first (in their own order when nothing has been used),
-     * then the added places.
-     */
     fun rank(places: List<Place>, added: List<Dest>, used: Map<String, Use>, now: Long): List<Dest> {
         val saved =
             places
@@ -37,11 +25,9 @@ object Destinations {
                     compareByDescending<Triple<Dest, Int, Use?>> { (_, _, u) -> u?.let { weight(it, now) } ?: 0.0 }.thenBy { it.second }
                 )
                 .map { it.first }
-        // A place that is also a favourite shows once, as the favourite.
         return (saved + added).distinctBy { it.label.lowercase() }
     }
 
-    /** `dest` added at the front, unless it's there already or is a favourite; at most [MAX_ADDED]. */
     fun add(added: List<Dest>, dest: Dest, places: List<Place>): List<Dest> {
         if (added.any { it.id == dest.id } || places.any { it.label.equals(dest.label, ignoreCase = true) }) return added
         return (listOf(dest) + added).take(MAX_ADDED)
@@ -60,7 +46,6 @@ object Destinations {
         return u.count * 0.5.pow(days / HALF_LIFE_DAYS)
     }
 
-    /** One more use of `dest`: the old count decayed to now, plus one. */
     fun note(used: Map<String, Use>, dest: Dest, now: Long): Map<String, Use> {
         val before = used[dest.id]
         val next = used + (dest.id to Use(dest.label, (before?.let { weight(it, now) } ?: 0.0) + 1, now))

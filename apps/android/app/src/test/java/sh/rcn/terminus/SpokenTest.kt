@@ -11,7 +11,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** What TalkBack says for the card and the widget: the server's words as sentences, with nothing abbreviated. */
 class SpokenTest {
     init {
         TestStrings.install()
@@ -25,7 +24,6 @@ class SpokenTest {
     private val hhmm = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Singapore"))
     private val clock = { ms: Long -> hhmm.format(Instant.ofEpochMilli(ms)) }
 
-    /** Six minutes before it's time to leave, or a minute before the card goes stale if that's sooner. */
     private fun before(a: NextAnswer) = minOf(a.leaveAtMs!! - 6 * 60_000, (a.card?.staleAtMs ?: Long.MAX_VALUE) - 60_000)
 
     @Test
@@ -117,7 +115,6 @@ class SpokenTest {
         assertEquals("1 minute, live", Spoken.eta(60, "live"))
         assertEquals("Arriving", Spoken.eta(20, "live"))
         assertEquals(null, Spoken.eta(null, "unknown"))
-        // A quality this version doesn't know is no live time.
         assertEquals("about 6 minutes", Spoken.eta(360, "stale"))
     }
 

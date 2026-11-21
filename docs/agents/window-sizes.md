@@ -13,6 +13,11 @@ live: a fold, a rotation, a resized window or Split View changes it
 mid-session. The device, its idiom (`userInterfaceIdiom`, `isTablet`),
 the screen's size and the orientation never decide a layout.
 
+Only the words that name the device come from the device itself: "this
+tablet" on a tablet, "this phone" otherwise (Android `DeviceKind`: 600 dp or
+more at its narrowest and no hinge). It's decided once, so a foldable phone
+stays a phone open or shut, as the iPhone Duo does.
+
 | Width | Name | Layout |
 | --- | --- | --- |
 | under 600 | narrow | The phone layout. |

@@ -14,7 +14,6 @@ import sh.rcn.terminus.TestStrings
 import sh.rcn.terminus.parseNearby
 import sh.rcn.terminus.ui.NearbyText.Cell
 
-/** Nearby's rows as a stop's board, on the API's golden answer: where each bus is going and its next three buses, the next large. */
 class NearbyTextTest {
     init {
         TestStrings.install()
@@ -65,7 +64,6 @@ class NearbyTextTest {
 
     @Test
     fun theNextBusIsAlwaysTheLargeOneWhateverTheWalk() {
-        // An older answer's tooSoon is no longer read: the first bus is shown and said like any other.
         val older = JSONObject(File(fixtures, "nearby-list.json").readText())
         for (stop in older.getJSONArray("stops").let { a -> (0 until a.length()).map(a::getJSONObject) }) stop.getJSONArray("board").let { b
             ->
@@ -102,7 +100,6 @@ class NearbyTextTest {
 
     @Test
     fun aGuessUnderAMinuteIsAboutAMinuteNeverNow() {
-        // The server's words, and an older server's "now" for a timetabled bus, worded here.
         for (words in listOf("~1 min", "now", null)) {
             val c = NearbyText.cells(BoardRow("A2", 30, "scheduled", eta = words))[0]
             assertEquals(Cell("1", mark = "~", after = " min", next = true, said = "about 1 minute, estimated"), c)
@@ -134,9 +131,7 @@ class NearbyTextTest {
         assertEquals("~ is a guess from the timetable, not a live time.", foot(stops))
         val live = NearbyStop("PGP", "PGP", 120, true, listOf(BoardRow("A1", 300, "live", later = listOf(LaterBus(900, "live")))))
         assertNull(foot(listOf(live)))
-        // A row with no time says nothing about guesses, whatever its quality.
         assertNull(foot(listOf(live.copy(board = listOf(BoardRow("K", null, "scheduled"))))))
-        // A timetabled bus under a minute away is "~1 min", so it's explained.
         val soon = live.copy(board = listOf(BoardRow("A1", 30, "scheduled", eta = "now")))
         assertNotNull(foot(listOf(soon)))
     }

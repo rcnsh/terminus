@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FirstFixTest {
-    // COM3's stop, and points north of it (a degree of latitude is about 111 km).
     private val lat = 1.2949
     private val lon = 103.7749
 
@@ -43,9 +42,7 @@ class FirstFixTest {
     @Test
     fun onlyAFreshFixOverFiftyMetresAwayAsksAgain() {
         assertFalse(FirstFix.reload(lat, lon, lat, lon))
-        // About 40 m: the same stops, the same answer.
         assertFalse(FirstFix.reload(lat, lon, lat + 0.00036, lon))
-        // About 60 m.
         assertTrue(FirstFix.reload(lat, lon, lat + 0.00054, lon))
     }
 }

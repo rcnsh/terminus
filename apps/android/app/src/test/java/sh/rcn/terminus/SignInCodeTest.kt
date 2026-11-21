@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SignInCodeTest {
-    /** Types [s] one character at a time, as a keyboard does, from [start]. */
     private fun type(s: String, start: String = "") = s.fold(start) { code, c -> codeEdit(code, code + c) }
 
     @Test
@@ -56,7 +55,6 @@ class SignInCodeTest {
 
     @Test
     fun aPasteOverWhatWasTypedReplacesIt() {
-        // Pasted after a few typed characters, or into full boxes: the pasted code wins.
         assertEquals("7KQ2XM", codeEdit("AB", "AB7KQ2XM"))
         assertEquals("7KQ2XM", codeEdit("ABCDEF", "ABCDEF7KQ2XM"))
     }

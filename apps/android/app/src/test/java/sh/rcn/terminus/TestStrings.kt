@@ -4,7 +4,6 @@ import java.io.File
 import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 
-/** strings.xml for unit tests, which have no Context: [L] reads from here. `install("values-zh")` for the Chinese. */
 object TestStrings {
     fun read(dir: String): Map<String, String> {
         val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/$dir/strings.xml"))
@@ -12,7 +11,6 @@ object TestStrings {
         return (0 until nodes.length).associate { i ->
             val n = nodes.item(i)
             val raw = n.textContent
-            // A quoted string keeps its edge spaces; the quotes aren't part of it.
             val text = if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) raw.substring(1, raw.length - 1) else raw
             n.attributes.getNamedItem("name").nodeValue to unescape(text)
         }
