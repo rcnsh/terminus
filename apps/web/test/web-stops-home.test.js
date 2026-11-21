@@ -1,7 +1,3 @@
-/**
- * The Stops tab's home as drawn (apps/web/public/app/buses.js): which pinned
- * stop is on screen after one is unpinned, here or on its own page.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
@@ -9,7 +5,6 @@ import { useLang, web } from './_web.mjs';
 
 useLang('en');
 page({ url: 'https://terminus.run/app/#buses', html: '<div id="root"></div>' });
-// happy-dom has no layout to measure the pager's height with.
 globalThis.ResizeObserver ??= class {
   observe() {}
   disconnect() {}
@@ -43,14 +38,12 @@ test('a stop unpinned on its own page: back on the home, the stop that took its 
   B.chosen.set('YIH');
   await draw();
   assert.equal(shown(), 'YIH');
-  // Off to YIH's page (the home goes), unpinned there with its star, then back.
   await away();
   P.profile.set({ pinnedStops: ['COM3', 'UTOWN'] });
   await draw();
   assert.equal(shown(), 'UTOWN');
   assert.equal(B.chosen.get(), 'UTOWN');
 
-  // The last one unpinned the same way: the one before it.
   await away();
   P.profile.set({ pinnedStops: ['COM3'] });
   await draw();

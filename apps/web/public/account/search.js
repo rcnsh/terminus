@@ -1,15 +1,6 @@
-// Destination search: the ranking and wording behind the search box
-// (search-box.js), a short, ranked, grouped list under a text box. Plain
-// functions, so the API's tests import them. This is the reference: the
-// Android and Mac apps follow the same rules, written out with the cases
-// they're held to in fixtures/search.json.
-
 import { t } from './dom.js';
 
-// A service (in the Stops tab's search) before a stop that matches as well:
-// "a" lists A1 and A2 before AS 5.
 const KINDS = { timetable: 0, place: 1, class: 2, service: 3, stop: 4, landmark: 5, building: 6, room: 7 };
-/** A kind this page doesn't know yet (a newer server's) still lists, after every known one. */
 const kindRank = (kind) => KINDS[kind] ?? 8;
 const GROUP = {
   timetable: t('In your timetable'),
@@ -23,15 +14,12 @@ const GROUP = {
 };
 const MAX = 8;
 
-/** A code as typed any way: lower case, without spaces, hyphens or underscores ("COM1-0203" is "com10203"). */
 const norm = (s) => s.toLowerCase().replace(/[\s\-_]+/g, '');
 
-/** 0 exact, 1 starts with, 2 a word starts with, 3 contains; -1 no match. */
 export function score(d, query) {
   const q = query.trim().toLowerCase();
   if (!q) return -1;
   const names = [d.code.toLowerCase(), d.label.toLowerCase(), ...(d.aliases ?? []).map((a) => a.toLowerCase())];
-  // Only hyphens or underscores typed: nothing to match a code by.
   const nq = norm(q);
   const code = nq ? norm(d.code) : null;
   if (names.some((n) => n === q) || code === nq) return 0;
@@ -41,7 +29,6 @@ export function score(d, query) {
   return -1;
 }
 
-/** The best few (MAX), most useful first. Rooms only once the query says which. Ties keep `dests`' order. */
 export function rank(dests, query) {
   const q = query.trim();
   return dests
@@ -55,29 +42,18 @@ export function rank(dests, query) {
 
 const walkMin = (m, speedMs) => Math.max(1, Math.round(m / speedMs / 60));
 
-/** What a result's group is called in the list. */
 export const groupOf = (d) => GROUP[d.kind] ?? t('Other places');
-/** Which group a result is in: its kind, or one group for every kind this page doesn't know. */
 export const groupKey = (d) => (Object.hasOwn(GROUP, d.kind) ? d.kind : '?');
 
-/** The line under a result: where it takes you. `stopName(code)` names a stop. */
 export function metaOf(d, stopName, speedMs = 1.3) {
   if (d.kind === 'timetable' || d.kind === 'service') return d.detail;
   if (d.kind === 'stop') return t('Bus stop');
   if (d.kind === 'place' || d.kind === 'class') return t('{0} stop', stopName(d.stopCode));
-  // Served by more than one stop: the quicker one is used at the time.
   if (d.kind === 'landmark') return `${d.detail ? `${d.detail} · ` : ''}${t('{0} stop', d.stops.map(stopName).join(t(' or ')))}`;
   const code = d.label !== d.code ? `${d.code} · ` : '';
   return `${code}${t('{0} stop', stopName(d.stopCode))}${d.walkM != null ? t(', {0} min walk', walkMin(d.walkM, speedMs)) : ''}`;
 }
 
-/**
- * Ranked results as the box shows them, in groups: each kind's results
- * together, the groups in the order of each one's best result, and rank
- * order kept inside a group. So each heading shows once, however the scores
- * interleave the kinds (never Stops, Buildings, Stops again). Pinned results
- * come first, so their group leads. The apps group the same way.
- */
 export function grouped(list) {
   const groups = new Map();
   for (const d of list) {
@@ -88,15 +64,9 @@ export function grouped(list) {
   return [...groups.values()].flat();
 }
 
-/**
- * Whether `d` is the place pinned result `pin` already stands for: the same
- * result (kind and code), or the stop or food court a timetable row's classes
- * go to. A code alone isn't one place: the stop COM3 and the building COM3 are two.
- */
 export const samePlace = (pin, d) =>
   pin.code === d.code && (pin.kind === d.kind || (pin.kind === 'timetable' && (d.kind === 'stop' || d.kind === 'landmark')));
 
-/** The results for `query`, ranked: `pinned` first whenever they match. The box shows them grouped(). */
 export function results(query, { source, suggestions, pinned = () => [] }) {
   const q = query.trim();
   if (!q) return suggestions();
@@ -104,21 +74,13 @@ export function results(query, { source, suggestions, pinned = () => [] }) {
   return [...top, ...rank(source(), q).filter((d) => !top.some((x) => samePlace(x, d)))].slice(0, MAX);
 }
 
-/** What a picked result puts in the box: a room or a code by its code, anything else by its name. */
 export const pickedText = (d) => (d.kind === 'room' || d.label === d.code ? d.code : d.label);
 
-/** The stop a picked result goes to: a place with several stops is kept whole, so the router can pick. */
 export const pickedStop = (d) => (d.kind === 'landmark' ? d.code : d.stopCode);
 
-/**
- * The Stops tab's search, from /api/campus `c`: every service, by its code
- * (with where it runs), then every stop by its long name, found by that, its
- * short name, its code and the nicknames /api/campus has for it ("library").
- */
 export function busesTabIndex(c) {
   if (!c) return [];
   const byCode = new Map(c.stops.map((s) => [s.code, s]));
-  // As people say it ("Yusof Ishak House"), not its sign's short name ("YIH").
   const longName = (code) => byCode.get(code)?.longName ?? byCode.get(code)?.name ?? code;
   const services = Object.entries(c.routes)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

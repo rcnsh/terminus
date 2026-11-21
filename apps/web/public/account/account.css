@@ -1,8 +1,3 @@
-/* Account page, on top of /assets/site.css. */
-
-/* Sign-in: no card. The livery runs edge to edge under the header, and the
-   page itself holds two steps (form, then "check your inbox"), in a column
-   at most 560 wide at every width (docs/agents/window-sizes.md). */
 body:has(.signin) { overflow-x: clip; }
 .signin .livery { height: 110px; margin: 0 calc(50% - 50vw); border-radius: 0; }
 .signin-step { max-width: 528px; margin: 0 auto; padding-top: 28px; }
@@ -13,7 +8,6 @@ body:has(.signin) { overflow-x: clip; }
 .signin-form { margin-top: 24px; }
 .signin form label { margin-top: 0; }
 .signin .btn.wide { margin-top: 12px; }
-/* Empty, the error line takes no room; the next line keeps its own gap. */
 .signin .form-error:empty { min-height: 0; margin-top: 0; }
 .signin-alt { color: var(--muted); font-size: 0.95rem; margin-top: 16px; }
 #sent-step .form-error:empty + .hint.small { margin-top: 16px; }
@@ -23,8 +17,6 @@ body:has(.signin) { overflow-x: clip; }
 .sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
 #sent-step .btn { margin-top: 20px; }
 
-/* Settings (settings.js): a list of groups and their pages. On a phone one
-   at a time, sliding; from 800px (as `wide` in settings.js) side by side. */
 .settings { position: relative; overflow-x: clip; padding-top: 8px; }
 .settings-side { display: grid; gap: 16px; align-content: start; min-width: 0; }
 .settings-side .eyebrow, .settings-rail .eyebrow { margin-bottom: 10px; }
@@ -44,13 +36,9 @@ body:has(.signin) { overflow-x: clip; }
 .settings-row .chev, .page-back svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .settings-row .chev { color: var(--muted); }
 .settings-groups { display: grid; gap: 12px; }
-/* Your account at the top, in a card of its own. */
 .settings-row.set-account { padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .set-account .avatar { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--accent); color: var(--bg); font: 800 1.1rem var(--display); }
-/* A long email on one line, cut short, rather than broken mid-word. */
 .set-account .row-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Every other page as a row in a group, with its icon, and what it has set on
-   the right; side by side (from 800px), under its name. */
 .set-group { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
 .set-item { min-height: 56px; }
 .set-item .row-text { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -58,15 +46,11 @@ body:has(.signin) { overflow-x: clip; }
 .set-item .row-sum { min-width: 0; text-align: right; }
 .set-item .row-sum.off { color: var(--warn-ink); font-weight: 600; }
 .set-item .row-sum.todo { color: var(--accent); font-weight: 600; }
-/* Send feedback is its name alone, as in the apps. */
 .set-item[data-page="feedback"] .row-sum { display: none; }
 .set-ico { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
 .set-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Settings' shapes while its code loads (app/app.js SettingsSkeleton), pulsing. */
 .skel, .skel-line { animation: skel-pulse 1.4s ease-in-out infinite; }
 .skel { display: block; background: var(--surface-2); border-radius: 6px; }
-/* A line of text as a bar: as tall as the text it stands for (its class gives
-   the size), the bar itself thinner, so the row is the height it will be. */
 .skel-line { display: block; height: 1lh; width: 7rem; max-width: 100%; margin: 0; background: linear-gradient(var(--surface-2) 0 0) center / 100% 0.62em no-repeat; border-radius: 6px; }
 .skel-line.short { width: 4.5rem; }
 .skel-line.title { width: 9rem; }
@@ -76,7 +60,6 @@ body:has(.signin) { overflow-x: clip; }
 .skel-block { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 @keyframes skel-pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .skel, .skel-line { animation: none; } }
-/* The widget along the foot of a page on a phone (app.js Peek), opening to the whole card. */
 .peek { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 5; display: grid; gap: 8px; max-height: calc(100dvh - 24px); }
 .peek-card { overflow-y: auto; padding: 4px; }
 .peek-bar { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 16px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
@@ -85,19 +68,14 @@ body:has(.signin) { overflow-x: clip; }
 .peek-text .eyebrow { margin: 0; font-size: 0.7rem; }
 .peek-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .peek-bar .chev { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Open, the page behind steps back. */
 .peek.open::before { content: ""; position: fixed; inset: 0; z-index: -1; background: rgb(0 0 0 / 0.45); }
-/* Room under a page's last row for the bar. */
 .settings.page-open:has(.peek) .settings-page:not(.leaving) { padding-bottom: 88px; }
 @media (min-width: 800px) { .peek { display: none; } }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
-/* About: the words, then its links as rows like the list's. */
 .about-text { display: grid; gap: 10px; }
 .about-text p { margin: 0; }
 a.settings-row { text-decoration: none; }
-/* Two or three choices as pills on one track (settings-pages.js Pills): radios
-   underneath, kept inside their pill so none sticks out past the page. */
 .segmented { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface-2); }
 .segmented label { position: relative; margin: 0; }
 .segmented input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }
@@ -107,13 +85,10 @@ a.settings-row { text-decoration: none; }
 .segmented span { display: block; padding: 6px 12px; border-radius: 999px; font-size: 0.875rem; color: var(--muted); cursor: pointer; }
 .segmented input:checked + span { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.12); }
 .segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* In the dark the chosen pill is a step lighter than the track: the card's own colour barely shows on it. */
 :root[data-theme="dark"] .segmented input:checked + span { background: color-mix(in srgb, var(--ink) 14%, var(--surface)); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .segmented input:checked + span { background: color-mix(in srgb, var(--ink) 14%, var(--surface)); }
 }
-/* Your trips: groups of one-line rows, a setting's name on the left and its
-   control on the right; on a narrow screen a wide control goes under. */
 .trips { display: grid; gap: 20px; }
 .trips-group > .eyebrow { margin: 0 0 8px 16px; }
 .trips-group .group-hint { margin: 8px 16px 0; font-size: 0.85rem; }
@@ -123,7 +98,6 @@ a.settings-row { text-decoration: none; }
 .field-sub { display: block; margin-top: 2px; font-size: 0.85rem; color: var(--muted); }
 .field-control { flex: 0 1 auto; display: flex; justify-content: flex-end; min-width: 0; max-width: 100%; }
 .field-control select { width: auto; max-width: 100%; min-width: 11rem; }
-/* "Pick the stop nearest me" and the like belong to the row above. */
 .field:has(+ .field-note) { border-bottom: 0; padding-bottom: 4px; }
 .field-note { padding-top: 0; padding-bottom: 12px; justify-content: flex-start; }
 @media (max-width: 560px) {
@@ -131,31 +105,25 @@ a.settings-row { text-decoration: none; }
   .field-control > select { width: 100%; }
 }
 .field-note .link-btn { padding: 0; }
-/* A wide control on its own line, under the setting's name (the pace, a link to import). */
 .field.stack { display: grid; justify-content: stretch; gap: 10px; }
 .field.stack > label { margin: 0; }
-/* A choice from a long list as its value and a chevron, as a row in the list does. */
 .field-control select.plain {
   appearance: none; field-sizing: content; width: auto; min-width: 0; padding: 6px 24px 6px 6px; border: 0; border-radius: 8px; text-align: right; text-align-last: right; color: var(--muted); cursor: pointer;
   background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a847e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") right 2px center / 18px no-repeat;
 }
 .field-control select.plain:hover { background-color: var(--surface-2); }
-/* The value stays beside the name, however narrow: it's short, and the name wraps first. */
 .field:has(select.plain) { flex-wrap: nowrap; }
 .field:has(select.plain) > label { flex: 1 1 auto; min-width: 0; }
 @media (max-width: 560px) {
   .field-control:has(> select.plain) { flex-basis: auto; }
   .field-control > select.plain { width: auto; max-width: 62vw; }
 }
-/* A box and its button (a NUSMods link and Import, a key's name and Create) side by side, even on a phone. */
 .trips-group .row { flex-wrap: nowrap; }
 .trips-group .row .btn { width: auto; flex: none; }
-/* − value +, for small steps. */
 .stepper { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .stepper button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink); font: 600 1.05rem/1 var(--font); cursor: pointer; }
 .stepper button:disabled { opacity: 0.4; cursor: default; }
 .stepper output { min-width: 4.6rem; text-align: center; font-variant-numeric: tabular-nums; }
-/* Rows that aren't fields (a list, the classes) in a group's card, and its last row: "+ Add …". */
 .group-body { padding: 4px 16px; border-bottom: 1px solid var(--line); }
 .group-body:last-child { border-bottom: 0; }
 .add-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: 0; background: none; color: var(--ink); font: 500 0.95rem var(--font); text-align: left; cursor: pointer; }
@@ -163,27 +131,21 @@ a.settings-row { text-decoration: none; }
 .add-row:hover { background: var(--surface-2); }
 .add-row[aria-expanded="true"] { border-bottom: 1px solid var(--line); }
 .add-form { padding-top: 0; padding-bottom: 14px; }
-/* Scrolled into view on opening: clear of the app's tab bar, with a little room. */
 .add-form { scroll-margin-bottom: 16px; }
 body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px); }
-/* Delete account: the only red on any page, alone in its card at the foot. */
 .settings-row.danger-row .row-title { color: var(--bad); }
 .unit { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
 .unit .unit-and { display: inline; margin: 0; font-size: inherit; color: inherit; }
 .unit input[type="time"] { width: auto; padding: 6px 10px; border: 0; background: var(--surface-2); }
 .trips .list { margin: 0; padding: 0 16px; }
-/* A checkbox drawn as an on/off switch. */
 .switch { appearance: none; width: 44px; height: 26px; padding: 0; border: 0; border-radius: 999px; background: var(--line-strong); position: relative; cursor: pointer; flex: none; transition: background 0.15s; }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 0.15s; }
 .switch:checked { background: var(--accent); }
 .switch:checked::after { transform: translateX(18px); }
-/* On the dark theme's bright orange, a dark knob: white was 2.3:1. */
 :root[data-theme="dark"] .switch:checked::after { background: #1c1917; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .switch:checked::after { background: #1c1917; }
 }
-/* Forced colours (Windows' contrast themes): the system's own colours for
-   what is on (a switch, the chosen pill, a ride on the line). */
 @media (forced-colors: active) {
   .switch { forced-color-adjust: none; border: 1px solid ButtonText; background: Canvas; }
   .switch::after { background: ButtonText; box-shadow: none; }
@@ -204,34 +166,26 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .page-back { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 999px; background: none; color: var(--ink); cursor: pointer; }
 .page-back:hover { background: var(--surface-2); }
 .page-back:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* The view sliding away, kept where it was on screen while the new one comes in. */
 .settings .leaving { position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; }
 .settings-page:not(.leaving) { position: relative; z-index: 2; }
 @media (max-width: 799.98px) {
   .settings.page-open .settings-side:not(.leaving) { display: none; }
 }
 @media (min-width: 800px) {
-  /* At least 20rem, and wider when the card's trip line needs it: its stops
-     don't shrink, so a fixed 20rem let the card spill over the column beside. */
   .settings { display: grid; grid-template-columns: minmax(20rem, min-content) minmax(0, 1fr); gap: 24px; align-items: start; }
   .settings-side { position: sticky; top: 16px; }
   .page-back { display: none; }
   .page-head { margin-left: 0; }
-  /* Chosen: a fill of the accent, rounded, nothing else (docs/agents/window-sizes.md). */
   .settings-row[aria-current] { background: var(--chosen); }
-  /* The list in its pane: the same cards and chevrons as on a phone, what each has set under its name. */
   .set-item .row-text { display: grid; gap: 1px; }
   .set-item .row-sum { text-align: left; font-size: 0.8rem; }
 }
-/* Wider still, on the account page: the list, the page, and the widget it changes, side by side. */
 @media (min-width: 1100px) {
   body:has(.settings.has-rail) .wrap { max-width: 84rem; }
   .settings.has-rail { grid-template-columns: 17rem minmax(0, 1fr) minmax(20rem, 24rem); gap: 32px; }
   .settings-rail { position: sticky; top: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
 }
 
-/* A card's own heading; not the Now card's headline (when to go, Done for
-   today), which is a heading too but sized by the card's style. */
 .card h2:where(:not(.go, .done-label)) { font-size: 1.15rem; margin-bottom: 4px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.tight input { width: 7.5rem; }
@@ -243,9 +197,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .btn.wide { width: 100%; }
 .locate { margin-top: 10px; font-size: 0.9rem; }
 
-/* Preview: when to set off. A class leads with it; the next bus sits below a rule. */
-/* A class: one colour for "go" (the countdown), ink for the bus, grey for the
-   rest. Red only when the plan arrives late. */
 .widget .catch { margin-top: 8px; font-weight: 600; color: var(--ink); }
 .widget .arrive { color: var(--muted); font-size: 0.9rem; }
 .widget .catch.late, .widget .arrive.late, .widget .big.late { color: var(--bad-ink); }
@@ -254,7 +205,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .widget .countdown { margin-top: 2px; font-weight: 600; font-size: 0.9rem; font-variant-numeric: tabular-nums; color: var(--accent); }
 .widget .countdown.gone { color: var(--muted); }
 .widget .leave { margin-top: 8px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
-/* The trip's phase, the same on every device, and the server's buttons. */
 .widget .phase { display: inline-block; margin-bottom: 8px; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); }
 .widget .ride-progress { margin: 2px 0 10px; }
 .widget .ride-progress progress { width: 100%; height: 6px; appearance: none; border: 0; border-radius: 999px; background: var(--surface-2); overflow: hidden; accent-color: var(--accent); }
@@ -265,16 +215,13 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .widget .notice { margin-bottom: 10px; font-size: 0.9rem; color: var(--warn-ink); }
 .widget .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
-/* A trip by bus or on foot (journey.js): Steps or Route, as on Android. */
 .journey .big.late, .journey .under.late, .journey .late { color: var(--bad-ink); }
 .journey .under { color: var(--muted); font-size: 0.95rem; font-variant-numeric: tabular-nums; }
 .bus-badge { display: inline-block; padding: 1px 7px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; line-height: 1.4; }
-/* A public bus: the fare sign after its number, a touch lighter than the number. */
 .bus-badge .fare { margin-left: 0.3em; font-weight: 600; }
 .route-line { display: flex; align-items: flex-start; margin: 18px 0 4px; }
 .route-line .above { display: grid; place-items: center; height: 24px; }
 .route-line .point { display: grid; justify-items: center; width: 76px; flex: none; text-align: center; }
-/* Four points (the walk on from the stop to a room): each only as wide as its words, so the line still fits a phone. */
 .route-line.walk-on .point { width: auto; min-width: 44px; max-width: 72px; }
 .route-line .dot { width: 14px; height: 14px; margin: 2px 0; border-radius: 50%; background: var(--ink); }
 .route-line .you .dot { background: var(--accent); }
@@ -289,24 +236,20 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .journey .tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--surface-2); }
 .journey .tag.live { color: var(--good-ink); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .journey .backup { margin-top: 8px; font-size: 0.9rem; color: var(--muted); }
-/* "Leave in 6 min": one line, the time in the accent (journey.js LeaveHead). */
 .journey .lead { margin: 2px 0 4px; font: 800 2.1rem/1.1 var(--display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .journey .lead .go, .journey .lead.go { color: var(--accent); }
 .journey .lead.late { color: var(--bad-ink); }
 .journey .steps-under { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .journey .steps-under .under { margin-right: 4px; }
-/* Steps: the trip as a line, as on a route map. Time | the line | what's there. */
 .journey .line { list-style: none; margin: 18px 0 0; padding: 0; }
 .journey .line .pt { display: grid; grid-template-columns: 5.2rem 22px minmax(0, 1fr); column-gap: 12px; min-height: 64px; }
 .journey .line .pt.end { min-height: 0; }
 .journey .line .time { padding-top: 1px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .journey .line .what { display: grid; align-content: start; gap: 2px; padding-bottom: 14px; min-width: 0; }
-/* A long stop's name wraps rather than being cut off: it's where to catch the bus. */
 .journey .line .what strong { font-size: 1.05rem; overflow-wrap: anywhere; }
 .journey .line .what small { color: var(--muted); font-size: 0.85rem; }
 .journey .line .end .what { padding-bottom: 0; }
 .journey .line .late .time, .journey .line .late .what small { color: var(--bad-ink); }
-/* The dot, then the line on to the next point: dotted for a walk, the bus's colour for a ride. */
 .journey .line .rail { position: relative; }
 .journey .line .rail::before { content: ''; position: absolute; z-index: 1; top: 3px; left: 3px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; background: var(--bg); border: 3px solid var(--ink); }
 .journey .line .start .rail::before { background: var(--accent); border-color: var(--accent); }
@@ -317,7 +260,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .journey .line .ride .rail::after { background: var(--ride, var(--ink)); }
 .journey .line .bus-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .journey .line .bus-line small { white-space: nowrap; }
-/* The bus to go on instead: information, not a control, so no box (journey.js Steps). */
 .journey .backup-line { display: flex; gap: 8px; align-items: center; margin: 14px 0 0; font-size: 0.9rem; color: var(--muted); }
 .journey .backup-line svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .journey .tag.live .dot { width: 7px; height: 7px; }
@@ -329,7 +271,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 
 .classes { padding-bottom: 6px; }
 .day { margin: 14px 0 4px; font: 600 0.75rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-/* A class: its name, then when and its stop; opened, the stop to change and Remove. */
 .cls { border-top: 1px solid var(--line); font-size: 0.93rem; }
 .cls:first-of-type, .day + .cls { border-top: 0; }
 .cls summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 8px 0; cursor: pointer; list-style: none; }
@@ -358,7 +299,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .dev-ico { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-/* Earlier bus, Best bus, Later bus: the earlier at the left, the later at the right, under the bus. */
 .step-bus { display: flex; gap: 8px; margin-top: 10px; }
 .step-bus .btn { flex: 1 1 0; white-space: nowrap; }
 .suggestion { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 0.93rem; line-height: 1.4; }
@@ -372,24 +312,17 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .code-input::placeholder { color: var(--muted); opacity: 1; }
 .code { font: 700 1.7rem/1 ui-monospace, "SF Mono", monospace; letter-spacing: 0.16em; margin: 14px 0 4px; }
 
-/* Bottom right, clear of the buttons in the content column. A problem
-   stays, with × to close it, so it can be clicked. */
 .toast { position: fixed; z-index: 25; bottom: 18px; right: 18px; max-width: calc(100vw - 36px); display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px; border-radius: 18px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 .toast.error.show, .toast.has-action.show { pointer-events: auto; }
-/* Undo: a pill in the toast's own colours, readable on it in either theme. */
 .toast-action { flex: none; margin: -4px -6px -4px 6px; padding: 3px 12px; border: 1px solid currentColor; border-radius: 999px; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
 .toast-action:hover { background: color-mix(in srgb, var(--bg) 14%, transparent); }
 .toast-action:focus-visible { outline-color: var(--bg); outline-offset: -2px; }
 .toast-close { flex: none; margin: -6px -8px -6px 0; padding: 4px 10px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .toast-close:focus-visible { outline-color: var(--bg); outline-offset: -2px; }
 
-/* ---------- Onboarding ----------
-   Motion is short and quiet: steps slide 16px and fade, the progress bar
-   grows, choices change colour. Reduced motion gets none of it. */
 :root { --ob-ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
 
-/* In the 560 column at every width, as sign-in. */
 .onboard { max-width: 528px; margin: 5vh auto 0; }
 .onboard.leaving { opacity: 0; transform: translateY(-6px); transition: opacity 0.24s ease-in, transform 0.24s ease-in; }
 .ob-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -411,7 +344,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 @keyframes ob-in-fwd { from { opacity: 0; transform: translateX(16px); } }
 @keyframes ob-in-back { from { opacity: 0; transform: translateX(-16px); } }
 
-/* Walking pace: three cards, one chosen. */
 .ob-paces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 6px; }
 .ob-pace {
   display: grid; align-content: start; gap: 4px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
@@ -432,8 +364,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .ob-app:hover { border-color: var(--accent); }
 @media (max-width: 560px) { .ob-apps { grid-template-columns: 1fr; } }
 
-/* The account page fades in when #app appears. */
-/* Backwards, not both: a transform kept after it would hold the widget's bar (.peek) to #app, not the screen. */
 #app:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) backwards; }
 @keyframes ob-appear { from { opacity: 0; transform: translateY(6px); } }
 
@@ -443,9 +373,7 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   .ob-out-fwd, .ob-out-back { transform: none; }
 }
 
-/* ---------- Destination search ---------- */
 .search { position: relative; }
-/* The browser's clear button is its own blue: an X in the page's muted ink instead. */
 .search input[type="search"]::-webkit-search-cancel-button {
   -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-left: 6px; cursor: pointer;
   background: var(--muted);
@@ -470,17 +398,13 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .search-empty { padding: 10px; color: var(--muted); font-size: 0.9rem; }
 @media (prefers-reduced-motion: reduce) { .search-list { animation: none; } }
 
-/* API keys: the new key, shown once. */
 .new-key { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
 .new-key .warn-text { margin: 0 0 8px; }
 .new-key code { font: 0.8rem/1.4 ui-monospace, "SF Mono", monospace; word-break: break-all; }
 .new-key .row code { flex: 1; user-select: all; }
 .new-key .hint code { display: block; margin-top: 4px; }
 
-/* "Is this wrong?" under the preview. */
-/* Under the answer, not part of it: no louder than the time beside it. */
 .report-open { font-size: 0.8rem; padding: 8px 0; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
-/* Its sheet: up from the foot of the screen, where the link is; from 600 wide a dialog in the middle, at most 560 wide. */
 .report-sheet {
   position: fixed; inset: auto 0 0; width: 100%; max-width: 520px; max-height: min(92dvh, 720px); margin: 0 auto;
   padding: 0; border: 0; border-radius: 24px 24px 0 0; background: var(--surface); color: var(--ink);
@@ -490,7 +414,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .report-sheet[open] { animation: report-up 0.22s ease-out; }
 @keyframes report-up { from { transform: translateY(24px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .report-sheet[open] { animation: none; } }
-/* Cancel where the iPhone's sheet has it, from 600 wide: a dialog in the middle has no handle to drag down. */
 .report-cancel { display: none; }
 @media (min-width: 600px) {
   .report-sheet { inset: 0; margin: auto; height: fit-content; border-radius: 24px; }
@@ -531,15 +454,11 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .list li.place { flex-direction: column; align-items: stretch; }
 .place-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
-/* A button that reads as a link: Today's Undo. */
 .linkish { background: none; border: 0; padding: 10px 4px; color: var(--muted); font: inherit; font-size: 0.875rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .linkish:hover { color: var(--ink); }
-/* Who's signed in, at the top of Account: in the web app (no header there),
-   and on the account page when its header has no room for these buttons. */
 .field.account-who { flex-wrap: nowrap; gap: 12px; }
 .account-who .avatar { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--accent); color: var(--bg); font: 800 1.05rem var(--display); }
 .field-email { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
-/* Appearance: the theme, one choice per line. */
 .theme-choice { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
 .theme-choice legend { padding: 0; margin-bottom: 4px; font-size: 0.9rem; color: var(--muted); }
 .theme-choice .check { margin: 0; }
@@ -547,21 +466,14 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 @media (min-width: 640px) { .narrow-only { display: none; } }
 @media (max-width: 639.98px) { .nav-links #add-email, .nav-links #logout { display: none; } }
 
-/* Settings › Appearance: the card styles in one card, each with a made-up
-   trip drawn in its own box, edged in the accent when it's the one chosen. */
-/* The chosen card style, drawn under its pills (settings-pages.js Appearance). */
 .style-preview { padding: 12px 16px 16px; }
 .style-preview .hint { margin: 0 0 10px; }
 .style-preview .widget { box-shadow: none; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--bg); pointer-events: none; }
-/* About: the mark and the name over the words. */
 .about-head { display: flex; align-items: center; gap: 12px; }
 .about-head img { width: 44px; height: 44px; border-radius: 12px; }
 .about-head strong { font: 700 1.2rem var(--display); }
 .about-text { padding: 0 4px; }
 
-/* Send feedback (settings-pages.js Feedback): one card like a message. The
-   From line, the note as the card's own body (no box inside the box), then
-   the counter and Send. */
 .compose { padding: 0; overflow: hidden; }
 .compose-from { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 16px; border-bottom: 1px solid var(--line); }
 .compose-key { flex: none; min-width: 2.6rem; color: var(--muted); font-size: 0.9rem; }
@@ -571,12 +483,10 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
   border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; line-height: 1.5;
 }
 .compose textarea:focus { outline: none; }
-/* The note is the card's body, so the card shows where the focus is. */
 .compose:focus-within:has(textarea:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .compose-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; border-top: 1px solid var(--line); }
 .compose-count { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; transition: color 0.2s; }
 .compose-count.near { color: var(--warn); }
-/* A stop suggestion's fields each take the row's width, as its stop menu does. */
 .compose-msg { margin: 10px 4px 0; }
 .compose-wrong { display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 14px 16px; }
 .compose-wrong svg { flex: none; width: 20px; height: 20px; margin-top: 2px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -584,8 +494,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .compose-wrong .row-title, .compose-wrong .hint { display: block; }
 .compose-wrong .hint { margin: 2px 0 0; }
 
-/* Done for today, or nothing to catch (preview.js DayDone): the label large
-   on a panel, a night sky after your day, then your favourites as tiles. */
 .done-panel { position: relative; overflow: hidden; padding: 28px 22px 24px; border-radius: 28px; background: var(--surface-2); }
 .done-panel.night { padding-top: 104px; color: #f2efeb; background: linear-gradient(#121a33, #181a30, #1c1b26); }
 .done-label { position: relative; font: 800 2.35rem/1.1 var(--display); letter-spacing: -0.02em; }
@@ -593,7 +501,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .done-panel.night .done-detail { color: #c9c3bd; }
 .night-sky { position: absolute; inset: 0; pointer-events: none; }
 .night-sky .star { position: absolute; width: 2.6px; height: 2.6px; border-radius: 50%; background: #fff; }
-/* A crescent: the moon, with the sky's own colour over most of it. */
 .night-sky .moon { position: absolute; top: 28px; right: 36px; width: 56px; height: 56px; border-radius: 50%; background: #fde9c9; -webkit-mask: radial-gradient(circle at 76% 28%, transparent 25px, #000 26px); mask: radial-gradient(circle at 76% 28%, transparent 25px, #000 26px); }
 .day-done .going { margin: 22px 0 10px; }
 .place-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -606,9 +513,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .place-tile span { font-size: 0.8rem; color: var(--muted); }
 .done-hint { margin: 12px 0 0; font-size: 0.85rem; }
 
-/* A stop's sign (Nearby in the web app, your stops in setup): its name on a
-   plate a shade off the card, the bus mark in the accent, what's there under
-   it. Not inverted: in the dark a near-white plate glared off every stop. */
 .stop-sign { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .stop-sign .plate { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 8px 0 14px; background: color-mix(in srgb, var(--ink) 5%, var(--surface)); border-bottom: 1px solid var(--line); color: var(--ink); }
 .stop-sign .plate-bus { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -618,7 +522,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .sign-services { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 14px; }
 .sign-services .svc-tag, .ob-bus .svc-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4em; padding: 2px 7px; border-radius: 6px; background: var(--svc); color: var(--svc-ink, var(--bg)); font-weight: 700; font-size: 0.8rem; }
 
-/* Setup's progress, as a route: a stop per step, the line filled up to this one. */
 .ob-line { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 4px 0 18px; padding: 0; list-style: none; }
 .ob-line::before, .ob-line::after { content: ''; position: absolute; top: 7px; left: 12.5%; height: 4px; border-radius: 2px; }
 .ob-line::before { right: 12.5%; background: var(--line-strong); }
@@ -628,7 +531,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .ob-line .passed .ob-stop { border-color: var(--accent); background: var(--accent); }
 .ob-line .here .ob-stop { border-color: var(--accent); }
 .ob-line .here, .ob-line .passed { color: var(--ink); }
-/* Halls as tiles, two to a row; the chosen one filled and ticked. */
 .ob-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
 .ob-tile { position: relative; display: grid; align-content: center; gap: 2px; min-height: 64px; padding: 11px 13px; text-align: left; font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 16px; cursor: pointer; }
 .ob-tile .hint { font-size: 0.8rem; }
@@ -636,11 +538,9 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .ob-tile.on::after { content: ''; position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 13px no-repeat; }
 .ob-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ob-label { margin: 18px 0 8px; }
-/* Where most students live: bigger than the rest, so most people are done at a glance. */
 .ob-tiles.ob-common, .ob-tiles.ob-rest { margin-top: 0; }
 .ob-common .ob-tile { min-height: 76px; font-size: 1rem; }
 .ob-signs { display: grid; gap: 8px; }
-/* Pace: a running track, the lap's time at your pace in the infield. */
 .ob-track { position: relative; margin-top: 18px; }
 .ob-track svg { display: block; width: 100%; height: auto; }
 .ob-track .infield { fill: #cfe5c3; }
@@ -649,7 +549,6 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 .ob-track-text strong { font: 800 2.4rem/1 var(--display); letter-spacing: -0.03em; }
 .ob-track-text span { font-size: 0.8rem; font-weight: 600; }
 .ob-lap { text-align: center; margin: 6px 0 0; font-size: 0.85rem; }
-/* Busy buses: the switch, then what it does: the earlier bus instead of the packed one. */
 .ob-busy { margin-top: 14px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 18px; }
 .ob-busy-row { display: flex; align-items: center; gap: 12px; margin: 0; padding: 8px 0; color: var(--ink); font-size: 1rem; cursor: pointer; }
 .ob-busy-row > span { display: grid; gap: 2px; flex: 1; }
@@ -664,15 +563,12 @@ body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-
 :root[data-theme="dark"] .ob-track .infield { fill: #1e3a26; }
 :root[data-theme="dark"] .ob-track-text { color: #bbf7d0; }
 
-/* An account with no email: adding one, at the top of Account, where it can't be missed. */
 .add-email { display: grid; gap: 8px; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); }
 .add-email h3 { margin: 0; font-size: 1.1rem; }
 .add-email .hint { margin: 0; line-height: 1.5; }
 .add-email .btn { margin-top: 6px; }
-/* In the list, the line under "No email" says what to do, in the accent. */
 .set-account .row-sum.add { color: var(--accent); font-weight: 600; }
 
-/* The next class on a card of its own (preview.js UpcomingCard). */
 .upcoming { display: grid; gap: 4px; margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); }
 .upcoming .eyebrow { margin: 0 0 2px; color: var(--accent); }
 .upcoming strong { font: 700 1.35rem/1.25 var(--font); }

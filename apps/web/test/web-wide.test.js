@@ -1,14 +1,8 @@
-/**
- * The web app in a wide window (docs/agents/window-sizes.md): the same
- * widths in every file that lays it out, the rail in place of the bar, and
- * the Stops tab as list and detail (apps/web/public/app/buses.js).
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
 import { read, useLang, web } from './_web.mjs';
 
-/** The body of the first rule for exactly `sel` inside the `@media (min-width: 800px)` blocks of `css`. */
 function wideRule(css, sel) {
   for (const block of css.split('@media (min-width: 800px) {').slice(1)) {
     const at = block.indexOf(`\n  ${sel} {`);
@@ -22,7 +16,6 @@ test('the bar along the bottom is a rail down the left edge from 800 wide, and t
   assert.match(wideRule(css, '.tabbar'), /flex-direction: column/);
   assert.match(wideRule(css, '.tabbar'), /width: var\(--rail-w\)/);
   assert.match(wideRule(css, 'body.app'), /padding-left: var\(--rail-w\)/);
-  // Nothing sits above a bar that isn't there: the map, the toast and Settings' forms reach the bottom.
   assert.match(wideRule(css, ':root'), /--tabbar-h: 0px/);
 });
 
@@ -30,7 +23,6 @@ test("Now's sky, the horizon and Settings' bands reach the page's edges beside t
   const css = read('app/app.css');
   const half = ':root { --half: calc((100vw - var(--rail-w, 0px)) / 2); }';
   assert.ok(css.includes(half));
-  // Every other reach to the edges goes through --half.
   assert.deepEqual(css.replace(half, '').match(/\b(50|100)vw\b/g), null);
   assert.match(css, /\.map-tab \{[^}]*inset: 0 0 calc\(var\(--tabbar-h\) \+ env\(safe-area-inset-bottom\)\) var\(--rail-w\)/);
 });
@@ -48,11 +40,10 @@ test('Settings keeps to the 560 column under 800, as Now and Stops do, and takes
 test('every part of the app switches to two panes at the same width', () => {
   const queries = (src) => [...src.matchAll(/min-width: (\d+)px/g)].map((m) => Number(m[1]));
   for (const file of ['app/app.js', 'app/buses.js']) assert.deepEqual([...new Set(queries(read(file)))], [800], file);
-  // Settings: side by side from 800; the account page's third column from 1100.
   assert.deepEqual([...new Set(queries(read('account/settings.js')))].sort(), [1100, 800]);
   const account = read('account/account.css');
   assert.match(account, /@media \(max-width: 799\.98px\) \{\n {2}\.settings\.page-open/);
-  assert.match(account, /@media \(min-width: 800px\) \{\n {2}\/\* At least 20rem/);
+  assert.match(account, /@media \(min-width: 800px\) \{\n {2}\.settings \{ display: grid;/);
   assert.doesNotMatch(account, /899\.98px/);
 });
 
@@ -61,7 +52,6 @@ test('dialogs are centred from 600 wide and at most 560 wide; sign-in and setup 
   assert.match(account, /@media \(min-width: 600px\) \{\n {2}\.report-sheet \{ inset: 0; margin: auto;/);
   const max = Number(/\.report-sheet \{[^}]*max-width: (\d+)px/.exec(account)[1]);
   assert.ok(max <= 560, `report sheet ${max} wide`);
-  // The wrap's 16 px gutters each side make these 560 in all.
   assert.match(account, /\.signin-step \{ max-width: 528px;/);
   assert.match(account, /\.onboard \{ max-width: 528px;/);
   assert.doesNotMatch(account, /\.signin-step \{[^}]*grid-template-columns/);
@@ -76,7 +66,6 @@ test('chosen is a rounded fill of the accent and nothing else, and only the trai
   assert.match(stops, /border-radius: 12px; background: var\(--chosen\);/);
   assert.match(css, /\.bt-pager-page\.open \.stop-sign \.plate \{ border-color: transparent; background: var\(--chosen\); \}/);
   assert.match(account, /\.settings-row\[aria-current\] \{ background: var\(--chosen\); \}/);
-  // No bar, no outline, no coloured chevron.
   assert.doesNotMatch(css + account, /aria-current\][^{]*\{[^}]*(box-shadow|border-color|outline)/);
   assert.doesNotMatch(css + account, /aria-current\] \.chev/);
   assert.match(css, /\.bt-list \.celestial, \.settings-tab \.settings-side \.celestial \{ display: none; \}/);
@@ -86,7 +75,6 @@ test("Elsewhere sits at the trailing end of the chips' row, and the report's foo
   const css = read('app/app.css');
   assert.match(css, /\.app-chips \.chip-search \{[^}]*margin-left: auto;/);
   assert.match(wideRule(css, '.app-main.split .app-card > .card-foot.card-foot'), /position: absolute;/);
-  // One CardFoot, always in the card: Now going between one column and two doesn't remount the report.
   const app = read('app/app.js');
   assert.equal(app.match(/<\$\{CardFoot\} \/>/g).length, 1);
 });
@@ -97,7 +85,6 @@ globalThis.ResizeObserver ??= class {
   observe() {}
   disconnect() {}
 };
-// A window 1280 wide.
 globalThis.matchMedia = (q) => {
   const min = /min-width: (\d+)px/.exec(q);
   return { matches: Boolean(min) && Number(min[1]) <= 1280, addEventListener() {}, removeEventListener() {} };
@@ -111,7 +98,6 @@ P.campus.set({
   routes: { A1: { seq: ['KTR', 'LT13', 'AS5'], loop: true, color: '#d32f2f', name: 'Loop from KR Bus Ter' } },
 });
 P.profile.set({ pinnedStops: [] });
-// No feed here: nothing answers, so a line is drawn from the campus data.
 globalThis.fetch = () => new Promise(() => {});
 
 const root = document.getElementById('root');
@@ -129,7 +115,6 @@ test('Stops in a wide window: the home beside the page opened from it, Back only
   assert.ok(root.querySelector('.bt-split .bt-list .bt-services'), 'the home on the left');
   assert.equal(detail().querySelector('.bt-choose').textContent, 'Choose a stop or a service.');
 
-  // A service picked on the home: its line beside it, the row marked, no Back.
   root.querySelector('.bt-list .bt-service').click();
   await go(location.hash);
   assert.equal(location.hash, '#buses/line/A1');
@@ -138,14 +123,12 @@ test('Stops in a wide window: the home beside the page opened from it, Back only
   assert.equal(root.querySelector('.bt-list .bt-service').getAttribute('aria-current'), 'true');
   assert.ok(root.querySelector('.bt-list .bt-services'), 'the home still there');
 
-  // A stop on that line: its page beside the home, with Back to the line.
   detail().querySelector('.bt-stop button').click();
   await go(location.hash);
   assert.equal(location.hash, '#buses/stop/KTR');
   assert.equal(detail().querySelector('.bt-back').getAttribute('aria-label'), 'Back to A1');
   assert.equal(root.querySelector('.bt-list .bt-service').getAttribute('aria-current'), null);
 
-  // The service picked on the home again, with that stop open: the line takes the stop's place, still no Back.
   root.querySelector('.bt-list .bt-service').click();
   await go(location.hash);
   assert.equal(location.hash, '#buses/line/A1');
@@ -172,7 +155,6 @@ test('Stops search in a wide window: its results take the home pane, as rows wit
   await go(location.hash);
   assert.equal(location.hash, '#buses/stop/LT13');
   assert.equal(root.querySelector('.bt-list #bt-results .bt-result-stop').getAttribute('aria-current'), 'true');
-  // Cleared: the home again.
   B.findText.set('');
   await settle();
   assert.equal(root.querySelector('#bt-results'), null);
@@ -219,7 +201,6 @@ test('the open pinned card shows the times its page has', async () => {
   B.chosen.set('KTR');
   B.route.set({ kind: 'stop', code: 'KTR' });
   B.signs.set(new Map([['KTR', { s: card, at: now - 1000, got: now - 1000 }]]));
-  // The page's board: live, two buses.
   B.boards.set(
     new Map([
       [
@@ -238,7 +219,6 @@ test('the open pinned card shows the times its page has', async () => {
   await settle();
   const row = root.querySelector('.bt-list .bt-pager-page.open .nearby-row');
   const times = [...row.querySelectorAll('.nb-time')].map((x) => x.textContent.replace(/\s+/g, ''));
-  // The page's two live buses stand for the card's first two; then its own guess for the third. Its own words for where it goes.
   assert.deepEqual(times, ['2min', '12', '~35']);
   assert.match(row.textContent, /LT13/);
   render(null, root);
@@ -250,11 +230,9 @@ test('the open pinned card shows the times its page has', async () => {
 
 test("wide Settings keeps the phone's grouped cards and chevrons, and Now's foot lines up with Today", () => {
   const account = read('account/account.css');
-  // From 800 the groups stay cards with chevrons; only what each has set moves under its name.
   assert.equal(wideRule(account, '.set-group'), null);
   assert.equal(wideRule(account, '.set-item .chev'), null);
   assert.match(wideRule(account, '.set-item .row-text'), /display: grid;/);
-  // Send feedback is its name alone at every width.
   assert.match(account, /\n\.set-item\[data-page="feedback"\] \.row-sum \{ display: none; \}/);
   assert.match(wideRule(read('app/app.css'), '.app-main.split .app-card > .card-foot.card-foot'), /left: calc\(50% \+ 24px\);/);
 });
@@ -270,7 +248,6 @@ test("a kept older /app/ without the rail's place still starts: the app makes it
   const made = railRoot();
   assert.equal(made.id, 'rail');
   assert.equal(made.nextElementSibling.tagName, 'HEADER');
-  // Found the second time, not made again.
   assert.equal(railRoot(), made);
   assert.equal(document.querySelectorAll('#rail').length, 1);
   document.body.replaceChildren(...kept);
@@ -293,11 +270,9 @@ test('the open card counts its own guesses on to the board, and never fills in w
       { svc: 'D2', etaS: 240, eta: '4 min', quality: 'live', later: [{ etaS: 1500, quality: 'scheduled' }] },
     ],
   };
-  // Three minutes on, the page's board has one A1 bus and no D2.
   const board = { board: [{ svc: 'A1', etaS: 720, eta: '12 min', quality: 'live', later: [] }], available: true, got: 180_000 };
   const [a1, d2] = B.withBoard(card, 0, board).board;
   assert.equal(a1.etaS, 720);
-  // The card's live 600 is three minutes old: not filled in. Its guesses are counted on by 180 s, as estimates.
   assert.deepEqual(
     a1.later.map((x) => [x.etaS, x.quality, x.eta]),
     [
@@ -305,13 +280,11 @@ test('the open card counts its own guesses on to the board, and never fills in w
       [3120, 'scheduled', null],
     ],
   );
-  // A service the board doesn't have: counted on, and its live time a "~", not live.
   assert.deepEqual([d2.etaS, d2.quality, d2.eta], [60, 'stale', null]);
   assert.deepEqual(
     d2.later.map((x) => x.etaS),
     [1320],
   );
-  // A guess due before the board's last bus is dropped.
   const soon = B.withBoard(card, 0, {
     ...board,
     board: [{ svc: 'A1', etaS: 120, quality: 'live', later: [{ etaS: 2600, quality: 'live' }] }],
@@ -337,7 +310,6 @@ test("the open card counts the board's buses off its own, so a bus running ahead
       },
     ],
   };
-  // 100 s on: the first bus has gone; the board's two are the card's 700 and its guess at 1300, a little early.
   const board = {
     board: [{ svc: 'D1', etaS: 600, quality: 'live', later: [{ etaS: 1150, quality: 'live' }] }],
     available: true,
@@ -391,7 +363,6 @@ test("the open card matches the board's buses by way first, so a way the board l
       { svc: 'D1', towards: ['A'], etaS: 100, quality: 'live', later: [{ etaS: 700, quality: 'scheduled' }] },
     ],
   };
-  // A minute on, the board has only the bus towards A.
   const board = { board: [{ svc: 'D1', towards: ['A'], etaS: 30, quality: 'live', later: [] }], available: true, got: 60_000 };
   assert.deepEqual(
     B.withBoard(card, 0, board).board.map((r) => [r.towards[0], r.etaS, r.quality, r.later.map((x) => x.etaS)]),

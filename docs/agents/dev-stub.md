@@ -121,3 +121,32 @@ each agent its own `PORT` and stop only the stub you started, by its PID.
   `simlock adb …` for `adb …`.
 - A fresh worktree has no `node_modules`: `pnpm install` before starting
   the stub, and `curl http://127.0.0.1:$PORT/` before launching anything.
+
+## The README's pictures
+
+`docs/readme/` holds each picture's page and the script that renders it,
+light and dark, to WebP (`cwebp`) in a headless Chromium (Playwright's, or
+`CHROME`; `PLAYWRIGHT=<path>/node_modules/playwright` if it isn't
+resolvable). Each page is light by default and dark with `#dark`, in the
+site's own tokens and fonts.
+
+- `node docs/readme/shots.mjs` takes the screenshots from the real site
+  under the stub: Now, the Stops tab with two stops pinned (as the store
+  screenshots have), and the map with D2 picked. It adds a phone's room
+  under the tab bar, which a browser window lacks, so the frames don't
+  clip the bar's end labels. Take them in Singapore's daytime (the stub's
+  class is 50 minutes from the real clock and the sky follows the real
+  hour), or give the stub and the pages a morning:
+  `STUB_NOW=2026-10-09T01:26:00Z CLASS_IN_MIN=34 SHOTS_AT=2026-10-09T01:26:00Z`.
+- Then the pictures composed from them: `node docs/readme/hero.mjs`
+  (`hero.html`, the banner: every client on the campus map under the
+  sky) and `sh docs/readme/features.sh` (`clients.html` and `knows.html`,
+  on a transparent background so they sit on GitHub's).
+- `sh docs/readme/diagram.sh` (`diagram.html`, "How it fits together"),
+  `sh docs/readme/loc.sh` (`loc.html`: the lines of code from
+  `pnpm loc --json`, passed in the address as base64, so the page holds no
+  counts of its own) and `sh docs/readme/render.sh` (`banner.html#og`, the
+  site's 1280x672 link preview, `apps/web/public/assets/og.png`).
+- `pnpm loc` counts the non-blank lines of the files git tracks, by part
+  and language, leaving out vendored code, lockfiles, test fixtures and
+  bundled data (`NO_COLOR` turns its colours off).

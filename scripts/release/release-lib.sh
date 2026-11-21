@@ -1,17 +1,9 @@
-# Checks and steps shared by scripts/release/release.sh and scripts/release/release-beta.sh,
-# which source this file from the repo root. Each check stops the release
-# and says what to do; they read VERSION, BUILD, OUT, BUCKET, DRY, ROOT,
-# SIGN_IDENTITY and SPARKLE_KEY from the script that sources them. Both run
-# under bash with pipefail, so a failure anywhere in a pipeline stops the release too.
-
 die() { echo "$*" >&2; exit 1; }
 
 warn_or_die() {
   if [ "$DRY" -eq 1 ]; then echo "warning: $* (a real release would stop here)"; else die "$*"; fi
 }
 
-# -PapiBase points a build at another host (apps/android/app/build.gradle.kts).
-# Gradle also takes it from these, and a signed APK must talk to the real one.
 no_api_base() {
   for f in "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties" apps/android/gradle.properties; do
     if grep -Eq '^[[:space:]]*apiBase[[:space:]]*[=:]' "$f" 2>/dev/null; then
@@ -24,34 +16,21 @@ no_api_base() {
   esac
 }
 
-# The ci workflow must have passed on this very commit: the release runs only
-# the API tests, not Android's lint and tests or the Mac's. The one exception
-# is the weekly scrape's commit (.github/workflows/scrape.yml, its commit
-# job): pushed with github.token, it never starts CI, but it changes only
-# the data files on top of a commit that was tested, and the scrape's own
-# test job ran the tests on that data. Such a commit (or a run of them)
-# counts as passed when the commit under it passed.
 SCRAPE_DATA="apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json"
 SCRAPE_BOT="github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 
-# Whether $1 is a scrape commit: one parent, the bot as author and committer,
-# and only SCRAPE_DATA changed. scrape.yml's DATA is the same list (a test
-# checks).
 scrape_commit() {
   [ "$(git rev-list --no-walk --parents "$1" | wc -w | tr -d ' ')" = 2 ] || return 1
   [ "$(git show -s --format='%an <%ae>' "$1")" = "$SCRAPE_BOT" ] || return 1
   [ "$(git show -s --format='%cn <%ce>' "$1")" = "$SCRAPE_BOT" ] || return 1
   files=$(git diff --name-only "$1^" "$1") || return 1
   [ -n "$files" ] || return 1
-  # Changed in place: nothing added, deleted, renamed or retyped.
   [ -z "$(git diff --name-only --no-renames --diff-filter=ADTUXB "$1^" "$1")" ] || return 1
   for f in $files; do
     case " $SCRAPE_DATA " in *" $f "*) ;; *) return 1 ;; esac
   done
 }
 
-# The newest ci run on $1 as "status conclusion url", or "none", in state.
-# Not printed for $(...): die would only leave the subshell, its words lost.
 ci_state() {
   runs=$(gh run list --workflow ci.yml --commit "$1" --limit 20 --json status,conclusion,event,url) ||
     die "couldn't ask GitHub for CI on $1; check gh and the network"
@@ -80,7 +59,6 @@ ci_passed() {
   esac
 }
 
-# Where TAG stands: TAG_LOCAL, TAG_REMOTE and GH_RELEASE are 1 or 0.
 tag_state() {
   TAG_LOCAL=0 TAG_REMOTE=0 GH_RELEASE=0
   git rev-parse -q --verify "refs/tags/$1" >/dev/null && TAG_LOCAL=1
@@ -98,11 +76,6 @@ tag_state() {
   fi
 }
 
-# The commands that finish a release whose APKs and DMG are up, from
-# tag_state. $1 is what goes before github-release.sh (CHANNEL=beta for a
-# beta). With FEEDS_AFTER_TAG=1 (stable: the appcast links to the tag) the
-# appcast and latest.json go up after the tag; each overwrites, so putting
-# them again when they're up already is safe.
 finish_steps() {
   [ $TAG_LOCAL -eq 1 ] || [ $TAG_REMOTE -eq 1 ] || echo "  git tag -a v$VERSION -m \"terminus $VERSION\""
   [ $TAG_LOCAL -eq 1 ] || [ $TAG_REMOTE -eq 0 ] || echo "  git fetch origin tag v$VERSION"
@@ -111,10 +84,6 @@ finish_steps() {
   echo "  ${1:+$1 }scripts/release/github-release.sh $VERSION"
 }
 
-# What the site serves now: LIVE_VERSION from latest.json, LIVE_BUILD from
-# the appcast (latest.json has no build; Sparkle compares the appcast's).
-# A real release can't go on without them, or the checks below would pass
-# for want of an answer.
 live_release() {
   LIVE_VERSION="" LIVE_BUILD=""
   if ! json=$(curl -fsS --max-time 20 "$1/download/latest.json") || ! xml=$(curl -fsS --max-time 20 "$1/download/appcast.xml"); then
@@ -123,8 +92,6 @@ live_release() {
   fi
   LIVE_VERSION=$(printf '%s' "$json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])') ||
     die "$1/download/latest.json has no version"
-  # Not `sed | head -1`: under pipefail, head closing the pipe early would
-  # fail the read.
   LIVE_BUILD=$(printf '%s' "$xml" | python3 -c '
 import re, sys
 m = re.search(r"<sparkle:version>([0-9]+)</sparkle:version>", sys.stdin.read())
@@ -132,20 +99,15 @@ print(m[1] if m else "")')
   [ -n "$LIVE_BUILD" ] || die "$1/download/appcast.xml has no sparkle:version"
 }
 
-# Sparkle installs only a higher CFBundleVersion and Android only a higher
-# versionCode, so a build that isn't above the live one reaches nobody.
 build_goes_up() {
   [ -n "$LIVE_BUILD" ] || return 0
   [ "$BUILD" -gt "$LIVE_BUILD" ] || warn_or_die "build $BUILD isn't above the live build $LIVE_BUILD ($LIVE_VERSION): $1"
 }
 
-# Every APK signed with the release key, the one assetlinks.json names: a
-# debug-signed APK wouldn't install over the real app or open its links.
 apks_signed() {
   sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
   [ -n "$sdk" ] || sdk=$(sed -n 's/^sdk\.dir=//p' apps/android/local.properties 2>/dev/null || true)
   [ -n "$sdk" ] || sdk="$HOME/Library/Android/sdk"
-  # No build-tools is a failed ls: the check below says so, not pipefail.
   signer=$(ls -d "$sdk"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
   [ -n "$signer" ] && [ -x "$signer" ] || die "no apksigner in $sdk/build-tools: install the Android SDK build-tools"
   keys=$(python3 -c '
@@ -156,8 +118,6 @@ for e in json.load(open(sys.argv[1])):
   [ -n "$keys" ] || die "no fingerprints in apps/web/public/.well-known/assetlinks.json"
   for apk in "$@"; do
     certs=$("$signer" verify --print-certs "$apk" 2>&1) || die "$apk doesn't verify: $certs"
-    # build-tools 36 prints "Signer #1 certificate SHA-256 digest: …",
-    # 37 "V2 Signer: certificate SHA-256 digest: …" (a line per scheme).
     digests=$(printf '%s\n' "$certs" | sed -nE 's/^(V[0-9.]+ )?Signer( #[0-9]+)?:? certificate SHA-256 digest: ([0-9a-f]+)$/\3/p' | sort -u)
     [ -n "$digests" ] || die "$apk has no signer"
     for d in $digests; do
@@ -168,10 +128,6 @@ for e in json.load(open(sys.argv[1])):
   echo "APKs signed with the release key"
 }
 
-# The certificate releases sign the Mac app with, by its SHA-1: every
-# version must carry the same code identity, or macOS forgets the app's
-# permissions and login item. Not `security | grep -q`: under pipefail,
-# grep leaving early can fail the pipe while the certificate is there.
 has_sign_identity() {
   ids=$(security find-identity -p codesigning) || die "couldn't list the keychain's signing identities"
   case "$ids" in
@@ -180,11 +136,6 @@ has_sign_identity() {
   esac
 }
 
-# Apple's notary service, before anything is built: credentials that have
-# expired (the app-specific password was revoked, say) would stop the
-# release after the Android build. They're in the keychain, never in a file.
-# While the screen is locked, notarytool says the profile is missing when it
-# isn't, so that's checked first. (Not `ioreg | grep -q`, as above.)
 has_notary_profile() {
   xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 && return
   case "$(ioreg -l -d1 -k IOConsoleUsers 2>/dev/null)" in
@@ -193,16 +144,6 @@ has_notary_profile() {
   die "the notary credentials $NOTARY_PROFILE don't work: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <email> --team-id BUKSCHP3SV"
 }
 
-# The dependencies, from the lockfiles only. node_modules and
-# apps/macos/.build are ignored by git, so anything left in them would be
-# tested, built and run beside the release's keys (sign_update below is
-# handed the Sparkle private key). Both are thrown away and rebuilt: pnpm
-# relinks node_modules from its store, checking each package against the
-# lockfile's integrity hash, and SwiftPM checks Sparkle out at the revision
-# Package.resolved pins and its binaries against the checksum in Sparkle's
-# manifest. That costs a few seconds for pnpm and a full build of the Mac
-# app's own code (its dependencies come prebuilt); the Android build is
-# Gradle's, with its own caches.
 fresh_deps() {
   echo "== dependencies"
   rm -rf node_modules apps/*/node_modules apps/macos/.build
@@ -212,12 +153,6 @@ fresh_deps() {
   sign_update_tool
 }
 
-# Sparkle's sign_update, the tool handed the Sparkle private key, as
-# published with the Sparkle that Package.resolved pins. It's signed ad hoc,
-# so codesign can't say who built it; its SHA-256 is pinned instead. On a
-# Sparkle update: check the new Sparkle-for-Swift-Package-Manager.zip's
-# SHA-256 against the checksum in Sparkle's Package.swift at that tag, then
-# set these to the version and to `shasum -a 256 bin/sign_update` from it.
 SPARKLE_VERSION=2.10.1
 SIGN_UPDATE_SHA256=43c249771bafc3aa581228abae00731a012d324691b8292860896635050be76b
 sign_update_tool() {
@@ -236,11 +171,7 @@ print(pins[0]["state"].get("version", "") if pins else "")' apps/macos/Package.r
   codesign --verify --strict "$SIGN_UPDATE" 2>/dev/null || die "$SIGN_UPDATE's code signature doesn't verify; not handing it the key"
 }
 
-# The appcast signed with the Sparkle key, as Sparkle checks a feed once
-# the app sets SURequireSignedFeed. sign_update adds the signature to the
-# file as a closing comment, so nothing may change it after this;
-# upload_all checks it's byte for byte what was signed.
-sign_appcast() {  # <appcast.xml>
+sign_appcast() {
   sign_update_tool
   "$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY" "$1" || die "sign_update couldn't sign $1"
   grep -q 'sparkle-signatures:' "$1" || die "sign_update left no signature in $1"
@@ -250,18 +181,12 @@ sign_appcast() {  # <appcast.xml>
   echo "appcast signed"
 }
 
-# The Sparkle signature checked with the public key the built app carries,
-# so a wrong key in ~/.terminus fails here, not on every Mac that updates.
-sparkle_signed() {  # <app> <signature> <dmg>
+sparkle_signed() {
   pub=$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$1/Contents/Info.plist") || die "no SUPublicEDKey in $1"
   swift scripts/release/verify-sparkle.swift "$pub" "$2" "$3" ||
     die "the Sparkle signature doesn't match SUPublicEDKey: is $SPARKLE_KEY the right key?"
 }
 
-# R2's uploads, one per line (key|file|type). $1 picks them: files (the
-# APKs and the DMG, which nothing links to yet), feeds (the appcast, then
-# latest.json, which point the apps at them) or all, in that order, so
-# /download/* never points at a file that isn't there yet.
 uploads() {
   if [ "${1:-all}" != feeds ]; then
     for f in "terminus-$VERSION.apk" "terminus-$VERSION-armv7.apk" "terminus-$VERSION-x86_64.apk"; do
@@ -275,19 +200,14 @@ uploads() {
   fi
 }
 
-# Wrangler, not `cf r2 objects put`: cf percent-encodes the slashes in the
-# key, which R2 needs literal. $1 as for uploads.
 upload_all() {
   sum=$(shasum -a 256 "$OUT/appcast.xml") || die "couldn't hash $OUT/appcast.xml"
   [ "${sum%% *}" = "${APPCAST_SHA256:-}" ] || die "$OUT/appcast.xml changed after it was signed; nothing uploaded"
   uploads "${1:-all}" | while IFS='|' read -r key file type; do
-    # Stopping at the first failure keeps latest.json from going up without its files.
     (cd apps/api && pnpm exec wrangler r2 object put "$BUCKET/$key" --file "$file" --content-type "$type" --remote) </dev/null || exit 1
   done
 }
 
-# The same uploads as commands to paste, after one stopped partway: each
-# overwrites, so all of them again is safe. $1 as for uploads.
 upload_steps() {
   uploads "${1:-all}" | while IFS='|' read -r key file type; do
     echo "  (cd apps/api && pnpm exec wrangler r2 object put \"$BUCKET/$key\" --file \"$file\" --content-type \"$type\" --remote)"

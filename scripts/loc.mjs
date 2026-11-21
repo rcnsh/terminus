@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-// Lines of code in the repo, by part (the Worker, the website, each app) and
-// by language. Counts the files git tracks, non-blank lines, comments
-// included; leaves out vendored code, lockfiles, test fixtures and the
-// bundled data, which nobody writes by hand.
-//
-//   pnpm loc            a table (coloured on a terminal; NO_COLOR turns it off)
-//   pnpm loc --json     the same numbers as JSON, which the README's picture is drawn from
-//                       (sh docs/readme/loc.sh)
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
@@ -32,7 +24,6 @@ const LANGUAGES = {
 
 const SKIP = [/^apps\/web\/public\/vendor\//, /\/test\/fixtures\//, /^fixtures\//, /^apps\/api\/data\//, /(^|\/)pnpm-lock\.yaml$/];
 
-// First match wins, so each part's tests come before the part itself.
 const PARTS = [
   ['API', /^apps\/api\/test\//, true],
   ['API', /^apps\/api\//, false],
@@ -95,9 +86,6 @@ const accent = paint('36');
 const num = (n) => n.toLocaleString('en-GB');
 const pct = (n, of) => `${((100 * n) / of).toFixed(1)}%`;
 
-// A bar `width` cells long at its longest, in eighths of a cell so short
-// rows still differ. The first `split` of it is solid, the rest light; the
-// light run has no partial cell, since ░ can't be cut into eighths.
 const BLOCKS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const bar = (n, max, width, split = n) => {
   const eighths = Math.round((n / max) * width * 8);
@@ -106,8 +94,6 @@ const bar = (n, max, width, split = n) => {
   return accent('█'.repeat(solid)) + dim('░'.repeat(Math.max(1, Math.round(eighths / 8) - solid)));
 };
 
-// Each cell is [text, width, style]: padded first, then styled, so colour
-// codes don't count towards the width. A negative width pads on the right.
 const row = (cells) =>
   '  ' + cells.map(([text, width, style = (s) => s]) => style(width < 0 ? text.padEnd(-width) : text.padStart(width))).join('  ');
 

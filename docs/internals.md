@@ -1629,6 +1629,61 @@ map; and Settings. It uses the same routes as the account page, with the session
   a chip of their own. `html` and `body` both have `overflow-x: clip`:
   on `body` alone CSS hands it to the window as `hidden`, and a Settings
   page mid-slide widens the window.
+- **Calls to the API** (`account/dom.js` `send()`, `api()`). A read gives up
+  after 20 s and a write after 60 s (an import or a save can be slow on a
+  phone, and the server may finish it after the page gave up): Wi-Fi that
+  drops everything, a lecture theatre's or a captive portal's, would
+  otherwise leave "Checking…" up for minutes under a pile of hung calls. A
+  reply that isn't a JSON object (a portal's sign-in page, a proxy's error)
+  or a body cut off part way counts as no answer; only a 204 stands for
+  `{}`. A 429, or a 503 with `Retry-After` (one without is a proxy's, a
+  plain failure), quiets its scope until then: sign-in, sign-out and
+  pairing are their own scope, so a 429 from the app's polling never stops
+  a sign-out. The API's errors are lowercase phrases for API users; the
+  page shows them as sentences.
+- **The device's clock** can be off by minutes, and every countdown
+  compares the server's times with it. Each reply's `Date` header, minus
+  this clock when it arrived, is a reading of the error; `Date` is whole
+  seconds and read late, so a reading is at most the truth, and the
+  largest of the last few is the guess (`skewOf`), ignored under 3 s. A
+  reply the service worker kept says nothing about now. `serverNow()` is
+  used wherever a server time meets now; the clock style is kept in
+  `localStorage` (`terminus.clock`) so the first paint has it.
+- **Signing out here** (`forgetAccountHere()`, also on a 401 from a session
+  ended elsewhere) drops what this browser kept of the account: the places
+  searched for, the pinned stops' count, the account's language as last
+  applied, and the push subscription, waiting at most 2 s for the push
+  service. The look (language, theme, clock, card style) is the browser's
+  and stays. `/account/?next=` only ever goes back to `/app/`, never to
+  another address.
+- **Guards in Settings.** A NUSMods link shared to the app only fills the
+  import box: any page could link there, so the person presses Import. "Pick
+  the stop nearest me" finds it in the browser and never sends the location.
+  Where a slow reply could land after a newer one (the preview after a save,
+  the choices after an Undo), only the newest asked for is drawn. A class
+  row finds its class by what it is, not its place, since every save
+  answers with the server's copy sorted its own way. A language is saved to
+  the account first, and only then applied: applying reloads the page, which
+  would hide a failed save, and the next load would follow the account's
+  old choice anyway. A pairing code is checked for use every 4 s while the
+  page is visible, at once when it's shown again, and counts down by the
+  server's clock. A problem stays in its toast until closed; a plain
+  message lasts 4 s and never replaces one with Undo.
+- **Screen readers.** The card's parts tick, but only one line speaks
+  (`Say`): the card in a sentence, minute by minute at most, and not while
+  its tab or the browser tab is hidden. The search box says how many
+  results half a second after typing stops, not at every letter; it
+  replaces `<datalist>`, which listed everything at once and couldn't say
+  where a room takes you. "Is this wrong?" keeps a reason picked earlier
+  only while the answer on screen still offers it.
+- **Small looks with a reason** (`account.css`). On the dark theme's orange
+  a switch's knob is dark (white was 2.3:1). A stop's sign is never
+  inverted: a near-white plate in the dark glared off every stop. Settings'
+  list pane is at least 20rem and wider when the card's trip line needs it,
+  as its stops don't shrink. The page's fade-in fills `backwards`, not
+  `both`: a transform kept after it would pin the widget's bar (`.peek`) to
+  `#app` instead of the screen. Windows' contrast themes get the system's
+  colours for what's on.
 
 - **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
   `assets/icons` (drawn by `apps/android/store/render.swift`), and a share
@@ -2331,6 +2386,24 @@ without the token, then uploads in a separate step that downloads nothing;
 its twice-yearly schedule only runs `--check`, which fails as a reminder
 when a newer build exists.
 
+The script's modes: `--check`, `--update`, `--dry-run` (builds the locked
+files into `build/map`), none (build, check, upload) and `--upload` (uploads
+`build/map` as it is once it matches, downloading nothing: the workflow's
+second step); `CHANNEL=beta|both` picks the bucket. Zoom 12 is a level to
+spare: with 512-pixel tiles every client stops at 13, and the world-wide
+levels below would be a quarter of the file, downloaded by every phone and
+Mac for offline use and never drawn. It uses `pmtiles` from the PATH only
+at `PMTILES_VERSION` (another version cuts the same tiles into other
+bytes, which the lock refuses), else downloads that release and checks its
+hash; `build_pbf_glyphs` is the Intel build on a Mac, run by Rosetta. A cut
+outside 1 to 20 MB, or fewer than 300 glyph ranges filled with Chinese
+(the CJK ideographs alone are 82), stops it. The tiles go up last, once
+everything they draw with is there, eight files at a time. Fonts and icons
+stay at the lock's basemaps-assets commit unless `ASSETS_COMMIT=<sha>` is
+given to `--update`; they keep their paths, so changed icons go in a new
+folder (`sprites/v5`, with `SPRITES` in map.ts) and changed fonts need
+`GLYPHS` bumped. Map data © OpenStreetMap contributors, ODbL.
+
 **Public buses are more services at the same stops** ([`public.ts`](../apps/api/src/answer/public.ts),
 [`lta.ts`](../apps/api/src/feeds/lta.ts), `data/public.json`). Singapore's public buses stop
 at the shuttles' shelters along Kent Ridge Crescent and Lower Kent Ridge
@@ -2792,6 +2865,18 @@ itself, so a session can't add passkeys.
   anything after the MAC, however well signed, is no session.
   `?register=1` checks the token before the browser makes a passkey, so a
   mistyped token never leaves one on the device that the server won't know.
+- Each new passkey gets a random user id, so a second one never replaces
+  the first in a password manager.
+
+The dashboard keeps its session in the tab's `sessionStorage` only, and
+refreshes the stats every minute while the tab is in front (at once when it
+comes back after longer), keeping what's drawn until they arrive. A reply
+asked for under a session since locked or replaced is dropped. Each section
+has its own address (`#/answers`), opened by 1–9 and 0; `r` refreshes, `/`
+searches. Week-on-week figures are the 7 full Singapore days to yesterday
+against the 7 before, so a morning's few hours don't read as a drop. Series
+keep their colours in a fixed order (`--s1` to `--s5`, checked for
+colour-blind separation) when another hides.
 
 ## Auth, confirmed
 
@@ -3416,7 +3501,12 @@ After its last reading a bus stays for one poll, then fades. The page draws the 
 at the video's exact size with `preserveDrawingBuffer` and no label fades.
 For each frame it sets the time, gives the buses' GeoJSON source their
 places, waits for the map's `idle`, and draws the map and the overlay
-(clock, date, buses per service, wordmark, map credit) onto one canvas. With the overlay
+(clock, date, buses per service, wordmark, map credit) onto one canvas. A
+frame the map hasn't finished in 5 s is taken as it is (a tile that never
+came), and a setup whose style never loads gives up after a minute rather
+than hold every later one. The map is its own, not the app's `map.js`,
+which has stores, sheets and live polling: this one is fixed to the video's
+size and never moves. With the overlay
 off (`--clean` in `render-timelapse.mjs`) only the map credit is drawn and the
 campus is centred, for footage cut into another video
 (`marketing/videos/`).
@@ -3572,6 +3662,14 @@ check. By hand only, the two probe workflows (`scripts/probes/probe_buses.py`,
 `scripts/probes/probe_arrivals.py`) measure the feed: a few services or stops
 every 5 seconds at most, for 10 (buses) or 15 (arrivals) minutes at most, with their own guest
 token. Use it in line with the
+every 5 seconds at most, for 15 minutes at most, with their own guest
+token (no `NEXTBUS_DEVICE_ID`, so each mints with a fresh random device id
+and a refusal can't touch the Worker's). Their report is the run's summary
+and one annotation, readable through the API without the logs. The
+`record buses` workflow, run by hand after a deploy, reads only terminus:
+it records `/api/buses` for a few minutes with a throwaway anonymous
+account (`scripts/probes/record_buses.mjs`), and a bus that switches sides
+of the road or jumps fails the run. Use it in line with the
 [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).
 Do not commit captured credentials, do not use NUSNET credentials with it, and
 do not raise the request rate.

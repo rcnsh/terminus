@@ -1,9 +1,3 @@
-// The status page: /api/status.json, in Singapore time, checked every minute.
-// The feed's state is drawn on the sky's road (sky-page.js): a live shuttle
-// when NUS's feed answers, the same bus in outline when the apps are
-// showing timetable estimates, as the apps draw a guess, and an empty road
-// overnight, when no shuttle runs.
-
 import { Bar, html, render, useEffect, useState } from '/assets/ui.js';
 import { t, timeout } from '/account/dom.js';
 import { drawHorizon } from '/assets/sky-page.js';
@@ -15,7 +9,6 @@ const dateTime = (iso) =>
   new Date(iso).toLocaleString(LOCALE, { ...TZ, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const time = (iso) => new Date(iso).toLocaleTimeString(LOCALE, { ...TZ, hour: 'numeric', minute: '2-digit' });
 
-/** The shuttle on the road: A1's red. */
 const RED = '#d32f2f';
 
 const CAUSE = {
@@ -23,11 +16,6 @@ const CAUSE = {
   feed: t("NUS's live bus times weren't available"),
 };
 
-/**
- * The headline, the line under it, the chip and the bus on the road, from
- * /api/status.json. `checked`: when it was last checked, kept apart from the
- * rest, which is read out as it changes; that changes every check.
- */
 function now(s) {
   let state = { kind: 'off', headline: t('No checks yet'), detail: '', checked: '', chip: '', bus: null };
   if (s.feed === 'up') {
@@ -78,11 +66,6 @@ function now(s) {
   return state;
 }
 
-/**
- * The feed's state: its headline, what it means and when it was checked.
- * Before the status comes, the same live region holds its shapes, heard as
- * "Checking…", so the headline that replaces them is announced.
- */
 function Head({ s, failed }) {
   const head = failed
     ? { kind: 'off', headline: t("Couldn't load the status"), detail: t('Try again in a minute.'), chip: '' }
@@ -104,7 +87,6 @@ function Head({ s, failed }) {
   `;
 }
 
-/** The 30 days' figures and two outages, as shapes, while the status is on its way. */
 const FactsSkeleton = () => html`
   <div class="facts" aria-hidden="true">
     ${[
@@ -166,7 +148,6 @@ function Status() {
   useEffect(() => {
     const load = async () => {
       try {
-        // Given up on after a while, so a hung call says it failed rather than loading for ever.
         const res = await fetch('/api/status.json', { cache: 'no-store', signal: timeout(15_000) });
         if (!res.ok) throw new Error(String(res.status));
         setS(await res.json());
@@ -176,7 +157,6 @@ function Status() {
       }
     };
     load();
-    // Not while the page is hidden; at once when it's shown again.
     const id = setInterval(() => document.hidden || load(), 60_000);
     const shown = () => document.hidden || load();
     document.addEventListener('visibilitychange', shown);
@@ -185,7 +165,6 @@ function Status() {
       document.removeEventListener('visibilitychange', shown);
     };
   }, []);
-  // The road under the headline: your stop's sign, and the feed's bus coming to it.
   const head = !failed && s ? now(s) : null;
   const bus = head?.bus ?? null;
   const empty = Boolean(head?.empty);

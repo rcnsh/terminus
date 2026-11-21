@@ -1,36 +1,18 @@
-// The answer card: /api/me/next drawn the way the widget shows it, on the account
-// page ("Your widget right now") and on the web app's Now. Every line comes
-// from the server's card (apps/api/src/answer/card.ts); this only lays them out.
-
 import { Fill, MARK, announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, sentences, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle, spokenJourney, startsAt } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
 
-/**
- * Old: past the card's staleAt (its bus has gone, the plan has moved on, or
- * it's 15 minutes old), as every client rules. A card with no staleAt
- * (setup, rest, free) never is; an answer with no card at all always is.
- */
-/**
- * Whether the card shows its "Arrive 09:51 · 9 min early" pill: not when the
- * line above already says it, and never on the bus, where `detail` always
- * does (as on the Mac, iPhone and Android).
- */
 export const showsTiming = (a) =>
   Boolean(a.timing?.text) && !a.card?.ride && !a.detail?.toLowerCase().includes(a.timing.text.toLowerCase());
 
 export const isStale = (a) => (!a?.card ? true : a.card.staleAt ? serverNow() >= Date.parse(a.card.staleAt) : false);
 
-/** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
- *  at the stop, the bus to wait for ("D2 at 9:41"), as it is. */
 export const leaveHead = (a) => (a.card.phase !== 'waiting' && serverNow() >= Date.parse(a.leave.at) ? t('Leave now') : a.card.leaveBy);
 
-/** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 export const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
-/** The time now, ticking every second; started afresh when `from` changes. */
 function useEverySecond(from) {
   const [now, setNow] = useState(serverNow());
   useEffect(() => {
@@ -40,15 +22,9 @@ function useEverySecond(from) {
   return now;
 }
 
-/**
- * "Leaves in 3 min 12 s", ticking every second from `departsAt`, as the
- * Android and Mac apps do, so the card never shows an old "4 min". Only this
- * line re-renders each second.
- */
 function Countdown({ at }) {
   const now = useEverySecond(at);
   const left = Math.floor((Date.parse(at) - now) / 1000);
-  // Gone: "Left 1 min ago" from the moment it leaves, never "0 min ago" (as the apps say it).
   const text =
     left > 60
       ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
@@ -58,27 +34,15 @@ function Countdown({ at }) {
   return html`<div class=${left > 0 ? 'countdown' : 'countdown gone'}>${text}</div>`;
 }
 
-/**
- * Says `text` on the page's status line (ui.js announce) whenever it
- * changes: the card's parts tick and redraw, but only this is heard. Not
- * while it's out of sight: on a tab that's hidden (the app keeps them drawn)
- * or in a browser tab in the background.
- */
 export function Say({ text }) {
   const mark = useRef(null);
   useEffect(() => {
     if (document.hidden || mark.current?.parentElement?.closest('[hidden]')) return;
     announce(text);
   }, [text]);
-  // Takes no room: only there to say where on the page it is.
   return html`<span hidden ref=${mark}></span>`;
 }
 
-/**
- * The card in a line, for a screen reader: what it's for and its headline,
- * minute by minute at most (journey.js spokenJourney for a trip). Null for
- * an old card, which is about to be replaced.
- */
 function spoken(a, now) {
   const c = a.card;
   if (a.mode === 'rest' || a.mode === 'free' || a.arrived)
@@ -92,7 +56,6 @@ function spoken(a, now) {
   return sentences([a.card?.title ?? a.label, a.detail]);
 }
 
-/** Says card `a` when what it means changes, checking each few seconds for "Leave now". */
 function SayCard({ a }) {
   const [now, setNow] = useState(serverNow());
   useEffect(() => {
@@ -102,16 +65,10 @@ function SayCard({ a }) {
   return html`<${Say} text=${spoken(a, now)} />`;
 }
 
-/** Sends a card's button (Not going, Undo, …) and returns the answer that comes back. */
 export const signal = (body) => api(`/api/me/signal${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
 
-/**
- * "Leave by 6:36" and, under it, the one countdown on the card ("in 8 min"),
- * ticking every second so the headline turns into "Leave now" on time.
- */
 function LeaveBy({ a, late }) {
   const now = useEverySecond(a.leave.at);
-  // At the stop the headline is the bus and its time: nothing to count down to.
   const left = a.card.phase === 'waiting' ? 0 : Math.floor((Date.parse(a.leave.at) - now) / 1000);
   return html`
     <h2 class=${`big${late}`}>${leaveHead(a)}</h2>
@@ -119,12 +76,6 @@ function LeaveBy({ a, late }) {
   `;
 }
 
-/**
- * A class: when to leave is the headline with one countdown under it, then
- * the bus that goes with it and when it gets you there, and everything else
- * (a busy bus, an estimate, "or go now") quietly underneath. Same lines as
- * the apps, because they all come from the server's card.
- */
 function ClassPlan({ a }) {
   const c = a.card;
   const late = c.late ? ' late' : '';
@@ -138,8 +89,6 @@ function ClassPlan({ a }) {
   `;
 }
 
-/** Where the trip is (the same phase the phone and the Mac show), a last-bus
- *  warning, and the notice while NUS's live times are down. */
 function Phase({ a }) {
   const c = a.card ?? {};
   return html`
@@ -150,18 +99,12 @@ function Phase({ a }) {
   `;
 }
 
-/**
- * On the bus: how far along the ride, and the next stop, as the phone's live
- * notification shows. Stops are taken as evenly spaced between boarding and
- * getting off; redrawn every few seconds.
- */
 function Ride({ ride }) {
   const [now, setNow] = useState(serverNow());
   const board = Date.parse(ride.board);
   const arrive = Date.parse(ride.arrive);
   useEffect(() => {
     if (serverNow() >= arrive) return;
-    // Stops once the ride is over: nothing on it changes after that.
     const timer = setInterval(() => {
       const at = serverNow();
       setNow(at);
@@ -190,7 +133,6 @@ function Ride({ ride }) {
   `;
 }
 
-/** A button that's disabled while what it started is under way, and again if that fails. */
 function Busy({ onClick, class: cls, children, disabled = false, ...props }) {
   const [busy, setBusy] = useState(false);
   return html`
@@ -203,7 +145,6 @@ function Busy({ onClick, class: cls, children, disabled = false, ...props }) {
         try {
           await onClick();
         } catch {
-          // Left for another try.
         } finally {
           setBusy(false);
         }
@@ -213,11 +154,6 @@ function Busy({ onClick, class: cls, children, disabled = false, ...props }) {
   `;
 }
 
-/**
- * The server's buttons, plans only (Not going, Not on campus today, Undo):
- * nothing asks what happened. A tap sends the signal; `onAnswer` gets the
- * answer that comes back.
- */
 function Actions({ a, onAnswer, onChoice }) {
   const list = a.card?.actions ?? [];
   return html`
@@ -237,15 +173,8 @@ function Actions({ a, onAnswer, onChoice }) {
   `;
 }
 
-/** Steps to another bus, and returns the answer that comes back. */
 const stepTo = (body) => api(`/api/me/step${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
 
-/**
- * "Earlier bus" and "Later bus" under the bus they change, and "Best bus"
- * between them once you've moved: the server's buses either side of this
- * one, on a trip by bus until you set off. Greyed out at the first bus you
- * can catch and the last one offered.
- */
 function StepBus({ a, onAnswer }) {
   const s = a.card?.step ?? null;
   if (!s) return null;
@@ -259,13 +188,11 @@ function StepBus({ a, onAnswer }) {
   `;
 }
 
-/** "Leave one bus earlier for CS2030?": what terminus has learned, offered, never applied by itself. */
 function Suggestion({ a, onChoice }) {
   const s = a.card?.suggestion ?? null;
   if (!s) return null;
   const choose = (choice) => async () => {
     await api('/api/me/choice', { method: 'POST', body: { id: s.id, choice } });
-    // Settings lists the choices made.
     lists.set((n) => n + 1);
     onChoice?.();
   };
@@ -280,7 +207,6 @@ function Suggestion({ a, onChoice }) {
   `;
 }
 
-/** The next class on a card of its own: when in the accent, what, then where. */
 const UpcomingCard = ({ u }) => html`
   <div class="upcoming">
     <p class="eyebrow">${u.when}</p>
@@ -289,18 +215,9 @@ const UpcomingCard = ({ u }) => html`
   </div>
 `;
 
-/**
- * The day's done, or there's nothing to catch: the label large, what's next
- * on a card of its own, then your favourites to plan a trip to instead,
- * where there's somewhere to show one (`onPlace`, the web app's Now). On
- * Now (`sky`) the words are up in the page's sky, above the horizon, the
- * favourites on the ground, under the hour's sky. On the account page's
- * preview it's a panel, the night's after your day.
- */
 function DayDone({ a, night, sky, onPlace, children }) {
   const places = onPlace ? (a.places ?? []) : [];
   const u = a.card?.upcoming ?? null;
-  // The line under the label: why today's empty on a break, or what's next when there's no card for it.
   const sub = u ? u.off : a.detail || null;
   return html`
     <div class=${sky ? 'widget day-done open' : 'widget day-done'}>
@@ -328,28 +245,14 @@ function DayDone({ a, night, sky, onPlace, children }) {
   `;
 }
 
-/**
- * On Now (`sky`), `top` up in the page's sky with the sun or the stars over
- * it, then the horizon; elsewhere `top` as it is.
- */
 export const InSky = ({ sky, children }) => (sky ? html`<div class="sky-head"><${Celestial} />${children}</div><${Horizon} />` : children);
 
-/** The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit. */
 const Chips = ({ a }) => html`
   <div class="chips">${[t('Timetable'), t('Nearby'), ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((x) => html`<span>${x}</span>`)}</div>
 `;
 
-/**
- * The card for answer `a` (from /api/me/next or a signal). `onAnswer` gets the
- * answer after a button; `onChoice` runs after a suggestion is answered.
- * `chips`: the widget's row of buttons under it (the account page's preview).
- * `onPlace`: a favourite tapped on Done for today (its key), in the web app.
- * `sky`: on the web app's Now, where the card's top is in the page's sky
- * and the rest on the ground below the horizon (sky.js).
- */
 export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky = false }) {
   const style = useStore(cardStyle);
-  // Drawn again when its times go stale (`staleAt`), even if nothing else changes by then.
   const [, restale] = useState(0);
   const staleAt = a.card?.staleAt ? Date.parse(a.card.staleAt) : null;
   useEffect(() => {
@@ -360,23 +263,16 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
   const steps = html`<${StepBus} a=${a} onAnswer=${onAnswer} />`;
   const row = html`${chips && html`<${Chips} a=${a} />`}<${SayCard} a=${a} />`;
-  // After your day, or no classes today: said plainly, with no bus to mistake
-  // for advice. "Undo" when the class just taken off was the day's last, and
-  // "Back on campus".
   if (a.mode === 'rest' || a.mode === 'free')
     return html`<${DayDone} a=${a} night=${a.mode === 'rest'} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
-  // There: the same panel, plain, with where else to go.
   if (a.arrived) return html`<${DayDone} a=${a} night=${false} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
   const old = isStale(a);
-  // A trip by bus or on foot, in the style chosen in Settings › Appearance. Old
-  // times fall through to the cards below, which say they're updating.
   if (a.card?.journey && !old && !a.arrived) {
     return html`<div class="widget"><${Journey} a=${a} style=${style} sky=${sky} lead=${html`<${Phase} a=${a} />`} steps=${steps} />${actions}${row}</div>`;
   }
   if (a.card?.kind === 'class' && !old) {
     return html`<div class="widget"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${steps}${actions}${row}</div>`;
   }
-  // The server's heading ("Next class · CS2030", "Heading home"); none without somewhere to go.
   const heading =
     a.card?.heading !== undefined
       ? a.card.heading
@@ -387,12 +283,9 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
           : a.dest?.label;
   const where = a.mode === 'nearby' ? t('Nearby') : (heading ?? t('Next bus'));
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
-  // A departure as a clock time, the way the widget shows it, so it can't go stale:
-  // the server's title ("A1 · ~09:11"), else worked out here for an older server.
   const big =
     a.card?.title ??
     (timed ? `${a.label.split(' · ')[0]} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label);
-  // The crowd only when the detail line doesn't already say it ("· crowding: high ·").
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
   return html`
@@ -412,15 +305,10 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   `;
 }
 
-/** A card with just a line in it: "Checking…", or why there's no answer; said unless `quiet`. */
 export const Message = ({ text, children, cls = 'widget', quiet = false }) => html`
   <div class=${cls}><div class="detail">${text}</div>${children}${!quiet && html`<${Say} text=${text} />`}</div>
 `;
 
-/**
- * The reasons offered as chips, as /api/me/feedback takes them (REASONS in the
- * API's feedback.ts). A pick is enough to send; a note can say more.
- */
 export const REPORT_REASONS = [
   ['never-came', 'Bus never came'],
   ['times-off', 'Times were off'],
@@ -429,22 +317,11 @@ export const REPORT_REASONS = [
   ['wrong-class', 'Wrong class'],
 ];
 
-/** Reasons about the bus itself: on an answer with NUS's live times (`card.fromNus`), picking one says they're NUS's before it's sent. */
 const NUS_REASONS = new Set(['never-came', 'times-off']);
 
-/** The chips for `card`: the reasons the server says fit it (card.reasons), or all of them from a server that doesn't say. */
 export const reasonsFor = (card) =>
   Array.isArray(card?.reasons) ? REPORT_REASONS.filter(([key]) => card.reasons.includes(key)) : REPORT_REASONS;
 
-/**
- * "Is this wrong?": a link that opens a bottom sheet (a modal dialog) about
- * the answer on screen (`answer`, as it was when the sheet opened: the card
- * refreshes meanwhile). The sheet shows that answer's line, the reasons as
- * chips, a note, and who the reply goes to (`email`); a reason or a note
- * sends it, and the sheet then says it went: that's the only confirmation.
- * Without an email the server takes no reports, so the sheet asks for one
- * instead (`onAddEmail`, the web app's way there by default).
- */
 export function Report({ answer, anonymous = false, email = null, onAddEmail = () => location.assign('/account/?add=1&next=/app/') }) {
   const [open, setOpen] = useState(false);
   const [picked, setReason] = useState(null);
@@ -455,8 +332,6 @@ export function Report({ answer, anonymous = false, email = null, onAddEmail = (
   const [reported, setReported] = useState(null);
   const dialog = useRef(null);
   const opener = useRef(null);
-  // A pick kept from an earlier opening counts only while this answer still offers it: a card that has
-  // moved on (now on the bus, say) mustn't send a reason no longer on screen.
   const offered = reasonsFor(reported?.card);
   const reason = offered.some(([key]) => key === picked) ? picked : null;
   useEffect(() => {

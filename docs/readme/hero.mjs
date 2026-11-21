@@ -1,11 +1,3 @@
-// Renders hero.html to the README's banner, light and dark
-// (banner-light.webp, banner-dark.webp). Run shots.mjs first when the app's
-// screenshots change; this only composes them.
-//
-//   node docs/readme/hero.mjs
-//
-// Needs Playwright (PLAYWRIGHT=/path/to/node_modules/playwright if it isn't
-// resolvable from here), a Chromium (CHROME, or Playwright's own) and cwebp.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

@@ -1,8 +1,3 @@
-/**
- * The offline fallback: what the apps show from the day plan they kept once
- * the network is gone and the last answer is stale. The web's rule is tested
- * here; the Android and Mac tests read the same cases.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -1,6 +1,3 @@
-/* The operator's dashboard: the base rules, then the dashboard's own under
-   .dash and the classes only it uses, then its Timelapse section's. */
-
 main { padding-top: 16px; padding-bottom: 64px; }
 h1 { font-size: 2rem; margin: 8px 0 20px; }
 h2 { font-size: 1.05rem; margin: 0 0 14px; }
@@ -17,10 +14,6 @@ th { color: var(--muted); font-weight: 500; }
 td .btn { white-space: nowrap; }
 .card { margin-bottom: 16px; }
 
-/* ------------------------------------------------------------ Dashboard */
-
-/* Series colours, in a fixed order (a series keeps its colour when another
-   hides), checked for colour-blind separation on these surfaces. */
 :root {
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
   --grid: color-mix(in srgb, var(--line) 80%, transparent);
@@ -32,8 +25,6 @@ td .btn { white-space: nowrap; }
 }
 :root[data-theme="dark"] { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; }
 
-/* Before sign-in: the site's header and one card in the middle of the page,
-   on a faint glow of the accent. */
 .gate {
   min-height: calc(100dvh - 180px); display: grid; place-items: center; padding: 0 16px;
   background: radial-gradient(40rem 24rem at 50% 42%, color-mix(in srgb, var(--accent-bright) 9%, transparent), transparent 70%);
@@ -72,7 +63,6 @@ body.dash-on > main { padding: 0; }
   transition: transform 0.6s var(--ease), opacity 0.3s ease 0.2s;
 }
 .dash.loading .progress { transform: scaleX(0.85); opacity: 1; transition: transform 8s cubic-bezier(0.1, 0.6, 0.2, 1), opacity 0.1s; }
-/* Refreshing keeps what's drawn, a little faded, rather than blanking it. */
 .dash.loading .page { opacity: 0.72; }
 
 .side {
@@ -131,15 +121,10 @@ kbd {
 .page { max-width: 96rem; transition: opacity 0.2s ease; }
 @keyframes side-in-wide { 0%, 35% { opacity: 0; } }
 @keyframes side-in-rail { 0%, 35% { opacity: 0; } }
-/* The page, its tiles, panels and charts come in once, as the dashboard
-   opens (.intro, admin.js). Moving between sections, often by key, is
-   instant. */
 .dash.intro .page { animation: page-in 0.25s var(--ease); }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
 
 .dash .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 12px; margin-bottom: 16px; }
-/* The columns Tiles (parts.js) chose, so no row is part-filled, once the
-   page has room for them at 12.5rem each; an even number falls back to half. */
 .dash .page { container: page / inline-size; }
 @container page (width >= 25.75rem) { .dash .tiles[data-alt="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container page (width >= 39rem) { .dash .tiles:is([data-cols="3"], [data-alt="3"]) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -184,13 +169,11 @@ kbd {
 .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .section-h { margin: 28px 0 12px; font-size: 1.25rem; }
 .lead { margin: -4px 0 16px; font-size: 0.83rem; }
-/* A page-wide caveat, such as counts that have stopped. */
 .notice {
   margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; color: var(--ink);
   background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
 }
 
-/* Charts */
 .chart { position: relative; }
 .plot { position: relative; outline: none; border-radius: 8px; touch-action: pan-y; }
 .plot:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
@@ -239,9 +222,6 @@ kbd {
 .stack span { min-width: 2px; transition: opacity 0.15s ease, flex-grow 0.5s var(--ease); }
 .stack span.dim { opacity: 0.4; }
 
-/* Tables */
-/* A table wider than its card scrolls, with a shadow on the side there's more:
-   the covers scroll with the table and hide each shadow at its end. */
 .table-wrap {
   overflow-x: auto;
   background:
@@ -265,7 +245,6 @@ table.data th[aria-sort="ascending"] .arrow, table.data th[aria-sort="descending
 table.data td { padding: 8px 8px; vertical-align: middle; }
 table.data td:first-child { white-space: nowrap; }
 table.data .num { text-align: right; }
-/* A number or a time breaks badly over two lines: the table scrolls instead. */
 table.data td.num, .nowrap { white-space: nowrap; }
 table.data tbody tr { transition: background 0.12s ease; }
 table.data tbody tr:hover { background: var(--surface-2); }
@@ -289,7 +268,6 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 .more-table > summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.85rem; padding: 4px 0; }
 .more-table[open] > summary { margin-bottom: 8px; }
 
-/* Controls */
 .seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
 .seg button {
   border: 0; background: none; color: var(--muted); font: 500 0.82rem var(--font); padding: 6px 11px; border-radius: 7px; cursor: pointer;
@@ -316,7 +294,6 @@ td:not(.num) .with-meter { justify-content: flex-start; }
   margin: 0 -8px 14px; padding: 10px 8px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px);
 }
 
-/* Overview */
 .attention { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .attention li > a, .attention li > span {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: var(--ink);
@@ -338,7 +315,6 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 .mini span { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini time { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* Settings: a setting's values in one bar, then each in words. */
 .setting-values { display: grid; gap: 6px; min-width: 16rem; }
 .setting-values .stack { margin: 0; height: 8px; }
 .setting-values .vals { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
@@ -366,7 +342,6 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 .status b { font: 700 1.6rem var(--display); }
 .status.good b { color: var(--good-ink); } .status.bad b { color: var(--bad-ink); } .status.warn b { color: var(--warn-ink); }
 
-/* Crash reports and reports: a list that opens item by item. */
 .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); transition: border-color 0.15s ease, box-shadow 0.2s ease; }
 .item:hover { border-color: var(--line-strong); }
@@ -405,7 +380,6 @@ td:not(.num) .with-meter { justify-content: flex-start; }
 .empty code { font-size: 0.85em; }
 .page > .empty { margin-bottom: 16px; }
 
-/* Arrival model */
 .model-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr)); gap: 16px 32px; align-items: start; }
 .model-status .status { margin: 0; }
 .model-status .status span { max-width: 34rem; }
@@ -419,7 +393,6 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 .tag.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink); }
 .tag.wait { color: var(--muted); }
 
-/* Collection */
 .switches { list-style: none; margin: 0 0 12px; padding: 0; }
 .switches li { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .switches li > div { flex: 1; }
@@ -435,17 +408,11 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
 .switch[aria-checked="true"] i { transform: translateX(18px); }
 .switch:disabled { opacity: 0.6; cursor: progress; }
 
-/* On a wide window the sidebar collapses to its icons. They stay where they
-   are: only the width moves and the names fade, and the page takes the room,
-   past its usual width. */
 @media (width > 56rem) {
   .dash { transition: grid-template-columns 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
   .dash.side-rail { grid-template-columns: 64px minmax(0, 1fr); }
   .dash.side-rail .dash-h, .dash.side-rail .page { max-width: none; }
-  /* Above the page, for the names drawn beside it when narrow. */
   .side { z-index: 10; padding-inline: 10px; overflow-x: hidden; }
-  /* Nothing in the sidebar is wider than it, or focus and the pointer would
-     scroll it sideways: names shrink and clip, the rest leaves when narrow. */
   .side .brand { min-width: 0; max-width: 100%; overflow: hidden; padding: 1px 7px; }
   .side nav a { gap: 10px; padding: 8px 12px; white-space: nowrap; }
   .side nav { grid-template-columns: minmax(0, 1fr); }
@@ -455,13 +422,10 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side nav a.on::before { left: -10px; }
   .side nav a > :not(.ic), .side .wordmark { transition: opacity 0.2s ease 0.08s; }
   .side-rail .side nav a > :not(.ic), .side-rail .side .wordmark { opacity: 0; transition: opacity 0.12s ease; }
-  /* The count or dot moves onto the icon's corner. */
   .side .pip { display: block; position: absolute; top: -6px; right: -9px; opacity: 0; transition: opacity 0.12s ease; }
   .side-rail .side .pip { opacity: 1; transition: opacity 0.2s ease 0.08s; }
   .side .pip .count { display: block; min-width: 16px; padding: 0 4px; font-size: 0.65rem; line-height: 16px; box-shadow: 0 0 0 2px var(--surface); }
   .side .pip .dot { display: block; margin: 4px 0 0 -2px; box-shadow: 0 0 0 2px var(--surface); }
-  /* The toggle and the foot change place, so they fade in at the new one.
-     Two names, so the animation runs again each way. */
   .side-toggle, .side-foot { animation: side-in-wide 0.3s ease-out both; }
   .side-rail .side-toggle, .side-rail .side-foot { animation-name: side-in-rail; }
   .side-rail .side-top { flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -473,7 +437,6 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .side-rail .side-foot .btn { padding: 0; min-height: 36px; }
   .side-rail .side-foot .btn svg { display: block; }
   .side-rail .side-foot .btn .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  /* Names, beside the sidebar (placeTip in admin.js puts them level). */
   .side-rail .side [data-tip]:hover::after, .side-rail .side [data-tip]:focus-visible::after {
     content: attr(data-tip); position: fixed; left: 70px; top: var(--tip-y); transform: translateY(-50%); z-index: 40; pointer-events: none;
     padding: 6px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font: 500 0.82rem/1.2 var(--font); white-space: nowrap;
@@ -481,7 +444,6 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   }
 }
 
-/* A phone or a narrow window: the sidebar becomes a bar across the top. */
 @media (max-width: 56rem) {
   .dash { grid-template-columns: minmax(0, 1fr); }
   .side {
@@ -504,15 +466,11 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .item > summary { flex-wrap: wrap; }
 }
 
-/* ------------------------------------------------------------ Timelapse */
-
-/* The map draws at the video's exact pixel size, out of sight; the preview canvas shows the frames. */
 #stage { position: fixed; left: -100000px; top: 0; }
 .timelapse { display: grid; gap: 14px; }
 .timelapse .rec { margin: 0; justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 .timelapse .rec::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
 .timelapse .rec.live { color: var(--good-ink); }
-/* The one thing on the dashboard that moves by itself: it's happening now. */
 .timelapse .rec.live::before { background: var(--good); animation: pulse 2.4s ease-in-out infinite; }
 .timelapse .tl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
 .timelapse .tl-bar select { width: auto; font-weight: 600; padding-top: 7px; padding-bottom: 7px; }
@@ -564,12 +522,9 @@ table.data td.best { font-weight: 700; color: var(--good-ink); }
   .timelapse .ticks span:nth-child(2), .timelapse .ticks span:nth-last-child(2) { display: none; }
 }
 
-/* Pressing a control: it gives a little, so the press is felt. */
 .dash :is(.btn, .chips button, .seg button, .switch, .timelapse .play) { transition-property: transform, background, color, border-color, box-shadow, opacity; }
 .dash :is(.btn, .chips button, .seg button, .timelapse .play):not(:disabled):active { transform: scale(0.97); transition-duration: 0.1s; }
 
-/* Less motion: nothing moves, but fades and colour changes stay, which help
-   follow what changed. */
 @media (prefers-reduced-motion: reduce) {
   .dash, .dash *, .dash *::before, .dash *::after {
     animation: none !important;

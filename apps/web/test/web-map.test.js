@@ -1,9 +1,3 @@
-/**
- * The web map's buses sliding along their line (apps/web/public/app/map.js:
- * pathOf, aheadBy, pointAt, positionAt, slideMs), on the real route lines
- * and the API's own placing (src/map/buses.ts), so the two measure a line the
- * same way and agree on which lines are loops.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -13,9 +7,6 @@ import { placeBuses, pointAlong } from '../../api/src/map/buses.ts';
 import { GRAPH } from '../../api/src/answer/graph.ts';
 import { haversineM } from '../../api/src/geo.ts';
 
-// map.js imports by site path (/assets/ui.js), as the browser does; here
-// those are files under apps/web/public. Loading it adds one listener to
-// the document and nothing else that needs a page.
 const PUBLIC = new URL('../public/', import.meta.url);
 registerHooks({
   resolve: (spec, ctx, next) => next(/^\/(assets|account|app|vendor)\//.test(spec) ? new URL(`.${spec}`, PUBLIC).href : spec, ctx),
@@ -51,7 +42,6 @@ test('the map takes a loop from /campus, not from where its line ends (A1 ends s
   assert.ok(haversineM(a[1], a[0], z[1], z[0]) > 5, 'A1’s ends meet: this test no longer covers the gap');
 });
 
-/** A bus driven along [svc]'s whole line and round again on a loop, as the API places it every 15 s. */
 async function drive(svc) {
   const shape = shapeFor(svc, GRAPH.routes[svc]);
   const total = pointAlong(shape, Infinity).along;
@@ -76,7 +66,6 @@ test('A1 slides on past KRB, round its loop, rather than jumping back to the sta
   assert.ok(i > 0, 'the bus never came round to the start');
   const d = aheadBy(path, shown[i - 1], shown[i]);
   assert.ok(d != null && d > 0 && d < path.total / 2, `from ${shown[i - 1].along} m to ${shown[i].along} m: ${d}`);
-  // Half way through, it's past the end of the line and on from the start.
   const g = { from: shown[i - 1], to: shown[i], start: 0, path, d, ms: slideMs(d) };
   const mid = positionAt(g, g.ms / 2);
   assert.ok(mid.along >= 0 && mid.along < path.total);
@@ -89,7 +78,6 @@ test('on every line a bus never slides backwards, never jumps between stops it d
     for (let k = 1; k < shown.length; k++) {
       const [f, b] = [shown[k - 1], shown[k]];
       const d = aheadBy(path, f, b);
-      // How far on it is along the road, round a loop past its start.
       const on = GRAPH.loops[svc] ? (((b.along - f.along) % path.total) + path.total) % path.total : b.along - f.along;
       if (on > 0 && on <= 1_500)
         assert.ok(d != null && Math.abs(d - on) < 0.01, `${svc}: ${f.along} m to ${b.along} m slides ${d}, not ${on}`);
@@ -97,12 +85,10 @@ test('on every line a bus never slides backwards, never jumps between stops it d
       if (d == null) continue;
       const ms = slideMs(d);
       assert.ok(ms >= 1_000 && ms <= 4_000, `${svc}: ${d} m takes ${ms} ms`);
-      // Along the slide, the bus only goes forwards and ends where it's placed.
       const g = { from: f, to: b, start: 0, path, d, ms };
       let was = 0;
       for (let t = 0; t <= ms; t += ms / 20) {
         const p = positionAt(g, t);
-        // On from where it was, the short way round a loop.
         const gone = ((((p.along - f.along + path.total / 2) % path.total) + path.total) % path.total) - path.total / 2;
         assert.ok(gone + 0.01 >= was && gone <= d + 0.01, `${svc}: from ${f.along} m to ${b.along} m, back at ${t} ms`);
         was = Math.min(gone, d);
@@ -129,7 +115,6 @@ test('failed polls for the buses back off from 5 s to a minute, never before the
     [0, 1, 2, 3, 4, 9].map((n) => busesWaitMs(n)),
     [5_000, 10_000, 20_000, 40_000, 60_000, 60_000],
   );
-  // A Retry-After still running (dom.js quietMs) holds the next poll back.
   assert.equal(busesWaitMs(0, 30_000), 30_000);
   assert.equal(busesWaitMs(4, 90_000), 90_000);
 });
@@ -138,23 +123,16 @@ test("the first view frames the campus's stops and the whole line of each servic
   const core = new Set(CAMPUS.stops.filter((s) => s.core).map((s) => s.code));
   const [[west, south], [east, north]] = campusBounds(CAMPUS);
   const stopsEast = Math.max(...CAMPUS.stops.filter((s) => core.has(s.code)).map((s) => s.lon));
-  // Every service but P stays on campus, and each of their lines is wholly in the frame.
   const onCampus = Object.keys(CAMPUS.routes).filter((svc) => CAMPUS.routes[svc].seq.every((code) => core.has(code)));
   assert.ok(!onCampus.includes('P') && onCampus.includes('K'), onCampus.join());
   for (const svc of onCampus)
     for (const [lon, lat] of CAMPUS.routes[svc].line)
       assert.ok(lon >= west && lon <= east && lat >= south && lat <= north, `${svc} at ${lon},${lat}`);
-  // K's east loop turns past the last stop: the stops alone would cut it off.
   const kEast = Math.max(...CAMPUS.routes.K.line.map((p) => p[0]));
   assert.ok(kEast > stopsEast && east === Math.max(kEast, ...onCampus.map((svc) => Math.max(...CAMPUS.routes[svc].line.map((p) => p[0])))));
-  // Nothing of P's trip to the Botanic Gardens: the frame stays on campus.
   assert.ok(east < 103.79 && north < 1.31, `${east},${north}`);
 });
 
-/**
- * Where MapLibre puts `points` when it fits their bounds into `box` less
- * `pad` (Web Mercator, 512 px tiles), up to `maxZoom`, as screen points.
- */
 function fitted(points, box, pad, maxZoom) {
   const merc = ([lon, lat]) => [(lon + 180) / 360, (1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2];
   const m = points.map(merc);
@@ -170,7 +148,6 @@ function fitted(points, box, pad, maxZoom) {
 
 test("a chosen service's whole line fits the map's free area: clear of the pills, the status line, the buttons and an open sheet, at every width", () => {
   const rect = (left, top, right, bottom) => ({ left, top, right, bottom });
-  // The boxes as the browser lays them out (the stub, R2 chosen): the pills' row, "3 buses on R2", Back to campus and the zoom buttons.
   const layout = (w, h, rail = 0) => ({
     box: rect(rail, 0, w, h),
     covers: [
@@ -188,7 +165,6 @@ test("a chosen service's whole line fits the map's free area: clear of the pills
     layout(1210, 834, 88),
     layout(1280, 860, 88),
   ];
-  // A stop's sheet open too (UHall's, as the browser lays it out): across the bottom of a phone, floating in the corner from 700.
   const sheet = (w, h, rail, r, side) => {
     const l = layout(w, h, rail);
     l.covers.push({ rect: r, side, sheet: true });
@@ -217,13 +193,11 @@ test("a chosen service's whole line fits the map's free area: clear of the pills
       }
     }
   }
-  // However much is covered, 15% of each way stays free for the line, the margins given up first.
   const crowded = freePadding(rect(0, 0, 390, 400), [{ rect: rect(0, 0, 390, 380), side: 'top' }]);
   assert.ok(crowded.top + crowded.bottom <= 340);
   const tight = freePadding(rect(0, 0, 390, 784), [
     { rect: rect(0, 10, 390, 54), side: 'top' },
     { rect: rect(0, 200, 390, 784), side: 'bottom' },
   ]);
-  // 54 + 584 clear and two 24 px margins is 686, past 85% of 784 (666.4): each margin gives up 10.
   assert.deepEqual([tight.top, tight.bottom], [54 + 14, 584 + 14], 'clear of both, the margins smaller');
 });

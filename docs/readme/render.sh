@@ -1,9 +1,4 @@
 #!/bin/sh
-# Renders banner.html to the site's link preview image
-# (apps/web/public/assets/og.png). The README's pictures come from the real
-# site instead (node docs/readme/shots.mjs), and its banner from hero.html
-# (node docs/readme/hero.mjs).
-# Needs a headless Chromium (Playwright's, or set CHROME).
 set -eu
 cd "$(dirname "$0")"
 CHROME="${CHROME:-$(ls -d "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-*/chrome-headless-shell 2>/dev/null | tail -1)}"

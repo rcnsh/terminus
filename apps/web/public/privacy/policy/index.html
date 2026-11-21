@@ -21,14 +21,10 @@
 <script type="module" src="/assets/stars.js" blocking="render"></script>
 <script src="/assets/i18n.js"></script>
 <style>
-  /* The full policy: the slim band of sky with its title, as Settings'
-     pages have it, then the text, with a card of its sections first. */
   .toc { margin-top: 20px; border-radius: 20px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
   .toc a { display: flex; justify-content: space-between; padding: 12px 18px; color: var(--ink); text-decoration: none; }
   .toc a + a { border-top: 1px solid var(--line); }
   .toc a span { color: var(--muted); }
-  /* Room between the card and the text, and a jump to a section glides
-     there rather than cutting, unless the system asks for less motion. */
   .toc + article { margin-top: 32px; }
   @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   article h2 { font-size: 1.25rem; margin: 40px 0 10px; scroll-margin-top: 16px; }
@@ -39,7 +35,6 @@
   article ul li::before { content: ''; position: absolute; left: 0; top: 0.62em; width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--accent); }
   .translated { margin-top: 20px; }
 </style>
-<!-- Every module the page starts with, asked for at once (web-sw.test.js keeps this list right). -->
 <link rel="modulepreload" href="/assets/ui.js">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/preact.mjs">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/hooks.mjs">

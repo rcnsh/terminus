@@ -1,8 +1,3 @@
-// The dashboard's pages, one per section of the sidebar, each drawn from
-// /api/admin/stats as admin.ts sends it (the shape is documented there).
-// Every number the stats carry is on one of them; the overview repeats the
-// headline ones and links to where the detail is.
-
 import { html, useEffect, useMemo, useRef, useState } from '/assets/ui.js';
 import { Chart, Diverge, Legend, Stack, compact } from '/admin/charts.js';
 import {
@@ -30,9 +25,7 @@ import {
 } from '/admin/parts.js';
 
 const sum = (xs) => xs.reduce((t, x) => t + (Number(x) || 0), 0);
-/** "1 report" / "3 reports". */
 const plural = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
-/** An Analytics Engine time ("2026-10-10 04:05:06", UTC) as ISO. */
 const aeIso = (x) => (/[zZ]$|[+-]\d\d:?\d\d$/.test(String(x)) ? String(x) : `${String(x).replace(' ', 'T')}Z`);
 const day = (r) => String(r.day).slice(0, 10);
 
@@ -41,19 +34,12 @@ const NEEDS_AE = html`<${Empty}>
   their quality, errors, active accounts, crash reports and the recorder's polls.
 <//>`;
 
-/**
- * Everything the pages chart, worked out once per load: per-day series
- * with quiet days as zeros, and the week-on-week changes.
- */
 export function derive(s) {
   const nowMs = Date.parse(s.now) || Date.now();
   const an = s.analytics && !s.analytics.error ? s.analytics : null;
   const d15 = lastDays(15, nowMs);
   const d14 = d15.slice(1);
   const d30 = lastDays(30, nowMs);
-  // 15 days: the charts show the last 14, today's so far included; the
-  // week's totals are the 7 full days to yesterday against the 7 before,
-  // so a morning's few hours don't read as a drop.
   const perDay = (kind) => {
     const m = new Map((an?.daily ?? []).filter((r) => r.kind === kind).map((r) => [day(r), Number(r.n)]));
     return d15.map((d) => m.get(d) ?? 0);
@@ -95,7 +81,6 @@ export function derive(s) {
   };
 }
 
-/** The sidebar's sections, in order: [id, title, what it holds]. */
 export const SECTIONS = [
   ['overview', 'Overview', 'The headline numbers and anything that needs you.'],
   ['accounts', 'Accounts', 'Who uses terminus: sign-ups, setup, and active accounts by app and version.'],
@@ -113,8 +98,6 @@ export const SECTIONS = [
   ['collection', 'Collection', 'What’s collected. Everything is off until turned on here.'],
 ];
 
-/* ---------------------------------------------------------------- Overview */
-
 function attention(s, d) {
   const out = [];
   if (s.feed && !s.feed.up) out.push(['bad', `The NUS feed is down, since ${when(s.feed.since)}.`, '#/feed']);
@@ -127,10 +110,8 @@ function attention(s, d) {
   else if (d.crashReports) out.push(['info', `${plural(d.crashReports, 'error report')} from the apps this week.`, '#/crashes']);
   if (s.feedback?.last7d) out.push(['info', `${plural(s.feedback.last7d, 'report')} from users this week.`, '#/reports']);
   if (s.eta?.error) out.push(['bad', `Arrival times: ${s.eta.error}`, '#/arrivals']);
-  // Lower case mid-sentence, but not a word that is all capitals (API).
   const lower = (t) => t.replace(/\S+/g, (w) => (w === w.toUpperCase() ? w : w.toLowerCase()));
   const off = SWITCHES.filter(([k]) => !s.collect?.[k]).map(([, t]) => lower(t));
-  // A setup choice rather than a problem, so a quiet dot; past two, a count reads better than a list.
   if (off.length)
     out.push([
       'quiet',
@@ -260,8 +241,6 @@ export function Overview({ s, d }) {
   `;
 }
 
-/* ---------------------------------------------------------------- Accounts */
-
 function Funnel({ steps }) {
   const first = steps[0]?.[1] || 0;
   return html`<ol class="funnel">
@@ -281,7 +260,6 @@ const METRICS = [
   ['d30', 'Month'],
 ];
 
-/** For a card whose switch is off but whose counts are still there: say they're old. */
 const STALE = ' The counts below are from before it was turned off.';
 
 function ActiveAccounts({ s, d }) {
@@ -408,8 +386,6 @@ export function Accounts({ s, d }) {
   `;
 }
 
-/* ----------------------------------------------------------------- Devices */
-
 export function Devices({ s, d }) {
   const devices = (s.devices ?? []).map((x) => ({ ...x, key: x.platform, share: share(x.active7, x.total) }));
   const clients = (s.clients ?? []).map((c) => {
@@ -489,13 +465,6 @@ export function Devices({ s, d }) {
   `;
 }
 
-/**
- * Every API key with whose it is (admin.ts apiKeys.list), beside the
- * requests each made (analytics.keys and keyRoutes, keyuse.ts): today so
- * far, and the 7 full Singapore days to yesterday, as the dashboard's
- * other weeks are. Requests from a key not in the list (revoked, or past
- * the 500 most lately used) have no owner to show, so they are only totalled.
- */
 export function keyRows(s, d14) {
   const an = s.analytics && !s.analytics.error ? s.analytics : null;
   const today = d14.at(-1);
@@ -514,7 +483,6 @@ export function keyRows(s, d14) {
     }
     use.set(r.keyId, u);
   }
-  // Commonest first, so the first row seen for a key is its top route.
   const top = new Map();
   for (const r of an?.keyRoutes ?? []) if (!top.has(r.keyId)) top.set(r.keyId, r.route);
   const rows = (s.apiKeys?.list ?? []).map((k) => {
@@ -528,7 +496,6 @@ export function keyRows(s, d14) {
 function ApiKeys({ s, d }) {
   const [q, setQ] = useState('');
   const { rows, unlisted, counted } = useMemo(() => keyRows(s, d.d14), [s, d.d14]);
-  // Counts already recorded stay in view after the switch is turned off.
   const counting = Boolean(d.an && (s.collect?.keys || counted));
   const needle = q.trim().toLowerCase();
   const shown = rows.filter(
@@ -582,7 +549,6 @@ const LEGACY = {
   outdated: 'An app below the oldest version served',
 };
 
-/** What still uses something on its way out (legacy.ts): what, which app, which route, how often and when last. */
 function Legacy({ s }) {
   const [what, setWhat] = useState('');
   if (!s.analytics || s.analytics.error) return null;
@@ -640,12 +606,6 @@ const SETTINGS = {
   notifications: 'Devices taking pushes',
 };
 
-/**
- * How many active accounts have each setting, on the latest day counted
- * (settings.ts): a row per setting, its values most common first. Pushes are
- * counted per app against that app's devices, so their shares aren't parts
- * of one whole and get no bar.
- */
 function Settings({ s }) {
   if (!s.analytics || s.analytics.error) return null;
   const all = s.analytics.settings ?? [];
@@ -699,8 +659,6 @@ function Settings({ s }) {
   `;
 }
 
-/* ----------------------------------------------------------------- Answers */
-
 const QUALITY = {
   live: 'Live: from the feed',
   scheduled: 'Scheduled: a headway guess',
@@ -715,11 +673,9 @@ export function Answers({ s, d }) {
   if (s.analytics.error) return html`<${Empty}><span class="bad">${`Analytics Engine: ${s.analytics.error}`}</span><//>`;
   const quality = (d.an.quality ?? []).map((q) => ({ key: q.quality || '—', quality: q.quality || '—', n: Number(q.n) }));
   const qTotal = sum(quality.map((q) => q.n));
-  // Each quality's bar in the table takes its colour in the stack above it.
   const qColor = new Map(quality.map((q, i) => [q.key, S(i)]));
   const live = quality.find((q) => q.quality === 'live')?.n ?? 0;
   const routes = (d.an.errors ?? []).map((e) => ({ key: e.route, route: e.route, n: Number(e.n) }));
-  // How long /api/me/next took, from the request reaching the Worker to the card built (admin.ts nextTook).
   const next = d.an.next ?? null;
   const total = sum(d.answers);
   const errs = sum(d.errors);
@@ -809,8 +765,6 @@ export function Answers({ s, d }) {
     </div>
   `;
 }
-
-/* ----------------------------------------------------------- Arrival times */
 
 const statCols = (first, max) => [
   first,
@@ -925,9 +879,6 @@ export function Arrivals({ s }) {
   `;
 }
 
-/* -------------------------------------------------------- Feed & recorder */
-
-/** The recorder's poll outcomes (analytics.ts logPoll), grouped as the chart shows them. */
 const OUTCOMES = [
   ['Asked NUS', ['upstream'], 'A request that got an answer.'],
   ['Failed or retried', ['error', 'retry'], 'A request that failed, or one more inside a poll (a fresh token, a second call).'],
@@ -936,7 +887,6 @@ const OUTCOMES = [
 ];
 
 function Recorder({ s, d }) {
-  // Failures are a sliver of each day's polls: on their own, they get a scale they can be seen on.
   const [only, setOnly] = useState('all');
   if (!s.analytics) return NEEDS_AE;
   if (s.analytics.error || !d.an.timelapse) return null;
@@ -946,7 +896,6 @@ function Recorder({ s, d }) {
     by.set(k, (by.get(k) ?? 0) + Number(r.n));
   }
   const n = (dd, outcome) => by.get(`${dd} ${outcome}`) ?? 0;
-  // Each keeps its place in OUTCOMES, so its colour, when the others are left out.
   const shownOutcomes = OUTCOMES.map((o, i) => [...o, i]).filter(
     ([, keys]) => only === 'all' || !keys.some((k) => k === 'upstream' || k === 'hit'),
   );
@@ -1064,9 +1013,6 @@ export function Feed({ s, d }) {
   `;
 }
 
-/* ----------------------------------------------------------- Crash reports */
-
-/** A list item that opens to show more, and opens by itself when linked to. */
 function Item({ open, children, summary }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -1192,11 +1138,8 @@ export function Crashes({ s, d, query, dismiss }) {
   `;
 }
 
-/* ----------------------------------------------------------------- Reports */
-
 export function Reports({ s, d, query, remove }) {
   const fb = s.feedback ?? { latest: [], last7d: 0 };
-  // Per report, so deletes that overlap don't free each other's button, and each error shows by its own.
   const [busy, setBusy] = useState({});
   const [msg, setMsg] = useState({});
   const mark = (set, id, value) => set((m) => ({ ...m, [id]: value }));
@@ -1231,7 +1174,6 @@ export function Reports({ s, d, query, remove }) {
     const k = new Date(f.created).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
     perDay.set(k, (perDay.get(k) ?? 0) + 1);
   }
-  // From the oldest report kept (two weeks at least), not a month mostly empty; the whole month when one is older.
   const oldest = [...perDay.keys()].sort()[0] ?? d.d30[0];
   const firstDay = oldest < d.d30[0] ? 0 : d.d30.indexOf(oldest);
   const chartDays = d.d30.slice(Math.max(0, Math.min(firstDay, d.d30.length - 14)));
@@ -1303,9 +1245,6 @@ export function Reports({ s, d, query, remove }) {
   `;
 }
 
-/* -------------------------------------------------------------- Collection */
-
-/** What each switch collects, in a line: the operator turns each on here (collect.ts). */
 export const SWITCHES = [
   [
     'active',

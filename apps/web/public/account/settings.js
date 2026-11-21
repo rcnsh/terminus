@@ -1,11 +1,3 @@
-// Settings: the signed-in part of the account page (/account/), and the web
-// app's Settings tab (/app/#settings). Your account, then everything else as
-// a list in groups, each row opening its page (settings-pages.js): one at a
-// time on a phone, sliding in from the side; side by side on a wide screen,
-// with the account page's widget in a third column on a wider one. The
-// address names the page (#trips, or #settings/trips in the web app), so
-// Back and a reload keep it.
-
 import {
   Icon,
   focusSoon,
@@ -40,7 +32,6 @@ import {
 import { cardStyle, styleName } from './journey.js';
 import { Band } from './sky.js';
 
-/** The pages in the list, in groups (what your trips use, this device, then feedback), with their icons. */
 const GROUPS = [['trips', 'timetable', 'favourites', 'notifications'], ['language', 'appearance', 'devices'], ['feedback']];
 const ICONS = {
   trips: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
@@ -54,7 +45,6 @@ const ICONS = {
   feedback: '<path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z"/>',
 };
 const CHEVRON = '<path d="m9 6 6 6-6 6" />';
-/** Pages opened from the links under the list. */
 const FOOT = ['about'];
 const TITLES = {
   trips: t('Your trips'),
@@ -75,18 +65,14 @@ async function signOut() {
   location.reload();
 }
 
-/** The account page's sign-in card, then back to the web app. */
 const addEmailFromApp = () => location.assign('/account/?add=1&next=/app/');
 
-/** A NUSMods link shared to the app: Timetable, with it in the box, for the person to import. */
 export function offerImport(link) {
   importOffer.set(link);
 }
 
-/** The walking pace chosen, in words: Normal until one is. */
 const paceName = (p) => ({ slow: t('Slow'), normal: t('Normal'), fast: t('Fast') })[p.walkPace ?? 'normal'] ?? t('Normal');
 
-/** What each group has set: a line under its name in the list. */
 function summaries({ p, me, notifyOn, devices, imported }) {
   const pace = paceName(p);
   const home = p.home?.stops?.[0];
@@ -122,18 +108,6 @@ function summaries({ p, me, notifyOn, devices, imported }) {
   };
 }
 
-/**
- * Settings for the signed-in account `me` (from /api/me), once the profile and
- * /api/campus are loaded (profile.js). `inApp`: in the web app, which shows the
- * answer on Now, has no header (so Sign out is in Account), and keeps its tab
- * in the address. `Notify` (a component) is the app's "Notify me when to
- * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above
- * the list (the account page's preview), or in a column of its own on a wide
- * screen; `Peek` (a component) is its bar along the foot of a page on a
- * phone. `onAddEmail` and `onSignOut` are Account's buttons; by default, the
- * web app's. `sky`: the list's title and each page's in a slim band of Now's
- * sky, ending on the low hills (sky.js), on a phone; the web app's.
- */
 export function Settings({
   me,
   inApp = false,
@@ -152,7 +126,6 @@ export function Settings({
   useStore(theme);
   useStore(cardStyle);
   const wide = useMedia('(min-width: 800px)');
-  // Room for the widget beside the page, rather than above the list.
   const roomy = useMedia('(min-width: 1100px)');
   const rail = Boolean(side) && roomy;
   const hash = useHash();
@@ -161,22 +134,16 @@ export function Settings({
   const groups = GROUPS.map((g) => g.filter((x) => x !== 'notifications' || Notify));
   const pages = ['account', ...groups.flat(), ...FOOT];
 
-  // The account's language: one chosen on another device is used
-  // here; one chosen here before the account had one goes to the account.
   useEffect(() => {
     const mine = window.i18n?.followAccount(profile.get().lang ?? 'auto');
     if (mine) edit((x) => (x.lang = mine));
   }, []);
 
-  /** The page the address names, if it's one shown here. */
   const named = hash.startsWith(pageHash) ? hash.slice(pageHash.length) : '';
   const inAddress = pages.includes(named) ? named : null;
-  // Somewhere else in the web app (Now, Map): Settings stays as it is.
   const elsewhere = Boolean(listHash) && !hash.startsWith(listHash);
   const want = inAddress ?? (wide ? 'trips' : null);
 
-  // Back on this page while Settings is on screen: the account again, so a
-  // device added or a change made on another one shows here.
   const away = useRef(false);
   away.current = elsewhere;
   useEffect(() => {
@@ -193,19 +160,12 @@ export function Settings({
   const side_ = useRef(null);
   const nodes = useRef({}).current;
   const rows = useRef({}).current;
-  /** The page on screen (null: the list), and the view sliding away. */
   const [view, setView] = useState({ shown: want, leaving: null });
-  /** Where the list was scrolled to, for coming back to it. */
   const listScroll = useRef(0);
-  /** Opened from the list here, so Back is the browser's. */
   const pushed = useRef(false);
-  /** Slides under way, finished at once by the next change. */
   const sliding = useRef([]);
-  /** How far a swipe back had moved the page when it was let go, in px. */
   const swipedTo = useRef(0);
 
-  // The address changed: the page it names (or the list) takes over, sliding
-  // on a phone while Settings is on screen.
   useEffect(() => {
     if (elsewhere || want === view.shown) return;
     for (const a of sliding.current) a.finish();
@@ -214,7 +174,6 @@ export function Settings({
     const from = window.scrollY;
     if (wide) {
       setView({ shown: want, leaving: null });
-      // Side by side the list stays, but the focus goes to the page opened, as on a phone.
       if (want) focusSoon(() => document.getElementById(`page-${want}`));
       return;
     }
@@ -226,7 +185,6 @@ export function Settings({
     if (!leaving) window.scrollTo(0, to);
   }, [want, elsewhere, wide]);
 
-  // The old view slides away under the new one; `shift` keeps it where it was on screen.
   useLayoutEffect(() => {
     const l = view.leaving;
     if (!l || l.started) return;
@@ -257,7 +215,6 @@ export function Settings({
     const b = into.animate(inFrames, timing);
     sliding.current = [a, b];
     a.finished.catch(() => {}).finally(() => setView((v) => (v.leaving === l ? { ...v, leaving: null } : v)));
-    // Focus follows: the page's heading, or the row it was opened from.
     if (view.shown) document.getElementById(`page-${view.shown}`)?.focus({ preventScroll: true });
     else rows[l.prev]?.focus({ preventScroll: true });
   }, [view]);
@@ -267,7 +224,6 @@ export function Settings({
     location.hash = pageHash + x;
   };
 
-  // Back to the list: the browser's Back when the page was opened here, so history stays in step.
   const closePage = () => {
     if (pushed.current) {
       pushed.current = false;
@@ -280,13 +236,10 @@ export function Settings({
     }
   };
 
-  // A NUSMods link shared to the app: its page, where the box has it.
   useEffect(() => {
     if (offer && view.shown !== 'timetable') openPage('timetable');
   }, [offer]);
 
-  // Swiping from the left edge goes back, in the installed app on an iPhone:
-  // it has no browser swipe of its own. The page follows the finger.
   useEffect(() => {
     if (navigator.standalone !== true || !root.current) return;
     const box = root.current;
@@ -336,17 +289,12 @@ export function Settings({
 
   const shown = view.shown;
   const leaving = view.leaving;
-  // A band of the sky at the top of the list and of each page, under it all
-  // plain; side by side, one over each pane. set-sky tells Now's sky (sky.js)
-  // to colour the browser's bar for it.
   const skyHere = sky;
   useEffect(() => {
     document.body.classList.toggle('set-sky', skyHere);
     return () => document.body.classList.remove('set-sky');
   }, [skyHere]);
   const sum = summaries({ p, me, notifyOn, devices, imported });
-  // What isn't set yet says what to do, in the accent: no home stop, no classes,
-  // or a link for a semester that's over.
   const todo = {
     trips: !p.home?.stops?.length,
     timetable: (me.needsReimport && !imported) || p.trips.length + p.manual.length === 0,

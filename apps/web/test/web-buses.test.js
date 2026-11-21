@@ -1,8 +1,3 @@
-/**
- * The web app's Stops tab (apps/web/public/app/buses.js): where you are in
- * it, from the address (#buses/stop/YIH, #buses/line/D1/YIH), the pinned
- * stops' boards, the board across the road, and pinning stops.
- */
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { useLang, web } from './_web.mjs';
@@ -49,7 +44,6 @@ test("a stop's address, and anything else is the home", () => {
   assert.deepEqual(B.parse('#buses/stop/YIH'), { kind: 'stop', code: 'YIH' });
   assert.deepEqual(B.parse(`#buses/stop/${encodeURIComponent('A/B')}`), { kind: 'stop', code: 'A/B' });
   assert.deepEqual(B.parse('#buses/line/D1/'), { kind: 'line', svc: 'D1', stop: null });
-  // A stray % (an address edited by hand) is read as it is, not thrown over.
   assert.deepEqual(B.parse('#buses/stop/50%'), { kind: 'stop', code: '50%' });
   for (const hash of ['#buses', '#buses/', '#buses/stop/', '#buses/stop', '#buses/line/', '#buses/nope/YIH', '', '#map'])
     assert.deepEqual(B.parse(hash), { kind: 'home' }, hash);
@@ -61,7 +55,6 @@ test("a stop's page is its own address, whether it's pinned or not, and reads ba
   assert.equal(B.stopHash('YIH'), '#buses/stop/YIH');
 });
 
-/** A fetch answering /api/me/stops with an empty board for each stop asked, noting each ask's codes. */
 function stopsFetch(asked, { fail = false } = {}) {
   return async (url) => {
     const u = new URL(url, 'http://x');
@@ -83,7 +76,6 @@ test('the home fetches the pinned stop on screen and the ones either side of it,
   assert.deepEqual(B.signWindow(pinned, 'UTOWN'), ['YIH', 'UTOWN', 'KR-MRT']);
   assert.deepEqual(B.signWindow(pinned, 'KR-MRT'), ['UTOWN', 'KR-MRT']);
   assert.deepEqual(B.signWindow(pinned, B.ADD), ['KR-MRT']);
-  // A pick no longer pinned is the first page until the home settles it.
   assert.deepEqual(B.signWindow(pinned, 'PGP'), ['COM3', 'YIH']);
   assert.deepEqual(B.signWindow([], null), []);
   assert.equal(B.pageOf(pinned, B.ADD), 4);
@@ -103,9 +95,7 @@ test('pulled down on the home: the pinned stop on screen fetched again, and with
     P.profile.set({ pinnedStops: ['YIH', 'UTOWN', 'COM3'] });
     B.chosen.set('UTOWN');
     assert.equal(await B.pullRefresh(), 'updated');
-    // One ask, for it and its neighbours.
     assert.deepEqual(asked, [['YIH', 'UTOWN', 'COM3']]);
-    // Just fetched: not asked again.
     assert.equal((await B.pullRefresh()).state, 'fresh');
     assert.equal(asked.length, 1);
     B.chosen.set(B.ADD);
@@ -163,7 +153,6 @@ test("the lines' counts are asked for at most once a minute, however often the h
     t.mock.timers.tick(1_000);
     await B.loadOuts();
     assert.equal(asked, 2);
-    // Counts that can't be brought up to date go, as for a feed that didn't answer.
     globalThis.fetch = async () => new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
     t.mock.timers.tick(60_000);
     await B.loadOuts();
@@ -174,7 +163,6 @@ test("the lines' counts are asked for at most once a minute, however often the h
 });
 
 test("a service's page brings the list its newer count, and an older list doesn't put the old one back", async (t) => {
-  // Well after the last test's asks, which set when the list may ask again.
   const start = Date.now() + 3_600_000;
   t.mock.timers.enable({ apis: ['Date'], now: start });
   const realFetch = globalThis.fetch;
@@ -183,16 +171,13 @@ test("a service's page brings the list its newer count, and an older list doesn'
   const one = { out: 1, outText: '1 out', stale: false };
   const none = { out: 0, outText: 'None out', stale: false };
   try {
-    // The list counted K's last bus a moment before it left the feed.
     globalThis.fetch = async () => json({ lines: { K: one, D1: one }, asOf: at(0) });
     await B.loadOuts();
     assert.deepEqual(B.outs.get().K, one);
-    // K's page, opened later, has none out: the list says so too, even when the page's asOf is pulled back by an old stop row.
     t.mock.timers.tick(30_000);
     globalThis.fetch = async () => json({ svc: 'K', stops: [], buses: [], out: none, asOf: at(-120) });
     await B.loadLine('K', null);
     assert.deepEqual(B.outs.get(), { K: none, D1: one });
-    // A list counted before the page (a kept copy) keeps the page's count; a newer one wins.
     globalThis.fetch = async () => json({ lines: { K: one, D1: one }, asOf: at(10) });
     t.mock.timers.tick(60_000);
     await B.loadOuts();
@@ -201,7 +186,6 @@ test("a service's page brings the list its newer count, and an older list doesn'
     t.mock.timers.tick(60_000);
     await B.loadOuts();
     assert.deepEqual(B.outs.get(), { K: one, D1: none });
-    // An older server's page, with no count, leaves the list as it is.
     globalThis.fetch = async () => json({ svc: 'D1', stops: [], buses: [{ id: 'x' }], asOf: at(55) });
     await B.loadLine('D1', null);
     assert.deepEqual(B.outs.get().D1, none);
@@ -218,13 +202,11 @@ test('the stop across the road: from its board, else the campus map; the board s
   assert.equal(B.oppositeOf('KR-MRT'), 'KR-MRT-OPP');
   assert.equal(B.oppositeOf('COM3'), null);
   assert.equal(B.oppositeOf('NOT-A-STOP'), null);
-  // The board knows better (a public stop with its own code).
   B.boards.set(new Map([['COM3', { stop: { code: 'COM3', opposite: '16189' } }]]));
   assert.equal(B.oppositeOf('COM3'), '16189');
   assert.equal(B.shownCode('YIH'), 'YIH');
   B.across.set(new Set(['YIH', 'UTOWN']));
   assert.equal(B.shownCode('YIH'), 'YIH-OPP');
-  // Nothing across the road: its own board.
   assert.equal(B.shownCode('UTOWN'), 'UTOWN');
   B.boards.set(new Map());
   B.across.set(new Set());
@@ -236,7 +218,6 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
   const saved = [];
   const eight = ['COM3', 'YIH', 'UTOWN', 'KR-MRT', 'CLB', 'IT', 'LT13', 'UHC'];
   globalThis.fetch = async (url, init) => {
-    // The save is made on the server's copy, read first.
     if (init?.method !== 'PUT') return new Response(JSON.stringify({ pinnedStops: eight.slice(0, 7) }), { headers: { etag: '"1"' } });
     saved.push(JSON.parse(init.body));
     return new Response(init.body, { headers: { 'content-type': 'application/json', etag: '"2"' } });
@@ -247,7 +228,6 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
     await P.togglePin('UHC');
     assert.deepEqual(P.profile.get().pinnedStops, eight);
     assert.equal(P.toastText.get(), null);
-    // The save goes once the edits settle.
     mock.timers.tick(400);
     for (let i = 0; i < 50 && P.toastText.get()?.text !== 'Saved'; i++) await new Promise((ok) => setImmediate(ok));
     assert.deepEqual(saved.at(-1).pinnedStops, eight);
@@ -257,14 +237,12 @@ test('up to 8 stops pinned (or as many as the profile allows), then a message an
     assert.deepEqual(P.profile.get().pinnedStops, eight);
     assert.deepEqual(P.toastText.get(), { text: 'You can pin up to 8 stops.', error: true });
 
-    // Unpinning is always allowed.
     await P.togglePin('YIH');
     assert.deepEqual(
       P.profile.get().pinnedStops,
       eight.filter((c) => c !== 'YIH'),
     );
 
-    // The profile's own limit, when it sends one.
     P.profile.set({ pinnedStops: ['COM3', 'YIH', 'UTOWN'], limits: { pinnedStops: 3 } });
     await P.togglePin('PGP');
     assert.deepEqual(P.profile.get().pinnedStops, ['COM3', 'YIH', 'UTOWN']);
@@ -279,7 +257,6 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
   const D = await web('account/dom.js');
   const realFetch = globalThis.fetch;
   const asOf = new Date(D.serverNow() - 5 * 60_000).toISOString();
-  // The server has already counted its times down to its own now.
   const row = { svc: 'D1', etaS: 300, eta: '5 min', quality: 'live', later: [{ etaS: 900 }] };
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ asOf, stop: { code: 'YIH', name: 'YIH' }, available: true, board: [row] }), {
@@ -290,16 +267,12 @@ test('a board kept by the server (asOf minutes old) is counted down from when it
     await B.loadBoard('YIH');
     const b = B.boards.get().get('YIH');
     assert.equal(b.asOf, Date.parse(asOf), 'asOf is kept for "Updated 5 min ago"');
-    // Just fetched: the server's times as they are, live.
     assert.deepEqual(B.aged(b.board[0], b.got, b.got + 1_000), row);
-    // Refreshes failing for 40 s: 40 s off, once, and no longer live.
     const old = B.aged(b.board[0], b.got, b.got + 40_000);
     assert.equal(old.etaS, 260);
     assert.equal(old.quality, 'stale');
     assert.equal(old.old, true);
-    // The later buses' words are from then: worded again from their seconds.
     assert.deepEqual(old.later, [{ etaS: 860, eta: null }]);
-    // A failed refresh keeps when the board last came.
     globalThis.fetch = async () => new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
     await B.loadBoard('YIH');
     assert.equal(B.boards.get().get('YIH').got, b.got);
@@ -326,15 +299,12 @@ test("a line's refresh that hung (the phone asleep) cannot put back older times 
     B.line.set(null);
     B.route.set({ kind: 'line', svc: 'D1', stop: 'YIH' });
     const first = B.loadLine('D1', 'YIH');
-    // The refresh comes a while later (the phone woke up).
     await new Promise((ok) => setTimeout(ok, 5));
     await B.loadLine('D1', 'YIH');
     assert.equal(B.line.get().data.n, 2);
-    // The older answer lands last: the newer stays.
     release(reply(1));
     await first;
     assert.equal(B.line.get().data.n, 2);
-    // An error landing late doesn't cover fresh times either.
     globalThis.fetch = () => Promise.resolve(new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } }));
     const failing = B.loadLine('D1', 'YIH');
     globalThis.fetch = () => Promise.resolve(reply(3));
@@ -377,7 +347,6 @@ test('an aged timetabled or live time keeps its "~", as the server words a guess
   assert.equal(sched.eta, null);
   assert.equal(Board.etaText(sched.etaS, sched.quality), '~6 min');
   assert.equal(Board.thenText(sched), 'then ~16, ~24 min');
-  // No more of them than the server names.
   const { THEN_MAX } = await import('../../api/src/answer/resolve.ts');
   assert.equal(Board.THEN_MAX, THEN_MAX);
   const many = B.aged(

@@ -1,8 +1,3 @@
-// The unattended renderer (apps/api/scripts/dev/render-timelapse.mjs) drives
-// the dashboard's Timelapse by its markup, through the selectors and button
-// words in render-timelapse-ui.mjs. This draws the page with a recorded day
-// and finds every one of them, so a change to the page fails here rather
-// than on the next unattended render.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
@@ -14,7 +9,6 @@ const { UI, WORDS } = await import('../../api/scripts/dev/render-timelapse-ui.mj
 const DATE = '2026-11-06';
 const T0 = Date.parse(`${DATE}T08:00:00+08:00`);
 
-/** A day of one D2 bus, read twice an hour apart, gzipped as the API sends it. */
 function dayFile() {
   const file = {
     v: 1,
@@ -37,7 +31,6 @@ function dayFile() {
     plates: ['PD1'],
     samples: [
       [0, 0, 0, 0, 0, 10],
-      // The last reading 40 s past the minute: the end handle shows 09:00.
       [3_640_000, 0, 0, 500, 500, 600],
     ],
     stops: [{ code: 'A', lat: 1.29, lon: 103.77, core: true }],
@@ -65,7 +58,6 @@ test("every selector and button render-timelapse.mjs uses is on the dashboard's 
   t.after(() => render(null, root));
   await settle();
 
-  // Signing in.
   assert.equal(Boolean(root.querySelector(UI.token)), true, UI.token);
   assert.equal(Boolean(button(root, null, WORDS.open)), true, WORDS.open);
   root.querySelector(UI.token).value = 'token';
@@ -73,10 +65,8 @@ test("every selector and button render-timelapse.mjs uses is on the dashboard's 
     .querySelector(UI.token)
     .closest('form')
     .dispatchEvent(new Event('submit', { cancelable: true }));
-  // The section loads with import(), then the day: the timeline's handles come last.
   for (let i = 0; i < 200 && !root.querySelector(UI.from); i++) await settle();
 
-  // Drawn only during or after an export: looked for in the section's source.
   const later = {
     progress: /class="job[^"]*"[\s\S]*?class="meta"/,
     failed: /class="bad job"/,
@@ -104,7 +94,6 @@ test("every selector and button render-timelapse.mjs uses is on the dashboard's 
   assert.equal(root.querySelector(UI.exportButton)?.textContent.trim(), WORDS.export);
   assert.match(read('admin/timelapse/timelapse.js'), new RegExp(`>${WORDS.download}<`), WORDS.download);
 
-  // The handles move by the keys the script presses: an arrow a minute, with Shift ten.
   const from = root.querySelector(UI.from);
   const at = () => from.getAttribute('aria-valuetext');
   assert.equal(at(), '08:00');
@@ -114,7 +103,6 @@ test("every selector and button render-timelapse.mjs uses is on the dashboard's 
   from.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
   await settle();
   assert.equal(at(), '08:11');
-  // From a time between minutes, the first press moves what the handle shows.
   const to = root.querySelector(UI.to);
   assert.equal(to.getAttribute('aria-valuetext'), '09:00');
   to.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));

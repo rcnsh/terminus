@@ -1,0 +1,11 @@
+# The sky over Now shows the hour, and the horizon is a picture with no words
+
+Now opens under a sky that says what time of day it is, never the weather: dawn, day, the golden hour, dusk and night, at fixed hours (`daylight.js` `phaseAt`: 6:30, 8:30, 16:30, 18:45, 19:40), since Singapore's sunrise and sunset move little over the year. Weather would be a second forecast on a screen whose one job is when to leave, and a wrong one. Nothing is drawn over the words: the sun is only ever low behind the hills (rising, in the golden hour, setting), and at night a few fixed stars and a crescent moon, which never twinkle into a distraction. The hour only picks classes; the colours are in `app.css`, and Android draws the same scene from the same numbers (`NightSky.kt`).
+
+There is one sky for the whole tab, from the window's top down to the horizon on screen, so it stays put as the chips switch cards; whatever the card area shows ends on a horizon (`sky.js` `Horizon`), and the near hill is the page's own colour, so the sky meets the ground rather than fading. The hills are fixed waves in pixels, so a wider window shows more of them rather than stretched ones, and they're drawn before the first paint. The far hills stop under the near one's ridge rather than at the strip's foot: two edges on one line blurred as the tab zoomed in, and the far colour showed under the road.
+
+The horizon has no words. Drawn this small, a stop's name and a time were too hard to read, so the card says them on the ground under it (`journey.js` `RoadLine`): your stop's sign by the road, and your bus coming up to it, nearer the sooner it's due. A bus whose time is an estimate is an outline, never filled, so it can't pass for a live one; the status page draws the feed's state the same way.
+
+Motion is bounded. On the landing page shuttles drive along the road, at most two at once across the page and each another service's colour than the last, only while the road is on screen; a button pauses them all (anything moving for more than a few seconds can be stopped, WCAG 2.2.2), and with less motion asked for they stand. The moon, the stars and the far hills lag as Now scrolls (`parallax`), and not at all with less motion.
+
+We considered a real sun and clouds from a weather feed, and labels on the horizon. Both put more to read where the answer is.

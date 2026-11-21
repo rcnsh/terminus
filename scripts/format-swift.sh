@@ -1,9 +1,4 @@
 #!/bin/sh
-# Formats every Swift file in the repo with swift-format (the one in the
-# Xcode toolchain, `swift format`), by the root .swift-format.
-#
-#   scripts/format-swift.sh           # rewrite the files in place
-#   scripts/format-swift.sh --check   # list the files it would change; exit 1 if any
 set -eu
 
 cd "$(git rev-parse --show-toplevel)"

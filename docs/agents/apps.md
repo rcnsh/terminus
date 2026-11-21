@@ -14,6 +14,18 @@ iPhone changes reach users only through a release
   `scripts/android-deps.sh` (or `scripts/android-deps.sh <pr>` for a PR
   the workflow didn't finish) and review the diff. Don't write hashes from
   a warm Gradle cache: CI's cold runners fetch files it leaves out.
+  The script (about 15 minutes; `<pr>` works in a worktree of its own)
+  writes the lockfiles and `verification-metadata.xml` in one run from an
+  empty Gradle home, running every task CI runs (resolving every
+  configuration fetches POMs no CI task asks for, and R8 files nothing
+  else does); checks each new hash against its repository and adds the
+  aapt2 jars for the other systems (`scripts/android_deps.py`), stopping
+  on a changed hash for a version already listed; then runs CI's tasks
+  again from another empty home with verification on. The empty home also
+  keeps `~/.gradle/gradle.properties` (the signing keys) out of the build.
+  It leaves the changes uncommitted and prints the commands that push them.
+  How the workflow keeps Gradle away from its push token: ADR
+  `0000-ci-jobs-split-by-what-they-hold.md`.
 - Mac (CI, macOS runner): `swift build && swift test`, then
   `swift build -c release --arch arm64` in `apps/macos`.
 - iPhone (CI, macOS runner), in `apps/ios`: `python3 -I scripts/strings.py
@@ -63,4 +75,17 @@ iPhone changes reach users only through a release
 - The mac and ios jobs are skipped when a run with exactly the same inputs
   has already passed (`swift-changes` in `ci.yml` hashes them). A file
   either job reads from outside its own app needs adding to that hash.
+  Gradle's build cache does this for the Android jobs; `swift-changes`
+  runs on Linux, so a skipped job never starts a macOS runner.
+- Why the CI steps are there: the Android release builds are the only
+  place R8 and resource shrinking run, so a missing keep rule shows there
+  rather than in a released app; a job per flavour, since they share no
+  compiled code. The mac job's swift-format check covers every Swift file,
+  the iPhone's too; it checks `MapLibre.xcframework.zip` against its
+  SHA-256 and that the framework links only macOS's own libraries, and
+  builds Release too, since the debug build can pass where it fails. The
+  iPhone unit tests are signed ad hoc: an unsigned app has no
+  entitlements, so the simulator gives it no keychain. Its last step stops
+  the simulator and Xcode's helpers, which otherwise hold the job open for
+  about 40 minutes after it's done.
 - **Android strings** need apostrophes escaped (`\'`).

@@ -1,37 +1,14 @@
-// The dashboard's Timelapse section (#/timelapse, loaded by admin.js when
-// it's opened): a day of NUS shuttles, as the recorder kept it
-// (/api/timelapse/days, apps/api/src/map/timelapse.ts), replayed on the campus map
-// and exported as a video. English only: it's for the operator.
-//
-// Its state, the map and an export in progress live in this module, not in
-// the section: leaving for another section and coming back finds the export
-// still running.
-//
-// The export never records the screen. Each frame is made on purpose: the
-// clock is set, the buses' source gets their places at that moment, the
-// map is left to finish drawing, and the map and the overlay (clock, date,
-// buses per service, the wordmark; or only the map's credit, for footage
-// that gets its own words on top) are drawn onto one canvas, which
-// Mediabunny encodes. Awaiting each frame's add() lets the encoder set the
-// pace, so a slow machine makes the same video, only more slowly.
-//
-// The map is built here rather than shared with app/map.js: that one is
-// the app's interactive map, with its stores, sheets and live polling. This
-// one is fixed to the video's size, drawn once per frame, and never moves.
-
 import { html, store, useEffect, useMemo, useRef, useStore } from '/assets/ui.js';
 import { busesAt, busesOut, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { inkOn } from '/account/dom.js';
 
-// "@" spelled %40, as in app/map-files.js: the static assets redirect the "@" form.
 const MEDIABUNNY = '/vendor/mediabunny%401.61.3/mediabunny.min.mjs';
 const FPS = 30;
 const PRESETS = {
   story: { w: 1080, h: 1920, label: 'Stories' },
   wide: { w: 1920, h: 1080, label: 'Landscape' },
 };
-/** A frame the map hasn't finished in this long is taken as it is (a tile that never came). */
 const SETTLE_MS = 5_000;
 const THEMES = {
   dark: { paper: '#0f0e0d', ink: '#f2efeb', muted: '#a39d97', casing: '#0f0e0d' },
@@ -46,30 +23,23 @@ const view = store({
   loading: false,
   preset: 'story',
   theme: 'dark',
-  /** Off: the map and its buses only, centred, for footage cut into another video. */
   overlay: true,
   seconds: 60,
-  /** The chosen start and end (epoch ms), or null for the first and last readings. */
   from: null,
   to: null,
-  /** Where the preview is, 0 to 1 of the chosen range. */
   scrub: 0,
-  /** The preview is playing through the range at the video's speed. */
   playing: false,
   job: null,
-  /** The map is being made or changed: nothing can be drawn from it yet. */
   preparing: false,
   note: '',
 });
 
-/** The dashboard's session: its token, and how to sign out when it's refused. Set by connect(). */
 let session = { token: () => null, signedOut: () => {} };
 
 export function connect(s) {
   session = s;
 }
 
-/** What was there when the dashboard signs out (Lock, or a refused token): an export stops, and the day and video go. */
 export function forget() {
   const { job } = view.get();
   if (job?.running) job.cancelled = true;
@@ -132,7 +102,6 @@ async function pick(date) {
   }
 }
 
-/** The stretch of the day the video covers: the chosen times, else every reading. */
 function range() {
   const { day, from, to } = view.get();
   if (!day) return null;
@@ -141,12 +110,10 @@ function range() {
   return b > a ? { a, b } : null;
 }
 
-/** The timeline's span: the recorder's whole window (06:30 to 00:30), so a day still recording shows how much is to come. */
 function windowOf(day) {
   return { a: Math.min(day.start, timeOn(day.date, '06:30')), b: Math.max(day.end, timeOn(day.date, '00:30')) };
 }
 
-/** Plays the preview through the range at the speed the video will, from where it is (or the start, at the end). */
 function play() {
   const v = view.get();
   if (v.playing) return stop();
@@ -159,7 +126,6 @@ function play() {
     if (!now.playing) return;
     const scrub = Math.min(1, from + (performance.now() - t0) / (now.seconds * 1000));
     view.set((x) => ({ ...x, scrub, playing: scrub < 1 }));
-    // preview() draws the latest moment asked for and skips the ones it couldn't keep up with.
     preview().catch(() => {});
     if (scrub < 1) requestAnimationFrame(tick);
   };
@@ -172,15 +138,11 @@ function stop() {
 
 let ml = null;
 let map = null;
-/** What the map is set up for: size, theme and day. */
 let shape = '';
-/** The canvas the video is made from: the map, then the overlay on top. */
 const composite = document.createElement('canvas');
 const overlay = document.createElement('canvas');
 const mark = new Image();
 mark.src = '/assets/mark.svg';
-/** The map draws here at the video's exact size, off screen; the preview shows its frames. Outside
- *  the section, so the map outlives a visit to another one. */
 const stage = document.createElement('div');
 stage.id = 'stage';
 stage.setAttribute('aria-hidden', 'true');
@@ -190,11 +152,8 @@ const sizeOf = () => PRESETS[view.get().preset];
 const scaleOf = ({ w, h }) => Math.min(w, h) / 1080;
 const styleUrl = () => `/map/style.json?theme=${view.get().theme}&lang=en`;
 
-/** The setup in progress, if any. One at a time; an export waits for it,
- *  and the button stays off until it's done (`preparing`). */
 let setting = null;
 
-/** The map at the video's size, theme and day, made or changed to fit. */
 function setUp() {
   const run = (setting ?? Promise.resolve()).catch(() => {}).then(prepare);
   setting = run;
@@ -209,8 +168,6 @@ function setUp() {
   return run;
 }
 
-/** [event] from the map, or an error after a minute: a style that never
- *  loads mustn't hold every later setup (and the export) behind it. */
 const mapEvent = (event) =>
   new Promise((ok, fail) => {
     const timer = setTimeout(() => fail(new Error(`The map did not finish loading (${event}).`)), 60_000);
@@ -232,8 +189,6 @@ async function prepare() {
   }
   const want = `${w}x${h} ${theme} ${day.date} ${words}`;
   if (shape === want && map) return;
-  // Unknown until this finishes: a change that fails part way leaves the map
-  // in neither shape, and the next setup redoes it in full.
   const was = shape;
   shape = '';
   if (!ml) {
@@ -245,7 +200,6 @@ async function prepare() {
     ml = maplibre;
     ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
   }
-  // The fonts the overlay is drawn in, before the first frame uses them.
   await Promise.all([
     document.fonts.load('700 100px "Space Grotesk"'),
     document.fonts.load('500 40px Inter'),
@@ -260,11 +214,8 @@ async function prepare() {
       fitBoundsOptions: { padding: f.padding },
       interactive: false,
       attributionControl: false,
-      // One map pixel per video pixel, whatever the screen.
       pixelRatio: 1,
-      // Kept after drawing, so each frame can be copied off the map's canvas.
       canvasContextAttributes: { preserveDrawingBuffer: true, antialias: true },
-      // Labels appear at once: a fade would differ from frame to frame.
       fadeDuration: 0,
       localIdeographFontFamily: "'PingFang SC', 'Noto Sans SC', sans-serif",
     });
@@ -284,7 +235,6 @@ async function prepare() {
   await settled();
 }
 
-/** Where the campus sits in the frame: clear of the clock (above in a story, to the left in landscape), or centred without it. */
 function framing(day, w, h, words) {
   const core = day.stops.filter((s) => s.core);
   const lons = core.map((s) => s.lon);
@@ -303,7 +253,6 @@ function framing(day, w, h, words) {
 
 const empty = { type: 'FeatureCollection', features: [] };
 
-/** Routes, stops and buses, sized for the video. Again after each style change. */
 function addLayers() {
   const { day, theme } = view.get();
   if (!map || !day) return;
@@ -369,7 +318,6 @@ function addLayers() {
   });
 }
 
-/** Resolves once the map has drawn everything it was given (or SETTLE_MS on). */
 function settled() {
   return new Promise((ok) => {
     let timer = null;
@@ -384,12 +332,10 @@ function settled() {
   });
 }
 
-/** Draws the moment [t] onto the composite canvas: the map with its buses, then the overlay. */
 async function frameAt(t) {
   const { day } = view.get();
   if (!map?.getSource('buses')) throw new Error("The map isn't ready yet. Try again in a moment.");
   const buses = busesAt(day, t);
-  // Listening before the change, so the map's "done" can't come and go unseen.
   const done = settled();
   map.getSource('buses').setData({
     type: 'FeatureCollection',
@@ -406,7 +352,6 @@ async function frameAt(t) {
   g.drawImage(overlay, 0, 0);
 }
 
-/** The clock, the date, buses per service and the wordmark, on a clear canvas. */
 function drawOverlay(t, counts) {
   const { day, theme } = view.get();
   const { w, h } = sizeOf();
@@ -417,7 +362,6 @@ function drawOverlay(t, counts) {
   g.clearRect(0, 0, w, h);
   if (!view.get().overlay) return credit(g, w, h, k, c);
 
-  // A wash behind the text, so it reads over the streets.
   const wash = story ? g.createLinearGradient(0, 0, 0, h * 0.3) : g.createLinearGradient(0, 0, w * 0.36, 0);
   wash.addColorStop(0, `${c.paper}f0`);
   wash.addColorStop(0.7, `${c.paper}b0`);
@@ -432,7 +376,6 @@ function drawOverlay(t, counts) {
   g.font = `700 ${170 * k}px "Space Grotesk", sans-serif`;
   g.fillText(clockAt(t), x - 6 * k, y);
   y += 64 * k;
-  // The recorded day's date, as the day list names it: past midnight is still that day's service.
   const date = new Date(day?.date ? `${day.date}T12:00:00+08:00` : t).toLocaleDateString('en-SG', {
     timeZone: 'Asia/Singapore',
     weekday: 'long',
@@ -444,7 +387,6 @@ function drawOverlay(t, counts) {
   const out = `${total} ${total === 1 ? 'bus' : 'buses'} out`;
   g.font = `500 ${40 * k}px Inter, sans-serif`;
   g.fillStyle = c.muted;
-  // A story has the width for one line; landscape keeps to its column, left of the map.
   if (story) g.fillText(`${date} · ${out}`, x, y);
   else {
     g.fillText(date, x, y);
@@ -493,20 +435,17 @@ function drawOverlay(t, counts) {
   credit(g, w, h, k, c);
 }
 
-/** The street map's data, credited as its licence asks: with the overlay off too. */
 function credit(g, w, h, k, c) {
   g.font = `400 ${20 * k}px Inter, sans-serif`;
   g.fillStyle = c.muted;
   g.fillText('Map data © OpenStreetMap contributors', 56 * k, h - 56 * k);
 }
 
-/** One frame at a time; a newer request while one draws replaces the waiting one. */
 let drawing = null;
 let wanted = null;
 
 async function preview() {
   const r = range();
-  // Not while the map is being set up: preview() runs again once it is.
   if (!r || !map || setting || view.get().job?.running) return;
   wanted = r.a + (r.b - r.a) * view.get().scrub;
   if (drawing) return;
@@ -518,7 +457,6 @@ async function preview() {
       await drawing;
     }
   } finally {
-    // A frame that failed mustn't leave the preview (and the export, which waits for it) stuck on it.
     drawing = null;
     wanted = null;
   }
@@ -546,20 +484,16 @@ async function exportVideo() {
     size: 0,
   };
   view.set((v) => ({ ...v, job, note: '', playing: false }));
-  // Not once forget() has dropped it: a stopped export doesn't come back.
   const update = (patch) => view.set((v) => (v.job === job ? { ...v, job: Object.assign(job, patch) } : v));
 
   let output = null;
   try {
-    // The map first: a frame needs its layers in place.
     await setting;
-    // The preview's frame out of the way; if it failed, that was the preview's problem, not this video's.
     await drawing?.catch(() => {});
     const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, WebMOutputFormat, canEncodeVideo } = await import(
       MEDIABUNNY
     );
     const opts = { width: w, height: h, frameRate: FPS, quality: QUALITY_HIGH };
-    // H.264 in MP4 where the browser can; VP9 in WebM where it can't.
     const avc = await canEncodeVideo('avc', opts);
     if (!avc && !(await canEncodeVideo('vp9', opts))) throw new Error('This browser can encode neither H.264 nor VP9 video.');
     update({ codec: avc ? 'H.264 MP4' : 'VP9 WebM' });
@@ -575,7 +509,6 @@ async function exportVideo() {
         await output.cancel();
         return update({ running: false, done: 0 });
       }
-      // The first frame is the start, the last the end.
       await frameAt(r.a + ((r.b - r.a) * i) / Math.max(1, frames - 1));
       await source.add(i / FPS, 1 / FPS);
       if (i % 5 === 4 || i === frames - 1) {
@@ -598,14 +531,12 @@ const mins = (ms) => {
   return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
 };
 const mb = (n) => (n < 1_048_576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1_048_576).toFixed(1)} MB`);
-/** "Fri 6 Nov", for a day's date. */
 const dayName = (date) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
 const count = (n) => n.toLocaleString('en-GB');
 
 const MIN = 60_000;
 const SGT_MS = 8 * 3_600_000;
-/** The timeline's chart: ten-minute slices of the 18-hour window. */
 const SLICES = 108;
 const LENGTHS = [30, 60, 90];
 
@@ -645,7 +576,6 @@ function Progress({ job }) {
   return html`<p class="hint job">Cancelled.</p>`;
 }
 
-/** Buttons for one choice of a few, the chosen one lit. */
 function Seg({ label, value, options, onPick, disabled }) {
   return html`
     <div class="seg" role="group" aria-label=${label}>
@@ -657,7 +587,6 @@ function Seg({ label, value, options, onPick, disabled }) {
   `;
 }
 
-/** Every three hours on the clock across the window, with its ends, clear of each other. */
 function ticksOf(win) {
   const step = 3 * 3_600_000;
   const out = [win.a];
@@ -670,11 +599,6 @@ function ticksOf(win) {
 const PLAY = html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9.5-5.5z" /></svg>`;
 const PAUSE = html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z" /></svg>`;
 
-/**
- * The day as a chart of buses out, with the video's start and end as handles
- * to drag and the preview's moment as a line. Dragging a handle previews that
- * end; a click anywhere else moves the preview there.
- */
 function Timeline({ v, r, busy, set }) {
   const box = useRef(null);
   const drag = useRef(null);
@@ -692,7 +616,6 @@ function Timeline({ v, r, busy, set }) {
     const k = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     return Math.round((win.a + k * span) / MIN) * MIN;
   };
-  // From the range as it is now, not as it was drawn: a drag changes it between renders.
   const move = (what, t) => {
     const now = range();
     if (!now) return;
@@ -703,7 +626,6 @@ function Timeline({ v, r, busy, set }) {
   const down = (e) => {
     if (busy || e.button !== 0) return;
     stop();
-    // A handle under the pointer wins over the line drawn on top of it: at either end of the range they overlap.
     const under = document.elementsFromPoint(e.clientX, e.clientY).map((el) => el.closest('[data-grip]')?.dataset.grip);
     drag.current = under.find((g) => g === 'from' || g === 'to') ?? 'head';
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -718,12 +640,9 @@ function Timeline({ v, r, busy, set }) {
     e.preventDefault();
     stop();
     const at = what === 'from' ? now.a : what === 'to' ? now.b : now.a + (now.b - now.a) * view.get().scrub;
-    // From the minute the handle shows (clockAt rounds down), so every press moves what's shown.
     move(what, Math.floor(at / MIN) * MIN + step * (e.shiftKey ? 10 : 1) * MIN);
   };
-  // A label near an end of the track keeps inside it; [room] is how wide it is, as a share of the track.
   const edge = (t, room = 0.04) => ((t - win.a) / span < room ? 'grip at-a' : (win.b - t) / span < room ? 'grip at-b' : 'grip');
-  // Handles too close for two labels share one, on the start's handle.
   const near = (r.b - r.a) / span < 0.07;
   const slider = (what, label, t) => ({
     'data-grip': what,
@@ -748,7 +667,6 @@ function Timeline({ v, r, busy, set }) {
         <div class="bars">
           ${counts.map((n, i) => {
             const t = win.a + ((i + 0.5) * span) / SLICES;
-            // Nothing recorded there: before the first reading, or still to come.
             if (t < day.start || t > day.end) return html`<i class="none"></i>`;
             return html`<i class=${t < r.a || t > r.b ? 'out' : ''} style=${{ height: `${Math.max(4, (n / most) * 100)}%` }}></i>`;
           })}
@@ -775,7 +693,6 @@ function Studio() {
   const v = useStore(view);
   const canvas = useRef(null);
   useEffect(() => {
-    // The composite canvas is the preview: the frames show here as they're made.
     if (canvas.current && composite.parentNode !== canvas.current) canvas.current.replaceChildren(composite);
   });
   const busy = Boolean(v.job?.running);
@@ -874,7 +791,6 @@ function Studio() {
   `;
 }
 
-/** The section. Each visit asks for the days again, so today's count of readings is current. */
 export function Timelapse() {
   const v = useStore(view);
   useEffect(() => {
