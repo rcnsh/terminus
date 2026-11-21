@@ -2,6 +2,7 @@ import type { Env } from '../types.ts';
 import { UpstreamRejected } from './auth.ts';
 import { isBeta } from '../origin.ts';
 import { onceEvery, perScope } from '../memo.ts';
+import { lost } from '../besteffort.ts';
 
 export type Feed = 'nus' | 'lta';
 
@@ -26,7 +27,7 @@ export async function noteBreakerOpen(env: Env, feed: Feed, err: unknown, nowMs:
     if (err.detail) seen.detail = err.detail;
     if (err.version !== undefined) seen.version = err.version;
   }
-  await env.KV.put(KEYS[feed], JSON.stringify(seen), { expirationTtl: 86_400 }).catch(() => {});
+  await env.KV.put(KEYS[feed], JSON.stringify(seen), { expirationTtl: 86_400 }).catch(lost(env, 'breaker note'));
 }
 
 export async function lastBreakerOpen(env: Env, feed: Feed): Promise<Seen | null> {

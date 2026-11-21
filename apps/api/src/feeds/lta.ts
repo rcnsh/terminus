@@ -148,6 +148,7 @@ export async function getPublicArrivals(
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
+    env,
     ctx,
     nowMs,
     key: `${cacheBase()}/public/${encodeURIComponent(ltaCode)}`,

@@ -1,6 +1,7 @@
 import type { Env } from './types.ts';
+import { onceEvery, perScope } from './memo.ts';
 
-export function analyticsEnabled(env: Env): boolean {
+export function analyticsEnabled(env: Pick<Env, 'AE'>): boolean {
   return typeof env.AE?.writeDataPoint === 'function';
 }
 
@@ -94,9 +95,14 @@ export function rowPoint<K extends RowKind>(kind: K, fields: RowFields<K>): Anal
   };
 }
 
-export function writeRow<K extends RowKind>(env: Env, kind: K, fields: RowFields<K>): void {
+const lostRows = perScope(() => onceEvery(10 * 60_000, 50));
+
+export function writeRow<K extends RowKind>(env: Pick<Env, 'AE'>, kind: K, fields: RowFields<K>, nowMs: number = Date.now()): void {
   if (!analyticsEnabled(env)) return;
   try {
     env.AE!.writeDataPoint(rowPoint(kind, fields));
-  } catch {}
+  } catch (err) {
+    if (lostRows(env.AE).due(kind, nowMs))
+      console.error(`analytics row ${kind} lost: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+  }
 }
