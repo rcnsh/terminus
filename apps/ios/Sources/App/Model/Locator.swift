@@ -8,6 +8,7 @@ final class Locator: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private(set) var status: CLAuthorizationStatus
     private var waiting: [UUID: CheckedContinuation<CLLocation?, Never>] = [:]
+    private var deciding: [CheckedContinuation<Void, Never>] = []
 
     override init() {
         status = manager.authorizationStatus
@@ -21,6 +22,22 @@ final class Locator: NSObject, CLLocationManagerDelegate {
     var allowed: Bool { status == .authorizedWhenInUse || status == .authorizedAlways }
 
     func ask() { manager.requestWhenInUseAuthorization() }
+
+    func decide() async {
+        guard undecided else { return }
+        await withCheckedContinuation { c in
+            deciding.append(c)
+            if deciding.count == 1 { ask() }
+        }
+    }
+
+    func settle(_ s: CLAuthorizationStatus) {
+        status = s
+        guard s != .notDetermined else { return }
+        let d = deciding
+        deciding = []
+        for c in d { c.resume() }
+    }
 
     func fix(maxAge: TimeInterval = 60, wait: Duration = .seconds(6)) async -> CLLocation? {
         guard allowed else { return nil }
@@ -76,7 +93,7 @@ final class Locator: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ m: CLLocationManager) {
         let s = m.authorizationStatus
-        Task { @MainActor in self.status = s }
+        Task { @MainActor in self.settle(s) }
     }
 
     nonisolated func locationManager(_ m: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

@@ -277,12 +277,7 @@ final class MapModel {
 
     func locateMe() async {
         let loc = Locator.shared
-        if loc.undecided {
-            loc.ask()
-            for _ in 0..<600 where loc.undecided {
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-        }
+        await loc.decide()
         guard loc.allowed else { return }
         guard let at = await loc.fix(maxAge: 20) else {
             say(L("Couldn't get your location."))
