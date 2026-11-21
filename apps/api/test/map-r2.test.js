@@ -1,18 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeBucket, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
+import { installGlobals, makeBucket, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import worker from '../src/index.ts';
-import { glyphRange } from '../src/map/map.ts';
+import { forgetHeads, glyphRange } from '../src/map/map.ts';
 
 const BASE = 'https://bus.example.test';
 const SIZE = 2000;
 const bytesOf = (seed) => Uint8Array.from({ length: SIZE }, (_, i) => (i * 7 + seed) % 251);
 
-let clock = FROZEN_NOW;
 function setup(files) {
-  clock += 3_600_000;
-  installGlobals(makeFetch(), clock);
+  forgetHeads();
+  installGlobals(makeFetch());
   const bucket = makeBucket(async (key) => files.get(key));
   const env = { ...makeEnv(), FILES: bucket };
   const get = async (path, headers = {}) => {
