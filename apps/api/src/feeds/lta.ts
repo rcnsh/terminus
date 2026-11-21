@@ -4,6 +4,7 @@ import { UpstreamUnreachable, timedFetch } from '../http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
 import { noteBreakerOpen } from './feedwatch.ts';
+import { onceEvery } from '../memo.ts';
 
 export const LTA_BASE = 'https://datamall2.mytransport.sg/ltaodataservice/';
 
@@ -83,19 +84,12 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
       });
     }
   }
-  if (unplaced.size && warnDue(stopCode, nowMs))
+  if (unplaced.size && unplacedWarnings.due(stopCode, nowMs))
     console.warn(`DataMall at ${stopCode}: buses matching neither direction left out: ${[...unplaced].slice(0, 4).join(', ')}`);
   return out;
 }
 
-const warnedAt = new Map<string, number>();
-const WARN_EVERY_MS = 3_600_000;
-function warnDue(stopCode: string, nowMs: number): boolean {
-  const last = warnedAt.get(stopCode);
-  if (last !== undefined && nowMs - last < WARN_EVERY_MS) return false;
-  warnedAt.set(stopCode, nowMs);
-  return true;
-}
+const unplacedWarnings = onceEvery(3_600_000, 500);
 
 export function publicProblem(raw: unknown, stopCode: string, graph: Graph, nowMs: number): string | null {
   const services = (raw as { Services?: unknown })?.Services;

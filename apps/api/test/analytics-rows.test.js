@@ -21,7 +21,7 @@ import {
   logStep,
   logTripWake,
 } from '../src/ops/analytics.ts';
-import { noteFailure, resetFailureNotes } from '../src/feeds/fms.ts';
+import { noteFailure } from '../src/feeds/fms.ts';
 import { adminStats } from '../src/ops/admin.ts';
 import { predictionsFor } from '../src/ops/eta.ts';
 
@@ -60,7 +60,6 @@ async function written() {
   logNextTook(env, 412.6);
   logError(env, '/api/me/devices/abc123?lat=1');
   logCronError(env, 'upstream');
-  resetFailureNotes();
   noteFailure(env, 'buses', 'A1', new TypeError('x is undefined'));
   logPoll(env, 'upstream', 'A1', 3);
   logTripWake(env, { changed: true, phase: 'leave', quality: 'live', first: false, gapS: 30, feedAgeS: 5, leaveShiftS: -20, lateS: 1 });

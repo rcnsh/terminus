@@ -1,6 +1,7 @@
 import type { Env } from '../types.ts';
 import { UpstreamRejected } from './auth.ts';
 import { isBeta } from '../origin.ts';
+import { onceEvery, perScope } from '../memo.ts';
 
 export type Feed = 'nus' | 'lta';
 
@@ -14,14 +15,11 @@ export interface Seen {
   version?: string;
 }
 
-const NOTE_EVERY_MS = 60_000;
-const noted = new Map<Feed, number>();
+const breakerNotes = perScope(() => onceEvery(60_000, 2));
 
 export async function noteBreakerOpen(env: Env, feed: Feed, err: unknown, nowMs: number): Promise<void> {
   if (!isBeta(env) || !env.KV) return;
-  const last = noted.get(feed);
-  if (last !== undefined && nowMs - last < NOTE_EVERY_MS && nowMs >= last) return;
-  noted.set(feed, nowMs);
+  if (!breakerNotes(env.KV).due(feed, nowMs)) return;
   const seen: Seen = { at: nowMs, reason: String((err as Error)?.message ?? err).slice(0, 300) };
   if (err instanceof UpstreamRejected) {
     seen.code = err.code;
@@ -46,8 +44,4 @@ export function breakerError(seen: Seen): Error {
   const err = new UpstreamRejected(seen.code, seen.reason, seen.detail ?? '');
   if (seen.version !== undefined) err.version = seen.version;
   return err;
-}
-
-export function resetNotes(): void {
-  noted.clear();
 }

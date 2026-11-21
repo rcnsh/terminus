@@ -5,6 +5,7 @@ import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
 import { GateBusy, throughGate } from './feedgate.ts';
 import { noteBreakerOpen } from './feedwatch.ts';
 import { writeRow } from '../analytics-rows.ts';
+import { onceEvery, perScope } from '../memo.ts';
 import {
   UpstreamHttpError,
   UpstreamRejected,
@@ -462,21 +463,14 @@ export function failureReason(err: unknown): string {
     .slice(0, 160);
 }
 
-const noted = new Map<string, number>();
 const NOTE_AGAIN_MS = 10 * 60_000;
-
-export function resetFailureNotes(): void {
-  noted.clear();
-}
+const failureNotes = perScope(() => onceEvery(NOTE_AGAIN_MS, 500));
 
 export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, err: unknown, nowMs: number = Date.now()): void {
   if (!notOutdated(err) || err instanceof MintQuiet) return;
   const reason = failureReason(err);
   const seen = `${what} ${key} ${reason.replace(/\d+/g, '#').slice(0, 60)}`;
-  const last = noted.get(seen);
-  if (last !== undefined && nowMs - last < NOTE_AGAIN_MS && nowMs >= last) return;
-  if (noted.size > 500) noted.clear();
-  noted.set(seen, nowMs);
+  if (!failureNotes(env.KV).due(seen, nowMs)) return;
   console.warn(`NUS ${what} for ${key} failed: ${reason}`);
   writeRow(env, 'error', { route: `feed ${what}`, reason });
 }
