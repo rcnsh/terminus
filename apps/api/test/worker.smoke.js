@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV, named } from './_stubs.mjs';
@@ -10,6 +10,8 @@ import { forgetHeads } from '../src/map/map.ts';
 
 const BASE = 'https://bus.example.test';
 const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
+
+beforeEach(forgetHeads);
 
 const D2_IN_4 = [
   { name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low', arrivalTime_veh_plate: 'PA1234A' },
@@ -90,9 +92,9 @@ test('a cache-busting ?t= does not defeat the cache: it is keyed on the resolved
 });
 
 test('a dead upstream returns quality "stale" with the original timestamp, reading the cached response once', async () => {
-  const fetchedAt = Date.now() - 185_000;
   const dead = makeFetch({ fail: true });
   const cache = installGlobals(dead);
+  const fetchedAt = Date.now() - 185_000;
   cache.seed(ARRIVALS_KEY('PGP'), {
     code: 'PGP',
     arrivals: [{ svc: 'D2', etaS: 240, crowd: 'low', plate: 'PA1234A' }],
@@ -1622,9 +1624,9 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
 });
 
 test('/api/line is as old as its stop row: a kept board is not "Updated 0 s ago"', async () => {
-  const fetchedAt = Date.now() - 185_000;
   const dead = makeFetch({ fail: true });
   const cache = installGlobals(dead);
+  const fetchedAt = Date.now() - 185_000;
   cache.seed(ARRIVALS_KEY('YIH'), {
     code: 'YIH',
     arrivals: [{ svc: 'D1', etaS: 240, crowd: 'low', plate: 'PA1234A' }],
