@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Settings › Timetable: import from NUSMods, then every class by day and
-/// time (tap one to change its stop), "Add a class or commitment by hand",
-/// and favourites at their usual time each week. As on Android.
 struct SettingsTimetablePane: View {
     let model: SettingsModel
     @State private var link = ""
@@ -36,7 +33,6 @@ struct SettingsTimetablePane: View {
         }
     }
 
-    /// The semester the link is for has ended: said above everything else.
     private var reimport: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(L("Re-import your timetable.")).font(.headline).foregroundStyle(Color.ink)
@@ -67,7 +63,6 @@ struct SettingsTimetablePane: View {
                         .autocorrectionDisabled()
                         .submitLabel(.go)
                         .onSubmit { model.importTimetable(link) }
-                        // NUSMods shares a sentence with the link in it: just the link is kept.
                         .onChange(of: link) { _, v in if let l = settingsNusmodsLink(in: v), l != v { link = l } }
                         .padding(.horizontal, 12)
                         .frame(minHeight: 44)
@@ -91,7 +86,6 @@ struct SettingsTimetablePane: View {
         }
     }
 
-    /// Classes whose room couldn't be placed: a stop for each, or Skip.
     @ViewBuilder private var unplacedList: some View {
         let list = model.unplaced
         if !list.isEmpty {
@@ -158,7 +152,6 @@ struct SettingsTimetablePane: View {
         }
     }
 
-    /// A favourite at its usual time each week: removable here with the classes.
     @ViewBuilder private func usualGroup(_ p: ProfileDoc) -> some View {
         let usual = p.usual.compactMap { u in p.places.first { $0.key == u.place }.map { (u, $0) } }
             .sorted { a, b in
@@ -189,24 +182,20 @@ struct SettingsTimetablePane: View {
     }
 }
 
-/// An unplaced class, while its stop is being picked.
 private struct UnplacedPick: Identifiable {
     let u: Unplaced
     var id: Unplaced { u }
 }
 
-/// A stop's name, or a food court's (favourites and classes can go to one).
 func settingsStopName(_ campus: Campus, _ code: String) -> String {
     campus.stops.first { $0.code == code }?.name ?? campus.destinations.first { $0.code == code && $0.kind == "landmark" }?.label ?? code
 }
 
-/// The NUSMods link in text that has more round it (NUSMods shares a sentence with the link in it).
 func settingsNusmodsLink(in text: String) -> String? {
     guard let r = text.range(of: #"https?://(?:www\.)?nusmods\.com/timetable/\S+"#, options: .regularExpression) else { return nil }
     return String(text[r]).trimmingCharacters(in: CharacterSet(charactersIn: ".,)"))
 }
 
-/// A class or commitment by hand: its day, times, name and where.
 private struct AddClassSheet: View {
     let model: SettingsModel
     @State private var day = 1

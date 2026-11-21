@@ -3369,6 +3369,139 @@ How `apps/android` behaves where the code alone doesn't say why
   for the start after. A signed-out session is ended on the server by a
   `LogoutWorker` with up to ten tries, the token in the job, not the
   settings.
+### The iPhone app
+
+`apps/ios/Sources/App`, by area; the controls it draws itself, and why, are
+in [ADR 0000](adr/0000-iphone-hand-made-controls.md).
+
+- **Refreshing (rule 2).** Every loop runs only while its screen is on
+  screen and the app active. Now's answer every 30 s (`AppModel.pollS`),
+  Nearby at the same pace; the Stops tab's pinned stop showing and the one
+  either side in one `/me/stops` request every 15 s (`BusPinned.window`,
+  not again within `BusesModel.minGapS`, 10 s), an open page's board or
+  line every 15 s, the lines' buses out (`/api/lines`, which reads every
+  service from NUS) at most once a minute (`BusLines.pollS`). Wide, a stop
+  open beside the home is asked for by its page alone (`stopBeside`), and
+  by `/me/stops` only every 5 minutes for its card's timetable guesses
+  (`guessGapS`). The map: buses every 5 s while a pill is on, a stop's
+  times every 15 s while its sheet is open, your dot every 20 s, each
+  doubling on failure up to a minute and never sooner than a 429's or
+  503's `Retry-After` (`MapModel.pollDelay`). A pull within 15 s of the
+  last answer (`Pull.freshS`, the edge cache's arrivals TTL) asks nothing
+  and says when the next timed refresh is. A board or line request isn't
+  cancelled with the page that made it: the page that replaces it skips
+  the stop as just asked, so that answer is the one it shows; a request
+  cancelled because the session went counts as not asked
+  (`BusAsk.cancelled`).
+- **Pinned cards.** A pinned stop's card is its own `/me/stops` answer
+  with its page's board merged in (`BusPinned.filled`, as Android's
+  `PinnedStop.withBoard` and the web's `withBoard`): each card row takes
+  the board's row for the same service and way (`towards`), else the
+  service's first row left, so a way the board lacks never takes the other
+  way's row; it gets the board's times, crowding and running state but
+  keeps its own words ("via UTown"), then the card's later buses the board
+  doesn't cover (`guessesAfter`: counted, not matched by time, and only
+  the timetable guesses past them). The merge always starts from the
+  card's own answer, never an earlier merge, whose guesses would come
+  round again.
+- **Sessions.** `AppModel.session` moves on with every sign-in and
+  sign-out, and an answer for an older session is dropped, in every model.
+  `MapModel` and `SettingsModel` outlive the tabs, so both are reset on
+  sign-in and sign-out. Woken by a push or a background refresh before
+  the phone's first unlock, the keychain can't be read: that isn't signed
+  out, and `AppModel` looks again once it can. A 401 for this phone's own
+  token signs it out; one for a token already replaced doesn't.
+- **Saving the profile.** Settings and setup show an edit at once and save
+  0.4 s later, so a run of taps is one save; one save is in flight at a
+  time and is never cancelled (whether it saved is known only from its
+  answer); changes made meanwhile are replayed on what it saved, and a
+  refusal puts back the last saved profile with the reason. Settings sends
+  the ETag as `If-Match` and on a 412 reads the profile again and makes its
+  changes on that (`ProfileDoc.missed` says so when a class it changed was
+  changed elsewhere). Setup doesn't save during a NUSMods import, whose
+  answer replaces the timetable, and saves what's waiting before one. The
+  profile is kept as JSON, so fields this version doesn't know survive.
+  The account's language and clock follow the account: one chosen on
+  another device is applied here, one picked here before the account had
+  one goes to it (`followAccount`); `TERMINUS_LANG` pins this phone's.
+- **Location.** Only while the app is in use (`Locator`). A fix under 60 s
+  old is used without asking again; an answer waits at most 1.5 s for a
+  new one, then goes with the last fix if it's under 10 minutes old (its
+  `acc` grown by 1.3 m/s since), and asks once more when the new fix comes
+  if it's 50 m from the one sent or the one sent was dropped (`acc` over
+  200 m, `MAX_FIX_ACC_M`) (`quickFix`, `refreshAgain`).
+- **Sign-in and pairing.** Codes are six characters from
+  `23456789ABCDEFGHJKMNPQRSTVWXYZ` (no 0/O, 1/I/L), as `PAIR_ALPHABET`.
+  A paste can bring words or land after typed text: the code is the last
+  six-character word that could be one, else the last six letters and
+  digits (`SignInCode.edit`). The email sign-in asks every 3 s for 15
+  minutes and stops on any 4xx but 429. A pairing link (`/pair?code=`,
+  from terminus.run, the beta, or the stub in a debug build) shows whose
+  account it is and waits for a yes, so a link can't quietly pair the
+  phone to a stranger's account.
+  The welcome screen's livery has the services' colours built in (as
+  `ROUTE_COLORS`), since it shows before there's an account. After this
+  phone signs in with an email, which ends the setup's other sessions, a
+  watch that was signed in gets a fresh pairing code unasked
+  (`WatchLink.accountChanged`); one signed out by its own Sign out doesn't.
+- **The map's files** (`MapFiles`, as the Mac's and Android's). One folder
+  per server, out of the backup. `/api/campus` is kept per language (the
+  server words it in the one asked in) and read once by `CampusStore` for
+  every reader; a copy of any age shows at once, one over an hour old is
+  checked in the background with its ETag. The style is fetched per theme
+  and language and kept only once it parses (a Wi-Fi sign-in page answers
+  200 too), and written to a new file name each time, since MapLibre
+  doesn't reload a style URL it already shows. The street map is
+  downloaded whole, checked weekly by ETag, and kept only if it starts a
+  PMTiles v3 header and is over 64 KB; each download gets its own name
+  (`campus-<id>.pmtiles`, recorded in `campus.pmtiles.json`), since
+  MapLibre keeps a file's header and directories by URL, and the old file
+  goes once a style naming the new one has loaded. A style that fails to
+  load drops the file only when the file itself fails that check.
+- **Drawing the map** (`CampusMapView`). Stop names come from a source of
+  their own: a tile waits for every layer from its source, and the names
+  wait for their font, which offline may never come. An invisible copy of
+  each dot is placed before the names, so no name covers a stop. Routes
+  are drawn in `/api/campus`'s order (a dictionary's changes per launch),
+  and a stop's services are kept as `" A1 D2 "` so `K` never matches
+  inside another code. MapLibre Native limits only the camera's centre, so
+  `PanLimit` limits the centre to the map less half the screen, further
+  by what a sheet hides, and the zoom to where the screen is still full of
+  map (the same as Android's and the Mac's). Buses slide on
+  `CLOCK_MONOTONIC_RAW`, which counts sleep, so an answer from before the
+  phone slept is stale (`Slides.staleS`, 15 s) and every bus jumps.
+- **Push, the Live Activity, reminders and the background refresh.** Push
+  tokens are sent again every 12 hours (`Push.resend`), since the server
+  drops one Apple stopped delivering to and nothing tells the phone; one
+  send at a time, so an older one can't register a token after a newer one
+  turned the setting off. A push is a nudge: the app fetches
+  `/api/me/next` and `TripSync` brings the widgets (reloaded only when
+  what they show changes, `shownKey`), the Live Activity and the reminders
+  in line. The notification delegate is on the main actor: iOS's
+  completion handler throws when called from any other thread. The Live
+  Activity (`LiveTrip`, iPhone only) is started only by the open app or by
+  the server's push-to-start; a stale one is updated, never ended, since
+  nothing could start it again; steps run one at a time, a step overtaken
+  by a later answer skipped; one no push can reach is ended by the app once
+  its trip is over; a finished trip lingers 10 minutes, as
+  `LIVE_DISMISS_S`. Reminders are local notifications scheduled from each
+  answer; their category is registered at launch, since a pushed alert can
+  carry it on a phone that has never scheduled one; with permission not yet
+  known (a background launch) they're asked about, not cleared. The
+  background refresh is asked for at the moment the kept answer next
+  changes, no sooner than iOS's 15 minutes, and only while a widget shows
+  it (counted at most every 10 minutes).
+- **Crash reports** (`CrashReports.swift`). An uncaught Objective-C
+  exception is written to disk as the app dies (no network) with its first
+  frame in the app; MetricKit reports the same crash later as SIGABRT, and
+  the report whose stack holds that frame address is dropped, which only
+  the same launch's crash can match, since the app loads at a new address
+  each launch. A report is dropped on any answer from the server, kept on a
+  5xx or none. The OS is sent as its major version only.
+- **Links** (`Links`): `terminus://plan`, `place/<key>`,
+  `to/<code>?label=…` and the tabs, as Android's. `to` only from the
+  app's own widgets, which carry `WidgetStore.linkKey`, so another app
+  can't add places with names of its choosing.
 
 ### Live buses on the map
 

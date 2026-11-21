@@ -1,10 +1,6 @@
 @preconcurrency import AVFoundation
 import SwiftUI
 
-/// Pair with a code from a signed-in phone or the account page. The code is
-/// the screen: six split-flap tiles that fill as it's typed, like a departure
-/// board settling. Where to find a code sits under it, then scanning the QR
-/// code the account page shows, and Pair at the foot, above the keyboard.
 struct PairView: View {
     let model: WelcomeModel
     @State private var code = ""
@@ -85,14 +81,12 @@ struct PairView: View {
 
     private var tiles: some View {
         ZStack {
-            // The field is there for the keyboard and Paste; the tiles show what's typed.
             TextField(
                 "",
                 text: Binding(
                     get: { code },
                     set: { new in
                         let clean = SignInCode.edit(old: code, new: new)
-                        // The sixth character, typed or pasted, pairs.
                         let full = clean.count == SignInCode.length && code.count < SignInCode.length
                         code = clean
                         if model.pairError != nil { model.pairError = nil }
@@ -126,7 +120,6 @@ struct PairView: View {
     }
 }
 
-/// One character of the code on a split-flap tile: dark in light and dark, as the boards are.
 private struct Flap: View {
     let char: Character?
     let current: Bool
@@ -165,7 +158,6 @@ private struct Flap: View {
     }
 }
 
-/// Where to find a code: on a phone, or on the web (which opens it).
 private struct WhereCard: View {
     let icon: String
     let title: String
@@ -190,9 +182,6 @@ private struct WhereCard: View {
     }
 }
 
-// MARK: scanning
-
-/// The QR code the account page (or another phone) shows, through the camera.
 private struct ScanSheet: View {
     let found: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -261,13 +250,11 @@ private struct ScanSheet: View {
     }
 }
 
-/// The camera's picture, reading QR codes. Each new one read is passed on once.
 private struct Scanner: UIViewRepresentable {
     let read: (String) -> Void
 
     enum Access { case allowed, undecided, refused }
 
-    /// A phone without a camera (the simulator) offers no scanning: typing is the way.
     static var hasCamera: Bool { AVCaptureDevice.default(for: .video) != nil }
 
     static var access: Access {
@@ -294,7 +281,6 @@ private struct Scanner: UIViewRepresentable {
         {
             guard let text = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue, text != last else { return }
             last = text
-            // Delivered on the main queue (setMetadataObjectsDelegate below).
             MainActor.assumeIsolated {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 read(text)
@@ -318,7 +304,6 @@ private struct Scanner: UIViewRepresentable {
         c.session.addOutput(output)
         output.setMetadataObjectsDelegate(c, queue: .main)
         output.metadataObjectTypes = [.qr]
-        // Starting the camera takes a moment: off the main thread.
         DispatchQueue.global(qos: .userInitiated).async { c.session.startRunning() }
         return view
     }

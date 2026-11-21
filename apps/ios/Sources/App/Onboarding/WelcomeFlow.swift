@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Signed out: the welcome screen, then signing in or pairing, each a page
-/// pushed over it (swipe back, or Back, to return).
 struct WelcomeFlow: View {
     @State private var path: [Page] = []
     @State private var model = WelcomeModel.shared
@@ -19,7 +17,6 @@ struct WelcomeFlow: View {
                     }
                 }
         }
-        // A pairing link: whose account it is, and a yes before anything happens.
         .alert(
             (onIPad ? L("Pair this iPad?") : L("Pair this phone?")),
             isPresented: Binding(get: { model.pendingPair != nil }, set: { if !$0 { model.pendingPair = nil } }),
@@ -40,20 +37,12 @@ struct WelcomeFlow: View {
     }
 }
 
-/// First launch: start straight away, or sign in to an account you already
-/// have. A bus's livery sweeps across the top, a stripe in each service's
-/// colour, with the mark where the fleet number would be; the buttons sit at
-/// the foot, under the thumb. It fits the screen; it scrolls only when
-/// large text can't fit.
 struct WelcomeView: View {
     let model: WelcomeModel
     let open: (WelcomeFlow.Page) -> Void
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        // Fitted to the screen, the livery taking what's left, so there's
-        // nothing to drag on any phone; it scrolls only when large text
-        // can't fit, rather than cutting the buttons off.
         ViewThatFits(in: .vertical) {
             page(livery: 130...360)
             ScrollView { page(livery: 160...160) }
@@ -66,7 +55,6 @@ struct WelcomeView: View {
             LanguageSwitch()
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, 12)
-            // The livery grows with the screen, so a tall phone isn't left with a gap.
             ZStack(alignment: .bottom) {
                 WelcomeLivery()
                 TerminusMark()
@@ -104,7 +92,6 @@ struct WelcomeView: View {
                 Banner(text: L("Update terminus to keep using it.")) {}
                     .padding(.bottom, 12)
             }
-            // Said as soon as it shows: it's why nothing happened.
             if let m = model.message ?? (model.pendingPair == nil ? model.pairError : nil) ?? app.signedOutReason {
                 Text(m)
                     .font(.subheadline)
@@ -147,9 +134,6 @@ struct WelcomeView: View {
     }
 }
 
-/// "English · 中文" on the first screen, before there's an account to keep it
-/// in. The one in use is the selected one, in the ink; each name is in its own
-/// language, so VoiceOver says it in that voice.
 private struct LanguageSwitch: View {
     @Environment(Prefs.self) private var prefs
 
@@ -174,14 +158,7 @@ private struct LanguageSwitch: View {
     }
 }
 
-/// The stripes down a bus's side, rising to the right: one per service (P's
-/// grey would dull it), then a gap and a thin line in the accent. Sized by the
-/// height it's given, with the rise capped, so a wide screen gets a flatter
-/// band rather than a steeper cut.
 struct WelcomeLivery: View {
-    /// The services as NUS paints them. The API's ROUTE_COLORS (campus.ts) is
-    /// the source and every other screen takes them from /api/campus; this one
-    /// shows before there's an account to ask with.
     static let services: [(svc: String, color: String)] = [
         ("A1", "#D32F2F"), ("A2", "#D9A000"), ("D1", "#EC4FA0"), ("D2", "#8E44C9"),
         ("K", "#2B9AD6"), ("R1", "#F57C1F"), ("R2", "#34A853"), ("P", "#8A939C"),
@@ -191,11 +168,8 @@ struct WelcomeLivery: View {
         Canvas { g, size in
             let rise = min(size.width * 0.25, 110)
             let unit = size.height / 300
-            // The band's lower edge, a fifth of the way up in the middle: the mark sits on it.
             let left = size.height - 60 * unit + rise / 2
             let right = left - rise
-            // A strip between two heights above the lower edge, each overlapping
-            // the next by a point so no hairline of background shows between them.
             func strip(_ from: CGFloat, _ to: CGFloat, _ color: Color) {
                 var p = Path()
                 p.move(to: CGPoint(x: 0, y: left - from))
@@ -217,13 +191,9 @@ struct WelcomeLivery: View {
     }
 }
 
-/// The mark, as the site draws it (assets/mark.svg): an orange T and a white
-/// stop on the dark stone, the same in both modes, like the app's icon.
-/// Decoration only: the wordmark beside it says the name.
 struct TerminusMark: View {
     var body: some View {
         Canvas { g, size in
-            // mark.svg's 64-unit grid.
             let u = min(size.width, size.height) / 64
             let orange = Color(rgb: 0xFB923C)
             func rr(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ r: CGFloat) -> Path {

@@ -1,26 +1,13 @@
 import SwiftUI
 import UIKit
 
-/*
- * The parts every page of Settings is made of, as on Android (SettingsParts.kt)
- * and the web (settings-pages.js): the page's title in a band of the sky, then
- * groups down the page, each a small grey heading in capitals, a card of rows
- * and at most one grey line under it. A row is a name, maybe a line under it,
- * and one control on the right. Red is only for deleting the account.
- */
-
-/// A page of Settings: its title (with Back, off the list) in the sky's band,
-/// then `content` down the page, scrolling together.
 struct SettingsScaffold<Content: View>: View {
     let title: String
     var back = true
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
-    /// The first page in a wide detail pane: nothing to go back to.
     @Environment(\.paneRoot) private var paneRoot
-    /// The band has scrolled up under the status bar: a strip of the page
-    /// goes behind the status bar, so the time never sits on the words.
     @State private var scrolled = false
     @State private var safeTop: CGFloat = 60
     private let clock = SkyClock.shared
@@ -31,8 +18,6 @@ struct SettingsScaffold<Content: View>: View {
         self.content = content()
     }
 
-    /// Pushed over another page, with Back. The first page in a wide detail pane
-    /// has the list's header instead, so the horizons beside each other line up.
     private var pushed: Bool { back && !paneRoot }
 
     var body: some View {
@@ -74,7 +59,6 @@ struct SettingsScaffold<Content: View>: View {
         .background(SwipeBack())
     }
 
-    /// Pushed, Back and the page's name; else the tab's own band, as on Nearby and Stops.
     @ViewBuilder private var band: some View {
         if pushed {
             SkyBand(moonLow: true) {
@@ -103,7 +87,6 @@ struct SettingsScaffold<Content: View>: View {
     }
 }
 
-/// A group's heading, its rows in one card, and at most one line under them.
 struct SettingsGroup<Content: View>: View {
     var title: String?
     var hint: String?
@@ -121,13 +104,11 @@ struct SettingsGroup<Content: View>: View {
     }
 }
 
-/// A line between rows of a group, from the text's edge, as iOS draws them.
 struct GroupDivider: View {
     var inset: CGFloat = 16
     var body: some View { Rectangle().fill(Color.line).frame(height: 1).padding(.leading, inset) }
 }
 
-/// A setting's explanation, under it.
 struct SettingsHint: View {
     let text: String
     var color: Color = .muted
@@ -141,7 +122,6 @@ struct SettingsHint: View {
     }
 }
 
-/// One setting: its name (and a line under it), then its control.
 struct SettingRow<Control: View>: View {
     let label: String
     var sub: String?
@@ -149,7 +129,6 @@ struct SettingRow<Control: View>: View {
     @Environment(\.dynamicTypeSize) private var type
 
     var body: some View {
-        // At the largest text sizes the control goes under its name, where it has the width.
         let layout =
             type.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 12))
         layout {
@@ -166,7 +145,6 @@ struct SettingRow<Control: View>: View {
     }
 }
 
-/// A switch with its name and a line under it; the whole row is the target.
 struct SettingSwitch: View {
     let label: String
     var sub: String?
@@ -188,7 +166,6 @@ struct SettingSwitch: View {
     }
 }
 
-/// A row that opens something: in the app (›) or `away` in Safari (↗).
 struct SettingLink: View {
     let title: String
     var sub: String?
@@ -221,7 +198,6 @@ struct SettingLink: View {
     }
 }
 
-/// The last row of a list: "+ Add …".
 struct SettingsAddRow: View {
     let title: String
     var id: String?
@@ -248,10 +224,8 @@ struct SettingsAddRow: View {
     }
 }
 
-/// Remove, quietly: grey, not the accent.
 struct QuietRemove: View {
     var title: String?
-    /// What VoiceOver says, naming what goes ("Remove Gym").
     let says: String
     let action: () -> Void
 
@@ -266,14 +240,12 @@ struct QuietRemove: View {
     }
 }
 
-/// A row's own highlight while it's held, as a list row's.
 struct SettingsRowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.background(configuration.isPressed ? Color.surface2 : Color.clear)
     }
 }
 
-/// The page's main action, in the ink, as the chosen chip on Now is (Android's InkButton).
 struct SettingsInkButtonStyle: ButtonStyle {
     var full = false
     @Environment(\.isEnabled) private var enabled
@@ -290,7 +262,6 @@ struct SettingsInkButtonStyle: ButtonStyle {
     }
 }
 
-/// Two or three choices as segments: auto, light, dark.
 struct SettingSegments: View {
     let label: String
     let options: [(String, String)]
@@ -307,7 +278,6 @@ struct SettingSegments: View {
     }
 }
 
-/// What happened (a save refused, data exported), floating at the foot with Undo where there's one.
 struct SettingsToast: View {
     let model: SettingsModel
 
@@ -339,7 +309,6 @@ struct SettingsToast: View {
     }
 }
 
-/// The email's first letter on a disc in the accent, for the account.
 struct AccountInitial: View {
     let email: String
     var size: CGFloat = 44
@@ -354,12 +323,10 @@ struct AccountInitial: View {
     }
 }
 
-/// The app's mark, as on its icon: About's, and where there's no email to show.
 struct SettingsMark: View {
     var size: CGFloat = 44
 
     var body: some View {
-        // mark.svg's 64-unit grid, as the app's icon and Android's BrandMark.
         Canvas { ctx, box in
             let u = min(box.width, box.height) / 64
             let orange = Color(red: 0xFB / 255, green: 0x92 / 255, blue: 0x3C / 255)
@@ -378,15 +345,11 @@ struct SettingsMark: View {
     }
 }
 
-// MARK: times and days
-
 enum SettingsTime {
-    /// "9:30 AM" or "09:30" for minutes past midnight, in the account's clock style.
     static func clock(_ min: Int) -> String {
         clockText(Date(timeIntervalSince1970: TimeInterval(min * 60)), in: TimeZone(identifier: "UTC")!)
     }
 
-    /// "Mon" in the app's language; `day` is 0 for Sunday, as the profile keeps it.
     static func dayShort(_ day: Int) -> String { weekday(day, short: true) }
     static func dayLong(_ day: Int) -> String { weekday(day, short: false) }
 
@@ -396,7 +359,6 @@ enum SettingsTime {
         return (short ? cal.shortWeekdaySymbols : cal.weekdaySymbols)[((day % 7) + 7) % 7]
     }
 
-    /// Minutes past midnight as a date the time pickers can show, in UTC, so no zone moves it.
     static func date(_ min: Int) -> Date { Date(timeIntervalSince1970: TimeInterval(min * 60)) }
 
     static func minutes(_ d: Date) -> Int {
@@ -406,7 +368,6 @@ enum SettingsTime {
         return (c.hour ?? 0) * 60 + (c.minute ?? 0)
     }
 
-    /// The app's language, with the account's 12- or 24-hour clock, for the time pickers.
     static var pickerLocale: Locale {
         var c = Locale.Components(locale: Lang.locale)
         c.hourCycle = Clock.hour12 ? .oneToTwelve : .zeroToTwentyThree
@@ -414,7 +375,6 @@ enum SettingsTime {
     }
 }
 
-/// "1 class", "12 classes"; "No classes yet".
 func settingsClassCount(_ n: Int) -> String {
     switch n {
     case 0: L("No classes yet")
@@ -425,18 +385,12 @@ func settingsClassCount(_ n: Int) -> String {
 
 func settingsDeviceCount(_ n: Int) -> String { n == 1 ? L("1 device") : L("%@ devices", "\(n)") }
 
-/// ", " between items, "、" in Chinese.
 var settingsListSep: String { L(", ") }
 
-/// Opens a page on the web, out of the app.
 @MainActor func openInSafari(_ url: String) {
     if let u = URL(string: url) { UIApplication.shared.open(u) }
 }
 
-// MARK: swiping back
-
-/// The page's own title replaces the navigation bar, which takes the edge
-/// swipe back with it; this gives the swipe back to the stack it's in.
 struct SwipeBack: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Controller { Controller() }
     func updateUIViewController(_ vc: Controller, context: Context) {}

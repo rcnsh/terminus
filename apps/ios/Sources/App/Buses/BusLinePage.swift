@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// A service's line, top to bottom in its colour: each stop, the buses at a
-/// stop or between two, and the stop it was opened from with its time.
 struct BusLinePage: View {
     let svc: String
     let from: String?
@@ -15,10 +13,8 @@ struct BusLinePage: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let now = ServerClock.now
-            // Refreshes failing: your stop's time counted down, not passed off as live.
             let line = model.lines[key]?.aged(now)
             let color = line?.color ?? model.color(svc)
-            // Your stop, where the line drawn from the campus data has it while the line comes.
             let waitingAt =
                 line == nil && !model.lineFailed.contains(key)
                 ? from.flatMap { LineSkeleton.stops(svc, campus: model.campus)?.firstIndex(of: $0) } : nil
@@ -33,22 +29,17 @@ struct BusLinePage: View {
                         }
                         .busBandEnd()
                         .id("top")
-                        // One stack, so the padding goes round the whole of it and not round each part.
                         VStack(alignment: .leading, spacing: 0) { content(line, color, now) }
                             .column()
                             .padding(.bottom, 24)
                     }
                 }
                 .background(Color.page)
-                // Opened from a stop: scrolled to it once, so your stop is in view with the buses coming to it,
-                // already while the line is on its way, so it doesn't jump when it comes.
-                // Not running, the note at the top says it all: no scrolling past it.
                 .onChange(of: line?.here?.index ?? waitingAt, initial: true) { _, i in
                     guard let i, !scrolled, line?.running != false else { return }
                     scrolled = true
                     withAnimation(.snappy) { proxy.scrollTo("s\(i)", anchor: UnitPoint(x: 0.5, y: 0.35)) }
                 }
-                // The line's first arrival shows it isn't running: back up to the note, scrolled past it while waiting.
                 .onChange(of: line == nil) { _, waiting in
                     guard !waiting, line?.running == false, scrolled else { return }
                     withAnimation(.snappy) { proxy.scrollTo("top", anchor: .top) }
@@ -73,9 +64,7 @@ struct BusLinePage: View {
         }
     }
 
-    /// The service and how many buses it has out, in the sky.
     private func heading(_ line: Line?, _ color: String?) -> some View {
-        // The line drawn from the campus data while it comes: only its summary is a bar.
         let waiting = line == nil && !model.lineFailed.contains(key) && LineSkeleton.stops(svc, campus: model.campus) != nil
         return SkyHeading(svc: svc, line: line, color: color, waiting: waiting)
             .column()
@@ -84,7 +73,6 @@ struct BusLinePage: View {
 
     @ViewBuilder private func content(_ line: Line?, _ color: String?, _ now: Date) -> some View {
         if let line, let st = Stopped.of(running: line.running, why: line.stopped, resumesAt: line.resumesAt, now: now) {
-            // Not running: why and when it's back, over the stops (it has no buses to show).
             let (why, back) = st.lines
             VStack(alignment: .leading, spacing: 2) {
                 Text(why).font(.headline)
@@ -125,21 +113,12 @@ struct BusLinePage: View {
     }
 }
 
-/// The line before it comes. With the campus data it's drawn for real, as
-/// the line will have it: the rail in the service's colour, each stop's
-/// name, the other services there and how many stops; only "Updated" is a
-/// bar. Without it, six rows on a faded rail, each name a bar. No buses
-/// either way: a made-up one would read as real.
 private struct LineSkeleton: View {
     let svc: String
-    /// The stop it was opened from: marked as yours, its time a bar.
     let from: String?
     let campus: BusCampus?
     let color: String?
 
-    /// The stops the line will list, from the campus data: a loop's first
-    /// stop again at the end, as `/api/line` has it. Nil without the
-    /// route, or with one of no stops (never "0 stops").
     static func stops(_ svc: String, campus: BusCampus?) -> [String]? {
         guard let r = campus?.routes[svc], !r.seq.isEmpty else { return nil }
         return r.seq + (r.loop && r.seq.count > 1 ? [r.seq[0]] : [])
@@ -148,7 +127,6 @@ private struct LineSkeleton: View {
     var body: some View {
         let rgb = color.flatMap(hexRGB) ?? 0x8A847E
         if let seq = Self.stops(svc, campus: campus) {
-            // Your stop where the line first calls there, as `/api/line` places it.
             let here = from.flatMap { seq.firstIndex(of: $0) }
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -161,7 +139,6 @@ private struct LineSkeleton: View {
                 VStack(spacing: 0) {
                     ForEach(Array(seq.enumerated()), id: \.offset) { i, code in
                         let stop = campus?.stop(code)
-                        // The same layout and padding as LineList's rows, so nothing moves when the line comes.
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(alignment: .center, spacing: 8) {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -208,13 +185,11 @@ private struct LineSkeleton: View {
                     }
                 }
             }
-            // One wave over the bars; the rail is real and stays still.
             .shimmering()
             .skeletonSpoken()
         }
     }
 
-    /// Your stop's time on its way, in HereTime's place: the time, how it's known, the next ones.
     private var hereTime: some View {
         VStack(alignment: .trailing, spacing: 2) {
             SkeletonLine(font: .system(size: 34, weight: .bold), points: 64).frame(width: 64)
@@ -225,7 +200,6 @@ private struct LineSkeleton: View {
         .accessibilityHidden(true)
     }
 
-    /// The other services at the stop, as the line lists them.
     @ViewBuilder private func badges(_ stop: BusCampus.Stop?) -> some View {
         let others = stop?.services.filter { $0 != svc } ?? []
         if !others.isEmpty {
@@ -240,7 +214,6 @@ private struct SkyHeading: View {
     let svc: String
     let line: Line?
     let color: String?
-    /// The line is on its way: its summary is a bar.
     var waiting = false
     @Environment(\.inks) private var inks
 
@@ -248,7 +221,6 @@ private struct SkyHeading: View {
         HStack(spacing: 14) {
             BusChip(svc: svc, color: color, big: true)
             if waiting {
-                // Room for "Runs until" under it too, so the band doesn't grow when the line comes.
                 VStack(alignment: .leading, spacing: 2) {
                     SkeletonLine(font: .title3.weight(.semibold), points: 150)
                     Text(verbatim: " ").hidden()
@@ -269,7 +241,6 @@ private struct SkyHeading: View {
     }
 }
 
-/// The line top to bottom in the service's colour: a node per stop, the buses on it at a stop or between two.
 private struct LineList: View {
     let line: Line
     let color: String?
@@ -338,7 +309,6 @@ private struct LineList: View {
     }
 }
 
-/// Your stop's time on the line, from its board row: the only time on the page.
 private struct HereTime: View {
     let row: BoardRow
     var body: some View {
@@ -353,7 +323,6 @@ private struct HereTime: View {
     }
 }
 
-/// The plates and how full each bus is.
 private struct BusesOnLine: View {
     let buses: [Line.Bus]
     let `where`: String
@@ -378,14 +347,12 @@ private struct Plate: View {
     }
 }
 
-/// The line's stretch beside one row: the line through it, and its stop's node or a bus.
 private struct Rail: View {
     let rgb: UInt32
     let first: Bool
     let last: Bool
     let bus: Bool
     let here: Bool
-    /// The line still on its way: the service's colour faded, as a skeleton.
     var faded = false
 
     var body: some View {
@@ -421,7 +388,6 @@ private struct Rail: View {
     }
 }
 
-/// Views in rows, wrapping onto the next when the width runs out.
 struct BusFlow: Layout {
     var spacing: CGFloat = 6
 

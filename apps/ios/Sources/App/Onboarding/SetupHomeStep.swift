@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// Where do you live? A residence brings all its stops; off campus, pick one.
 struct SetupHomeStep: View {
     let model: OnboardingModel
 
     var body: some View {
-        // Continue means a home is set; with none yet it's a skip, said as one.
         SetupPage(
             title: L("Where do you live?"),
             sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved."), message: model.message
@@ -24,10 +22,6 @@ struct SetupHomeStep: View {
     }
 }
 
-/// Residences as tiles: where most students live on their own at the top, then
-/// a few of the others (the chosen one always among those showing) and off
-/// campus. Your stops follow as their signs, with the buses that call there, so
-/// the choice shows what it does.
 private struct SetupHomePicker: View {
     let model: OnboardingModel
     let campus: Campus
@@ -35,7 +29,6 @@ private struct SetupHomePicker: View {
     @State private var all = false
     private let locator = Locator.shared
 
-    /// How many of the other residences show before "All 15 halls and colleges".
     private static let few = 4
 
     private enum Cell: Hashable {
@@ -46,7 +39,6 @@ private struct SetupHomePicker: View {
     var body: some View {
         let stops = model.homeStops
         let residence = model.residence
-        // Off campus once chosen, or when the stops are no residence's.
         let off = offCampus ?? (!stops.isEmpty && residence == nil)
         let common = campus.residences.filter { $0.common == true }
         let (shown, collapsed) = others(chosen: residence)
@@ -76,7 +68,6 @@ private struct SetupHomePicker: View {
         }
     }
 
-    /// The other residences showing, and whether some are folded away behind "All".
     private func others(chosen: Campus.Residence?) -> ([Campus.Residence], Bool) {
         let others = campus.residences.filter { $0.common != true }
         guard others.count > Self.few + 1 && !all else { return (others, false) }
@@ -124,7 +115,6 @@ private struct SetupHomePicker: View {
         }
     }
 
-    /// Off campus: the stop you start from, from a menu, or the one nearest the phone.
     @ViewBuilder private func homeStop(_ stops: [String]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Menu {
@@ -181,7 +171,6 @@ private struct SetupHomePicker: View {
     }
 }
 
-/// A stop's sign: its name on the plate, the bus mark in the accent, and the services that call there.
 struct SetupStopSign: View {
     let name: String
     let services: [String]
@@ -216,7 +205,6 @@ struct SetupStopSign: View {
     }
 }
 
-/// Views left to right, wrapping onto the next line when there's no room.
 struct SetupFlowRow: Layout {
     var spacing: CGFloat = 6
 

@@ -1,22 +1,15 @@
 import Foundation
 import WidgetKit
 
-/// Keeps everything outside the app in step with the plan: the widgets, the
-/// Live Activity and the leave reminders, from every answer the app gets
-/// (AppModel), a push brings, or the background refresh fetches.
 @MainActor enum TripSync {
-    /// The last plan the widgets were redrawn for, as they show it.
     private static var shown: String?
 
     static func answered(_ answer: NextAnswer) {
-        // AppModel has kept the answer itself (Shared.lastAnswer); when it came is kept here.
         WidgetStore.answerAt = Date()
         WidgetStore.error = nil
         if let loc = Locator.shared.last {
             WidgetStore.saveLocation(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude, acc: loc.acc, at: loc.timestamp)
         }
-        // Redrawn only when what they show has changed: a refresh every 30 s
-        // mostly moves bus times the widgets don't show.
         let key = shownKey(answer)
         if key != shown {
             shown = key
@@ -29,15 +22,12 @@ import WidgetKit
         countWidgets()
     }
 
-    /// A new language: the widgets redraw in it, whatever the next answer says.
     static func restyled() {
         shown = nil
         WidgetCenter.shared.reloadAllTimelines()
     }
 
     static func signedIn() {
-        // Maybe another account than the last (a sign-in from a guest): what the
-        // widgets kept was that one's, so they fetch this one's rather than show it.
         Shared.lastAnswer = nil
         Shared.lastDay = nil
         WidgetStore.forget()
@@ -47,7 +37,6 @@ import WidgetKit
     }
 
     static func signedOut() {
-        // Called before the token goes: the server can still be told to stop pushing.
         Push.signedOut()
         Reminders.forget()
         WidgetStore.forget()
@@ -57,14 +46,10 @@ import WidgetKit
         Background.schedule()
     }
 
-    /// The leave alerts or the Live Activity turned on or off in Settings.
     static func prefsChanged() {
         Task { await applyPrefs() }
     }
 
-    /// Turn off, on the Live Activity: the setting goes off, as Android's
-    /// Turn off on its live notification does, and the activity with it.
-    /// Done once the server knows, so it starts none by push.
     static func liveTurnedOff() async {
         TripPrefs.liveActivity = false
         await applyPrefs()
@@ -83,13 +68,10 @@ import WidgetKit
         Background.schedule()
     }
 
-    /// Something outside the app shows the plan: a widget, the reminders or the Live Activity.
     static var followed: Bool {
         TripPrefs.leaveAlerts || TripPrefs.liveActivity || Shared.defaults.integer(forKey: "widgets.count") > 0
     }
 
-    /// Fetches the plan with the app closed (a push, the background refresh)
-    /// and lets everything outside the app follow it. True when it came.
     @discardableResult
     static func refresh(force: Bool) async -> Bool {
         guard followed || force else { return true }
@@ -99,16 +81,12 @@ import WidgetKit
             return false
         }
         answered(a)
-        // The day plan kept for offline, when it's another day's or over an hour old.
         if before?.dest?.label != a.dest?.label || dayDue() { await keepDay() }
         await WidgetStore.refreshChosen()
-        // Buses near you, with the phone's last place only: not the home stop it may be far from.
         if NearbyShared.wanted { await NearbyShared.refreshIfDue(needsPlace: true) }
         return true
     }
 
-    /// A board of buses near you fetched in the app (the Nearby tab): kept for
-    /// the widgets, which are redrawn with it while one shows it.
     static func nearbyFetched(_ data: Data, token: String) {
         guard NearbyShared.keep(data, sentWith: token) else { return }
         if NearbyShared.wanted { WidgetCenter.shared.reloadTimelines(ofKind: "nearby") }
@@ -118,8 +96,6 @@ import WidgetKit
         }
     }
 
-    /// "Not going", from a reminder's button: the class taken off today, as
-    /// the app's button does; then the reminders and the rest follow the new plan.
     static func skip(trip: String) async {
         guard let token = TokenStore.read() else { return }
         do {
@@ -129,13 +105,9 @@ import WidgetKit
             Reminders.clear()
             answered(a)
         } catch {
-            // Left as it was: the app can be opened, or the button tried again.
         }
     }
 
-    // MARK: helpers
-
-    /// What the widgets show of an answer: they're redrawn when it changes.
     static func shownKey(_ a: NextAnswer) -> String {
         let c = a.card
         let j = c?.journey
@@ -164,10 +136,6 @@ import WidgetKit
 
     private static var countedAt: Date?
 
-    /// How many widgets are on the Home and Lock Screens, so the background
-    /// refresh and push run only while something shows them; and how many
-    /// show buses near you (Buses near you, the large widgets' next buses),
-    /// for NearbyShared.wanted. Asked at most every ten minutes.
     private static func countWidgets() {
         if let countedAt, -countedAt.timeIntervalSinceNow < 600 { return }
         countedAt = Date()

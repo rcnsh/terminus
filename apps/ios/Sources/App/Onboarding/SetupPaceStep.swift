@@ -1,13 +1,8 @@
 import SwiftUI
 
-/// How you get around: the pace as a lap of a running track (400 m, something
-/// people have walked round) with the chosen pace's time in the middle; the
-/// three paces; "allow for packed buses", with the trade it makes drawn under
-/// it; then 12- or 24-hour times.
 struct SetupPaceStep: View {
     let model: OnboardingModel
 
-    /// Each pace, and how long a lap of a 400 m track takes at it.
     private var paces: [(value: String, title: String, lap: Int)] {
         [("slow", L("Slow"), 6), ("normal", L("Normal"), 5), ("fast", L("Fast"), 4)]
     }
@@ -45,12 +40,10 @@ struct SetupPaceStep: View {
     }
 }
 
-/// A running track, from above: the lap's time at your pace in the infield.
 private struct SetupTrack: View {
     let lapMin: Int
     @Environment(\.colorScheme) private var scheme
 
-    /// A running track's own red, the same in light and dark.
     private static let track = Color(rgb: 0xB4533A)
 
     var body: some View {
@@ -70,7 +63,6 @@ private struct SetupTrack: View {
                     Path(
                         roundedRect: CGRect(x: lane, y: lane, width: size.width - 2 * lane, height: size.height - 2 * lane),
                         cornerRadius: r - lane), with: .color(infield))
-                // The finish line, and you on the far bend.
                 var finish = Path()
                 finish.move(to: CGPoint(x: size.width / 2, y: 0))
                 finish.addLine(to: CGPoint(x: size.width / 2, y: lane))
@@ -96,7 +88,6 @@ private struct SetupTrack: View {
     }
 }
 
-/// "Allow for packed buses", with an example of what it does: the earlier R2 instead of the packed one.
 private struct SetupBusyBuses: View {
     let model: OnboardingModel
 
@@ -152,8 +143,6 @@ private struct SetupBusyBuses: View {
     }
 }
 
-/// 12- or 24-hour, as two halves of one switch, each an example time. The
-/// phone's own style shows picked until another is (Settings has "follow the phone").
 private struct SetupClockSwitch: View {
     let model: OnboardingModel
 

@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Now before its first answer: the card's shape in bars, the trip's top in
-/// the sky (where to, "Leave in", by when and Live) and its steps on the
-/// ground, so the answer fills in without the page moving. No buttons: one
-/// that can't be pressed yet would read as broken.
 struct NowSkeletonHead: View {
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
 
@@ -23,7 +19,6 @@ struct NowSkeletonHead: View {
     }
 }
 
-/// The ground under it: the road's line, then three steps of the trip.
 struct NowSkeletonGround: View {
     @ScaledMetric(relativeTo: .subheadline) private var timeWidth: CGFloat = 72
 
@@ -46,10 +41,8 @@ struct NowSkeletonGround: View {
         .accessibilityHidden(true)
     }
 
-    /// The steps' kinds: the walk to the stop, the ride, where you're going.
     private enum Kind { case walk, ride, end }
 
-    /// One point of the steps, in the boxes StepsLine's LinePoint has for its kind.
     private func step(_ kind: Kind, title: CGFloat, below: CGFloat) -> some View {
         let rail = kind != .end
         let ride = kind == .ride

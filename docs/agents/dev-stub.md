@@ -93,9 +93,24 @@ starts on terminus.run, and its first answers come from NUS (rule 2). Give
 each agent its own `PORT` and stop only the stub you started, by its PID.
 
 - **iPhone (Simulator, debug build):** the app reads `TERMINUS_*`
-  variables from its environment (the list and what each does are in
-  `DevLaunch`, `apps/ios/Sources/App/TerminusApp.swift`). Set them in the
-  simulator's launchd, then launch the app:
+  variables from its environment (most in `DevLaunch`,
+  `apps/ios/Sources/App/TerminusApp.swift`):
+  - `TERMINUS_RESET=1` starts signed out with nothing kept;
+    `TERMINUS_TOKEN` (and `TERMINUS_EMAIL`) signs in with that token, set
+    up; `TERMINUS_API_BASE` the server (the stub at
+    `http://localhost:8787` is also kept as the developer menu's choice,
+    so it stays on it when opened from the home screen).
+  - `TERMINUS_LANG=en|zh|auto` the language, which then goes to the
+    account rather than the other way round; `TERMINUS_THEME=light|dark`;
+    `TERMINUS_CARD_STYLE=steps|route`; `TERMINUS_NEW_TO_NUS=1|0`;
+    `TERMINUS_SKY=night|dawn|day|golden|dusk` one hour's sky.
+  - `TERMINUS_VIEW=nearby` opens on Nearby; `TERMINUS_OPEN_STOP=<code>` a
+    stop's page on Stops; `TERMINUS_MAP_SVC` turns a map pill on,
+    `TERMINUS_MAP_STOP` opens a stop's sheet, `TERMINUS_MAP_BUS=1` the
+    first bus's; `TERMINUS_ALERTS=1` and `TERMINUS_LIVE=1` turn the leave
+    alerts and the Live Activity on.
+
+  Set them in the simulator's launchd, then launch the app:
 
   ```sh
   TOK=$(curl -s -X POST http://127.0.0.1:$PORT/__stub/session | python3 -I -c 'import sys,json; print(json.load(sys.stdin)["token"])')

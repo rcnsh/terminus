@@ -1,20 +1,10 @@
 import SwiftUI
 
-/*
- * A stop's board, as the Android app draws it (BusesScreen.kt): a card with
- * a row per service, its colour chip, where it goes and its next stop, how
- * sure the time is when it isn't live and how full the bus is, and the
- * minutes large on the right, a green dot beside a live one. A service not
- * running is greyed, with why and when it's back. Every time is the server's.
- */
-
-/// A service as it's painted on the bus, larger, for the board's rows and the line's heading.
 struct BusChip: View {
     let svc: String
     let color: String?
     var paid = false
     var big = false
-    /// At least this wide: a list's badges all as wide as its widest.
     var width: CGFloat = 0
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
@@ -33,18 +23,15 @@ struct BusChip: View {
     }
 }
 
-/// The board: a row per service, the running ones first.
 struct BusBoardCard: View {
     let board: Board?
     let failed: Bool
     let colors: [String: String]
-    /// The services the campus data says call here, for the rows' badges before the board comes.
     var services: [String] = []
     let onRow: (BoardRow) -> Void
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
-            // Refreshes failing: the times counted down, none passed off as live.
             let now = ServerClock.now
             let b = board?.aged(now)
             VStack(alignment: .leading, spacing: 0) {
@@ -80,9 +67,6 @@ struct BusBoardCard: View {
     }
 }
 
-/// The board before it comes: a row per service known to call here, its
-/// badge real, where it goes and its times as bars, in the running rows'
-/// boxes; three rows of bars when none is known.
 private struct BoardSkeleton: View {
     let services: [String]
     let colors: [String: String]
@@ -118,13 +102,11 @@ private struct BoardSkeleton: View {
                 .padding(.vertical, 14)
             }
         }
-        // One wave over the bars; the badges are real and stay still.
         .shimmering()
         .skeletonSpoken()
     }
 }
 
-/// One service at the stop. A public bus has no line page (/line is the shuttles'), so no chevron.
 struct BusBoardRowView: View {
     let row: BoardRow
     let color: String?
@@ -152,8 +134,6 @@ struct BusBoardRowView: View {
         if typeSize.isAccessibilitySize { stackedRow } else { sideBySideRow }
     }
 
-    /// At the largest text sizes there's no room beside the words for the
-    /// minutes: they go on the chip's line, the rest under it.
     private var stackedRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
@@ -184,7 +164,6 @@ struct BusBoardRowView: View {
                 if let to = BusWords.destination(row) {
                     Text(verbatim: to).font(.body).bold().foregroundStyle(Color.ink).lineLimit(1)
                 }
-                // The next stop and the tags on one line when they fit, the tags under it when not.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         nextStop.fixedSize()
@@ -212,7 +191,6 @@ struct BusBoardRowView: View {
         .padding(.vertical, 14)
     }
 
-    /// The minutes, with the live dot to their left; VoiceOver says "Live" before the time.
     private var time: some View {
         HStack(spacing: 6) {
             if BusWords.isLive(row) { BusLiveDot() }
@@ -224,7 +202,6 @@ struct BusBoardRowView: View {
         if let next = BusWords.nextStop(row) { Text(verbatim: next).font(.subheadline).foregroundStyle(Color.muted) }
     }
 
-    /// How sure the time is, only when it isn't live (the dot says that), and how full the bus is.
     @ViewBuilder private var tags: some View {
         if !BusWords.isLive(row) { BusQualityTag(row: row) }
         if let c = busCrowdWord(row.crowd) { BusCrowdPill(text: c, packed: row.crowd == "high") }
@@ -233,11 +210,9 @@ struct BusBoardRowView: View {
     private func stoppedRow(_ s: Stopped) -> some View {
         let (why, back) = s.lines
         return HStack(alignment: .center, spacing: 12) {
-            // Its badge in full colour: the row still opens the line, so it mustn't look switched off.
             BusChip(svc: row.svc, color: color, paid: row.paid)
             VStack(alignment: .leading, spacing: 2) {
                 if !row.endsHere, let to = BusWords.destination(row) {
-                    // Whole at the largest text sizes, where one line holds a stop's name at most.
                     Text(verbatim: to)
                         .font(.subheadline).foregroundStyle(Color.muted).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
@@ -262,7 +237,6 @@ struct BusBoardRowView: View {
 }
 
 extension Text {
-    /// `text` with the first `part` of it in bold.
     init(busBold part: String?, in text: String) {
         var a = AttributedString(text)
         if let part, !part.isEmpty, let r = a.range(of: part) { a[r].inlinePresentationIntent = .stronglyEmphasized }
@@ -270,14 +244,12 @@ extension Text {
     }
 }
 
-/// A row pressed: a faint wash, as a list's row.
 struct BusRowPress: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.background(configuration.isPressed ? Color.ink.opacity(0.06) : .clear)
     }
 }
 
-/// The green dot beside a live time, said "Live" by VoiceOver.
 struct BusLiveDot: View {
     @Environment(\.inks) private var inks
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
@@ -292,7 +264,6 @@ struct BusLiveDot: View {
     }
 }
 
-/// Live (a dot), Scheduled (amber), or the last time known; why there's no time when there isn't one.
 struct BusQualityTag: View {
     let row: BoardRow
     @Environment(\.inks) private var inks
@@ -314,7 +285,6 @@ struct BusQualityTag: View {
     }
 }
 
-/// Small words on a tint of their own colour.
 struct BusTag: View {
     let text: String
     let color: Color
@@ -344,21 +314,15 @@ func busCrowdWord(_ crowd: String?) -> String? {
     }
 }
 
-/// "4 min" with the number large, or "Arriving"; a dash without a time (the
-/// tag says why). The words are the server's ("4 min", "~6 min", "约 6 分钟"),
-/// with its number drawn large; worked out here for an older server. A time
-/// without a number ("now") is as large as a number, so the column reads as one.
 struct BusBigTime: View {
     let etaS: Int?
     let quality: String
     let eta: String?
-    /// The number's size at the default text size; it grows with the reader's.
     var size: CGFloat = 34
     @ScaledMetric(relativeTo: .largeTitle) private var scale: CGFloat = 1
 
     var body: some View {
         let size = self.size * scale
-        // Only a bus seen is arriving: an estimate is "~1 min" however close.
         let arriving = (etaS ?? .max) < BusTimes.arrivingS && quality == "live"
         let color: Color = arriving ? .brand : (quality == "live" ? .ink : .muted)
         Group {
@@ -384,15 +348,12 @@ struct BusBigTime: View {
     }
 }
 
-/// Under the board: the services ending within two hours, and how old the
-/// times are, with the live dot explained once when a row has it.
 struct BusBoardFoot: View {
     let board: Board
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let now = ServerClock.now
-            // Aged as the card ages its rows, so the dot here goes when theirs do.
             let live = board.aged(now).rows.contains { $0.running && BusWords.isLive($0) }
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {

@@ -1,17 +1,8 @@
 import SwiftUI
 
-/// How Now draws a trip by bus or on foot, chosen in Settings › Appearance.
-/// Each leads with when to leave and ends with when you get there; the
-/// words and times are the server's (`card.journey`), only the countdowns
-/// tick here. As Android's CardStyle and JourneyCard.
-///
-/// - steps: the trip as a line diagram down the card, as on a bus's route
-///   map: the walk dotted, the ride in the bus's colour. The default.
-/// - route: a line across, from you to the stop to where you're going.
 enum JourneyStyle: String, CaseIterable {
     case steps, route
 
-    /// A style since removed (the ticket) reads as steps.
     static func of(_ pref: String) -> JourneyStyle { JourneyStyle(rawValue: pref) ?? .steps }
 
     var name: String {
@@ -22,13 +13,10 @@ enum JourneyStyle: String, CaseIterable {
     }
 }
 
-/// At a large text size the route's points are too narrow for their names
-/// and times: the trip as steps then, one point to a line.
 private func shown(_ style: JourneyStyle, _ size: DynamicTypeSize) -> JourneyStyle {
     size >= .accessibility1 && style == .route ? .steps : style
 }
 
-/// The top of the trip, up in the sky.
 struct JourneyTop: View {
     let answer: NextAnswer
     let journey: Journey
@@ -44,7 +32,6 @@ struct JourneyTop: View {
         switch shown(style, typeSize) {
         case .route:
             LeaveHead(answer: a, journey: j, now: now)
-            // With a change of bus the line has no room for the walk to the stop: said here.
             let under = [JourneyText.by(a, j, now: now), j.change == nil ? nil : JourneyText.walk(j), JourneyText.arrive(j)].compactMap {
                 $0
             }.joined(separator: " · ")
@@ -61,11 +48,7 @@ struct JourneyTop: View {
     }
 }
 
-/// "Leave in 6 min" as one line at one size, with only the time in the
-/// accent, so it reads first. "Leave now" is all accent; too late to be on
-/// time, all red.
 private struct LeaveHead: View {
-    /// Follows the text size the phone is set to, as the rest of the card does.
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let journey: Journey
@@ -93,13 +76,11 @@ private struct LeaveHead: View {
     }
 }
 
-/// The rest of the trip, on the ground under the horizon.
 struct JourneyGround: View {
     let answer: NextAnswer
     let journey: Journey
     let style: JourneyStyle
     let now: Date
-    /// The horizon's road in words; only on Now, where the horizon is.
     var road = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -114,7 +95,6 @@ struct JourneyGround: View {
                 Tags(answer: a, journey: j)
             case .steps:
                 StepsLine(answer: a, journey: j, now: now).padding(.top, 18)
-                // Information, not a control: a line with the bus's icon, as on the Mac, never in a box that looks tappable.
                 if let backup = JourneyText.backup(a, j) {
                     Label {
                         Text(backup)
@@ -127,19 +107,14 @@ struct JourneyGround: View {
                     .padding(.top, 14)
                 }
             }
-            // A busy bus and an estimate are small print, not more headlines.
             let small = [a.leaveNote, a.card?.estimate].compactMap { $0 }
             if !small.isEmpty { Text(small.joined(separator: " ")).font(.footnote).foregroundStyle(Color.muted).padding(.top, 8) }
-            // On foot, the bus's data quality isn't about the walk: `why` says what matters.
             if j.bus != nil && !j.live, let q = a.qualityText { Text(q).font(.footnote).foregroundStyle(Color.muted).padding(.top, 4) }
         }
-        // The card is read as one sentence, up in the sky.
         .accessibilityHidden(true)
     }
 }
 
-/// The horizon's road in words, just under it: your bus and when it reaches
-/// your stop ("about" for an estimate), the stop's name in bold.
 struct RoadLine: View {
     let journey: Journey
     let now: Date
@@ -154,14 +129,11 @@ struct RoadLine: View {
                     BusBadge(svc: bus.svc, color: bus.color, size: 14, paid: bus.paid)
                     Text(s)
                 }
-                // Up into the strip under the road, which is just the near hill.
                 .padding(.top, -12))
         }
         return AnyView(EmptyView())
     }
 
-    /// When your bus reaches `stop`, `left` seconds away: "arriving at COM3"
-    /// only for a bus seen; an estimate is "in about 1 min" to the end.
     nonisolated static func words(stop: String, left: Int, live: Bool) -> String {
         let n = Int((Double(left) / 60).rounded())
         if left <= 0 { return L("from %@", stop) }
@@ -170,7 +142,6 @@ struct RoadLine: View {
     }
 }
 
-/// Live (or not), the crowd, and the backup bus, as tags under the trip.
 private struct Tags: View {
     let answer: NextAnswer
     let journey: Journey
@@ -178,7 +149,6 @@ private struct Tags: View {
     var body: some View {
         HStack(spacing: 6) {
             if journey.live { Pill(text: L("Live"), color: .good) }
-            // The crowd is the headline bus's: a class's leave-by bus can be another.
             if !answer.isClassPlan, let crowd = answer.card?.crowd { Pill(text: crowd) }
         }
         .padding(.top, 10)
@@ -188,9 +158,6 @@ private struct Tags: View {
     }
 }
 
-/// Route: you, the stop and where you're going on a line, the times under
-/// each; a dashed walk, the bus's stretch in its colour. On foot, you and
-/// the place, the walk between.
 private struct RouteLine: View {
     let journey: Journey
 
@@ -200,15 +167,12 @@ private struct RouteLine: View {
             if let bus = j.bus {
                 let change = j.change
                 let narrow = j.walkEnd != nil || change != nil
-                // With a change of bus the line starts at the stop, as on the
-                // web: room for both rides, the walk to the stop said above.
                 if change == nil, let walk = j.walk {
                     Point(name: L("You"), time: j.leave ?? L("now"), dot: .brand, narrow: narrow)
                     Stretch(takes: walk, line: .walk)
                 }
                 Point(name: bus.stop, time: bus.board, dot: .ink, narrow: narrow)
                 Stretch(takes: change?.firstRide ?? j.ride ?? "", line: .ride(serviceColor(bus.color)), badge: bus).layoutPriority(1)
-                // Where the first bus drops you, across the road to the second's stop when it isn't the same one, and the second ride.
                 if let c = change {
                     Point(name: c.from, time: (c.walk != nil ? c.reach : nil) ?? c.bus.board, dot: .ink, narrow: true)
                     if let walk = c.walk {
@@ -235,7 +199,6 @@ private struct RouteLine: View {
         case ride(Color)
     }
 
-    /// A point on the line: a dot, its name and its time.
     struct Point: View {
         let name: String
         let time: String
@@ -253,7 +216,6 @@ private struct RouteLine: View {
         }
     }
 
-    /// Between two points: the bus above the line (nothing for a walk), the line level with the dots, how long under it.
     struct Stretch: View {
         let takes: String
         let line: Kind
@@ -275,7 +237,6 @@ private struct RouteLine: View {
                     }
                 }
                 .frame(height: 18)
-                // Wider than a short stretch: drawn past its ends, over the gap beside the names.
                 Text(takes).font(.caption).foregroundStyle(Color.muted).lineLimit(1).fixedSize().padding(.top, 4)
                     .frame(maxWidth: .infinity)
             }
@@ -284,10 +245,6 @@ private struct RouteLine: View {
     }
 }
 
-/// Steps: the trip as a line diagram, as on a bus's route map. Each point
-/// has its time on the left and a dot on the line; between them the walk is
-/// dotted and the ride drawn in the bus's colour; where you're going is
-/// ringed in the accent.
 private struct StepsLine: View {
     let answer: NextAnswer
     let journey: Journey
@@ -344,8 +301,6 @@ private struct StepsLine: View {
         case ride(Color)
     }
 
-    /// A point on the line: its time, its dot, what's there, and under it how
-    /// long the stretch to the next point takes, which the line runs beside.
     struct LinePoint<Title: View>: View {
         let time: String
         let dot: Dot
