@@ -79,4 +79,13 @@ class CrashReportsTest {
         assertTrue(CrashReports.done(429))
         assertFalse(CrashReports.done(503))
     }
+
+    @Test
+    fun caughtFailuresAreSentOnceEachAndAtMostFiveAProcess() {
+        val gate = CaughtGate(CrashReports.MAX_CAUGHT)
+        assertEquals(true, gate.admit("IllegalStateException|redraw"))
+        assertEquals(false, gate.admit("IllegalStateException|redraw"))
+        val more = (1..10).map { gate.admit("E|$it") }
+        assertEquals(listOf(true, true, true, true, false, false, false, false, false, false), more)
+    }
 }

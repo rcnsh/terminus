@@ -22,7 +22,10 @@ internal object CrashReports {
     private const val PATH = "/api/errors"
     const val KEY_ENABLED = "crash-reports"
 
+    const val MAX_CAUGHT = 5
+
     private val sending = AtomicBoolean(false)
+    private val caughtGate = CaughtGate(MAX_CAUGHT)
 
     fun enabled(ctx: Context): Boolean = terminusPrefs(ctx).getBoolean(KEY_ENABLED, true)
 
@@ -43,7 +46,7 @@ internal object CrashReports {
 
     fun caught(ctx: Context, e: Throwable) {
         val app = ctx.applicationContext
-        if (!enabled(app)) return
+        if (!enabled(app) || !caughtGate.admit("${e.javaClass.name}|${e.message}")) return
         runCatching { save(app, e, fatal = false) }
         sendPending(app)
     }
@@ -141,5 +144,16 @@ internal object CrashReports {
             if (trace.size > frames) lines += "\t... ${trace.size - frames} more"
         }
         return lines.take(maxLines).joinToString("\n")
+    }
+}
+
+internal class CaughtGate(private val max: Int) {
+    private val seen = mutableSetOf<String>()
+
+    @Synchronized
+    fun admit(key: String): Boolean {
+        if (seen.size >= max || key in seen) return false
+        seen += key
+        return true
     }
 }
