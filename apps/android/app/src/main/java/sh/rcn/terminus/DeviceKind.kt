@@ -4,10 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.annotation.StringRes
 
-/**
- * What kind of device this is, for the words that name it: "this tablet" on a tablet, "this phone" otherwise. Decided once, from the device
- * rather than the window, so a phone that unfolds to a tablet's width (its hinge says so) stays a phone, as the iPhone Duo does.
- */
 object DeviceKind {
     @Volatile private var tablet = false
 
@@ -19,10 +15,8 @@ object DeviceKind {
             )
     }
 
-    /** A tablet: 600 dp or more at its narrowest, and no hinge (a foldable phone is a phone, open or shut). */
     internal fun isTablet(hinge: Boolean, smallestWidthDp: Int) = !hinge && smallestWidthDp >= 600
 
-    /** [id], or its "this tablet" version on a tablet. */
     @StringRes fun word(@StringRes id: Int): Int = if (tablet) TABLET[id] ?: id else id
 
     private val TABLET =

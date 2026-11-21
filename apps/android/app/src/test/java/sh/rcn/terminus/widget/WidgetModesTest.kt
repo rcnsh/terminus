@@ -12,7 +12,6 @@ import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.TestStrings
 
-/** What a widget shows, and when it goes back to the timetable by itself. */
 class WidgetModesTest {
     init {
         TestStrings.install()
@@ -25,7 +24,6 @@ class WidgetModesTest {
     fun anInexactRedrawStepsCloserSoItIsNeverLaterThanACountdownsSlack() {
         val at = now + 10 * 60_000L
         assertEquals(at, WidgetModes.stepTo(at, now, exact = true))
-        // Inexact: steps of a third, each run no later than two thirds of the way, until the last is within LAST_STEP_MS.
         var t = now
         var steps = 0
         while (true) {
@@ -42,8 +40,6 @@ class WidgetModesTest {
     @Test
     fun anExactRedrawHasAnInexactOneBehindItInCaseAlarmsAndRemindersIsTurnedOff() {
         val at = now + 60_000L
-        // Turning it off cancels the exact alarm and stops the app with no broadcast; the inexact one still comes, two minutes on, and
-        // redraws Nearby's counts as clock times. Each exact redraw moves it on, so while exact alarms work it never comes.
         assertEquals(at + 120_000L, WidgetModes.backstopAt(at, exact = true))
         assertNull(WidgetModes.backstopAt(at, exact = false))
         assertNull(WidgetModes.backstopAt(null, exact = true))
@@ -80,10 +76,8 @@ class WidgetModesTest {
 
     @Test
     fun theButtonsShowOnlyWhereTheWidgetHasRoomForThem() {
-        // A bar or a square never has them, on either widget.
         assertFalse(WidgetModes.rowShown(400f, 100f, large = true))
         assertFalse(WidgetModes.rowShown(200f, 200f, large = true))
-        // The trip: on the favourites widget only; tall enough for your day, on both.
         assertTrue(WidgetModes.rowShown(300f, 200f, large = true))
         assertFalse(WidgetModes.rowShown(300f, 200f, large = false))
         assertTrue(WidgetModes.rowShown(300f, 300f, large = false))
@@ -93,12 +87,8 @@ class WidgetModesTest {
     fun aTripThatBecomesDueTakesTheWidgetBack() {
         val leaveAt = now + 3 * 60_000
         val plan = NextAnswer.parse(JSONObject(answer(leaveAt, "due")))
-        // Chosen before the trip was due: the trip wins.
         assertEquals(Mode.Timetable, WidgetModes.effective(utown, now - 10 * 60_000, plan, rowShown = true, now = now))
-        // Chosen during it: the choice stands.
         assertEquals(utown, WidgetModes.effective(utown, now - 30_000, plan, rowShown = true, now = now))
-        // The phone's clock 5 minutes fast: the trip turned due 5 minutes later
-        // on it, so a choice made 3 minutes ago (phone time) came before it.
         val fast = 5 * 60_000L
         assertEquals(
             Mode.Timetable,
@@ -119,37 +109,25 @@ class WidgetModesTest {
         val fav = listOf("KR MRT", "UTown", "The Deck").map { Mode.To(Destinations.Dest("place:$it", it)) }
         val com3 = Mode.To(Destinations.Dest("stop:COM3", "COM 3"))
         val all = listOf(Mode.Timetable, Mode.Nearby) + fav + com3
-        // Room for four: Timetable, Nearby, the top favourite, then COM 3.
         assertEquals(listOf("Timetable", "Nearby", "KR MRT", "COM 3"), WidgetModes.pick(all, com3, 330f).map { it.label })
-        // Room for all: nothing moves.
         assertEquals(all, WidgetModes.pick(all, com3, 600f))
-        // Nothing added: as before.
         assertEquals(listOf("Timetable", "Nearby", "KR MRT", "UTown"), WidgetModes.pick(all.dropLast(1), null, 330f).map { it.label })
-        // However wide, no more than a Glance Row can hold.
         val many = listOf(Mode.Timetable, Mode.Nearby) + (1..10).map { Mode.To(Destinations.Dest("stop:S$it", "S$it")) }
         assertEquals(WidgetModes.MAX_BUTTONS, WidgetModes.pick(many, null, 2000f).size)
-        // Only Timetable and Nearby fit: they stay.
         assertEquals(listOf("Timetable", "Nearby"), WidgetModes.pick(all, com3, 175f).map { it.label })
     }
 
     @Test
     fun aChosenWidgetIsRedrawnAsItsTimesAgeAndItsChoiceRunsOut() {
         sh.rcn.terminus.ServerClock.reset()
-        // Nearby: when its times turn old, three minutes after they came.
         assertEquals(now + WidgetModes.NEARBY_OLD_MS, WidgetModes.redrawAt(Mode.Nearby, now, now, null, now))
-        // A place: its leave-by turning into "Leave now", before the half hour is up.
         val leaveAt = now + 10 * 60_000
         val place = NextAnswer.parse(JSONObject(answer(leaveAt, "idle")))
         assertEquals(leaveAt, WidgetModes.redrawAt(utown, now, now, place, now))
-        // Past it, the choice running out; then nothing.
         assertEquals(now + WidgetModes.KEEP_MS, WidgetModes.redrawAt(utown, now, now, place, leaveAt))
         assertEquals(null, WidgetModes.redrawAt(utown, now, now, place, now + WidgetModes.KEEP_MS))
     }
 
-    /**
-     * Signing out leaves no widget holding the old account's place or answer. Every key the modes and the nearby swap declare is filled, so
-     * a key added later and left out of forget() fails here.
-     */
     @Test
     fun forgetLeavesNothingOfTheOldAccount() {
         val keys =

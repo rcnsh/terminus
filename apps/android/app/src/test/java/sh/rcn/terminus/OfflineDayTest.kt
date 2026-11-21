@@ -7,10 +7,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * The offline fallback, against the cases the web and Mac apps are checked against too (fixtures/offline-day.json), on the API's own
- * /api/me/day golden.
- */
 class OfflineDayTest {
     init {
         TestStrings.install()
@@ -47,9 +43,7 @@ class OfflineDayTest {
 
     @Test
     fun theWidgetIsRedrawnWhenTheLineMovesOn() {
-        // 09:00: the first class's leave-by (09:36:40) is the next change.
         assertEquals(ms("2026-08-27T01:36:40Z"), OfflineDay.nextChangeAt(day, ms("2026-08-27T01:00:00Z")))
-        // After the last trip home has ended: nothing more.
         assertNull(OfflineDay.nextChangeAt(day, ms("2026-08-27T08:10:00Z")))
     }
 
@@ -62,7 +56,6 @@ class OfflineDayTest {
         assertEquals("GEA1000 @ UTown · starts 10:00", first.head)
         assertEquals("Leave by ~09:36", first.big)
         assertEquals("R2 from PGP", first.how)
-        // Planned a while ago: an estimate, so "~" even on a live time. A walk reads as a line of its own.
         val walk = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T05:10:00Z"))!!, hhmm)
         assertEquals("Leave by ~13:41", walk.big)
         assertEquals("Walk", walk.how)

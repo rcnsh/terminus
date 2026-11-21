@@ -20,46 +20,29 @@ import kotlinx.coroutines.withContext
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.forgetWidgets
 
-/**
- * Leaving the account on this phone, the same way whichever way it goes: signed out here, the account deleted, or the server refusing the
- * token (a 401: this phone removed from the account, or an account with no email deleted after going unused). The account's things go from
- * the phone, and so does everything that would keep asking for them: the refresh chain, the leave alerts, the live notification, the
- * widgets' places, the push address.
- */
 object Session {
     private val ended = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    /** Fires when a refused token signed this phone out, for the screens open at the time. */
     val signedOut: SharedFlow<Unit> = ended
 
-    /**
-     * The server refused [token] (401), from wherever it was sent: the app, the widget, a push, an alarm, the live notification. Signs out
-     * only while it is still this phone's token. True when it signed out.
-     */
     suspend fun rejected(ctx: Context, token: String?): Boolean {
         if (token == null) return false
         val app = ctx.applicationContext
         val store = Store(app)
         if (!withContext(Dispatchers.IO) { store.signOutIf(token) }) return false
         Refresher.cancel(app)
-        // The widget says why, until the app is opened.
         store.lastError = widgetMessage(store)
         runCatching { forgetWidgets(app) }
         ended.tryEmit(Unit)
         return true
     }
 
-    /**
-     * A token was just stored for a sign-in: what the phone kept for the widgets, and the place each widget was showing, were the last
-     * account's (maybe a guest's on this phone), so they go before the widgets refresh.
-     */
     suspend fun signedIn(ctx: Context) {
         val app = ctx.applicationContext
         withContext(Dispatchers.IO) { Store(app).forgetAnswers() }
         runCatching { forgetWidgets(app) }
     }
 
-    /** Signed out here, or the account deleted: local state goes first, so the screen can change at once, even offline. */
     fun clearLocal(ctx: Context) {
         val app = ctx.applicationContext
         Store(app).clear()
@@ -67,10 +50,6 @@ object Session {
         CoroutineScope(Dispatchers.Default).launch { runCatching { forgetWidgets(app) } }
     }
 
-    /**
-     * Signing out: local state goes now, and the server is told in a job that waits for a network and tries again, so an offline sign-out
-     * still ends the session there. The token travels in the job, not in the settings.
-     */
     fun signOut(ctx: Context) {
         val token = Store(ctx).token
         clearLocal(ctx)
@@ -84,7 +63,6 @@ object Session {
         WorkManager.getInstance(ctx).enqueue(work)
     }
 
-    /** What the welcome screen says about [reason] ([Store.takeSignedOut]); null for none. */
     fun message(reason: String?): String? =
         when (reason) {
             Store.SIGNED_OUT_REMOVED -> L.s(DeviceKind.word(R.string.signed_out_removed))
@@ -97,7 +75,6 @@ object Session {
         L.s(if (store.signedOutReason == Store.SIGNED_OUT_UNUSED) R.string.device_removed_unused else R.string.device_removed)
 }
 
-/** Ends a signed-out session on the server ([Session.signOut]). */
 class LogoutWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         val token = inputData.getString(TOKEN) ?: return Result.success()
@@ -107,17 +84,12 @@ class LogoutWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
-            // Busy or down: again later. Refused (already gone): done.
             if (e.status == 429 || e.status >= 500) again() else Result.success()
         } catch (e: Exception) {
             again()
         }
     }
 
-    /**
-     * Ten tries at most, over some hours. A device session has no expiry: one never ended stays in the account's devices (where it can be
-     * removed) until the server's daily clean-up drops it, 90 days after its last use.
-     */
     private fun again() = if (runAttemptCount < MAX_TRIES) Result.retry() else Result.success()
 
     companion object {

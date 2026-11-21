@@ -7,16 +7,9 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import sh.rcn.terminus.ui.MainActivity
 
-/**
- * Long-press on the app icon: Next, each favourite, and Nearby, opening the app on that answer, or on the Nearby tab, through the same
- * terminus:// links the widget's chips use. Rebuilt only when the places change.
- */
 object Shortcuts {
     fun update(ctx: Context, places: List<Place>) {
-        // Launchers show four at most (Pixel's shows the first four by rank), so
-        // four, with Nearby last, rather than Nearby lost behind a third place.
         val max = ShortcutManagerCompat.getMaxShortcutCountPerActivity(ctx).coerceIn(3, 4)
-        // Next and Nearby always; as many places as fit between them.
         val wanted = buildList {
             add(Triple("next", L.s(R.string.chip_next), MainActivity.intentFor(ctx)))
             places.take(max - 2).forEach { add(Triple("place:${it.key}", it.label, MainActivity.intentFor(ctx, place = it.key))) }

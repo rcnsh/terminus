@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The tabs' order, and which one a terminus:// link opens (ADR 0017). */
 class TabsTest {
     @Test
     fun nearbyIsBetweenNowAndStops() {

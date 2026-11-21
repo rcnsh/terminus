@@ -4,9 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** A service's code on its colour reads at 4.5:1 or better, whichever colour it is. */
 class InkTest {
-    /** The services as NUS paints them (the API's ROUTE_COLORS), A1 at its darker red. */
     private val services =
         mapOf(
             "A1" to 0xFFD32F2FL,

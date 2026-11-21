@@ -1,21 +1,3 @@
-// Frames the Play Store's tablet screenshots, the same way frame.mjs frames
-// the phone's: each capture inside the device it came from, under a headline,
-// the four slides one picture cut in four, the sky going from dawn to night.
-//
-// Two sets, one per slot in Play Console:
-// - tablet: the Pixel Tablet emulator landscape (2560×1600 captures) for the
-//   10-inch slot, drawn 2560×1440 (16:9, the shape Play asks for).
-// - fold: the Pixel 10 Pro Fold emulator open (2076×2152 captures) for the
-//   7-inch slot, drawn 1440×2560 (9:16).
-// Captures in captures/<set>/{en,zh}, slides to screenshots/<set>/ and
-// screenshots/<set>/zh/. Each is laid out in CSS pixels at 3/4 of its size and
-// drawn at a device scale factor of 4/3, so the captures keep their detail.
-//
-//   node apps/android/store/frame-large.mjs              # both sets
-//   node apps/android/store/frame-large.mjs tablet       # one set
-//   node apps/android/store/frame-large.mjs fold 2-map   # one slide, both languages
-//
-// Draws with Chromium, as frame.mjs does, and needs a Mac for the Chinese.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,8 +9,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fonts = join(here, '../../web/public/assets/fonts');
 const SCALE = 4 / 3;
 
-// The words, in the listing's order. A headline is two lines split at "|" on
-// the fold, one line on the tablet; its part in braces is in the accent colour.
 const SLIDES = [
   {
     file: '1-leave-by',
@@ -56,8 +36,6 @@ const SLIDES = [
   },
 ];
 
-// Each set's page (W×H CSS pixels), its capture's size, where the device's
-// screen sits (top, width), and how big the scenery is drawn.
 const SETS = {
   tablet: {
     W: 1920,
@@ -85,12 +63,6 @@ const SETS = {
   },
 };
 
-/**
- * The strip, as wide as all four slides, in the app's skies: the sun rising
- * on the first, a shuttle across the first join, Marina Bay Sands and the
- * setting sun across the third with a lit shuttle under them, the moon over
- * the last. Heights count up from the foot of the page, scaled by `s`.
- */
 function panoramaScript(set, device) {
   const phases = SLIDES.map((sl) => SKIES[sl.sky]);
   return `(() => {
@@ -205,7 +177,6 @@ function page(set, name, index, lang) {
     return `<div class="device" style="left:${i * set.W + left}px"><div class="screen"><img src="${pathToFileURL(shot)}"></div></div>`;
   }).join('');
   const w = set.words;
-  // The fold's crease: a faint line down the middle of its inner screen, as the real one catches the light.
   const crease =
     name === 'fold'
       ? `.screen::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 10px; margin-left: -5px; background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.05) 40%, rgba(255,255,255,0.06) 60%, rgba(0,0,0,0)); }`

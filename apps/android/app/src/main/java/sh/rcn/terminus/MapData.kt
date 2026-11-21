@@ -17,38 +17,16 @@ import kotlin.math.tan
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * The Map tab's data: stops and routes from `/api/campus`, live buses from `/api/buses`, and the GeoJSON the map draws from them. Plain
- * JSON in and out, so it's tested on the JVM (MapDataTest).
- */
-
-/**
- * How far the map pans and zooms out, so the screen stays on the street map: past the map file's edge there's nothing to draw. MapLibre
- * Native limits only the camera's centre, so the centre's box is the map less half the screen on every side, and the map zooms out only
- * until the screen is full of it. Sizes in dp, as the map's zoom counts them (512 a tile). The same as the Mac's PanLimit; the web's map
- * limits the whole screen itself.
- */
 object PanLimit {
-    /** The map file's extent (MAP_BOUNDS in apps/api's map.ts): west, south, east, north. */
     val EXTENT = doubleArrayOf(103.755, 1.28, 103.83, 1.332)
     private const val TILE = 512.0
 
-    /**
-     * The furthest out a [width] by [height] screen can zoom and still be full of map, where [west] and [south] dp of it, along those
-     * edges, are under a sheet and may show past the map ([centre]).
-     */
     fun minZoom(width: Double, height: Double, west: Double = 0.0, south: Double = 0.0): Double =
         max(
             log2((width - west) / (TILE * (x(EXTENT[2]) - x(EXTENT[0])))),
             log2((height - south) / (TILE * (y(EXTENT[1]) - y(EXTENT[3])))),
         )
 
-    /**
-     * West, south, east, north of where the centre may go at [zoom]; a point mid-map on a side the screen is wider than. Under an open
-     * sheet the screen may show past the map by as much as the sheet covers, [west] dp beside one floating in the corner and [south] dp
-     * above it or under one across the foot: a line fitted clear of the sheet puts the centre well off it, and the plain limit would pull
-     * the line back under it (the website's underSheet).
-     */
     fun centre(width: Double, height: Double, zoom: Double, west: Double = 0.0, south: Double = 0.0): DoubleArray {
         val world = TILE * 2.0.pow(zoom)
         val (w, e) = inset(x(EXTENT[0]) - west / world, x(EXTENT[2]), width / 2 / world)
@@ -59,7 +37,6 @@ object PanLimit {
     private fun inset(a: Double, b: Double, by: Double): Pair<Double, Double> =
         if (b - a > 2 * by) a + by to b - by else ((a + b) / 2).let { it to it }
 
-    // Web Mercator, as a fraction of the world: x east, y south.
     private fun x(lon: Double) = (lon + 180) / 360
 
     private fun y(lat: Double) = (1 - ln(tan(PI / 4 + lat * PI / 360)) / PI) / 2
@@ -69,8 +46,6 @@ object PanLimit {
     private fun lat(y: Double) = atan(sinh(PI * (1 - 2 * y))) * 180 / PI
 }
 
-/** A stop on the map, with the services that call there. */
-/** [longName]: the full name ("Yusof Ishak House") where [name] is short ("YIH"); null from an older server. */
 data class MapStop(
     val code: String,
     val name: String,
@@ -83,27 +58,14 @@ data class MapStop(
         get() = longName ?: name
 }
 
-/**
- * A service's stops in the order it calls ([seq], a loop's first stop once), from /api/campus's `routes`, with the server's words for it:
- * [name] ("Loop from KR Bus Ter") and [via] ("via AS 5, PGP, KR MRT"). Both null from an older server; [via] null too for a line with no
- * stop worth naming between its ends.
- */
 data class ServiceRoute(val svc: String, val seq: List<String>, val loop: Boolean, val name: String? = null, val via: String? = null)
 
-/** A service: its colour (ARGB), its path along the roads as [lon, lat] pairs, and whether it's a loop. */
 data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>, val loop: Boolean = false) {
-    /** [west, south, east, north] of the line. */
     fun bounds(): DoubleArray = doubleArrayOf(line.minOf { it[0] }, line.minOf { it[1] }, line.maxOf { it[0] }, line.maxOf { it[1] })
 
-    /** The line measured for sliding buses along it. */
     val path: RoutePath by lazy { RoutePath(line, loop) }
 }
 
-/**
- * A route line measured as the API measures it (haversine, metres from its start at each point), so a bus's `along` is a place on it.
- * [closed] is the service's `loop` from /api/campus, as the API places buses: a loop's line needn't end exactly where it starts (A1's ends
- * are some 40 m apart at KRB).
- */
 class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     private val cum =
         DoubleArray(line.size).also { c ->
@@ -111,13 +73,10 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
         }
     val total: Double = cum.lastOrNull() ?: 0.0
 
-    /** A loop: a bus can slide on past the start. */
     val closed: Boolean = loop && line.size >= 2
 
-    /** The point [m] metres along, as (lat, lon, the road's bearing there). */
     fun pointAt(m: Double): Triple<Double, Double, Double> = pointOn(wrap(m))
 
-    /** The point [at] metres along, already a place on the line (0 to [total]): not wrapped again. */
     private fun pointOn(at: Double): Triple<Double, Double, Double> {
         var lo = 0
         var hi = cum.size - 1
@@ -132,22 +91,14 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
         return Triple(aLat + (bLat - aLat) * t, aLon + (bLon - aLon) * t, bearing(aLat, aLon, bLat, bLon))
     }
 
-    /** The part of the line from [a] to [b] metres along it, as [lon, lat] points; null when that isn't a stretch of this line. */
     fun slice(a: Double, b: Double): List<DoubleArray>? {
         if (line.size < 2 || !(b > a) || a < 0 || b > total + 1) return null
-        // Held to the line's ends, never wrapped: on a loop, a stop at (or a
-        // little past) the line's end would otherwise come back to its start.
         fun end(m: Double) = pointOn(m.coerceIn(0.0, total)).let { (lat, lon) -> doubleArrayOf(lon, lat) }
         return listOf(end(a)) + line.filterIndexed { i, _ -> cum[i] > a && cum[i] < b } + listOf(end(b))
     }
 
-    /** [m] as a place on the line: round again on a loop, else held to its ends. */
     fun wrap(m: Double): Double = if (closed) ((m % total) + total) % total else m.coerceIn(0.0, total)
 
-    /**
-     * Metres on along the line from bus [f] to bus [b], round a loop past its start; null when it isn't on ahead: the same place, behind, a
-     * long way, or a line kept from before the route changed.
-     */
     fun aheadBy(f: LiveBus, b: LiveBus): Double? {
         val fa = f.along ?: return null
         val ba = b.along ?: return null
@@ -158,10 +109,8 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     }
 
     companion object {
-        /** Further than this in one answer (back from the background), a bus jumps. */
         const val SLIDE_MAX_M = 1_500.0
 
-        /** As apps/api's geo.ts. */
         fun haversine(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
             val r = PI / 180
             val s = sin((bLat - aLat) * r / 2).pow(2) + cos(aLat * r) * cos(bLat * r) * sin((bLon - aLon) * r / 2).pow(2)
@@ -177,25 +126,18 @@ class RoutePath(private val line: List<DoubleArray>, loop: Boolean = false) {
     }
 }
 
-/**
- * [serviceCodes]: every service in /api/campus's routes, drawn or not, in code order. [stopAliases]: each stop's nicknames, from
- * /api/campus's destinations of kind "stop", for the Stops tab's search.
- */
 data class CampusMap(
     val stops: List<MapStop>,
     val routes: Map<String, MapRoute>,
     val serviceCodes: List<String> = routes.keys.sorted(),
     val stopAliases: Map<String, List<String>> = emptyMap(),
-    /** Every service's stops in order, in /api/campus's own order, drawn or not: the Stops tab's list of services. */
     val lines: List<ServiceRoute> = emptyList(),
 ) {
-    /** The services in pill order: A1, A2, D1, … */
     val services: List<String>
         get() = routes.keys.sorted()
 
     fun stop(code: String) = stops.firstOrNull { it.code == code }
 
-    /** Of the stops [codes], the one nearest ([lat], [lon]): a tap's slop can take in two stops a road apart. */
     fun nearest(codes: List<String>, lat: Double?, lon: Double?): String? {
         val known = codes.distinct().mapNotNull(::stop)
         if (lat == null || lon == null) return known.firstOrNull()?.code ?: codes.firstOrNull()
@@ -203,17 +145,11 @@ data class CampusMap(
         return known.minByOrNull { (it.lat - lat).pow(2) + ((it.lon - lon) * k).pow(2) }?.code ?: codes.firstOrNull()
     }
 
-    /** [west, south, east, north] of the main campus's stops (not P's trip to the Botanic Gardens). */
     fun coreBounds(core: Set<String>): DoubleArray {
         val pts = stops.filter { it.code in core }.ifEmpty { stops }
         return doubleArrayOf(pts.minOf { it.lon }, pts.minOf { it.lat }, pts.maxOf { it.lon }, pts.maxOf { it.lat })
     }
 
-    /**
-     * [west, south, east, north] of the main campus as the map draws it: its stops ([coreBounds]) and the whole line of every service whose
-     * stops are all on it, so a loop that turns past the last stop (K's and D2's in the east) isn't cut off at the window's edge, and P's
-     * trip to the Botanic Gardens stays out. The iPhone's `coreBounds` and the website's `campusBounds` frame the same.
-     */
     fun coreExtent(core: Set<String>): DoubleArray {
         val b = coreBounds(core)
         if (stops.none { it.code in core }) return b
@@ -227,7 +163,6 @@ data class CampusMap(
     }
 
     companion object {
-        /** The stops and routes from `/api/campus`; the core stops' codes come back alongside. */
         fun parse(o: JSONObject): Pair<CampusMap, Set<String>> {
             val s = o.getJSONArray("stops")
             val core = mutableSetOf<String>()
@@ -264,7 +199,6 @@ data class CampusMap(
             return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations")), serviceRoutes(r)) to core
         }
 
-        /** Each service's stops and whether it's a loop, in the order /api/campus lists them. */
         fun serviceRoutes(routes: JSONObject): List<ServiceRoute> =
             routes.keys().asSequence().toList().map { svc ->
                 val x = routes.optJSONObject(svc) ?: JSONObject()
@@ -277,10 +211,8 @@ data class CampusMap(
                 )
             }
 
-        /** Every service in /api/campus's `routes`, in plain code order. */
         fun serviceCodes(routes: JSONObject): List<String> = routes.keys().asSequence().toList().sorted()
 
-        /** Each stop's nicknames, from /api/campus's `destinations` of kind "stop". */
         fun stopAliases(destinations: JSONArray?): Map<String, List<String>> {
             if (destinations == null) return emptyMap()
             return (0 until destinations.length())
@@ -291,18 +223,12 @@ data class CampusMap(
     }
 }
 
-/** "#e53935" -> 0xFFE53935; grey for anything else. */
 fun parseColor(hex: String?): Long {
     val h = hex?.removePrefix("#")
     return if (h != null && h.length == 6 && h.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) 0xFF000000L or h.toLong(16)
     else 0xFF8A939CL
 }
 
-/**
- * A bus on the map, as `/api/buses` gives it: an id stable while it runs, and its number plate. It's at a stop ([at], drawn at the stop's
- * dot) or between two (drawn on its line); [ox] and [oy] are how far from that point it's drawn, in dp at full size, turned with the road:
- * beside the dot at a stop.
- */
 data class LiveBus(
     val id: String,
     val lat: Double,
@@ -311,73 +237,48 @@ data class LiveBus(
     val moving: Boolean,
     val crowd: String?,
     val nextStop: String?,
-    /** Metres along its route line of where it's drawn; null off its line, or from an older server. */
     val along: Double? = null,
-    /** Its number plate (PD726D); null from an older server. */
     val plate: String? = null,
-    /** The stop it's at, or null between stops. */
     val at: String? = null,
-    /** At a stop, its place among the buses there: 0 in front, then 1, 2 behind. */
     val slot: Int = 0,
-    /** Between stops, the stretch of its line it's somewhere on; null at a stop, or from an older server. */
     val stretch: Stretch? = null,
-    /**
-     * The stops still ahead on its line, [nextStop] first, to where the line ends; empty past a one-way line's end, or from an older
-     * server.
-     */
     val upcoming: List<String> = emptyList(),
-    /** Where its line ends (a loop's first stop); null from an older server. */
     val towards: String? = null,
-    /**
-     * The codes of [at], [stretch]'s last stop and [upcoming], in step with the names: a name can be a stop either side of a road. Null
-     * from an older server.
-     */
     val atCode: String? = null,
     val passedCode: String? = null,
     val upcomingCodes: List<String?> = emptyList(),
     val ox: Double = 0.0,
     val oy: Double = 0.0,
 ) {
-    /** Drawn where it goes: at a stop, beside the dot to its left (the kerb: buses drive on the left), the ones behind it further back. */
     fun placed(): LiveBus = if (at != null) copy(ox = -AT_STOP_SIDE_DP, oy = AT_STOP_STEP_DP * slot) else copy(ox = 0.0, oy = 0.0)
 
     companion object {
-        /** As the web map (apps/web/public/app/map.js). */
         const val AT_STOP_SIDE_DP = 22.0
         const val AT_STOP_STEP_DP = 26.0
     }
 }
 
-/**
- * A tapped bus's stops, as its sheet lists them, from what `/api/buses` said (the server walks the line, not the app): the stop it [passed]
- * (between stops) or the one it's [here] at, its [next], then [after] it at most [AFTER] more, and how many [more] there are past those.
- */
 data class BusStrip(
     val passed: String?,
     val here: String?,
     val next: String?,
     val after: List<String>,
     val more: Int,
-    /** Each named stop's code, for opening its sheet: [after]'s in step with it; null where the API didn't say. */
     val passedCode: String? = null,
     val hereCode: String? = null,
     val nextCode: String? = null,
     val afterCodes: List<String?> = emptyList(),
 ) {
-    /** Between stops: the bus is drawn on the line after [passed], not at a stop. */
     val between: Boolean
         get() = here == null
 
-    /** Anything ahead of the bus to list. */
     val any: Boolean
         get() = next != null
 
     companion object {
         const val AFTER = 4
 
-        /** [all]: every stop to where its line ends, not the first [AFTER] after the next. */
         fun of(bus: LiveBus, all: Boolean = false): BusStrip {
-            // [nextStop] alone: upcoming is empty from an older server.
             val ahead = bus.upcoming.ifEmpty { listOfNotNull(bus.nextStop) }
             val codes = ahead.indices.map { bus.upcomingCodes.getOrNull(it) }
             val rest = ahead.drop(1)
@@ -397,13 +298,8 @@ data class BusStrip(
     }
 }
 
-/** A stretch of a route line, [from] and [to] metres along it, starting at the stop named [last]. */
 data class Stretch(val from: Double, val to: Double, val last: String)
 
-/**
- * One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". [stale]: the feed is down and these are
- * where the buses were last seen, so they may have moved on.
- */
 data class BusList(val svc: String, val available: Boolean, val buses: List<LiveBus>, val stale: Boolean = false) {
     companion object {
         fun parse(o: JSONObject): BusList {
@@ -444,7 +340,6 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         upcomingCodes =
                             b.optJSONArray("upcoming")
                                 ?.let { u ->
-                                    // In step with [upcoming]: the same entries, those with a name.
                                     (0 until u.length())
                                         .mapNotNull { j -> u.optJSONObject(j)?.takeIf { it.optString("name").isNotEmpty() } }
                                         .map { it.optString("code").ifEmpty { null } }
@@ -458,7 +353,6 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
     }
 }
 
-/** GeoJSON for the map's sources. */
 object MapGeoJson {
     fun routes(campus: CampusMap): String =
         collection(
@@ -470,7 +364,6 @@ object MapGeoJson {
             }
         )
 
-    /** `services` as " A1 D2 ": spaces round each, so K never matches inside another code. */
     fun stops(campus: CampusMap): String =
         collection(
             campus.stops.map { s ->
@@ -498,7 +391,6 @@ object MapGeoJson {
             }
         )
 
-    /** A tapped bus's [stretch] of [path], in the service's [color]; empty when there's none. */
     fun stretch(color: Long, path: RoutePath?, stretch: Stretch?): String {
         val line = stretch?.let { path?.slice(it.from, it.to) } ?: return EMPTY
         return collection(
@@ -527,26 +419,14 @@ object MapGeoJson {
         JSONObject().put("type", "FeatureCollection").put("features", JSONArray(features)).toString()
 }
 
-/**
- * Each bus's slide from where it was drawn to its new place, along its route line, so it follows the road round corners, easing in and out.
- * It takes [msFor] its distance: further, longer. Its old and new places may be beside the line (a stop's dot, and beside it), so it moves
- * from one to the other as it goes. One that can't get there along the line (behind it, a long way on, no line) jumps, and so does every
- * bus with [still] (animations off) or after a while without an answer. Times are any one clock that keeps counting while the phone sleeps
- * (elapsedRealtime, not uptimeMillis), so a map left asleep reads as stale. Call [update] with every answer, the same list or not: that's
- * what tells a quiet map from a stale one.
- */
 class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
     private class Slide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double, val ms: Long = 0)
 
     private var slides: Map<String, Slide> = emptyMap()
 
-    /** When the last answer came, to tell a stale map. */
     private var lastUpdate: Long? = null
 
-    /** New places [buses], with [path] their route's line, at [now]. */
     fun update(buses: List<LiveBus>, path: RoutePath?, now: Long, still: Boolean = false) {
-        // No answer for a while (the screen was off, the app in the
-        // background): every bus jumps to where it is now.
         val stale = lastUpdate.let { it == null || now - it > STALE_MS }
         lastUpdate = now
         slides = buses.associate { raw ->
@@ -557,10 +437,8 @@ class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
         }
     }
 
-    /** Each bus where it's drawn at [now]. */
     fun at(now: Long): List<LiveBus> = slides.values.map { at(it, now) }
 
-    /** Whether any bus is still on its way at [now]. */
     fun moving(now: Long): Boolean = slides.values.any { it.from != null && now - it.start < it.ms }
 
     private fun at(s: Slide, now: Long): LiveBus {
@@ -587,13 +465,8 @@ class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
     }
 
     companion object {
-        /**
-         * How long a slide of [m] metres takes, as the web map: a steady 100 m a second, so a longer stretch takes longer, from 1 s for a
-         * short hop to 4 s, done before the next answer (every 5 s).
-         */
         fun slideMs(m: Double): Long = (m / 100 * 1_000).toLong().coerceIn(1_000L, 4_000L)
 
-        /** No answer for longer than this: every bus jumps to where it is now. */
         const val STALE_MS = 15_000L
     }
 }

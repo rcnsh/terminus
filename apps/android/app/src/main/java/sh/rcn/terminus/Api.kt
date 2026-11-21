@@ -17,7 +17,6 @@ import org.json.JSONObject
 
 data class Place(val key: String, val label: String)
 
-/** `/api/me/next`. label and detail are display-ready; show them verbatim. */
 data class NextAnswer(
     val label: String,
     val detail: String,
@@ -29,95 +28,66 @@ data class NextAnswer(
     val destLabel: String?,
     val why: String?,
     val places: List<Place>,
-    /** When the bus leaves, epoch ms. Clients count down from this. */
     val departsAtMs: Long?,
-    /** For a class: "on-time" | "tight" | "late", and its display text. */
     val timingStatus: String?,
     val timingText: String?,
-    /** Planned answers: when the plan changes by itself (a class starts, the day ends). */
     val refreshAtMs: Long? = null,
-    /** Already at the destination: no bus, no countdown. */
     val arrived: Boolean = false,
-    /** The latest time to set off, epoch ms; for a class, the latest that's still on time. */
     val leaveAtMs: Long? = null,
-    /** Rests on a headway, not a live time: shown with a "~". */
     val leaveEstimated: Boolean = false,
-    /** Why leave-by is earlier than it could be ("D2 is often busy…"). Shown verbatim. */
     val leaveNote: String? = null,
-    /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
-    /** A class plan that is a one-off trip or a favourite at its usual time (`dest.place`): [classAtMs] is when to arrive by. */
     val destPlace: Boolean = false,
-    /** Display-ready text from the server; null when there's no card. */
     val card: Card? = null,
-    /** The user's walking speed (m/s, from their pace), for walk times the app works out itself. */
     val walkSpeedMs: Double? = null,
 ) {
-    /** The server's card (card.ts): every line below is worded there, once. */
     val isClassPlan: Boolean
         get() = card?.kind == "class"
 
-    /** "starts 10:00" for a class; "arrive by 19:00" for a one-off trip or a usual time, which isn't one. */
     val startsRes: Int
         get() = if (destPlace) R.string.arrive_by else R.string.starts_at
 
-    /** No classes today (or none left): nothing to catch, said plainly. */
     val isFree: Boolean
         get() = mode == "free"
 
-    /** The trip's phase, when one is in progress ("On your way"). */
     val phaseText: String?
         get() = card?.phaseText
 
-    /**
-     * "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks. At the stop it's the bus to wait for ("D2 at 09:41"),
-     * as the server says it.
-     */
     fun leaveHeadline(now: Long): String? {
         val at = leaveAtMs ?: return null
         if (card?.phase == "waiting") return card.leaveBy
         return if (now >= at) L.s(R.string.leave_now) else card?.leaveBy
     }
 
-    /** Class: "Catch the ~09:41 D2 at PGP", or "Walk there". */
     val catchHow: String?
         get() = card?.catch
 
-    /** Class: "Arrive ~09:55 · 3 min early". */
     val catchArrive: String?
         get() = card?.arrive
 
-    /** Class: both on one line, for the widget and notifications. */
     val catchLine: String?
         get() = card?.catchLine
 
-    /** Whether the leave-by trip misses the class start. */
     val leaveLate: Boolean
         get() = card?.late ?: false
 
-    /** The headline bus, when it's not the one to wait for. */
     val goNowLine: String?
         get() = card?.goNow
 
-    /** "Crowding: low" / "Crowding: medium" / "Crowding: high". */
     val crowdText: String?
         get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
 
-    /** "Estimated time", "Live times are a few minutes old", "No live data". */
     val qualityText: String?
         get() = card?.quality
 
-    /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
     fun leaveText(now: Long): String? {
         val head = leaveHeadline(now) ?: return null
         return card?.leaveVia?.let { "$head · $it" } ?: head
     }
 
-    /** The headline, as the server words it (card.title): "D2 · 09:42", "A1 · ~09:11", or the label. */
     val title: String
         get() = card?.title ?: label
 
-    /** [title]; "D2 · 09:42" from the label and departure time (a "~" on anything but a live time), worked out here for an older server. */
     fun clockLabel(format: (Long) -> String): String {
         card?.title?.let {
             return it
@@ -165,10 +135,8 @@ data class NextAnswer(
     }
 }
 
-/** `card` in /api/me/next (apps/api's card.ts). Lines are shown verbatim. */
 data class Card(
     val kind: String,
-    /** Dim from this instant, epoch ms. */
     val staleAtMs: Long?,
     val crowd: String?,
     val quality: String?,
@@ -181,50 +149,26 @@ data class Card(
     val goNow: String?,
     val note: String?,
     val estimate: String?,
-    /** Where the trip is: idle, due, heading, waiting, riding, missed, arrived. */
     val phase: String = "idle",
-    /** "On your way", above the answer. Null when idle. */
     val phaseText: String? = null,
-    /** 12 characters: a tile or a glance. */
     val glance: String? = null,
-    /** One line: a collapsed notification, a compact widget. */
     val line: String? = null,
-    /** Buttons the server decided to show; tapping one sends it to /api/me/signal. */
     val actions: List<CardAction> = emptyList(),
-    /** "Last D2 from UTown in 18 min". */
     val warning: String? = null,
-    /** When this card changes by itself: refresh then. */
     val nextChangeAtMs: Long? = null,
-    /** False when the user turned reminders off for this class: no leave notification. */
     val remind: Boolean = true,
-    /** "Leave one bus earlier for CS2030?", accepted or turned down with /api/me/choice. */
     val suggestion: Suggestion? = null,
-    /** On the bus: the stops from boarding to getting off, for a progress bar. */
     val ride: Ride? = null,
-    /**
-     * The planned bus has left and nothing says whether you're on it: [line] says so and gives the next way there. Notified with that,
-     * never "Leave now".
-     */
     val gone: Boolean = false,
-    /** Where to walk to now (the bus's stop, or the destination on foot), for walking directions. */
     val walkTo: WalkTo? = null,
-    /** "NUS's live bus times have been down since 9:14 AM", above the answer. */
     val notice: String? = null,
-    /** The trip as steps, for the card styles that draw it. */
     val journey: Journey? = null,
-    /** Done for today, no classes, home: the next class, for its own card. */
     val upcoming: Upcoming? = null,
-    /** The headline: "R2 · 09:06", "A1 · ~09:11", "On the R2"; the label when there's no time. */
     val title: String? = null,
-    /** Above the headline: "Next class · GEA1000 @ UTown", "Heading home"; null with no destination. */
     val heading: String? = null,
-    /** When to send the leave reminder, epoch ms; null: no reminder for this trip. */
     val remindAtMs: Long? = null,
-    /** "Earlier bus", "Later bus", "Best bus" under the bus; null once you've set off, or with no bus to change. */
     val step: Step? = null,
-    /** The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's. */
     val fromNus: Boolean = false,
-    /** The "Is this wrong?" reasons that fit this card, in the sheet's order; null from an older server, which offers them all. */
     val reasons: List<String>? = null,
 ) {
     companion object {
@@ -273,10 +217,6 @@ data class Card(
     }
 }
 
-/**
- * One part of the card, read on its own: a malformed one (a field missing or the wrong type) is left out, and the rest of the answer still
- * shows.
- */
 private inline fun <T> lenient(parse: () -> T?): T? =
     try {
         parse()
@@ -284,10 +224,6 @@ private inline fun <T> lenient(parse: () -> T?): T? =
         null
     }
 
-/**
- * A reply read whole: one that isn't the shape this version reads (a field missing or the wrong type) is a [ParseError], "unexpected
- * response", and not taken for the network failing ("Offline").
- */
 internal inline fun <T> parsing(read: () -> T): T =
     try {
         read()
@@ -295,10 +231,6 @@ internal inline fun <T> parsing(read: () -> T): T =
         throw ParseError(e.message ?: "unexpected answer", e)
     }
 
-/**
- * `card.upcoming`: the next class, worded on the server, from the timetable alone: when ("Tomorrow · Tue"), what ("CS2030 at 10:00"), where
- * ("At COM1 · get off at COM 3"), and why today has none when it's a break.
- */
 data class Upcoming(val whenText: String, val title: String, val where: String, val off: String?) {
     companion object {
         fun parse(o: JSONObject): Upcoming? =
@@ -311,32 +243,22 @@ data class Upcoming(val whenText: String, val title: String, val where: String, 
     }
 }
 
-/**
- * The ride, from boarding to getting off. Where the bus is comes from the clock: stops are taken as evenly spaced between the board and
- * arrival times (the arrival is live when the server knows the bus's plate).
- */
 data class Ride(
     val svc: String,
     val stops: List<String>,
     val boardMs: Long,
     val arriveMs: Long,
-    /** The bus you change to where this one drops you; [stops] is this bus's alone. */
     val change: RideChange? = null,
 ) {
-    /** 0 to 1 along the ride. */
     fun progress(now: Long): Float = ((now - boardMs).toFloat() / (arriveMs - boardMs)).coerceIn(0f, 1f)
 
-    /** How many stops have been passed; the last is where you get off. */
     fun passed(now: Long): Int = (progress(now) * (stops.size - 1)).toInt()
 
-    /** The stop the bus is heading for next, or null once it's there. */
     fun nextStop(now: Long): String? = stops.getOrNull(passed(now) + 1)
 
-    /** Stops left before getting off, the next one included. */
     fun stopsLeft(now: Long): Int = (stops.size - 1 - passed(now)).coerceAtLeast(0)
 
     companion object {
-        /** Null without its times, or with fewer than two stops: there's no bar to draw. */
         fun parse(o: JSONObject): Ride? {
             val svc = o.optStringOrNull("svc") ?: return null
             val stops = o.optJSONArray("stops") ?: return null
@@ -348,11 +270,6 @@ data class Ride(
         }
     }
 
-    /**
-     * "Next: Opp NUSS · 3 stops to go", the same in the notification and the widget. Nearing the stop to change at, the second bus too ("·
-     * Then P at 09:42 from Kent Vale"); before that the line has no room for it. Without [withChange] for a screen that shows the change on
-     * a line of its own.
-     */
     fun nextText(now: Long, withChange: Boolean = true): String {
         val next = nextStop(now)
         val left = stopsLeft(now)
@@ -366,7 +283,6 @@ data class Ride(
     }
 }
 
-/** `ride.change`: the second bus of a trip that changes, worded on the server ("Then P from Kent Vale at 9:42"). */
 data class RideChange(val svc: String, val color: Long, val stop: String, val board: String?, val text: String) {
     companion object {
         fun parse(o: JSONObject): RideChange? =
@@ -380,54 +296,33 @@ data class RideChange(val svc: String, val color: Long, val stop: String, val bo
     }
 }
 
-/**
- * `card.journey`: the trip as steps (walk to the stop, take the bus, get there), worded on the server; on foot the whole way, the walk
- * alone, with no [bus]. The app draws it in the card style chosen in Settings › Appearance ([CardStyle]); only the countdowns tick here.
- */
 data class Journey(
-    /** When to set off ("4:01 PM"); null when it's now. */
     val leave: String?,
-    /** The walk to the stop ("3 min"); null at the stop. On foot, the whole walk there. */
     val walk: String?,
-    /** The bus to catch; null on foot. */
     val bus: JourneyBus?,
-    /** When the bus leaves, epoch ms, to count down to; null on foot. */
     val boardAtMs: Long?,
-    /** Time on the bus ("8 min"); null on foot. */
     val ride: String?,
-    /** Where to get off, when it's across the road from the destination. */
     val off: String?,
-    /** Where you're going ("GEA1000 @ UTown") and the stop you get off at ("UTown"). */
     val to: String,
     val toStop: String,
-    /** When you get there: to the room or building itself when there's a `walkEnd`. */
     val arrive: String?,
-    /** The walk from `toStop` on to where you're going ("2 min"): a class's room, a building searched for. */
     val walkEnd: String? = null,
-    /** When the bus gets to `toStop`; `arrive` when there's no `walkEnd`. */
     val arriveStop: String? = arrive,
-    /** A class: "3 min early". */
     val slack: String?,
     val live: Boolean,
     val backup: JourneyBus?,
-    /** On foot: why not a bus ("D1 would be 16 min"). */
     val why: String? = null,
-    /** The server's words for the card, each null from an older server (JourneyText words them then). */
     val text: JourneyWords = JourneyWords(),
-    /** A change of bus on the way: [bus] is the first, this the second. */
     val change: JourneyChange? = null,
 ) {
-    /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
     val place: String
         get() = text.place ?: to.substringBefore(" @ ")
 
     companion object {
         fun parse(o: JSONObject): Journey? {
             val bus = o.optJSONObject("bus")?.let(JourneyBus::parse)
-            // A bus that can't be read isn't a walk: no journey rather than the wrong one.
             if (bus == null && !o.isNull("bus")) return null
             val board = o.optStringOrNull("boardAt")?.let(::parseInstant)
-            // A bus needs its time to count down to; on foot there's neither.
             if (bus != null && board == null) return null
             if (bus == null && o.optStringOrNull("walk") == null) return null
             return Journey(
@@ -459,17 +354,12 @@ data class Journey(
                         backup = o.optStringOrNull("backupText"),
                         summary = o.optStringOrNull("summary"),
                     ),
-                // A change that can't be read leaves the first bus, whose words name the change.
                 change = o.optJSONObject("change")?.takeIf { bus != null }?.let { lenient { JourneyChange.parse(it) } },
             )
         }
     }
 }
 
-/**
- * `card.journey`'s words: "To GEA1000 @ UTown · starts 10:00", "by ~09:36", "5 min walk", "10 min ride · off at Opp NUSS", "Arrive ~09:51 ·
- * 9 min early", "at UTown", "Or go now: R2 at 09:06 from PGP", and [summary], the trip in one line for a widget.
- */
 data class JourneyWords(
     val title: String? = null,
     val place: String? = null,
@@ -483,23 +373,16 @@ data class JourneyWords(
     val summary: String? = null,
 )
 
-/**
- * `journey.change`: where the first bus drops you ([from]) and the second goes from ([stop], across the road when [walk] is set), the wait,
- * the second bus and the rides on each, worded on the server.
- */
 data class JourneyChange(
     val from: String,
     val stop: String,
-    /** When the first bus gets to [from]. */
     val reach: String,
     val walk: String?,
     val wait: String?,
     val bus: JourneyBus,
     val boardAtMs: Long,
-    /** Time on the second bus, and on the first ("6 min", "8 min"). */
     val ride: String,
     val firstRide: String,
-    /** "8 min ride · off at Kent Vale", "Change at Kent Vale · 3 min wait", "6 min ride". */
     val firstRideText: String,
     val changeText: String,
     val rideText: String,
@@ -523,8 +406,6 @@ data class JourneyChange(
     }
 }
 
-/** A bus in the journey: its service, colour (as painted on the bus, ARGB), stop and time. */
-/** `paid`: a public bus, with a fare, unlike the free shuttle. */
 data class JourneyBus(val svc: String, val color: Long, val stop: String, val board: String, val paid: Boolean = false) {
     companion object {
         fun parse(o: JSONObject): JourneyBus? {
@@ -540,7 +421,6 @@ data class JourneyBus(val svc: String, val color: Long, val stop: String, val bo
     }
 }
 
-/** A stop to walk to, and where it is. */
 data class WalkTo(val name: String, val lat: Double, val lon: Double) {
     companion object {
         fun parse(o: JSONObject): WalkTo? {
@@ -550,11 +430,9 @@ data class WalkTo(val name: String, val lat: Double, val lon: Double) {
         }
     }
 
-    /** Walking directions there in the phone's maps app (Google Maps opens it; a browser otherwise). */
     fun mapsUri(): android.net.Uri = "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking".toUri()
 }
 
-/** Something terminus learned and offers to change; `id` goes back to /api/me/choice. */
 data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String) {
     companion object {
         fun parse(o: JSONObject): Suggestion? =
@@ -567,10 +445,6 @@ data class Suggestion(val id: String, val text: String, val accept: String, val 
     }
 }
 
-/**
- * `card.step`: the buses either side of the one on the card, sent back to /api/me/step to change to one. A null side is the first bus you
- * can catch, or the last one offered: its button greyed, not hidden. [moved]: not the bus terminus chose, so "Best bus" goes back.
- */
 data class Step(
     val trip: String,
     val earlier: StepTarget?,
@@ -594,7 +468,6 @@ data class Step(
     }
 }
 
-/** A bus to step to. [json] is the server's object as it came, sent back as it is. */
 data class StepTarget(val svc: String, val stop: String, val boardMs: Long?, val json: String) {
     companion object {
         fun parse(o: JSONObject): StepTarget? =
@@ -607,10 +480,8 @@ data class StepTarget(val svc: String, val stop: String, val boardMs: Long?, val
     }
 }
 
-/** A class you chose to leave a bus earlier for (`earlier`) or get no reminders for (`quiet`). */
 data class TripChoice(val trip: String, val pref: String, val label: String?)
 
-/** A button on the card: `id` is the signal to send, `trip` which trip it's about. */
 data class CardAction(val id: String, val label: String, val trip: String) {
     companion object {
         fun parse(o: JSONObject): CardAction? =
@@ -622,12 +493,10 @@ data class CardAction(val id: String, val label: String, val trip: String) {
     }
 }
 
-/** `/api/me/day`: today's timeline. */
 data class DayItem(
     val kind: String,
     val key: String,
     val label: String,
-    /** done | now | next | later | skipped */
     val status: String,
     val fromName: String?,
     val toName: String,
@@ -636,29 +505,22 @@ data class DayItem(
     val leaveAtMs: Long?,
     val leaveEstimated: Boolean,
     val svc: String?,
-    /** Where to catch it: the bus's stop, which may not be where you set off from. */
     val leaveStop: String? = null,
     val timingText: String?,
     val timingStatus: String?,
-    /** On the bus to it: "On the D2 · off at UTown · arrive 9:52", worded by [DayTimeline]. */
     val onBus: OnBus? = null,
-    /** Can be taken off today (swiped away): anything not done yet. */
     val removable: Boolean = false,
-    /** The server's line under it: "Leave by ~09:36 · R2 from PGP", "Not going"; null when done or from an older server. */
     val line: String? = null,
-    /** The server's name for it: the class, or "Home, from UTown"; null from an older server. */
     val title: String? = null,
 )
 
 data class OnBus(val svc: String, val off: String?, val arriveMs: Long?)
 
-/** `date` is the SGT day it's for (YYYY-MM-DD): a plan kept for offline is only used that day. */
 data class DayPlan(val items: List<DayItem>, val note: String?, val date: String? = null) {
     companion object {
         fun parse(o: JSONObject): DayPlan = parsing {
             val a = o.optJSONArray("items") ?: JSONArray()
             DayPlan(
-                // An item without a time it starts can't be placed in the day: left out.
                 items =
                     (0 until a.length()).mapNotNull {
                         val x = a.getJSONObject(it)
@@ -697,12 +559,6 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
     }
 }
 
-/**
- * A service at a stop and its next bus. `color` (#rrggbb), the service's colour. `paid`: a public bus, with a fare. `later`: the buses
- * after the next one the feed knows, soonest first: every later time there is, so nothing else is guessed. `towards`: the next stop's name,
- * then where the route ends (one entry when they're the same). `crowd`: the next bus's (low, medium, high). `endsAtMs`: when the service
- * stops for the day. The newer fields are null or empty from an older server.
- */
 data class BoardRow(
     val svc: String,
     val etaS: Int?,
@@ -711,33 +567,20 @@ data class BoardRow(
     val paid: Boolean = false,
     val later: List<LaterBus> = emptyList(),
     val towards: List<String> = emptyList(),
-    /** The well-known places it passes from here ("UTown", "Kent Ridge MRT"), for someone new to NUS; empty from an older server. */
     val via: List<String> = emptyList(),
     val crowd: String? = null,
     val endsAtMs: Long? = null,
-    /** The route ends at this stop: the server gave `towards` and it's empty; false from an older server. */
     val endsHere: Boolean = false,
-    /** False: a service that calls here but isn't running now (asked for with `stopped=1`). */
     val running: Boolean = true,
-    /** Why it isn't: "ended" (done for today), "notYet" (later today), "noService" (not today). */
     val stopped: String? = null,
-    /** When it next starts; null when none was found. */
     val resumesAtMs: Long? = null,
-    /** The server's words: "4 min", "now", "~6 min"; null without a time, or from an older server. */
     val eta: String? = null,
-    /** "then 12, ~20 min"; null with no later buses, or from an older server. */
     val laterText: String? = null,
-    /** "to Central Library, Kent Vale", "Ends here"; null from an older server. */
     val toText: String? = null,
-    /**
-     * Where it's going, worded and translated: "to PGP Foyer", "via UTown", "Ends here" (Nearby's boards only); null from an older server.
-     */
     val dest: String? = null,
-    /** The place inside [dest] ("PGP Foyer"), set apart from the words round it; null when there's none, or from an older server. */
     val destPlace: String? = null,
 )
 
-/** A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min". */
 data class LaterBus(val etaS: Int, val quality: String, val eta: String? = null)
 
 private fun parseLater(r: JSONObject): List<LaterBus> {
@@ -754,7 +597,6 @@ private fun parseLater(r: JSONObject): List<LaterBus> {
     }
 }
 
-/** One board row, wherever a board appears (/api/arrivals, /api/me/nearby, /api/line). */
 fun parseBoardRow(r: JSONObject): BoardRow =
     BoardRow(
         svc = r.getString("svc"),
@@ -784,24 +626,16 @@ internal val STOPPED = setOf("ended", "notYet", "noService")
 data class NearbyStop(
     val code: String,
     val name: String,
-    /** Seconds on foot; null for a pinned stop asked for without a location (/api/me/stops). */
     val walkS: Int?,
     val available: Boolean,
     val board: List<BoardRow>,
-    /** The stop across the road, if it has one. */
     val opposite: String? = null,
-    /** Metres away as the crow flies; null from an older server. */
     val distM: Int? = null,
-    /** The full name, where [name] is short; null from an older server. */
     val longName: String? = null,
-    /** [opposite] is across the road; false when the two are only near each other (PGP and PGP Foyer). */
     val oppositeAcross: Boolean = true,
-    /** [opposite]'s full name; null from an older server. */
     val oppositeName: String? = null,
-    /** Which way its buses go, by places a newcomer knows: "to UTown, Science, Kent Ridge MRT". Null with none, or from an older server. */
     val viaText: String? = null,
 ) {
-    /** "2 min walk", or "here" under a minute; null without a walk. */
     val walkWords: String?
         get() = walkS?.let { if (it < 60) L.s(R.string.here) else L.s(R.string.min_walk, (it + 30) / 60) }
 }
@@ -811,41 +645,26 @@ data class Destination(
     val label: String,
     val stopCode: String,
     val kind: String,
-    /** Metres on foot from the stop; null for a stop. */
     val walkM: Int? = null,
-    /** Other names people search for, lower case ("soc", "mrt"). */
     val aliases: List<String> = emptyList(),
-    /** A landmark's every stop; the router takes the quicker. */
     val stops: List<String> = emptyList(),
-    /** What a landmark is ("Food court"). */
     val detail: String? = null,
 )
 
-/** The destination search, by the rules every client shares ([SearchRank], search.json). */
 fun rankDestinations(all: List<Destination>, query: String, max: Int = SearchRank.MAX): List<Destination> =
     SearchRank.rank(all, query, max) { SearchRank.Key(it.kind, it.code, it.label, it.aliases) }
 
-/** A result's identity in a list: a stop and a building can share a code (COM3), and the kind tells them apart. */
 val Destination.id: String
     get() = "$kind:$code"
 
-/**
- * Whether this is the place a timetable row ([row], whose code is where its classes go) stands for: that stop or landmark itself, not a
- * building or room sharing its code.
- */
 fun Destination.isPlaceOf(row: Destination): Boolean = (kind == "stop" || kind == "landmark") && code == row.code
 
-/**
- * The where picker's results for [query]: [pinned] (the timetable's stops) first, then the rest of the search, less the places a pinned row
- * already stands for.
- */
 fun whereResults(destinations: List<Destination>, pinned: List<Destination>, query: String): Pair<List<Destination>, List<Destination>> {
     if (query.isBlank()) return pinned to emptyList()
     val top = rankDestinations(pinned, query, max = 6)
     return top to rankDestinations(destinations, query, max = 6).filter { d -> top.none { d.isPlaceOf(it) } }
 }
 
-/** What the user asked for: the planned trip, a favourite, or any stop/venue. */
 sealed interface Target {
     data object Plan : Target
 
@@ -854,32 +673,21 @@ sealed interface Target {
     data class Code(val code: String, val label: String) : Target
 }
 
-/** The server said no. [message] is a sentence to show: the API's own errors are lowercase phrases, written for API users. */
 open class ApiError(val status: Int, message: String) : IOException(sentence(message))
 
-/**
- * 426: the server no longer serves this version (KV `config:minClient`). Nothing is asked again for a while ([Outdated]); the app offers
- * the update.
- */
 class UpdateRequired(message: String) : ApiError(426, message)
 
-/** "not a valid NUSMods share link" -> "Not a valid NUSMods share link." */
 internal fun sentence(text: String): String {
     if (text.isEmpty()) return text
-    // "terminus" is written lower case, even starting a sentence.
     val s = if (text.startsWith("terminus")) text else text.replaceFirstChar { it.uppercaseChar() }
-    // Chinese ends with a full-width stop.
     val cjk = s.any { it in '\u4e00'..'\u9fff' }
     return if (s.last() in ".!?。！？") s else if (cjk) "$s。" else "$s."
 }
 
-/** The answer arrived but isn't what this version understands. Not a network problem. */
 class ParseError(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-/** A conditional request's answer: what the app kept is still current. */
 class NotModified : Exception("not modified")
 
-/** `fast` is for the widget: a tap runs inside a broadcast, which can be killed. */
 class Api(internal val token: String?, private val fast: Boolean = false, private val hour12: Boolean = false) {
 
     suspend fun pair(code: String, name: String): String {
@@ -887,41 +695,30 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return parsing { request("POST", "/api/pair", body).getString("token") }
     }
 
-    /** First launch: an account with no email, so the app works before any sign-in. */
     suspend fun anon(name: String): String = parsing {
         request("POST", "/api/auth/anon", JSONObject().put("name", name).put("platform", "android")).getString("token")
     }
 
     suspend fun me(): Me = Me.parse(request("GET", "/api/me"))
 
-    /** The whole profile as the server keeps it, with its version; edited and sent back whole ([saveProfile]). */
     suspend fun profile(): Tagged {
         var tag: String? = null
         val json = request("GET", "/api/me/profile") { tag = it.getHeaderField("etag") }
         return Tagged(json, tag)
     }
 
-    /**
-     * Saves the whole profile. With [ifMatch], the version it was made from, only if no other device saved since: refused with 412
-     * otherwise ([saveChanges]).
-     */
     suspend fun saveProfile(profile: JSONObject, ifMatch: String?): Tagged {
         var tag: String? = null
         val json = request("PUT", "/api/me/profile", profile, ifMatch = ifMatch) { tag = it.getHeaderField("etag") }
         return Tagged(json, tag)
     }
 
-    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. With the profile's new version. */
     suspend fun import(share: String): Imported {
         var tag: String? = null
         val json = request("POST", "/api/me/import", JSONObject().put("share", share)) { tag = it.getHeaderField("etag") }
         return Imported(ImportResult.parse(json), tag)
     }
 
-    /**
-     * `/api/campus` as it came, with its ETag, for [MapFiles], which keeps a copy for the map, the Stops tab and the pickers. Null when
-     * [etag] says the kept copy is still current.
-     */
     suspend fun campusJson(etag: String? = null): Pair<JSONObject, String?>? {
         var tag: String? = null
         val json =
@@ -933,23 +730,16 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return json to tag
     }
 
-    /** One service's live buses, for the map. */
     suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/api/buses?svc=${enc(svc)}")) }
 
-    /**
-     * What's coming at one stop, for the Stops tab and the map's stop sheet: every row, the stop's name and its opposite stop, and the
-     * services not running now (`stopped=1`), greyed. With [public], the public buses there too (the profile's `publicBuses`).
-     */
     suspend fun board(stop: String, public: Boolean = false): Board = parsing {
         Board.parse(request("GET", "/api/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else ""))
     }
 
-    /** One service's whole line; with [stop], that stop's board row for it too. */
     suspend fun line(svc: String, stop: String? = null): Line = parsing {
         Line.parse(request("GET", "/api/line?svc=${enc(svc)}" + (stop?.let { "&stop=${enc(it)}" } ?: "")))
     }
 
-    /** Starts a sign-in approved from the email; send it with this device's anonymous token to keep its setup. */
     suspend fun signInStart(email: String, name: String): SignInRequest {
         val o = request("POST", "/api/auth/app/start", JSONObject().put("email", email).put("name", name))
         return parsing { SignInRequest(o.getString("request"), o.getString("poll"), o.getInt("match")) }
@@ -962,7 +752,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         }
     }
 
-    /** The code from the email, typed here. A wrong one throws with the server's message. */
     suspend fun signInCode(r: SignInRequest, code: String): SignInPoll {
         val o = request("POST", "/api/auth/app/code", JSONObject().put("request", r.request).put("poll", r.poll).put("code", code))
         return parsing {
@@ -970,12 +759,10 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         }
     }
 
-    /** After a "choose" outcome: which setup to keep. `anon` is the device's old token. */
     suspend fun merge(anon: String, keepDevice: Boolean) {
         request("POST", "/api/auth/app/merge", JSONObject().put("anon", anon).put("keep", if (keepDevice) "device" else "account"))
     }
 
-    /** A code another device can pair with (accounts with an email only). */
     suspend fun pairCode(): String = parsing { request("POST", "/api/me/pair-code", JSONObject()).getString("code") }
 
     suspend fun devices(): List<Device> {
@@ -1001,7 +788,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         request("DELETE", "/api/me/devices/${enc(id)}")
     }
 
-    /** Only for an account with no email: one with an email is deleted from the account page. */
     suspend fun deleteAccount() {
         request("DELETE", "/api/me")
     }
@@ -1009,7 +795,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
     suspend fun next(target: Target, lat: Double?, lon: Double?, acc: Double? = null): NextAnswer =
         NextAnswer.parse(nextJson(target, lat, lon, acc))
 
-    /** Raw form, for the widget cache. `acc` is how far out the fix may be ([Locator.accOf]). */
     suspend fun nextJson(target: Target, lat: Double?, lon: Double?, acc: Double? = null): JSONObject {
         val q = buildList {
             if (lat != null && lon != null) {
@@ -1022,7 +807,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
                 is Target.SavedPlace -> add("place=${enc(target.key)}")
                 is Target.Code -> add("to=${enc(target.code)}")
             }
-            // The card's clock times, in this phone's 12- or 24-hour style.
             if (hour12) add("h12=1")
         }
         return request("GET", "/api/me/next" + query(q))
@@ -1030,7 +814,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
 
     suspend fun nearby(lat: Double?, lon: Double?, acc: Double? = null): List<NearbyStop> = parseNearby(nearbyJson(lat, lon, acc))
 
-    /** [stopped]: the services not running now too, greyed on the Stops tab; Nearby and the widgets leave them out. */
     suspend fun nearbyJson(lat: Double?, lon: Double?, acc: Double? = null, stopped: Boolean = false): JSONObject {
         val q =
             (if (lat != null && lon != null) listOfNotNull("lat=${coord(lat)}", "lon=${coord(lon)}", acc?.let { "acc=${Math.round(it)}" })
@@ -1038,11 +821,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return request("GET", "/api/me/nearby" + query(q))
     }
 
-    /**
-     * The pinned stops [codes] as Nearby shows them (/api/me/stops), for the Stops tab's card, with the answer's time. With a location,
-     * each says the walk there; without one, none does. The services not running now come too, after the others: a stop with none running
-     * lists them, with when each starts again.
-     */
     suspend fun stops(codes: List<String>, lat: Double?, lon: Double?): Pair<List<NearbyStop>, Long?> {
         val q =
             listOf("codes=" + codes.joinToString(",") { enc(it) }) +
@@ -1052,7 +830,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return parseNearby(json) to json.optStringOrNull("asOf")?.let(::parseInstant)
     }
 
-    /** How many buses each service has out (/api/lines), for the Stops tab's list of lines, and when they were counted. */
     suspend fun lines(): Pair<Map<String, LineOut?>, Long?> = parsing {
         request("GET", "/api/lines").let { LineOut.parse(it) to it.optStringOrNull("asOf")?.let(::parseInstant) }
     }
@@ -1065,17 +842,12 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         }
     }
 
-    /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /api/me/next. */
     suspend fun signal(kind: String, trip: String?): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
         return request("POST", "/api/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 
-    /**
-     * Another bus for [step]'s trip: [to] one of its sides, going [dir] ("earlier" or "later"), or null for the best bus again. Answers
-     * with the new /api/me/next for that trip, from [lat] and [lon] when given.
-     */
     suspend fun step(step: Step, to: StepTarget?, dir: String?, lat: Double? = null, lon: Double? = null): JSONObject {
         val body = JSONObject().put("trip", step.trip).put("to", to?.let { JSONObject(it.json) } ?: JSONObject.NULL)
         dir?.let { body.put("dir", it) }
@@ -1083,10 +855,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return request("POST", "/api/me/step" + if (hour12) "?h12=1" else "", body)
     }
 
-    /**
-     * A one-off trip later today: planned like a class. Answers with the new /api/me/next, planned from [lat] and [lon] when given, as
-     * [nextJson] is.
-     */
     suspend fun once(target: Target, atMin: Int, lat: Double? = null, lon: Double? = null, acc: Double? = null): JSONObject {
         val body = JSONObject().put("atMin", atMin)
         when (target) {
@@ -1105,17 +873,14 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return request("POST", "/api/me/once" + query(q), body)
     }
 
-    /** This phone's Firebase token, so the server can say when the card changes. */
     suspend fun registerPush(token: String) {
         request("POST", "/api/me/push", JSONObject().put("token", token))
     }
 
-    /** No more pushes to this session: nothing on the phone would show them. */
     suspend fun unregisterPush() {
         request("DELETE", "/api/me/push")
     }
 
-    /** A suggestion accepted or turned down (`id`), or a choice undone (`trip` and `pref`). */
     suspend fun choice(choice: String, id: String? = null, trip: String? = null, pref: String? = null): List<TripChoice> {
         val body = JSONObject().put("choice", choice)
         id?.let { body.put("id", it) }
@@ -1124,23 +889,16 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return parseChoices(request("POST", "/api/me/choice", body))
     }
 
-    /**
-     * The new semester's reminder, in both languages (unless the account chose one), or null when there's none: for a push that says only
-     * `kind: term`.
-     */
     suspend fun notice(): Map<String, String>? {
         val n = request("GET", "/api/me/notice").optJSONObject("notice") ?: return null
-        // Only the fields sent: a missing one is absent, not "".
         return listOf("title", "body", "zhTitle", "zhBody").mapNotNull { k -> n.optStringOrNull(k)?.let { k to it } }.toMap()
     }
 
-    /** Classes with a bus earlier or no reminders, and how many trips are remembered. */
     suspend fun choices(): Pair<List<TripChoice>, Int> {
         val o = request("GET", "/api/me/choices")
         return parseChoices(o) to o.optInt("history", 0)
     }
 
-    /** "Clear trip history": forgets how each trip went; choices stay. */
     suspend fun clearHistory() {
         request("DELETE", "/api/me/history")
     }
@@ -1152,11 +910,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         }
     }
 
-    /**
-     * /api/me/day as it came: kept for when the phone is offline ([Store.saveDay]). With a location, the next class is planned from there,
-     * as the card is. With the language it's written in, as [L.header] gives it: the account's choice wins over the one asked in, and a
-     * switch reaches the account a moment after the app shows it. Null from an older server: the one asked in.
-     */
     suspend fun dayJson(lat: Double? = null, lon: Double? = null, acc: Double? = null): Pair<JSONObject, String> {
         val q = buildList {
             if (lat != null && lon != null) {
@@ -1175,18 +928,12 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         return json to (written?.let { if (it.startsWith("zh")) "zh-Hans" else "en" } ?: asked)
     }
 
-    /** Whose account a pairing code belongs to (masked), without spending it. */
     suspend fun pairCheck(code: String): String = parsing {
         request("POST", "/api/pair/check", JSONObject().put("code", code)).getString("account")
     }
 
-    /** The released version, from /download/latest.json. */
     suspend fun latestVersion(): String = parsing { request("GET", "/download/latest.json").getString("version") }
 
-    /**
-     * "Is this wrong?": the answer as the server sent it, with a reason (one of REPORT_REASONS), a note, or both. Needs an account with an
-     * email.
-     */
     suspend fun report(reason: String?, note: String, answer: JSONObject?, appVersion: String) {
         val body = JSONObject().put("kind", "wrong").put("note", note).put("platform", "android").put("appVersion", appVersion)
         reason?.let { body.put("reason", it) }
@@ -1194,16 +941,13 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         request("POST", "/api/me/feedback", body)
     }
 
-    /** Send feedback: a note about anything, emailed to the operator like "Is this wrong?". Needs an account with an email. */
     suspend fun feedback(note: String, appVersion: String) {
         val body = JSONObject().put("kind", "other").put("note", note).put("platform", "android").put("appVersion", appVersion)
         request("POST", "/api/me/feedback", body)
     }
 
-    /** Download my data: everything the account holds, as the account page gives it. */
     suspend fun export(): JSONObject = request("GET", "/api/me/export")
 
-    /** Ends this device's session on the server. */
     suspend fun logout() {
         request("POST", "/api/auth/logout", JSONObject())
     }
@@ -1217,21 +961,9 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         seen: ((HttpURLConnection) -> Unit)? = null,
     ): JSONObject =
         withContext(Dispatchers.IO) {
-            // Refused as too old: nothing the server would refuse goes out until
-            // the hold is up (or the app is updated). Signing in or out and
-            // leaving (pushes off, the account deleted) still go, as it serves them.
             if (Outdated.gated(method, path) && Outdated.holding()) throw UpdateRequired(L.s(R.string.update_required))
-            // Asked to slow down: nothing goes out until Retry-After is up.
             if (Quiet.blocked(path)) throw ApiError(429, L.s(R.string.busy_try_again))
             try {
-                // Fast (widgets, a push, an alarm's broadcast, the live
-                // notification) must finish inside the ~10 s a broadcast or a
-                // push handler gets. The timeouts below are per step (and per
-                // address tried, with none for the DNS lookup), so the whole
-                // exchange has a deadline of its own too, which also ends it
-                // when the caller is cancelled. The chosen address, then the
-                // site's other one if it couldn't be reached at all, inside
-                // the same deadline (Servers.order).
                 withTimeout(if (fast) FAST_DEADLINE_MS else DEADLINE_MS) {
                     val tries = Servers.tries()
                     for ((i, base) in tries.withIndex()) {
@@ -1240,8 +972,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
                         var status: Int? = null
                         var failure: Throwable? = null
                         try {
-                            // Any reply counts as the server answering (an error status,
-                            // a 304 or a body this version can't read too), as on the Mac.
                             return@withTimeout blocking(conn) {
                                 exchange(conn, method, path, body, ifNoneMatch, ifMatch, seen) {
                                     status = it
@@ -1253,7 +983,6 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
                             if (i == tries.lastIndex || !Servers.unreached(e, method)) throw e
                         } finally {
                             conn.disconnect()
-                            // For the developer menu: an error status is an answer, not a failure.
                             RequestLog.record(
                                 method,
                                 path,
@@ -1282,20 +1011,10 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         reached: (Int) -> Unit,
     ): JSONObject {
         conn.requestMethod = method
-        // Fast: 2 s to connect plus 7 s to read stays under the broadcast's
-        // budget. The Worker gives each NUS call up to 5 s, and a cold
-        // /api/me/next mints a guest token first, which usually fits in 7 s. A
-        // connection is up in well under a second, or not at all within 2.
-        // The read timeout counts each wait for bytes, but the answer is one
-        // small JSON body sent at once, so it is in effect the wait for the
-        // reply. The rare worst case (a re-mint and a retry, ~20 s) is left
-        // to the next refresh rather than overrunning the budget.
         conn.connectTimeout = if (fast) 2_000 else 8_000
         conn.readTimeout = if (fast) 7_000 else 10_000
         conn.setRequestProperty("accept", "application/json")
-        // So the server can tell apps and versions apart (the User-Agent only says Dalvik).
         conn.setRequestProperty("x-terminus-client", CLIENT)
-        // The server writes answers, cards and errors in the app's language.
         conn.setRequestProperty("accept-language", L.header())
         token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
         ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
@@ -1307,14 +1026,12 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
         }
         val status = conn.responseCode
         reached(status)
-        // How far the phone's clock is out, from a reply fresh from the server.
         val cached =
             (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 ||
                 conn.getHeaderField("cf-cache-status").equals("HIT", ignoreCase = true)
         ServerClock.observe(conn.getHeaderField("date"), System.currentTimeMillis(), cached)
         val retryAfter = conn.getHeaderField("retry-after")
         if (status == 429) Quiet.after(path, retryAfter)
-        // Down for a moment (the accounts database): the polling loops wait it out.
         if (status == 503) Quiet.later(retryAfter)
         if (status == 304 && ifNoneMatch != null) throw NotModified()
         seen?.invoke(conn)
@@ -1325,12 +1042,8 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
             Outdated.refused()
             throw UpdateRequired(L.s(R.string.update_required))
         }
-        // Without the API's own words (an HTML error page from in front
-        // of the Worker), a plain sentence rather than "HTTP 502".
         if (status !in 200..299) throw ApiError(status, json?.optStringOrNull("error") ?: L.s(R.string.server_not_answering))
-        // Only an account's routes are refused as too old, so only they say it's over.
         if (token != null && Outdated.gated(method, path)) Outdated.served()
-        // A 200 that isn't JSON is not "offline": the server said something this version can't read.
         return json ?: throw ParseError("not JSON")
     }
 
@@ -1339,46 +1052,28 @@ class Api(internal val token: String?, private val fast: Boolean = false, privat
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
 
-/** The whole exchange, connecting included, for a fast request (a broadcast's ~10 s) and any other. */
 private const val FAST_DEADLINE_MS = 9_000L
 private const val DEADLINE_MS = 20_000L
 
-/**
- * Runs [block] on an IO thread and waits for it, cancellably: cancelled (or past [withTimeout]'s deadline), [conn] is disconnected, which
- * ends a connect or a read under way, and the caller goes on at once rather than waiting out a blocking call, such as a DNS lookup, that
- * has no timeout.
- */
 private suspend fun <T> blocking(conn: HttpURLConnection, block: () -> T): T = suspendCancellableCoroutine { cont ->
     val io = Dispatchers.IO.asExecutor()
-    // Off the cancelling thread, which may be the main one.
     cont.invokeOnCancellation { io.execute { conn.disconnect() } }
-    // A result after cancellation is dropped by the continuation.
     io.execute { cont.resumeWith(runCatching(block)) }
 }
 
-/**
- * After a 429, every request on this phone (the app, its widgets, the live notification) waits out the server's Retry-After, at most 5
- * minutes: a loop that kept asking would only keep the limit tripped, and each refused request still costs the server one. Sign-in, pairing
- * and code routes have limits of their own, so a 429 from one holds back only those, not the widget's answers. The wait goes by the time
- * since boot (the phone's clock can be changed), and is kept in the settings by the wall clock, so a process started for a widget or a push
- * honours it too.
- */
 object Quiet {
     private const val MAX_S = 300L
     private const val DEFAULT_S = 60L
     private const val KEY = "quiet-until"
 
-    /** For tests: the time since boot, and the wall clock. */
     internal var elapsed: () -> Long = { android.os.SystemClock.elapsedRealtime() }
     internal var wall: () -> Long = { System.currentTimeMillis() }
 
     @Volatile private var prefs: android.content.SharedPreferences? = null
     @Volatile private var untilElapsed = 0L
     @Volatile private var authUntilElapsed = 0L
-    /** A 503's Retry-After: not a gate, only how long the polling loops wait. */
     @Volatile private var laterElapsed = 0L
 
-    /** At process start ([TerminusApp]): a wait a process before this one was told. */
     fun init(ctx: android.content.Context) {
         val p = ctx.applicationContext.getSharedPreferences("terminus-net", android.content.Context.MODE_PRIVATE)
         prefs = p
@@ -1407,15 +1102,12 @@ object Quiet {
         laterElapsed = elapsed() + s.coerceAtMost(MAX_S) * 1000
     }
 
-    /** How long until requests go out again, ms (0: now): a retry waits at least this. */
     fun remainingMs(): Long = (untilElapsed - elapsed()).coerceAtLeast(0)
 
-    /** How long a polling loop waits before asking again, at least: a 429's wait or a 503's. */
     fun waitMs(): Long = maxOf(remainingMs(), laterElapsed - elapsed(), 0)
 
     internal fun auth(path: String) = path.startsWith("/api/auth/") || path.startsWith("/api/pair") || path.startsWith("/api/me/pair-code")
 
-    /** For tests. */
     internal fun reset() {
         untilElapsed = 0
         authUntilElapsed = 0
@@ -1423,13 +1115,7 @@ object Quiet {
     }
 }
 
-/**
- * The server refused this version (426, below KV `config:minClient`). Nothing is asked for [HOLD_MS] after that, from the app, the widgets
- * or the notifications: then one request finds out whether the minimum has come down. Kept in the settings, for every process, until an
- * answer comes or this version is replaced.
- */
 object Outdated {
-    /** Half an hour, as the Mac app holds. */
     private const val HOLD_MS = 30 * 60_000L
     private const val KEY_AT = "outdated-at"
     private const val KEY_VERSION = "outdated-version"
@@ -1441,28 +1127,20 @@ object Outdated {
     fun init(ctx: android.content.Context) {
         val p = ctx.applicationContext.getSharedPreferences("terminus-net", android.content.Context.MODE_PRIVATE)
         prefs = p
-        // Refused as another version: this one may be new enough.
         at = if (p.getString(KEY_VERSION, null) == BuildConfig.VERSION_NAME) p.getLong(KEY_AT, 0) else 0
     }
 
-    /** Refused lately: what the app shows is the update, not an error. */
     val required: Boolean
         get() = at != 0L
 
     fun holding(): Boolean = at != 0L && wall() - at in 0 until HOLD_MS
 
-    /**
-     * Whether the server refuses this request to an outdated app, as apps/api checks it: an account's routes (`/api/me…`) and the answers
-     * it asks with its token (KEYED in index.ts). Not signing in or out (`/api/auth/…`, `/api/pair…`), the released version
-     * (`/download/…`), nor taking the device off pushes or deleting the account (`DELETE /api/me/push`, `DELETE /api/me`).
-     */
     fun gated(method: String, path: String): Boolean {
         val p = path.substringBefore('?')
         if (method == "DELETE" && (p == "/api/me" || p == "/api/me/push")) return false
         return p == "/api/me" || p.startsWith("/api/me/") || p in ANSWERS
     }
 
-    /** The bus answers the server refuses an outdated app (KEYED in apps/api's index.ts). */
     private val ANSWERS = setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs")
 
     fun refused() {
@@ -1476,16 +1154,13 @@ object Outdated {
         prefs?.edit { remove(KEY_AT).remove(KEY_VERSION) }
     }
 
-    /** For tests. */
     internal fun reset() {
         at = 0
     }
 }
 
-/** `x-terminus-client`: platform and version. */
 val CLIENT = "android/${BuildConfig.VERSION_NAME}"
 
-/** `/api/me`: who this device is signed in as. */
 data class Me(
     val email: String?,
     val anonymous: Boolean,
@@ -1507,10 +1182,8 @@ data class Me(
 
 data class SignInRequest(val request: String, val poll: String, val match: Int)
 
-/** status: pending | approved | denied | expired. outcome as in applogin.ts. */
 data class SignInPoll(val status: String, val token: String?, val email: String?, val outcome: String?)
 
-/** [watch]: an Apple Watch, whose [platform] is "ios"; an older server never says so. */
 data class Device(
     val id: String,
     val name: String,
@@ -1520,7 +1193,6 @@ data class Device(
     val current: Boolean,
     val watch: Boolean = false,
 ) {
-    /** "Android", "iPhone": product names, the same in every language. */
     val platformName: String?
         get() =
             if (watch) "Apple Watch"
@@ -1533,10 +1205,8 @@ data class Device(
                 }
 }
 
-/** A stop, with the services that call there (for its sign in setup). */
 data class Stop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String> = emptyList())
 
-/** `common`: where most students live (PGP, UTown Residence), shown first in the pickers. */
 data class Residence(
     val code: String,
     val name: String,
@@ -1545,12 +1215,10 @@ data class Residence(
     val common: Boolean = false,
     val walkMin: Int? = null,
 ) {
-    /** Minutes on foot to its stop, as the server works them out; from the metres at 1.3 m/s, worked out here for an older server. */
     val minutes: Int
         get() = walkMin ?: maxOf(1, Math.round(walkM / 1.3 / 60).toInt())
 }
 
-/** `colors`: each service's colour as NUS paints it, from /api/campus's routes. */
 data class Campus(
     val stops: List<Stop>,
     val residences: List<Residence>,
@@ -1568,7 +1236,6 @@ data class Campus(
             val d = o.optJSONArray("destinations") ?: JSONArray()
             val routes = o.optJSONObject("routes")
             Campus(
-                // A stop without a place (lat and lon) can't be on the map or measured to: left out, as WalkTo does.
                 stops =
                     (0 until s.length())
                         .mapNotNull {
@@ -1606,11 +1273,8 @@ data class Campus(
     }
 }
 
-/** `/api/me/import`: what was found, what couldn't be placed, and for which semester. */
-/** An imported class whose room couldn't be placed: the person picks its stop, or skips it. */
 data class Unplaced(val module: String, val venue: String, val day: Int, val arriveByMin: Int, val endMin: Int?, val offCampus: Boolean)
 
-/** An import's answer, and the version (the ETag) of the profile it saved. */
 class Imported(val result: ImportResult, val version: String?)
 
 data class ImportResult(
@@ -1653,10 +1317,8 @@ data class ImportResult(
     }
 }
 
-/** The phone's name, as Settings and the account page show it: "Google Pixel 8". */
 fun deviceName(): String = "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}".take(40)
 
-/** Four decimals is about 11 m: enough to tell PGP from PGP Foyer, and no more precise than that in URLs that pass through logs. */
 private fun coord(v: Double) = "%.4f".format(java.util.Locale.ROOT, v)
 
 private fun parseDestination(d: JSONObject) =
@@ -1673,7 +1335,6 @@ private fun parseDestination(d: JSONObject) =
 
 internal fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
 
-/** 12-hour times: the account's choice ([Clock]), else the phone's own setting. The server is asked for its card in the same style. */
 fun hour12(ctx: android.content.Context): Boolean =
     when (Clock.pref(ctx)) {
         Clock.H12 -> true
@@ -1681,9 +1342,6 @@ fun hour12(ctx: android.content.Context): Boolean =
         else -> !android.text.format.DateFormat.is24HourFormat(ctx)
     }
 
-/**
- * The account's 12- or 24-hour choice (its profile's `clock`), kept on the phone for the widgets and alarms, which don't load the profile.
- */
 object Clock {
     const val AUTO = "auto"
     const val H12 = "12"
@@ -1700,11 +1358,9 @@ object Clock {
     }
 }
 
-/** "1.0.10" > "1.0.9", and a release is newer than its own pre-release: "2.0.0" > "2.0.0-beta.2" > "2.0.0-beta" > "1.3.10". */
 fun isNewer(latest: String, current: String): Boolean {
     fun parts(v: String): Pair<List<Int>, List<Int>?> {
         val (num, pre) = v.split('-', limit = 2).let { it[0] to it.getOrNull(1) }
-        // "beta.2" -> [2]; "beta" -> [0]. No tag at all ranks above any tag.
         return num.split('.').map { it.toIntOrNull() ?: 0 } to pre?.let { p -> listOf(p.substringAfter('.', "0").toIntOrNull() ?: 0) }
     }
     fun cmp(a: List<Int>, b: List<Int>): Int {
@@ -1727,7 +1383,6 @@ fun isNewer(latest: String, current: String): Boolean {
 
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)
 
-/** /api/me/nearby's stops, nearest first. */
 fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
     val stops = json.getJSONArray("stops")
     (0 until stops.length()).map { i ->
@@ -1740,7 +1395,6 @@ fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
             available = s.optBoolean("available", true),
             opposite = s.optStringOrNull("opposite")?.ifEmpty { null },
             longName = s.getJSONObject("stop").optStringOrNull("longName")?.ifEmpty { null },
-            // On the stop object, or beside it as `opposite` is; across when null from an older server.
             oppositeAcross = (s.getJSONObject("stop").takeIf { it.has("oppositeAcross") } ?: s).optBoolean("oppositeAcross", true),
             oppositeName = (s.getJSONObject("stop").optStringOrNull("oppositeName") ?: s.optStringOrNull("oppositeName"))?.ifEmpty { null },
             distM = if (s.has("distM") && !s.isNull("distM")) s.optInt("distM") else null,

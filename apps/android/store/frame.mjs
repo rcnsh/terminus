@@ -1,22 +1,3 @@
-// Frames the Play Store screenshots: each capture from the emulator
-// (captures/en, captures/zh, unchanged) inside a phone, under a headline.
-// The five are one picture cut in five, as Play shows them side by side: the
-// app's sky going from dawn to night along it, its hills, city and road
-// running through, and shuttles, the setting sun and Marina Bay Sands
-// crossing from one to the next. Writes screenshots/ and screenshots/zh/, 1080×1920
-// (Play allows up to 2:1 for the whole image). The captures are the Pixel 10 Pro
-// emulator's own screen, 1280×2856, so the phone drawn has a real phone's shape.
-//
-// The home screen's capture is rebuilt around its own pixels: the widgets and
-// the app icons as captured, on a wallpaper of the app's dusk, without the
-// search bar.
-//
-//   node apps/android/store/frame.mjs            # all of them
-//   node apps/android/store/frame.mjs 3-map      # one, both languages
-//
-// Draws with Chromium, headless: CHROME if set, else Playwright's download
-// (~/Library/Caches/ms-playwright), else Google Chrome. The Chinese uses the
-// system's PingFang SC, so run it on a Mac.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -27,13 +8,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fonts = join(here, '../../web/public/assets/fonts');
 const W = 1080;
 const H = 1920;
-// The captures' size: the emulator's screen as it is, never resized.
 const CW = 1280;
 const CH = 2856;
 
-// The words, in the listing's order. The headline is two lines, split at
-// "|", so every phone sits at the same height; its part in braces is in the
-// accent colour; the Chinese follows the app's glossary (src/i18n.ts).
 const SLIDES = [
   {
     file: '1-leave-by',
@@ -68,9 +45,6 @@ const SLIDES = [
   },
 ];
 
-// The skies of apps/web/public/assets/sky.css (light), and night's from the
-// dark one: top to horizon, the far hills, the trees, the city, the ground
-// and the road; `dark` puts the words in light ink.
 export const SKIES = {
   dawn: {
     s: ['#8fc1e8', '#b7d6ee', '#f1d6c2', '#f7c9a4'],
@@ -116,13 +90,10 @@ export const SKIES = {
   },
 };
 
-// Where the phones sit.
 const SCREEN_W = 620;
 const SCREEN_H = Math.round((SCREEN_W * CH) / CW);
 const PHONE_TOP = 450;
 
-// The home screen's capture (both languages lay it out alike): the two widgets
-// and the four app icons, in its own pixels.
 const HOME = {
   widgets: [
     { x: 59, y: 527, w: 1163, h: 638 },
@@ -131,15 +102,9 @@ const HOME = {
   radius: 80,
   icons: [186, 489, 791, 1094].map((x) => ({ x, y: 2399 })),
   iconR: 91,
-  // How far the icons move down, to where the search bar was.
   drop: 230,
 };
 
-/**
- * The whole strip, five slides wide, drawn in the page with a canvas: each
- * slide's page shows its own fifth of it, so the hills, the road and the
- * shuttles carry on across the joins.
- */
 function panoramaScript() {
   const phases = SLIDES.map((s) => SKIES[s.sky]);
   return `(() => {
@@ -240,14 +205,11 @@ function panoramaScript() {
 })();`;
 }
 
-/** The home screen, rebuilt: the capture's widgets and icons on the app's dusk, its status bar redrawn. */
 function homeScreen(shot) {
   const src = pathToFileURL(shot).href;
-  // Each piece is cut a pixel inside its edge, so nothing of the old wallpaper comes with it.
   const crop = (x, y, w, h, r) =>
     `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${r}px;background:url('${src}') -${x}px -${y}px / ${CW}px ${CH}px;"></div>`;
   const widgets = HOME.widgets.map((b) => crop(b.x + 1, b.y + 1, b.w - 2, b.h - 2, HOME.radius - 1)).join('');
-  // The icons a row lower, where the search bar was.
   const icons = HOME.icons
     .map((p) => {
       const r = HOME.iconR - 1;
@@ -262,7 +224,6 @@ function homeScreen(shot) {
     const y = 30 + ((i * 151) % 1100);
     return `<circle cx="${x}" cy="${y}" r="${i % 6 === 0 ? 2.6 : 1.5}" fill="#fff" opacity="${0.25 + (i % 5) * 0.12}"/>`;
   }).join('');
-  // Drawn 1080 wide, as tall as the capture's shape, with the hills and the sun at its foot.
   const VH = Math.round((W * CH) / CW);
   const wallpaper = `<svg width="${CW}" height="${CH}" viewBox="0 0 ${W} ${VH}" style="position:absolute;inset:0">
     <defs>
@@ -287,7 +248,6 @@ function homeScreen(shot) {
     <div class="pill"></div></div>`;
 }
 
-/** "Know when to|{leave for class}": two lines, the braces' part in the accent colour. */
 export function head(text) {
   return text
     .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
@@ -305,7 +265,6 @@ function page(index, lang) {
   const zh = lang === 'zh';
   const face = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Space Grotesk', sans-serif`;
   const body = zh ? `'PingFang SC', 'Hiragino Sans GB', sans-serif` : `'Inter', sans-serif`;
-  // Every slide's phone, in the middle of its own fifth of the strip.
   const phones = SLIDES.map((s, i) => {
     const shot = join(here, 'captures', lang, `${s.file}.png`);
     const screen = s.home ? homeScreen(shot) : `<img src="${pathToFileURL(shot)}">`;
@@ -359,7 +318,6 @@ export function chrome() {
   throw new Error('no Chromium: set CHROME to one');
 }
 
-// Run as a script, not when frame-large.mjs borrows the skies and the headline.
 if (realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const only = process.argv[2];
   const bin = chrome();

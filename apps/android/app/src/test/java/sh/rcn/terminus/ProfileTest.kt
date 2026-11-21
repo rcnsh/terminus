@@ -57,7 +57,6 @@ class ProfileTest {
         assertEquals(listOf("a", "b", "c"), p.places.map { it.key })
         assertEquals("x", p.json.getJSONArray("places").getJSONObject(1).getString("icon"))
         assertEquals(setOf("b", "c"), p.usual.map { it.place }.toSet())
-        // Not twice, and not over the same stop added again meanwhile.
         p.restorePlace(removed)
         assertEquals(3, p.places.size)
         assertNull(p.removePlace("nope"))
@@ -86,7 +85,6 @@ class ProfileTest {
 
     @Test
     fun `removing an imported class leaves the others as they were`() {
-        // Imported classes carry fields the app doesn't model (weeks); only the one removed goes.
         val p =
             ProfileDoc(
                 JSONObject(
@@ -117,9 +115,7 @@ class ProfileTest {
 
     @Test
     fun `later today starts half an hour from now on campus`() {
-        // 14:12 in Singapore: 14:42, up to the five-minute mark.
         assertEquals(14 * 60 + 45, soonOnCampus(java.time.Instant.parse("2026-10-01T06:12:00Z").toEpochMilli()))
-        // 23:40: not into tomorrow.
         assertEquals(23 * 60 + 55, soonOnCampus(java.time.Instant.parse("2026-10-01T15:40:00Z").toEpochMilli()))
     }
 }

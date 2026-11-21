@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
-/** The live notification asks less often while refreshes fail, and as usual once one works. */
 class LiveBackoffTest {
     @Test
     fun nothingExtraAfterASuccess() {
@@ -18,7 +17,6 @@ class LiveBackoffTest {
     }
 }
 
-/** A push address belongs to the session it was sent with. */
 class PushTagTest {
     @Test
     fun sameSessionSameTag() {

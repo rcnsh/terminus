@@ -14,6 +14,24 @@ iPhone changes reach users only through a release
   `scripts/android-deps.sh` (or `scripts/android-deps.sh <pr>` for a PR
   the workflow didn't finish) and review the diff. Don't write hashes from
   a warm Gradle cache: CI's cold runners fetch files it leaves out.
+  - `kotlin-stdlib-common` is excluded from every configuration: it's an
+    empty module since Kotlin 1.9.20, and Gradle keeps it in the graph
+    only while the lock pins `kotlin-stdlib`, so writing the locks drops it
+    and the next build refuses the lock it just wrote. `resolveAll`
+    resolves every configuration (lenient, for their files' hashes), which
+    the build tasks alone leave out.
+  - `settings.gradle.kts` asks each group of the repository that publishes
+    it (Google's Maven for Android, Google and androidx; Maven Central for
+    the rest, the Kotlin plugin markers included; never the Gradle Plugin
+    Portal), and lists them twice, since `pluginManagement` runs first:
+    keep the two alike. ktfmt runs from its Maven Central jar for that
+    reason, not through its plugin. The root `build.gradle.kts` applies
+    the Kotlin Android plugin `apply false` only to pin the Kotlin version
+    AGP's built-in Kotlin support uses, and pins a few of the plugins' and
+    lint's dependencies above AGP's for advisories (issue #171).
+  - The unit tests declare the files they read at run time (`fixtures/`,
+    the strings, the Kotlin sources' text) as inputs, so a change to one
+    reruns them rather than taking a cached pass.
 - Mac (CI, macOS runner): `swift build && swift test`, then
   `swift build -c release --arch arm64` in `apps/macos`.
 - iPhone (CI, macOS runner), in `apps/ios`: `python3 -I scripts/strings.py

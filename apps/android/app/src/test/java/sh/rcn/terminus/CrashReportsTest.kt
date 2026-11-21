@@ -44,7 +44,6 @@ class CrashReportsTest {
         assertTrue(lines.size <= CrashReports.MAX_LINES)
         assertTrue(lines[0].startsWith("java.lang.RuntimeException: top"))
         assertTrue(lines.any { it == "Caused by: java.lang.IllegalArgumentException: middle" })
-        // The root cause isn't crowded out by the long trace above it.
         assertTrue(lines.any { it == "Caused by: java.lang.IllegalStateException: bottom" })
         assertTrue(lines.any { it.startsWith("\t... ") && it.endsWith(" more") })
     }

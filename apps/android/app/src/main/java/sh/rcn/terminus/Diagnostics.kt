@@ -9,12 +9,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * The app's last requests to our server, kept in memory for the developer menu (Settings, About) and the diagnostics it copies. Only the
- * path is kept, never the query: /api/me/next is asked with where you are.
- */
 object RequestLog {
-    /** One attempt at one address: [status] null when no answer came ([failure] says why, null when cancelled or past the deadline). */
     data class Entry(
         val atMs: Long,
         val method: String,
@@ -30,7 +25,6 @@ object RequestLog {
     private val entries = ArrayDeque<Entry>()
     private val _changes = MutableStateFlow(0)
 
-    /** Bumped on every entry, so an open developer menu redraws. */
     val changes: StateFlow<Int> = _changes
 
     fun record(
@@ -50,7 +44,6 @@ object RequestLog {
         _changes.value++
     }
 
-    /** Newest first. */
     fun entries(): List<Entry> = synchronized(entries) { entries.toList() }
 
     fun clear() {
@@ -63,12 +56,7 @@ object RequestLog {
     fun hostOf(base: String): String = base.substringAfter("://").substringBefore('/')
 }
 
-/**
- * What the developer menu shows about the app's state, and the text it copies for a bug report: the version and phone, the server and its
- * clock, what the alerts and push need, and the last answer. Nothing that identifies the account, and no place.
- */
 object Diagnostics {
-    /** On or off, or not known (null): an older Android without the setting. */
     data class Facts(
         val version: String,
         val build: Int,
@@ -132,7 +120,6 @@ object Diagnostics {
         )
     }
 
-    /** The text Copy diagnostics puts on the clipboard: English, for the operator, with times in Singapore's. */
     fun report(f: Facts, requests: List<RequestLog.Entry>, now: Long): String = buildString {
         fun line(k: String, v: Any?) = append(k).append(": ").append(v ?: "-").append('\n')
         fun on(b: Boolean?) =
@@ -168,16 +155,12 @@ object Diagnostics {
         for (r in requests) append(entry(r)).append('\n')
     }
 
-    /** One request as a line: when, what, where, and how it went. */
     fun entry(r: RequestLog.Entry): String = "${time(r.atMs)} ${r.method} ${r.path} ${r.host} ${outcome(r)} ${r.tookMs} ms"
 
-    /** The status, or why there was none. */
     fun outcome(r: RequestLog.Entry): String = r.status?.toString() ?: r.failure ?: "no answer"
 
-    /** "+42 s" when the phone is behind the server, "-42 s" ahead, "right" within [ServerClock.MIN_SKEW_MS]. */
     fun skew(ms: Long): String = if (ms == 0L) "right" else "${if (ms > 0) "+" else "-"}${kotlin.math.abs(ms) / 1000} s"
 
-    /** How long ago [at] was, as "3 min ago" (seconds under a minute, hours over an hour); null for never. */
     fun ago(at: Long, now: Long): String? {
         if (at <= 0) return null
         val s = ((now - at) / 1000).coerceAtLeast(0)
