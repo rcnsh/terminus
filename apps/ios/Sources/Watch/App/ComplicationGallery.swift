@@ -2,9 +2,6 @@
     import SwiftUI
     import WidgetKit
 
-    /// Each complication family drawn from the plan as kept, at its size on
-    /// a face, for screenshots (TERMINUS_SHOW=complications): a face can't
-    /// be edited from a script. Debug builds only.
     struct ComplicationGallery: View {
         var body: some View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -29,7 +26,6 @@
                         }
                     }
                     .task {
-                        // TERMINUS_SCROLL=foot shows the bottom of the gallery, for the smaller watches.
                         guard ProcessInfo.processInfo.environment["TERMINUS_SCROLL"] == "foot" else { return }
                         try? await Task.sleep(for: .seconds(2))
                         scroller.scrollTo("foot", anchor: .bottom)

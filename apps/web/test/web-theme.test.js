@@ -1,17 +1,10 @@
-/**
- * Light, dark or the device's own (apps/web/public/assets/theme.js), run as
- * a page runs it: the choice kept on this browser wins over the device's
- * setting, and what follows dark mode by itself is pointed at the choice.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { memoryStorage, read } from './_web.mjs';
 
-/** theme.js on a page with this stored choice, on a device in dark mode or not. */
 function page({ stored = null, systemDark = false, storage = memoryStorage(stored ? { 'terminus-theme': stored } : {}) } = {}) {
   const events = [];
-  // The installed app's bar colour, one per mode, and a picture with a dark version.
   const nodes = [
     { media: '(prefers-color-scheme: light)', dataset: {} },
     { media: '(prefers-color-scheme: dark)', dataset: {} },
@@ -44,7 +37,6 @@ test('the stored choice, else the device: light, dark, or auto', () => {
   assert.equal(page({ stored: 'dark' }).theme.pref(), 'dark');
   assert.equal(page({ stored: 'light' }).theme.pref(), 'light');
   assert.equal(page({ stored: 'sepia' }).theme.pref(), 'auto');
-  // Storage blocked: the device's.
   const blocked = {
     getItem: () => {
       throw new Error('denied');
@@ -73,7 +65,6 @@ test('the page is drawn in the choice, and its dark-mode media point at it', () 
     light.nodes.map((n) => n.media),
     ['all', 'not all', 'not all'],
   );
-  // Auto: no theme of its own, and the media as written.
   const auto = page({ systemDark: true });
   assert.equal(auto.html.dataset.theme, undefined);
   assert.deepEqual(
@@ -104,8 +95,6 @@ test('set() keeps the choice, redraws in it and tells the map; auto forgets it',
 });
 
 test('each dark palette written twice (the device in dark mode, and dark chosen) is the same both times', () => {
-  // CSS can't say "dark mode, or dark chosen" in one selector, so each
-  // stylesheet writes its dark colours under both; this keeps them in step.
   const DEVICE = ':root:not([data-theme="light"])';
   const CHOSEN = ':root[data-theme="dark"]';
   for (const file of ['assets/site.css', 'assets/sky.css', 'app/app.css']) {
@@ -113,7 +102,6 @@ test('each dark palette written twice (the device in dark mode, and dark chosen)
     const rules = { [DEVICE]: new Map(), [CHOSEN]: new Map() };
     for (const m of css.matchAll(/(:root:not\(\[data-theme="light"\]\)|:root\[data-theme="dark"\])([^{},]*)\{([^}]*)\}/g)) {
       const props = [...m[3].matchAll(/([\w-]+)\s*:\s*([^;]+);/g)].map((p) => `${p[1]}: ${p[2].trim()}`).sort();
-      // Keyed by what follows :root, and which such rule it is (site.css has a second, for more contrast).
       const rest = m[2].trim();
       let n = 0;
       while (rules[m[1]].has(`${rest}#${n}`)) n += 1;

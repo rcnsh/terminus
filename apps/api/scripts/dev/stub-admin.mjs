@@ -1,18 +1,7 @@
-/**
- * Made-up numbers for the dashboard (/admin/), so the dev stub shows every
- * part of it filled in: Analytics Engine's answers to the queries admin.ts
- * makes, a feed state with past incidents in KV, two weeks of scored arrival
- * times and the arrival-time model's days in shadow in the R2
- * bucket, and accounts, devices and reports in D1.
- * Nothing here is real; STUB_ADMIN=empty leaves the dashboard as a fresh
- * install would see it.
- */
-
 import { COL } from '../../src/analytics-rows.ts';
 
 const DAY = 86_400_000;
 
-/** A number from 0 to 1 that's the same every run for the same seed. */
 function rand(seed) {
   let h = 2166136261;
   for (const c of String(seed)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
@@ -21,14 +10,11 @@ function rand(seed) {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
-/** The last [n] Singapore days as YYYY-MM-DD, oldest first, as the dashboard counts them. */
 const days = (nowMs, n) =>
   Array.from({ length: n }, (_, i) => new Date(nowMs + 8 * 3_600_000 - (n - 1 - i) * DAY).toISOString().slice(0, 10));
 const weekday = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
-/** Busier on weekdays, as term is. */
 const busy = (d) => ([0, 6].includes(weekday(d)) ? 0.45 : 1);
 
-/** Made-up API keys: [id, owner (a demo account), name, requests a weekday]; the last is never used. */
 const KEYS = [
   ['demo-key-0', 'demo-0', 'Home Assistant', 420],
   ['demo-key-1', 'demo-3', 'Telegram bot', 1900],
@@ -41,12 +27,6 @@ const KEY_ROUTES = ['/api/next', '/api/arrivals', '/api/buses'];
 const SERVICES = ['A1', 'A2', 'D1', 'D2', 'BTC', 'E', 'K', 'L'];
 const VERSIONS = ['android/3.5.0', 'android/3.4.3', 'android/3.4.2', 'mac/3.5.0', 'mac/3.4.3', 'android/3.5.1-beta.1'];
 
-/**
- * What Analytics Engine's SQL API would answer [q] with, or null for a query
- * this doesn't know. Each query is told by its columns, named from the same
- * declaration admin.ts builds them from (analytics-rows.ts), so a moved
- * column moves here too.
- */
 export function fakeAeRows(q, nowMs) {
   const is = (kind) => q.includes(`${COL[kind].kind} = '${kind}'`);
   if (q.includes(`${COL.answer.kind} IN ('answer', 'error')`)) {
@@ -93,7 +73,6 @@ export function fakeAeRows(q, nowMs) {
     });
   }
   if (is('active')) {
-    // Counted after midnight for the day before: none for today.
     return days(nowMs - DAY, 30).flatMap((day, i) => {
       const growth = 0.7 + i / 100;
       const d1 = Math.round((160 + rand(`a${day}`) * 60) * busy(day) * growth);
@@ -211,13 +190,11 @@ export function fakeAeRows(q, nowMs) {
   return null;
 }
 
-/** Two weeks of scored arrival times, as eta.ts writes them to the bucket. */
 function etaDay(date) {
   const rows = [];
   for (let i = 0; i < 400; i++) {
     const s = Math.floor(rand(`${date}s${i}`) * SERVICES.length);
     const etaS = 30 + Math.floor(rand(`${date}h${i}`) ** 1.6 * 1700);
-    // Further ahead is less sure, and late more often than early.
     const spread = 25 + etaS / 9;
     const errS = Math.round((rand(`${date}e${i}`) - 0.38) * spread * 2.2);
     const hour = 7 + Math.floor(rand(`${date}o${i}`) * 17);
@@ -237,11 +214,6 @@ const METHODS = ['feed', 'corrected', 'checked', 'history', 'gated', 'recent', '
 const CAUSES = ['wentBy', 'atStop', 'stuck', 'unseen', 'firstStop', 'held', 'other'];
 const HORIZONS = ['under 2 min', '2 to 5 min', '5 to 10 min', '10 to 30 min'];
 
-/**
- * A day of the arrival-time model in shadow, as etashadow.ts keeps it: the
- * [i]th day it ran, so history covers more as days build up, and the
- * blend edges past the feed once it has a week or so to learn from.
- */
 function shadowDay(date, i) {
   const learnt = Math.min(1, i / 10);
   const stats = (h, m) => {
@@ -276,7 +248,6 @@ function shadowDay(date, i) {
       return [m, { n, mae: w('mae'), p50: w('p50'), p90: w('p90'), bias: w('bias'), miss }];
     }),
   );
-  // The feed's misses by cause, about as production's: most went by unseen or at a first stop.
   const share = { wentBy: 0.19, atStop: 0.05, stuck: 0.18, unseen: 0, firstStop: 0.4, held: 0.01, other: 0.17 };
   const fix = { feed: 1, corrected: 0.97, checked: 0.85, history: 1.6, gated: 0.97, recent: 0.98, blend: 0.83 };
   const missed = Math.round(overall.feed.n * overall.feed.miss);
@@ -317,7 +288,6 @@ function shadowDay(date, i) {
   };
 }
 
-/** Fills the stub's D1, KV and bucket with the dashboard's made-up data. */
 export async function seedAdmin({ db, kv, files, nowMs }) {
   for (const date of days(nowMs - DAY, 14)) await files.put(`eta/${date}.json`, JSON.stringify(etaDay(date)));
   for (const [i, date] of days(nowMs - DAY, 12).entries()) await files.put(`eta/model/${date}.json`, JSON.stringify(shadowDay(date, i)));

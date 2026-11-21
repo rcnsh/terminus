@@ -5,12 +5,9 @@ import Testing
 
 @testable import Terminus
 
-/// The map window's camera on a real MLNMapView (the vendored MapLibre):
-/// it stays on the street map (`keepOnMap`) however the moves overlap.
 @MainActor @Suite(.serialized) struct KeepOnMapTests {
     private func spin(_ s: TimeInterval) async throws { try await Task.sleep(for: .seconds(s)) }
 
-    /// MapLibre names its cache after the app's bundle id, which the test runner hasn't got.
     private static let named: Void = {
         let m = class_getInstanceMethod(Bundle.self, #selector(getter: Bundle.bundleIdentifier))!
         let original = unsafeBitCast(method_getImplementation(m), to: (@convention(c) (Bundle, Selector) -> String?).self)
@@ -21,7 +18,6 @@ import Testing
 
     init() { _ = Self.named }
 
-    /// A 600 by 400 window on a plain style at `zoom` over (`lat`, `lon`), kept on the map by the window's coordinator.
     private func window(zoom: Double, lat: Double, lon: Double) async throws -> (NSWindow, MLNMapView, CampusMapView.Coordinator) {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("terminus-map-tests")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -42,8 +38,6 @@ import Testing
         return (w, view, c)
     }
 
-    /// Closed but kept: MapLibre's renderer can abort when a view is freed
-    /// in the test runner (in ThreadLocalBase::set, from ~Renderer).
     private static var closed: [(NSWindow, MLNMapView, CampusMapView.Coordinator)] = []
 
     private func close(_ w: NSWindow, _ view: MLNMapView, _ c: CampusMapView.Coordinator) {
@@ -52,7 +46,6 @@ import Testing
         Self.closed.append((w, view, c))
     }
 
-    /// How far the centre is off where it may be at this zoom, in degrees.
     private func off(_ view: MLNMapView) -> Double {
         let box = PanLimit.centre(width: view.bounds.width, height: view.bounds.height, zoom: view.zoomLevel)
         let c = view.centerCoordinate
@@ -72,11 +65,9 @@ import Testing
         defer { close(w, view, c) }
         view.setZoomLevel(14.5, animated: true)
         try await spin(0.15)
-        // The second press ends the first move where it is, off the map's edge, inside this call.
         view.setZoomLevel(14, animated: true)
         try await spin(1.5)
         #expect(off(view) < 1e-6)
-        // And the window still keeps to the map after that.
         view.setCenter(CLLocationCoordinate2D(latitude: 1.30, longitude: 103.70), animated: false)
         try await spin(1)
         #expect(off(view) < 1e-6)
@@ -87,7 +78,6 @@ import Testing
         defer { close(w, view, c) }
         view.setCenter(CLLocationCoordinate2D(latitude: 1.30, longitude: 103.70), animated: false)
         try await spin(0.1)
-        // A zoom out cuts the move back short, further off the edge at the new zoom.
         view.setZoomLevel(14, animated: true)
         try await spin(1.5)
         #expect(off(view) < 1e-6)

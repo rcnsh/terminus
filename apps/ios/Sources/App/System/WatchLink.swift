@@ -2,23 +2,14 @@ import Foundation
 import Observation
 import WatchConnectivity
 
-/// The iPhone's end of WatchConnectivity: "Set up your watch" in Settings ›
-/// Devices gets a pairing code and sends it to the watch, which redeems it
-/// for a session of its own (ADR 0016). The watch says whether it's signed
-/// in (WatchHandoff), so after this phone signs in with an email, which
-/// ends a setup's other sessions on the server, a watch it had set up
-/// gets a fresh code without being asked.
 @MainActor @Observable
 final class WatchLink: NSObject, WCSessionDelegate {
     static let shared = WatchLink()
 
-    /// A watch is paired with this phone, and has terminus on it.
     private(set) var paired = false
     private(set) var installed = false
-    /// What the watch last said; nil before it has said anything.
     private(set) var watch: WatchHandoff.State?
     private(set) var sending = false
-    /// Said under the button: sent, or why not.
     private(set) var result: String?
 
     func start() {
@@ -27,8 +18,6 @@ final class WatchLink: NSObject, WCSessionDelegate {
         WCSession.default.activate()
     }
 
-    /// Gets a pairing code with `token` and sends it to the watch, which
-    /// signs in with it when it next can.
     func setUp(token: String) {
         guard !sending else { return }
         sending = true
@@ -51,9 +40,6 @@ final class WatchLink: NSObject, WCSessionDelegate {
         }
     }
 
-    /// This phone signed in with an email: a watch that was signed in has
-    /// lost its session with the setup's other ones, so it gets a fresh
-    /// code. Not one signed out by its own Sign out.
     func accountChanged(token: String) {
         guard paired, installed, let w = watch, w.signedIn || w.out == .server else { return }
         setUp(token: token)
@@ -81,7 +67,6 @@ final class WatchLink: NSObject, WCSessionDelegate {
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
 
-    /// Switched to another watch: the session starts again for it.
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
         session.activate()
     }

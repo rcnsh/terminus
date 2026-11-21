@@ -40,18 +40,11 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.widget.clock
 
-/**
- * The Nearby tab (ADR 0017): its title in the band of sky every tab but Now starts with ([TitleBand]), then the stops around you as their
- * signs ([NearbyList]), in the page's column at every width; under them, when they came. Opening it asks for the location once, and it asks
- * for its stops when it opens and then at the card's pace, only while it's the tab on screen.
- */
 @Composable
 internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, act: NearbyActions) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    // Allowed: asked again from where you are. Refused, the stops already asked for stand: the server would send the same.
     val location = rememberLocationAsk { allowed -> if (allowed) vm.loadNearby(restart = true) }
-    // Once while the app is open, not each time the tab comes back: refused, the card under the title is the way to allow it.
     var asked by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!asked && !location.allowed) {
@@ -64,7 +57,6 @@ internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValu
             location.recheck()
             while (true) {
                 vm.loadNearby()
-                // Never sooner than a 429's or a 503's Retry-After.
                 delay(maxOf(POLL_MS, Quiet.waitMs()))
             }
         }
@@ -72,7 +64,6 @@ internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValu
     val phase = skyPhase()
     val top = insets.calculateTopPadding()
     val scroll = rememberScrollState()
-    // Pulled down, the stops are asked for again; the nearest stop's first service drives to the sign on the hill.
     BusPull(
         state.nearby?.firstOrNull()?.board?.firstOrNull()?.color?.let(::parseColor),
         ::hillScene,
@@ -103,7 +94,6 @@ internal fun NearbyScreen(state: UiState, vm: MainViewModel, insets: PaddingValu
                             )
                             Spacer(Modifier.width(8.dp))
                         }
-                        // A failed refresh is said as it happens; "Updated 9:41" alone isn't.
                         val failed = state.nearbyError != null
                         Text(
                             footer,

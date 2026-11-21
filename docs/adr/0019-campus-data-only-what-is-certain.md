@@ -1,0 +1,13 @@
+# Campus data names only what is certain, and publishes nothing under another licence
+
+`/api/campus` and `/api/stops/pairs` hand every client, and anyone building on the API, the campus as data: stop and building names, search aliases, colours, distances. A wrong entry there is worse than a missing one: a student who searches "the science library" and is sent to the wrong side of campus trusts the answer, while one who finds only a code can still type it. So the data errs towards leaving things out.
+
+- Building names (`CURATED_LABELS` in `src/map/campus.ts`) are a small hand-checked set, not a guessed directory. A faculty or lecture-theatre prefix (`MECHANICAL_LABELS`) is named by pattern, since that prefix is public and unambiguous; a hall's or lab's proper name is never guessed. Anything else is listed by its code.
+- Search aliases (`ALIASES`) are only the short names students are known to type ("soc", "mrt"). A plausible nickname that might be wrong is left out.
+- The destination search lists every stop, every building with a real name and NUSMods' rooms, not `venues.json`: that table also holds the NUS map's internal ids and bare room numbers, which still resolve when typed but would clutter the list.
+- A stop is off-core (`core: false`, left out of the map's first view) only when it is a clear outlier: more than `CORE_RADIUS_FACTOR` (3) times the median distance from the campus's middle. The 30 or so campus stops sit within about 1.1 km and P's Botanic Gardens stops at 5.3 km or more, so the factor never splits a borderline case. Fitting the map to them would shrink the campus to nothing.
+- Service colours (`ROUTE_COLORS`) are NUS's own paint on the buses and signs, with D1 and P picked to stay apart, and every client takes them from the API rather than keeping a copy. Each colour carries white or near-black text, whichever contrasts more, and `campus.test.js` holds every pair to 4.5:1 (A2's yellow and K's light blue take dark text).
+- `/api/stops/pairs` gives straight-line distances between a stop and its opposite stop, not the footpath distances the answers use: those come from OpenStreetMap, and republishing them as a dataset would carry the ODbL with it. Only a mutual pair is a pair; a one-way `opposite` pointer is a scrape oddity and is left as a single stop.
+- `x` and `y` (an SVG projection) stay in `/api/campus`, marked deprecated in the spec: no client draws them now, but an older client or a script reading the endpoint mustn't break.
+
+We considered seeding names and aliases from a public directory or the NUS map's own labels, which would cover far more buildings. It was rejected because neither is checked against what students call the places, and a confident wrong name costs more than an unlabelled code.

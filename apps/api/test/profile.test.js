@@ -20,7 +20,6 @@ import { withLang } from '../src/i18n.ts';
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
 const isStop = (c) => STOPS.has(c);
 
-// Thursday (day 4) at hh:mm SGT.
 const thu = (h, m = 0) => Date.UTC(2026, 7, 27, h - 8, m);
 
 function profile(trips, extra = {}) {
@@ -52,14 +51,11 @@ test('a class counts as next until it starts', () => {
 test('home since the last class: the next trip starts from home, however short the gap', () => {
   const tt = [cls(10, 12, 'COM3'), cls(13, 14, 'LT27')];
   const none = { skipped: new Set(), done: new Set() };
-  // Seen home after the 10:00 (its trip home was the plan, before a later trip was added).
   const seen = nextTripFor(profile(tt), thu(12, 40), { ...none, done: new Set(['home:720']) });
   assert.deepEqual([seen.to, seen.from, seen.fromVenue], ['LT27', 'PGP', null]);
-  // No one saw: home once the trip home's bus has had time to get you there.
   const homeBy = new Map([['home:720', thu(12, 30)]]);
   assert.equal(nextTripFor(profile(tt), thu(12, 20), { ...none, homeBy }).from, 'COM3', 'still on the way');
   assert.equal(nextTripFor(profile(tt), thu(12, 30), { ...none, homeBy }).from, 'PGP');
-  // Nothing says you went: from the class.
   assert.equal(nextTripFor(profile(tt), thu(12, 40), none).from, 'COM3');
 });
 
@@ -73,8 +69,6 @@ test('a gap longer than gapHours sends you home, then back', () => {
 });
 
 test('a class at the home stop after a long gap is planned from the last class, not from home to home', () => {
-  // A UTown resident with a class at UTown after a long gap: "Home" is not
-  // a trip (as /api/me/day has it), so the class is the trip, from where you are.
   const tt = [cls(10, 12, 'COM3'), cls(16, 18, 'UTOWN')];
   for (const at of [thu(12, 30), thu(14), thu(15, 30)]) {
     const p = nextTripFor(profile(tt, { home: { stops: ['UTOWN'] } }), at);
@@ -145,7 +139,6 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
 });
 
 test('a one-off trip or a date-range lesson on a day that does not exist is refused, not kept for ever', () => {
-  // 2026-13-45 passes the pattern; it is never today, so a save would never drop it.
   const once = parseProfile({ once: [{ date: '2026-13-45', arriveByMin: 600, to: 'COM3', label: 'x' }] }, isStop);
   assert.equal(once.ok, false);
   assert.match(once.error, /once\[0\]: date/);
@@ -189,7 +182,6 @@ test('the limit errors, written as literals for their translation, name the limi
 });
 
 test('pinnedStops: known stops in the user’s order, repeats dropped, at most 8', () => {
-  // A pin may also name a public stop of its own (LTA's code), which isn't a shuttle stop.
   const pinnable = (c) => isStop(c) || c === '16009';
   const r = parseProfile({ pinnedStops: ['utown', 'PGP', '16009', 'UTOWN'] }, isStop, isStop, pinnable);
   assert.ok(r.ok);
@@ -200,7 +192,6 @@ test('pinnedStops: known stops in the user’s order, repeats dropped, at most 8
     assert.equal(b.ok, false, JSON.stringify(bad));
     assert.equal(b.error, 'pinnedStops must be up to 8 known stop codes');
   }
-  // Nine pins with repeats: the limit counts the stops left once they're dropped.
   const nine = ['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27', '16009', 'PGP', 'COM3', 'UTOWN'];
   const deduped = parseProfile({ pinnedStops: nine }, isStop, isStop, pinnable);
   assert.ok(deduped.ok);
@@ -248,7 +239,6 @@ test('the rest message names the next class', () => {
 
 test("the next class's card: when, what, and where to get off", () => {
   const name = (code) => ({ COM3: 'COM 3', UTOWN: 'UTown' })[code] ?? code;
-  // Its room isn't at the stop: both, so you know where to get off.
   const tt = [cls(10, 12, 'COM3', 'CS2030 @ COM1'), { ...cls(9, 10, 'UTOWN', 'GEA1000 @ UTown'), day: 5, venue: 'UT-AUD1' }];
   assert.deepEqual(upcomingClass(profile(tt), thu(20), false, name), {
     when: 'Tomorrow · Fri',
@@ -256,9 +246,7 @@ test("the next class's card: when, what, and where to get off", () => {
     where: 'At UT-AUD1 · get off at UTown',
     off: null,
   });
-  // Later today, at its stop, in the 12-hour style.
   const today = upcomingClass(profile(tt), thu(5), true, name);
-  // (The 12-hour clock has a narrow space before AM.)
   assert.deepEqual(
     { ...today, title: today.title.replace(/\s/g, ' ') },
     { when: 'Today', title: 'CS2030 at 10:00 AM', where: 'At COM 3', off: null },
@@ -268,7 +256,6 @@ test("the next class's card: when, what, and where to get off", () => {
     withLang('zh', () => upcomingClass(profile(tt), thu(20), false, name).where),
     '在 UT-AUD1 · 在 UTown 下车',
   );
-  // Nothing coming: no card.
   assert.equal(upcomingClass(profile([]), thu(20), false, name), null);
 });
 
@@ -282,18 +269,15 @@ test('timing: on time, tight and late against the class start', () => {
   const c = cls(10, 12, 'COM3', 'CS2030 @ COM1');
   const now = thu(9, 30);
   const arrive = (h, m) => new Date(thu(h, m)).toISOString();
-  // Stop at 09:50 + 2 min walk = 09:52: 8 min early.
   assert.deepEqual(
     [timingFor(arrive(9, 50), c, 120, now).status, timingFor(arrive(9, 50), c, 120, now).text],
     ['on-time', 'Arrive 09:52 · 8 min early'],
   );
   assert.equal(timingFor(arrive(9, 57), c, 60, now).status, 'tight');
-  // Tight is the colour; the words count the minutes, same as the class card.
   assert.equal(timingFor(arrive(9, 57), c, 60, now).text, 'Arrive 09:58 · 2 min early');
   assert.equal(timingFor(arrive(9, 59), c, 60, now).text, 'Arrive 10:00 · just in time');
   assert.equal(timingFor(arrive(9, 57), c, 60, now, true).text, 'Arrive 9:58\u00a0AM · 2 min early');
   assert.deepEqual([timingFor(arrive(10, 3), c, 120, now).status, timingFor(arrive(10, 3), c, 120, now).text], ['late', '~5 min late']);
-  // A guessed arrival says so, as the card's own "Arrive ~09:58" does: never shown as live.
   assert.equal(timingFor(arrive(9, 57), c, 60, now, false, true).text, 'Arrive ~09:58 · 2 min early');
   assert.equal(timingFor(null, c, 0, now), null, 'no arrival time, no claim');
 });
@@ -322,7 +306,6 @@ test('between classes the plan names the room you leave from; from home it does 
   ];
   assert.equal(nextTripFor(profile(tt), thu(12, 10)).fromVenue, 'COM1-0212');
   assert.equal(nextTripFor(profile(tt), thu(8)).fromVenue, null);
-  // After the last class, the trip home starts from that room too.
   assert.equal(nextTripFor(profile(tt), thu(14, 30)).fromVenue, 'LT27');
 });
 

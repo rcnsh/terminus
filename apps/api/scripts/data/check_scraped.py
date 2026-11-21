@@ -28,35 +28,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 DATA = "apps/api/data"
-# NUS Kent Ridge, Bukit Timah and the stops between: generous on every side.
 LAT = (1.25, 1.35)
 LON = (103.74, 103.84)
-# How much smaller a list may get in one scrape before a human should look.
 MAX_DROP = 0.10
-# A list shorter than this (the routes, the public stops and routes) may not
-# lose a single item: 10% of eight routes would let one vanish unseen.
 SMALL_LIST = 20
 MAX_SIZE = 200_000
-# A stop moved further than this is a different place. Re-surveyed stops
-# have moved up to 87 m (UHALL, September 2026).
 MAX_MOVE_M = 100
-# Semesters start on a Monday, so any change is a whole week or more: none
-# gets past this.
 MAX_SHIFT_DAYS = 3
-# Future holidays one scrape may take away (a corrected mistake); a year has
-# about a dozen.
 MAX_TAKEN_BACK = 3
 MIN_HOLIDAYS = 5
 CODE = re.compile(r"^[A-Z0-9][A-Z0-9-]{0,23}$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ACAD_YEAR = re.compile(r"^(\d{4})/(\d{4})$")
 LTA_CODE = re.compile(r"^\d{5}$")
-# Names are shown as they are: letters (Chinese too), digits, spaces and
-# everyday punctuation. No '<', no control characters, no ':' (so no URL).
 NAME_PUNCT = set(" '’&().,/+-")
 DOMAIN = re.compile(r"(?i)www\.|[a-z0-9]\.[a-z]{2,}")
-# The same rules as calendarsync.ts (valid()), so a calendar one takes the
-# other does too.
 HOLIDAY_NAME_MAX = 79
 STOP_NAME_MAX = 40
 LONG_NAME_MAX = 80
@@ -196,7 +182,6 @@ def check_shapes(problems):
             problems.append(f"shape {svc} leaves campus")
         if any(b < a for a, b in zip(at, at[1:])):
             problems.append(f"shape {svc} goes backwards between stops")
-        # The distances along the line must match the line itself.
         straight = sum(_metres(a, b) for a, b in zip(line, line[1:]))
         if at[-1] and not (0.95 <= straight / at[-1] <= 1.05):
             problems.append(f"shape {svc}: stops say {at[-1]} m, line is {round(straight)} m")
@@ -291,21 +276,17 @@ def check_calendar_data(c, old, today, problems):
     for h in hols:
         if not holiday_ok(h):
             problems.append(f"holiday {h!r} is malformed")
-    # Past years roll off each January, so no count compared with git: at
-    # least this year's terms must be there.
     if len(sems) < 4:
         problems.append(f"only {len(sems)} semesters")
     if len(hols) < MIN_HOLIDAYS:
         problems.append(f"only {len(hols)} holidays")
     if not old:
         return
-    # A semester git has must start when git says, give or take.
     was = {(s.get("acadYear"), s.get("semester")): strict_date(s.get("start")) for s in old.get("semesters", []) if isinstance(s, dict)}
     for s in sems:
         before, now = was.get((s.get("acadYear"), s.get("semester"))), strict_date(s.get("start"))
         if before and now and abs((now - before).days) > MAX_SHIFT_DAYS:
             problems.append(f"semester {s['acadYear']} {s['semester']} moved from {before} to {now}")
-    # Holidays to come that vanished: a correction now and then, never many.
     dates = {h.get("date") for h in hols if isinstance(h, dict)}
     gone = sorted(
         h["date"]

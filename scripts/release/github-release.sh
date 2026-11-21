@@ -1,25 +1,7 @@
 #!/bin/bash
-# Publish a GitHub release for a tagged version, with the APKs (one per CPU
-# type) and the Mac DMG attached, the hand-written highlights in
-# docs/RELEASE_NOTES.md (when it's for this version) and the commits since the
-# previous tag. scripts/release/release.sh runs it once every file is in
-# build/release/<version>; run again, it re-uploads the files to the
-# existing release.
-#
-# A pre-release version ("2.0.0-beta") is titled "terminus 2.0 beta" and
-# marked a pre-release on GitHub. The site's downloads are unaffected: they
-# follow latest.json in R2.
-#
-# With CHANNEL=beta it publishes a beta from scripts/release/release-beta.sh: the
-# files in build/release/beta/<version>, as a pre-release for terminus beta.
-#
-#   scripts/release/github-release.sh 1.3.8          # publish
-#   scripts/release/github-release.sh 1.3.8 --notes  # print the notes only
-#   CHANNEL=beta scripts/release/github-release.sh 2.0.1-beta.1
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 VERSION="${1:?usage: [CHANNEL=beta] scripts/release/github-release.sh <version> [--notes]}"
-# It names the tag and the files: a version, as release.sh and release-beta.sh check.
 VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9]+)?)?$'
 [[ $VERSION =~ $VERSION_RE ]] || { echo "$VERSION isn't a version like 2.1.0 or 2.1.1-beta.1" >&2; exit 1; }
 TAG="v$VERSION"
@@ -31,9 +13,6 @@ MAC="$DIR/terminus-$VERSION.dmg"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG" >&2; exit 1; }
 [ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC" >&2; exit 1; }
 
-# A release lists the commits since the previous release, past its betas.
-# No previous tag only for the very first: otherwise a failed lookup would
-# publish the first release's notes instead of the changes.
 EXCLUDE='*-*'
 case "$VERSION" in *-*) EXCLUDE='' ;; esac
 EARLIER=$(git tag -l 'v*' --merged "$TAG^")
@@ -50,7 +29,6 @@ if [ "${2:-}" = "--notes" ]; then cat "$NOTES"; exit 0; fi
 TITLE="terminus $(python3 scripts/release/release-notes.py --title "$VERSION")"
 PRE=""
 case "$VERSION" in *-*) PRE="--prerelease" ;; esac
-# The other CPU types' APKs, when this version has them.
 set -- "$APK"
 for f in "$DIR/terminus-$VERSION-armv7.apk" "$DIR/terminus-$VERSION-x86_64.apk"; do
   if [ -f "$f" ]; then set -- "$@" "$f"; fi

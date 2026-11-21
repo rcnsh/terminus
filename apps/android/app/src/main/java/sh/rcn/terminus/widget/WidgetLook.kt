@@ -29,20 +29,13 @@ import sh.rcn.terminus.ui.phaseAt
 import sh.rcn.terminus.ui.skyBrush
 import sh.rcn.terminus.ui.starsAndMoon
 
-/**
- * The colours a widget's words are drawn in: over the sky ([WidgetLook.sky]) or on the ground under the horizon ([WidgetLook.ground]).
- * Fixed rather than following the phone's theme by themselves: the sky is a picture drawn for one theme, so the words over it must change
- * with it, at the same redraw.
- */
 internal class Inks(
     val ink: ColorProvider,
     val muted: ColorProvider,
     val accent: ColorProvider,
     val late: ColorProvider,
     val good: ColorProvider,
-    /** Behind a pill (Live, Seats) or a chip not chosen. */
     val chip: ColorProvider,
-    /** Behind the chosen chip, and the words on it. */
     val chipOn: ColorProvider,
     val onChipOn: ColorProvider,
     val line: ColorProvider,
@@ -52,14 +45,9 @@ private fun fixed(argb: Long) = ColorProvider(Color(argb))
 
 private fun fixed(c: Color) = ColorProvider(c)
 
-/**
- * A widget's look at [phase] on a [dark] phone: Now's sky over the top in the hour's colours, with its ink (the app's SkyInk), and the
- * page's colours under the horizon.
- */
 internal class WidgetLook(val phase: Phase, val dark: Boolean) {
     val palette = palette(phase, dark)
 
-    /** The page under the horizon, which the near hill is drawn in. */
     val page: Color = Color(if (dark) 0xFF0F0E0D else 0xFFFAFAF9)
 
     val sky: Inks =
@@ -117,7 +105,6 @@ internal class WidgetLook(val phase: Phase, val dark: Boolean) {
     val pageColor: ColorProvider = fixed(page)
 
     companion object {
-        /** The look now: the hour on the phone's clock, as Now's sky, and the phone's theme. */
         fun now(ctx: Context): WidgetLook {
             val dark = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
             return WidgetLook(phaseAt(LocalDateTime.now().let { it.hour * 60 + it.minute }), dark)
@@ -125,32 +112,19 @@ internal class WidgetLook(val phase: Phase, val dark: Boolean) {
     }
 }
 
-/**
- * Minutes from [minute] past midnight until the sky next changes, so the widget is redrawn then: read from [phaseAt] itself, so the two
- * can't disagree about the hours.
- */
 internal fun minutesToNextPhase(minute: Int): Int {
     val now = phaseAt(minute)
     return (1..24 * 60).first { phaseAt((minute + it) % (24 * 60)) != now }
 }
 
-/** When the sky next changes, on the phone's clock (epoch ms), from [now]. */
 internal fun nextPhaseAt(now: Long, zone: ZoneId = ZoneId.systemDefault()): Long {
     val t = java.time.Instant.ofEpochMilli(now).atZone(zone)
     val minute = t.hour * 60 + t.minute
     return t.withSecond(0).withNano(0).plusMinutes(minutesToNextPhase(minute).toLong()).toInstant().toEpochMilli()
 }
 
-/**
- * Most pixels a sky is drawn with per dp: past this a gradient and some hills look the same, and a widget's pictures share a memory budget.
- */
 private const val MAX_SCALE = 2.5f
 
-/**
- * Now's sky, [widthDp] by [heightDp], ending in the horizon (drawn [scale] times its numbers, [road] on its road) whose near hill is the
- * page's colour, so the widget's ground carries on under it. At night the stars, and a small moon centred at [moon]: dp in from the right
- * edge and down from the top, where a layout keeps it clear of its words; none with no room.
- */
 internal fun skyBitmap(
     ctx: Context,
     look: WidgetLook,
@@ -168,7 +142,6 @@ internal fun skyBitmap(
         drawRect(skyBrush(look.palette, size.height), size = size)
         val strip = 92 * scale * px
         val top = size.height - strip
-        // moonRoom sets the moon's size: a third of it, 10 dp across.
         if (look.phase == Phase.NIGHT)
             starsAndMoon(
                 top,
@@ -180,10 +153,6 @@ internal fun skyBitmap(
     return image.asAndroidBitmap()
 }
 
-/**
- * The bar's sky ([widthDp] by [heightDp]): the hour's colours across rather than down, the stars at night, and the skyline faint at the
- * right end, [skylineDp] wide.
- */
 internal fun barBitmap(ctx: Context, look: WidgetLook, widthDp: Float, heightDp: Float, skylineDp: Float): Bitmap {
     val px = minOf(ctx.resources.displayMetrics.density, MAX_SCALE)
     val w = (widthDp * px).roundToInt().coerceAtLeast(1)
@@ -193,14 +162,12 @@ internal fun barBitmap(ctx: Context, look: WidgetLook, widthDp: Float, heightDp:
     CanvasDrawScope().draw(Density(px), LayoutDirection.Ltr, Canvas(image), Size(w.toFloat(), h.toFloat())) {
         drawRect(Brush.horizontalGradient(0f to sky[0], 0.55f to sky[1], 1f to sky[2]), size = size)
         if (look.phase == Phase.NIGHT) {
-            // Only the stars: the moon would sit on the words.
             clipRect(right = size.width * 0.9f) { starsAndMoon(size.height, alpha = 0.8f, moonRoom = 0f, moonAt = Offset(-100f, -100f)) }
         }
         val left = size.width - skylineDp * px
         val scale = 0.42f
         drawContext.canvas.saveLayer(Rect(left, 0f, size.width, size.height), Paint().apply { alpha = 0.55f })
         inset(left = left, top = 0f, right = 0f, bottom = 0f) {
-            // No near hill: drawn over the bar's own colour, it shows as a pale box.
             horizon(
                 size.height - 92 * scale * px * 0.86f,
                 Color.Transparent,

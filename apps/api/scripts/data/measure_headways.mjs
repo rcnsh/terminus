@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-/**
- * Measures each shuttle service's headway from the timelapse recorder's
- * days and writes data/headways.json, which headwayFor reads (hours.ts).
- * The feed lists two buses a service, and nothing about a service it has no
- * time for, so every guess past that counts in headways: they should be the
- * ones the buses keep, not one figure for all.
- *
- *   node scripts/data/measure_headways.mjs <day.json.gz>... [--out data/headways.json]
- *
- * The days come from the stable site's R2 bucket (docs/eta-model.md, "On
- * production data"). Nothing here calls NUS. A headway is the gap between
- * two buses reaching the same stop (eta.ts passingsOf), counted
- * at the hour, day kind and period of the first: median by hour where an
- * hour has MIN_GAPS, and over the day where the day does. The vacation runs
- * its own timetable, so it's measured on its own days or not at all.
- */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -24,11 +8,8 @@ import { dayKindOf } from '../../src/answer/hours.ts';
 import { termDay } from '../../src/timetable/calendar.ts';
 import { sgt } from '../../src/config.ts';
 
-/** Fewer gaps than this don't make a median worth keeping. */
 export const MIN_GAPS = 20;
-/** A gap longer than this is a break in service (the night, a lull), not a headway. */
 const MAX_GAP_S = 2 * 3600;
-/** Two buses this close are a bunch: not a headway. */
 const MIN_GAP_S = 30;
 
 const median = (xs) => {
@@ -36,17 +17,11 @@ const median = (xs) => {
   return s.length % 2 ? s[s.length >> 1] : (s[(s.length >> 1) - 1] + s[s.length >> 1]) / 2;
 };
 
-/** The period a time falls in: term time, the vacation, or null with no calendar to say. */
 export function periodOf(ms) {
   const kind = termDay(ms).kind;
   return kind === 'unknown' ? null : kind === 'vacation' ? 'vacation' : 'term';
 }
 
-/**
- * The headways in [passings]: `usualS`, each service's median over term
- * time (for costs with no time), and `byTime`, by period, day kind and hour
- * (types.ts HeadwaysByTime). Medians from fewer than MIN_GAPS are left out.
- */
 export function headwaysOf(passings) {
   const atStop = new Map();
   for (const p of passings) {
@@ -60,7 +35,6 @@ export function headwaysOf(passings) {
     ps.sort((a, b) => a.t - b.t);
     for (let i = 1; i < ps.length; i++) {
       const s = (ps[i].t - ps[i - 1].t) / 1000;
-      // The same bus again is a lap (passingsOf counts a stop once a lap): one bus running alone.
       if (s < MIN_GAP_S || s > MAX_GAP_S) continue;
       const at = ps[i - 1].t;
       const period = periodOf(at);
@@ -82,7 +56,6 @@ export function headwaysOf(passings) {
     if (!period) usualS[svc] = s;
     else if (!hour) (((byTime[svc] ??= {})[period] ??= {})[day] ??= { all: s, hours: {} }).all = s;
   }
-  // Hours only under a day that has its own median.
   for (const [k, xs] of gaps) {
     const [svc, period, day, hour] = k.split('|');
     const d = byTime[svc]?.[period]?.[day];
@@ -95,7 +68,10 @@ function main(args) {
   const outAt = args.indexOf('--out');
   const out = outAt >= 0 ? args.splice(outAt, 2)[1] : fileURLToPath(new URL('../../data/headways.json', import.meta.url));
   if (!args.length) {
-    console.error('measure_headways: give the recorder day files (timelapse/YYYY-MM-DD.json.gz)');
+    console.error(
+      'measure_headways: give the recorder day files (timelapse/YYYY-MM-DD.json.gz)\n\n' +
+        'usage: node scripts/data/measure_headways.mjs <day.json.gz>... [--out data/headways.json]',
+    );
     process.exit(2);
   }
   const passings = [];

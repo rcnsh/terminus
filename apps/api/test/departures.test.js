@@ -1,9 +1,3 @@
-/**
- * A service's departures from a stop (departures.ts): the feed's live
- * times, then estimates one headway apart while the service runs, and
- * the card and the leave-by that read them. On the real graph, with the
- * measured headways (data/headways.json), where the point is the hours.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -17,11 +11,9 @@ import { SAME_BUS_MS } from '../src/answer/plan.ts';
 import { STEP } from '../src/config.ts';
 import { ON_TIME_SLACK_S } from '../src/timetable/profile.ts';
 
-/** An instant from a Singapore wall-clock time, "2026-08-27T19:40". */
 const at = (sgt) => Date.parse(`${sgt}+08:00`);
 const hhmmss = (ms) => new Date(ms + 8 * 3600_000).toISOString().slice(11, 19);
 
-/** A board at `code` fetched at `fetchedAt`, with `svc`'s buses at these times. */
 const board = (code, fetchedAt, svc, times, extra = {}) => ({
   code,
   fetchedAt,
@@ -34,7 +26,6 @@ const board = (code, fetchedAt, svc, times, extra = {}) => ({
 const PGP = GRAPH.stops.find((s) => s.code === 'PGP');
 const leg = { svc: 'D2', hops: 5, off: undefined, to: { code: 'UTOWN', name: 'UTown' } };
 
-// D2 on a weekday in term: every 422 s at 19:00, 654 s at 20:00.
 const NOW = at('2026-08-27T19:40');
 const LAST = at('2026-08-27T19:55');
 
@@ -44,12 +35,10 @@ test('an estimate counts the headway at the bus before it: past an hour, the car
   assert.equal(hhmmss(first.latest), '20:02:02', 'the 19:00 headway, from the 19:55 bus');
   assert.equal(second.latest - first.latest, 654_000, 'the 20:00 headway, from the 20:02 bus');
 
-  // The card: you can't be there for the 19:55, so the bus after it.
   const s = scoreLeg(GRAPH, { ...leg, rideS: 600 }, sa, NOW, (LAST - NOW) / 1000 + 60);
   const card = NOW + s.boardS * 1000;
-  assert.ok(card >= first.earliest && card <= first.latest, hhmmss(card));
+  assert.ok(card >= first.earliest && card <= first.latest, `${hhmmss(card)}: too late for the 19:55, so the bus after it`);
 
-  // A class whose latest bus is at 20:10: the 20:02:02 one, not 20:05:54.
   const rideS = 600;
   const arriveBy = { atMs: at('2026-08-27T20:10') + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
   const option = { svc: 'D2', stop: PGP, walkS: 60, rideS, boardS: 0, totalS: 0, fromMs: NOW, quality: 'scheduled', hops: 5 };
@@ -62,11 +51,10 @@ test('an estimate counts the headway at the bus before it: past an hour, the car
     walkAllS: null,
     nowMs: NOW,
   });
-  assert.equal(hhmmss(Date.parse(l.arrive) - rideS * 1000), '20:02:02');
+  assert.equal(hhmmss(Date.parse(l.arrive) - rideS * 1000), '20:02:02', 'a class whose latest bus is at 20:10: the 20:02:02, not 20:05:54');
 });
 
 test('with no live times, the card and the leave-by read one window: the card its middle, the leave-by its end, by the close', () => {
-  // D2 closes at 23:00 on a weekday and runs every 873 s at 22:00; the feed answered with nothing.
   const now = at('2026-08-27T22:45');
   const sa = board('PGP', now, 'D2', []);
   const from = now + 80_000;
@@ -93,18 +81,15 @@ test('with no live times, the card and the leave-by read one window: the card it
 });
 
 test('before the service starts, the first bus is due within a headway of the start; a class leave-by is as it will be once it runs', () => {
-  // D2 starts at 07:15 on a weekday, every 430 s at 07:00; the feed lists nothing yet.
   const now = at('2026-08-27T06:30');
   const sa = board('PGP', now, 'D2', []);
   const chain = departuresFrom(GRAPH, sa, 'D2', { now, from: now + 80_000 });
   assert.deepEqual([hhmmss(chain[0].earliest), hhmmss(chain[0].latest), chain[0].opens], ['07:15:00', '07:22:10', true]);
 
-  // Reaching the stop after it starts: what's left of that first window, not a headway from when you get there.
   const late = at('2026-08-27T07:10');
   const s = scoreLeg(GRAPH, leg, board('PGP', late, 'D2', []), late, 600, { openBy: at('2026-08-27T08:00') });
-  assert.equal(hhmmss(late + s.boardS * 1000), '07:21:05');
+  assert.equal(hhmmss(late + s.boardS * 1000), '07:21:05', "what's left of the first window, not a headway from reaching the stop");
 
-  // A class with its latest bus at 09:50: from 06:30, as from 07:16 once D2 runs, a whole headway ending then.
   const rideS = 600;
   const latestBoard = at('2026-08-27T09:50');
   const arriveBy = { atMs: latestBoard + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
@@ -119,12 +104,11 @@ test('before the service starts, the first bus is due within a headway of the st
       nowMs,
     });
   const [early, running] = [leave(now), leave(at('2026-08-27T07:16'))];
-  assert.deepEqual([early.board, early.arrive], [running.board, running.arrive]);
-  assert.equal(Date.parse(early.arrive) - rideS * 1000, latestBoard);
+  assert.deepEqual([early.board, early.arrive], [running.board, running.arrive], 'from 06:30 as from 07:16 once D2 runs');
+  assert.equal(Date.parse(early.arrive) - rideS * 1000, latestBoard, 'a whole headway ending at the latest bus');
 });
 
 test('no estimate is due after the service closes: the bus before the close was the last', () => {
-  // D2 closes at 23:00; the last live bus at 22:50, every 873 s at 22:00.
   const now = at('2026-08-27T22:40');
   const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', [at('2026-08-27T22:50')]), 'D2', {
     now,
@@ -135,7 +119,6 @@ test('no estimate is due after the service closes: the bus before the close was 
     ds.map((d) => d.kind),
     ['live'],
   );
-  // Nor on Nearby, whose row would otherwise run on to tomorrow's first buses.
   const all = departuresFrom(GRAPH, board('PGP', now, 'D2', [at('2026-08-27T22:50')]), 'D2', { now, from: now });
   const r = {
     svc: 'D2',
@@ -153,7 +136,7 @@ test('no estimate is due after the service closes: the bus before the close was 
     laterText: null,
     toText: '',
   };
-  assert.deepEqual(nearbyRow(r, now, all).later, []);
+  assert.deepEqual(nearbyRow(r, now, all).later, [], "nor on Nearby, whose row would run on to tomorrow's first buses");
 });
 
 test('with its hours unknown, a service is guessed for, as far as a day ahead unless asked further', () => {
@@ -164,11 +147,9 @@ test('with its hours unknown, a service is guessed for, as far as a day ahead un
   assert.ok(ds.at(-1).latest <= NOW + 86_400_000, 'not past a day');
   const empty = departuresFrom(unknown, board('PGP', NOW, 'D2', []), 'D2', { now: NOW, from: NOW });
   assert.ok(empty.at(-1).latest <= NOW + 86_400_000, 'nor with no live times');
-  // A class two days off asks up to its latest board.
   const far = departuresFrom(unknown, board('PGP', NOW, 'D2', []), 'D2', { now: NOW, from: NOW, until: NOW + 2 * 86_400_000 });
-  assert.ok(far.at(-1).latest > NOW + 2 * 86_400_000 - 3600_000, 'up to it');
+  assert.ok(far.at(-1).latest > NOW + 2 * 86_400_000 - 3600_000, 'a class two days off asks up to its latest board');
 
-  // Nearby: the row says nothing of when the service ends, and still gets its third bus.
   const r = {
     svc: 'D2',
     etaS: (LAST - NOW) / 1000,
@@ -185,11 +166,10 @@ test('with its hours unknown, a service is guessed for, as far as a day ahead un
     laterText: null,
     toText: '',
   };
-  assert.equal(nearbyRow(r, NOW, ds).later.length, 2);
+  assert.equal(nearbyRow(r, NOW, ds).later.length, 2, 'Nearby, with no end to the service, still gets its third bus');
 });
 
 test("the card's bus is found among the departures by which bus it is, though its time is the middle of its window", () => {
-  // The feed answered with no D2 at PGP: the card's bus is half a headway in, 247 s at 16:00.
   const now = at('2026-08-27T16:00');
   const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
   const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
@@ -202,7 +182,6 @@ test("the card's bus is found among the departures by which bus it is, though it
   assert.equal(departureOf(all, best), all[0]);
   assert.ok(Date.parse(departsAt) - Date.parse(all[0].board) > SAME_BUS_MS, "further from its window's start than the feed moves a bus");
 
-  // A trip with no leave-by of its own steps from that bus.
   const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: null }, false, now);
   assert.ok(s.steps?.later, 'a later bus to step to');
 });
@@ -217,21 +196,19 @@ test('a departure is known by its identity, not by which object it is: a copy is
   const copies = all.map((l) => ({ ...l }));
   assert.deepEqual(departureOf(copies, options[0]), all[0]);
 
-  // A chosen bus sent back is the user's: the leave-by the answer gives has no identity on it.
   const departsAt = new Date(now + options[0].boardS * 1000).toISOString();
   const later = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: null }, false, now).steps.later;
   const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target: later }, false, now);
   assert.equal(s.leave.board, later.board);
-  assert.ok(!('bus' in s.leave), Object.keys(s.leave).join());
+  assert.ok(!('bus' in s.leave), `a chosen bus sent back carries no identity on the leave-by: ${Object.keys(s.leave).join()}`);
 });
 
 test('a bus the feed lists twice is two departures, each its own, and so are the estimates after it', () => {
-  // A loop one bus runs alone: the feed gives its next pass and the one after, both P1.
   const now = at('2026-08-27T10:00');
   const sa = { ...board('PGP', now, 'D2', [at('2026-08-27T10:05'), at('2026-08-27T10:35')]) };
   sa.arrivals = sa.arrivals.map((a) => ({ ...a, plate: 'P1' }));
   const ids = departuresFrom(GRAPH, sa, 'D2', { now, from: now, max: 4 }).map((d) => d.id);
-  assert.deepEqual(ids, ['P1', 'P1@2', 'P1@2+1', 'P1@2+2']);
+  assert.deepEqual(ids, ['P1', 'P1@2', 'P1@2+1', 'P1@2+2'], 'a loop one bus runs alone: its next pass and the one after');
 });
 
 test('no departure leaves after `until`: a window that ends past it is left out, before the service starts too', () => {
@@ -252,7 +229,6 @@ test('no departure leaves after `until`: a window that ends past it is left out,
 });
 
 test("before the service starts, the windows around a chosen bus meet the start's own, with no gap between", () => {
-  // D2 starts at 07:15, every 430 s at 07:00; the windows meet at 08:30.
   const now = at('2026-08-27T06:30');
   const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', []), 'D2', {
     now,
@@ -268,7 +244,6 @@ test("before the service starts, the windows around a chosen bus meet the start'
 });
 
 test("tomorrow morning's class leave-by is the same whether or not the feed lists a bus tonight", () => {
-  // 22:40 on a weekday; D2 closes at 23:00 and starts at 07:15. The latest you can board is 07:50 tomorrow.
   const now = at('2026-08-27T22:40');
   const rideS = 600;
   const arriveBy = { atMs: at('2026-08-28T07:50') + (ON_TIME_SLACK_S + rideS) * 1000, venueWalkS: 0 };
@@ -288,7 +263,6 @@ test("tomorrow morning's class leave-by is the same whether or not the feed list
 });
 
 test('a class a day or more ahead counts on a window that ends at the latest you can board, however far off', () => {
-  // 10:00 on a Thursday with an empty feed; the class is at 14:00 tomorrow or the day after.
   const now = at('2026-08-27T10:00');
   const rideS = 600;
   for (const day of ['2026-08-28', '2026-08-29']) {
@@ -306,29 +280,29 @@ test('a class a day or more ahead counts on a window that ends at the latest you
     assert.equal(latest - Date.parse(l.board), Math.max(60, headwayFor(GRAPH, 'D2', latest - 1)) * 1000, `${day}: a headway before it`);
   }
 
-  // The days between are a headway at a time too, from each start, whatever day the windows meet at.
   const latest = at('2026-09-03T13:40');
   const ds = departuresFrom(GRAPH, board('PGP', now, 'D2', []), 'D2', { now, from: now, until: latest, around: latest });
   const friday = ds.filter((d) => d.earliest >= at('2026-08-28T07:15') && d.latest <= at('2026-08-28T23:00'));
-  assert.ok(friday.length > 50, `${friday.length} on the Friday`);
+  assert.ok(friday.length > 50, `${friday.length} on the Friday: the days between are a headway at a time too`);
   for (const d of friday)
     assert.ok(d.latest - d.earliest <= 2 * Math.max(60, headwayFor(GRAPH, 'D2', d.earliest)) * 1000, hhmmss(d.earliest));
 });
 
 test("a trip's second bus a day or more ahead is looked for from when the first gets you to it", () => {
-  // P runs 08:20 to 17:25 on weekdays, about hourly; the first bus gets you to KR-MRT at 12:29:49 tomorrow.
   const now = at('2026-08-27T10:00');
   const from = at('2026-08-28T12:29:49');
   const d = nextDeparture(GRAPH, board('KR-MRT', now, 'P', []), 'P', from, now);
   assert.ok(d, 'a bus, though more than a day after now');
   assert.deepEqual([d.earliest, d.latest], [from, from + Math.max(60, headwayFor(GRAPH, 'P', from)) * 1000]);
-  // The same asked before P starts today: tomorrow's bus isn't counted from today's start.
   const early = at('2026-08-27T08:10');
-  assert.deepEqual(nextDeparture(GRAPH, board('KR-MRT', early, 'P', []), 'P', from, early), d);
+  assert.deepEqual(
+    nextDeparture(GRAPH, board('KR-MRT', early, 'P', []), 'P', from, early),
+    d,
+    "asked before P starts today: not counted from today's start",
+  );
 });
 
 test('with no live times and no class, a bus chosen with "Later" stays chosen as the card\'s own bus comes up to it', () => {
-  // D2 every 494 s at 10:00, the feed answers with nothing; the card counts from now, a second a second.
   const answerAt = (now, target) => {
     const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
     const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
@@ -367,12 +341,13 @@ test('with a bus chosen and no live times, the card\'s own bus is still the one 
   const target = { svc: 'D2', stop: 'PGP', board: '2026-08-27T08:58:58Z' };
   const s = withSteps({ departsAt, leave: null }, f, { trip: 'to:UTOWN', target }, false, now);
   const later = s.steps?.later;
-  // Never a bus you'd leave for more than STEP.laterMaxS after the card's own (leave now, 16:00).
-  assert.ok(!later || Date.parse(later.board) - 80_000 <= now + STEP.laterMaxS * 1000, later?.board);
+  assert.ok(
+    !later || Date.parse(later.board) - 80_000 <= now + STEP.laterMaxS * 1000,
+    `${later?.board}: never a bus to leave for more than STEP.laterMaxS after the card's own`,
+  );
 });
 
 test('estimates long after the last live bus are the same buses as stepping a headway at a time, across the hours', () => {
-  // The last live D2 at 08:00; you can be at the stop from 14:31, past six hours of changing headways.
   const now = at('2026-08-27T07:59');
   const sa = board('PGP', now, 'D2', [at('2026-08-27T08:00')]);
   const from = at('2026-08-27T14:31');
@@ -386,21 +361,22 @@ test('estimates long after the last live bus are the same buses as stepping a he
 });
 
 test('the first bus after the start waits for it, however many headways in you reach the stop', () => {
-  // D2 starts at 07:15, every 430 s at 07:00: its first window ends at 07:22:10.
   const now = at('2026-08-27T07:10');
   const sa = board('PGP', now, 'D2', []);
   for (const reach of ['07:16', '07:23']) {
     const [d] = departuresFrom(GRAPH, sa, 'D2', { now, from: at(`2026-08-27T${reach}`) });
     assert.equal(d.opens, true, reach);
-    // Not for a trip that can't wait for the start; for a class, no wait once you're there after it.
     const earliestS = (at(`2026-08-27T${reach}`) - now) / 1000;
-    assert.equal(scoreLeg(GRAPH, leg, sa, now, earliestS), null, reach);
-    assert.equal(scoreLeg(GRAPH, leg, sa, now, earliestS, { openBy: at('2026-08-27T08:00') }).opensInS, 0);
+    assert.equal(scoreLeg(GRAPH, leg, sa, now, earliestS), null, `${reach}: not for a trip that can't wait for the start`);
+    assert.equal(
+      scoreLeg(GRAPH, leg, sa, now, earliestS, { openBy: at('2026-08-27T08:00') }).opensInS,
+      0,
+      `${reach}: for a class, no wait once you're there after the start`,
+    );
   }
 });
 
 test('late for a class, a bus you reach after the service starts is "leave now", not a wait for the start', () => {
-  // D2 starts at 07:15 and its first window ends at 07:22:10; you can be at the stop by 07:23.
   const now = at('2026-08-27T07:10');
   const rideS = 600;
   const walkS = (at('2026-08-27T07:23') - now) / 1000 - readyS({ walkS: 0 });
@@ -418,7 +394,6 @@ test('late for a class, a bus you reach after the service starts is "leave now",
 });
 
 test('with no live times, after "Later", "Earlier" still goes back to the bus before it as the clock moves on', () => {
-  // D2 every 422 s at 19:00; the feed answers with nothing.
   const answerAt = (now, target) => {
     const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
     const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
@@ -438,7 +413,6 @@ test('with no live times, after "Later", "Earlier" still goes back to the bus be
 });
 
 test('with no live times, a class less than a headway off is not counted on the part of a window left', () => {
-  // D2 every 494 s at 16:00; the latest you can board is 2 min after you can be at the stop.
   const now = at('2026-08-27T16:00');
   const rideS = 600;
   const from = now + readyS({ walkS: 60 }) * 1000;
@@ -460,7 +434,6 @@ test('with no live times, a class less than a headway off is not counted on the 
 });
 
 test('a chosen bus that has left lines up nothing: the steps are as if none was chosen', () => {
-  // D2 every 494 s at 16:00, no live times; the chosen bus left 10 s ago.
   const now = at('2026-08-27T16:00');
   const byStop = new Map([['PGP', board('PGP', now, 'D2', [])]]);
   const candidates = [{ stop: PGP, distM: 0, walkS: 60, legs: [{ svc: 'D2', hops: 5, to: { code: 'UTOWN', name: 'UTown' } }] }];
@@ -473,7 +446,6 @@ test('a chosen bus that has left lines up nothing: the steps are as if none was 
   assert.deepEqual(steps(gone), steps(null));
 });
 
-/** A class at `classAt` by `svc` from `code`, with the feed answering nothing: its leave-by and the steps either side of it. */
 function classSteps(svc, code, now, classAt, rideS = 600) {
   const option = {
     svc,
@@ -511,7 +483,6 @@ test('a class days ahead steps among the buses on its day, either side of its le
 });
 
 test("on K, a class's Earlier and Later are the windows either side of its leave-by's, not overlapping it", () => {
-  // K every 2346 s: the leave-by's window is 10:17:54 to 10:57:00.
   const rideS = 600;
   for (const cls of ['2026-08-27T11:10', '2026-08-27T11:25', '2026-08-27T12:30']) {
     const { leave, steps } = classSteps('K', 'PGP', at('2026-08-27T10:00'), at(cls), rideS);
@@ -519,13 +490,12 @@ test("on K, a class's Earlier and Later are the windows either side of its leave
     if (steps.earlier) assert.ok(Date.parse(steps.earlier.board) < Date.parse(leave.board), `${cls}: Earlier before the leave-by`);
     if (steps.later)
       assert.ok(Date.parse(steps.later.board) >= end, `${cls}: Later from ${hhmmss(Date.parse(steps.later.board))}, after ${hhmmss(end)}`);
-    // Earlier's window ends where the leave-by's starts: a bus a whole headway before its end.
-    if (steps.earlier) assert.ok(end - Date.parse(steps.earlier.board) >= 2346_000, `${cls}: Earlier a window before`);
+    if (steps.earlier)
+      assert.ok(end - Date.parse(steps.earlier.board) >= 2346_000, `${cls}: Earlier a window before, ending where the leave-by's starts`);
   }
 });
 
 test("a class whose latest bus is under a headway off: the steps are the windows after the leave-by's late one", () => {
-  // D2 from PGP, a 60 s walk and the minute to get ready: at the stop by 10:01:20.
   const now = at('2026-08-27T10:00');
   const ready = now + readyS({ walkS: 60 }) * 1000;
   const rideS = 600;

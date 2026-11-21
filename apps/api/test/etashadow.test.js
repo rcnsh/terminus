@@ -1,8 +1,3 @@
-/**
- * The arrival-time model in shadow (etashadow.ts): off unless asked for,
- * each closed day answered by a model built only from the days before it,
- * one day a run, oldest first. On the real route lines.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -14,7 +9,6 @@ import { etaModelOn, modelBefore, segmentsKey, shadowEta, shadowKey, shadowSumma
 
 const DAYS = ['2026-08-25', '2026-08-26'];
 
-/** A day with one K bus driving its real line at 8 m/s from PGP, read every 30 s for 20 minutes. */
 function dayOn(date) {
   const { open } = windowOf(date);
   const rows = Array.from({ length: 40 }, (_, k) => ({
@@ -27,11 +21,6 @@ function dayOn(date) {
 
 const ae = (ms) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
 
-/**
- * Each day's predictions as Analytics Engine has them: asked four minutes
- * in (the bus past UHALL, read at the poll after), for MUSEUM, [errS] too
- * soon (the bus comes that much later).
- */
 function predictionsOf(days, errS) {
   const stop = SHAPES.K.stops[10];
   return days.flatMap((day) => {
@@ -70,8 +59,6 @@ test('each day is answered by the model of the days before it, oldest first, onc
   const { env, bucket, fetchImpl, now } = await setUp({ ETA_MODEL: 'shadow' });
   await env.KV.put('config:collect:eta', 'on');
   assert.equal(await shadowEta(env, now, fetchImpl), null, 'the older day waits for eta.ts, and the newer for it');
-  // eta.ts scores both days first, oldest first; a day it scored the older
-  // way (no version in its metadata) doesn't count.
   await bucket.put(etaKey(DAYS[0]), JSON.stringify({ v: 1, date: DAYS[0], predictions: 0, matched: 0, services: [], rows: [] }));
   assert.equal(await shadowEta(env, now, fetchImpl), null, 'the older day scored the older way: still waiting');
   assert.equal(await recordEta(env, now, fetchImpl), DAYS[0], 'scored again');
@@ -91,11 +78,8 @@ test('each day is answered by the model of the days before it, oldest first, onc
   assert.equal(second.built.days, 1);
   assert.ok(second.built.pairs >= 5);
   assert.equal(second.coverage, 1);
-  // The feed was 90 s too soon; the day before taught the model that, and
-  // the bus drove as it did the day before.
-  // To the second: the feed says whole seconds.
-  assert.equal(Math.round(second.overall.feed.mae), 90);
-  assert.ok(second.overall.corrected.mae <= 1);
+  assert.equal(Math.round(second.overall.feed.mae), 90, 'the feed was 90 s too soon');
+  assert.ok(second.overall.corrected.mae <= 1, 'the day before taught the model that, to the second the feed gives');
   assert.ok(second.overall.history.mae <= 15, `history ${second.overall.history.mae} s out: the bus's last stop, read every 30 s`);
   assert.deepEqual(second.grid.n, [0, 1, 0, 0], 'one case, said 2 to 5 minutes ahead');
   assert.equal(second.overall.feed.miss, 0, '90 s out: no miss');
@@ -106,22 +90,21 @@ test('each day is answered by the model of the days before it, oldest first, onc
   );
 
   assert.equal(await shadowEta(env, now, fetchImpl), null, 'both done');
-  // A day kept by an older model is run again.
   await bucket.put(shadowKey(DAYS[0]), JSON.stringify({ ...first, v: 1 }));
-  assert.equal(await shadowEta(env, now, fetchImpl), DAYS[0]);
+  assert.equal(await shadowEta(env, now, fetchImpl), DAYS[0], 'a day kept by an older model is run again');
   assert.equal(readJson(bucket, shadowKey(DAYS[0])).v, 4);
   assert.deepEqual(
     (await shadowSummary(env, now)).days.map((d) => d.date),
     DAYS,
   );
-  // Version 3 could make buses early more often than the feed: a
-  // different model, so not shown, its grid not counted, and run again.
-  // A grid where all weight on history erred least, under 2 minutes.
-  const grid = { sums: [[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], [], [], []], n: [1, 0, 0, 0] };
-  await bucket.put(shadowKey(DAYS[1]), JSON.stringify({ ...second, v: 3, grid }), { customMetadata: { v: '3' } });
+  const allWeightOnHistoryErredLeast = { sums: [[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], [], [], []], n: [1, 0, 0, 0] };
+  await bucket.put(shadowKey(DAYS[1]), JSON.stringify({ ...second, v: 3, grid: allWeightOnHistoryErredLeast }), {
+    customMetadata: { v: '3' },
+  });
   assert.deepEqual(
     (await shadowSummary(env, now)).days.map((d) => [d.date, d.v]),
     [[DAYS[0], 4]],
+    'version 3 could make buses early more often than the feed: a different model, not shown',
   );
   assert.equal((await modelBefore(bucket, '2026-08-27')).model.weights[0], 0, "version 3's grid doesn't count");
   assert.equal(await shadowEta(env, now, fetchImpl), DAYS[1], 'and run again');

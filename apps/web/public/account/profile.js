@@ -1,36 +1,17 @@
-// The signed-in account's profile and the campus it's about, shared by every
-// part of the page that shows or changes them: Settings, first-time setup,
-// and the map's "Add to favourites". One copy, so a place saved on the map is in
-// Settings at once, and a change made in Settings is the one the map sees.
-
 import { html, store, useStore } from '../assets/ui.js';
 import { api, apiTagged, setClockPref, t } from './dom.js';
 
-/** The profile as the server last returned it, with edits not yet saved. Null until loaded. */
 export const profile = store(null);
-// Times everywhere follow the account's 12- or 24-hour choice.
 profile.subscribe((p) => p && setClockPref(p.clock));
-/** /api/campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
 export const campus = store(null);
-/** The user's walking speed (m/s, from their pace), as /api/me/next last said, for walk times worked out here. */
 export const walkSpeed = store(1.3);
-/** Bumped after each save: what depends on the profile (the account page's preview) redraws. */
 export const saves = store(0);
-/** Bumped when the lists the server keeps apart from the profile change (devices, keys, choices). */
 export const lists = store(0);
-/** The short message at the bottom of the screen: { text, error } ("Saved"), or null. */
 export const toastText = store(null);
 
-/** How long a message stays: long enough to read. A problem stays until it's closed or another comes. */
 export const TOAST_MS = 4_000;
 
 let toastTimer = null;
-/**
- * Shows `text` at the bottom of the screen; `error`, something that went
- * wrong, which stays until closed. `action` ({ label, run }) adds a button,
- * Undo, and stays a little longer; a plain message ("Saved") doesn't replace
- * it meanwhile, so the button isn't gone before it can be clicked.
- */
 export function toast(text, { error = false, action = null } = {}) {
   if (!error && !action && toastText.get()?.action) return;
   toastText.set(action ? { text, error, action } : { text, error });
@@ -38,10 +19,8 @@ export function toast(text, { error = false, action = null } = {}) {
   if (!error) toastTimer = setTimeout(() => toastText.set(null), action ? TOAST_MS * 1.5 : TOAST_MS);
 }
 
-/** Where toast() shows: once per page. Its words are on a status line, so they're heard as well as seen. */
 export function Toast() {
   const now = useStore(toastText);
-  // Kept while it fades out, so the words don't vanish first.
   const last = now ?? Toast.last ?? { text: '' };
   Toast.last = last;
   return html`
@@ -64,22 +43,14 @@ export function Toast() {
   `;
 }
 
-/** How many times a save is made again on a fresh copy when another device saved first (412). */
 const SAVE_TRIES = 3;
 
-/** The 400 ms wait before a save, so a run of changes (typing, a few taps) is one save. */
 let saveTimer = null;
-/** The profile as the server last answered with it, and its version (`etag`, for If-Match). */
 let confirmed = null;
-/** The changes made since the last save was sent: shown already, sent next. */
 let pending = [];
-/** The save on its way, { changes, done }: one at a time, so each is made on the one before it. */
 let sending = null;
-/** A timetable import on its way: changes made meanwhile wait for its answer, then go on top of it. */
 let importing = null;
-/** saveNow's changes: its caller says how the save went, so a save carrying one shows no toast. */
 const awaited = new WeakSet();
-/** Counts edits: a reload's answer doesn't replace edits made while it was on its way. */
 let edits = 0;
 
 const loaded = ({ data, etag }) => {
@@ -87,7 +58,6 @@ const loaded = ({ data, etag }) => {
   return data;
 };
 
-/** `doc` with `changes` made to it, on a copy. */
 function withChanges(doc, changes) {
   const next = structuredClone(doc);
   for (const change of changes) change(next);
@@ -99,10 +69,8 @@ export async function loadProfile() {
   return profile.get();
 }
 
-/** Whether the profile shown is ahead of the server's: a change is waiting or on its way. */
 const busy = () => Boolean(saveTimer || sending || pending.length || importing);
 
-/** The profile afresh (it may have changed on the map or another device), unless a change here is waiting or being saved. */
 export async function reloadProfile() {
   if (busy()) return;
   const mine = edits;
@@ -110,24 +78,15 @@ export async function reloadProfile() {
   if (!busy() && mine === edits) profile.set(loaded(r));
 }
 
-/**
- * Changes the profile: `change` gets a copy to edit. Saved a moment later,
- * so a run of changes (typing, a few taps) is one save. Only the change is
- * saved, made again on the profile as the server has it, so what another
- * device saved meanwhile stays: `change` may run more than once.
- */
 export function edit(change) {
   record(change);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    sendSave().catch(() => {
-      // Said in a toast; nothing waits on it.
-    });
+    sendSave().catch(() => {});
   }, 400);
 }
 
-/** Shows `change` at once and queues it for the next save. */
 function record(change) {
   const next = structuredClone(profile.get());
   change(next);
@@ -136,12 +95,6 @@ function record(change) {
   edits++;
 }
 
-/**
- * Sends the changes waiting, if no save is on its way (they go when it's
- * back). Each is made on the profile as the server last had it, sent with
- * its version (If-Match); if another device saved since (412), the profile
- * is read again and the changes made on that. Returns the save's promise.
- */
 function sendSave() {
   if (sending || importing || !pending.length) return sending?.done ?? Promise.resolve(null);
   const changes = pending;
@@ -151,7 +104,6 @@ function sendSave() {
     try {
       let saved = null;
       for (let tries = 1; !saved; tries++) {
-        // Nothing read yet (a page that set the profile itself): read it now.
         if (!confirmed) loaded(await apiTagged('/api/me/profile'));
         const base = confirmed;
         try {
@@ -163,13 +115,11 @@ function sendSave() {
           confirmed = null;
         }
       }
-      // Changes made since this was sent stay on screen, on top of what it saved.
       profile.set(withChanges(saved, pending));
       if (!batch.quiet) toast(t('Saved'));
       saves.set((n) => n + 1);
       return saved;
     } catch (err) {
-      // Not saved: the profile as the server has it, with the changes made since (they're sent next).
       if (confirmed) profile.set(withChanges(confirmed.doc, pending));
       if (!batch.quiet) toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
       throw err;
@@ -182,10 +132,6 @@ function sendSave() {
   return batch.done;
 }
 
-/**
- * Saves straight away, for steps that must land before moving on; throws if
- * it can't. Changes still waiting go with it; a save on its way goes first.
- */
 export async function saveNow(change) {
   clearTimeout(saveTimer);
   saveTimer = null;
@@ -200,13 +146,6 @@ export async function saveNow(change) {
   }
 }
 
-/**
- * Imports a NUSMods share link (POST /api/me/import), which saves the
- * timetable itself. A change still waiting is saved first, so it isn't lost
- * under the import; changes made while it runs wait for its answer, then
- * are made on top of it and saved. Answers with what the server replied; throws
- * if it failed.
- */
 export async function importTimetable(share) {
   clearTimeout(saveTimer);
   saveTimer = null;
@@ -216,7 +155,6 @@ export async function importTimetable(share) {
   const run = (async () => {
     try {
       const { data, etag } = await apiTagged('/api/me/import', { method: 'POST', body: { share } });
-      // The import saved a new version: the next save is made on it.
       confirmed = { doc: data.profile, etag };
       profile.set(withChanges(data.profile, pending));
       return data;
@@ -234,16 +172,8 @@ export async function loadCampus() {
   return campus.get();
 }
 
-/**
- * Set when the service worker's check behind its kept /api/campus was
- * refused (401): signed out elsewhere. Each page acts on it as on any 401
- * of its own, so the kept copy never hides it.
- */
 export const campusRefused = store(false);
 
-// The service worker answers /api/campus from its kept copy and checks it
-// behind: when a newer one has replaced it, it's read again (from the
-// worker's copy, at once) and what's drawn from it redraws in place.
 globalThis.navigator?.serviceWorker?.addEventListener('message', (e) => {
   if (e.data?.kind !== 'campus') return;
   if (e.data.status === 401) campusRefused.set(true);
@@ -254,19 +184,12 @@ globalThis.navigator?.serviceWorker?.addEventListener('message', (e) => {
     );
 });
 
-/** Every stop, by name, for menus. */
 export const stopsByName = (c = campus.get()) =>
   (c?.stops ?? []).map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
 
-/**
- * Residences on campus: the common ones (PGP, UTown Residence) first, then by
- * name. Common first also settles home stops several share (every UTown
- * college is UTOWN's) on the likelier one.
- */
 export const residencesByName = (c = campus.get()) =>
   [...(c?.residences ?? [])].sort((a, b) => Number(b.common === true) - Number(a.common === true) || a.name.localeCompare(b.name));
 
-/** A residence menu's options after its blank one: where most students live in a group of their own at the top. */
 export function ResidenceOptions({ residences }) {
   const option = (r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`;
   const common = residences.filter((r) => r.common);
@@ -277,49 +200,34 @@ export function ResidenceOptions({ residences }) {
   `;
 }
 
-/** A stop's name, or a food court's (favourites and classes can go to one). */
 export function stopName(code) {
   const c = campus.get();
   return c?.stops.find((s) => s.code === code)?.name ?? c?.destinations?.find((d) => d.code === code)?.label ?? code;
 }
 
-/** Metres between two points, as apps/api/src/geo.ts works it out, so the map's distances along a line match the API's. */
 export function haversineM(aLat, aLon, bLat, bLon) {
   const r = (d) => (d * Math.PI) / 180;
   const s = Math.sin(r(bLat - aLat) / 2) ** 2 + Math.cos(r(aLat)) * Math.cos(r(bLat)) * Math.sin(r(bLon - aLon) / 2) ** 2;
   return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
-/** Stops from nearest to furthest, with how far (metres). */
 export function stopsNear(lat, lon) {
   return stopsByName()
     .map((s) => ({ s, d: haversineM(lat, lon, s.lat, s.lon) }))
     .sort((a, b) => a.d - b.d);
 }
 
-/** The residence whose stops are exactly these, if any. Only stops are saved. */
 export function residenceFor(homeStops) {
   const key = [...homeStops].sort().join();
   return residencesByName().find((r) => [...r.stops].sort().join() === key) ?? null;
 }
 
-/** A residence's walk to its stops, in minutes at a normal pace (/api/campus `walkMin`); worked out here for an older server. */
 export const residenceWalkMin = (r) => r.walkMin ?? Math.max(1, Math.round(r.walkM / 1.3 / 60));
 
-/**
- * One of the account's limits (the profile's `limits`: pinnedStops, label,
- * homeWalkMin, …), so the page holds to what the server will take; `fallback`
- * until the profile has loaded, and worked out here for an older server.
- */
 export const limit = (key, fallback) => profile.get()?.limits?.[key] ?? fallback;
 
-/** As many stops as the profile keeps pinned (its `limits`; 8 before it has loaded). */
 export const pinMax = () => limit('pinnedStops', 8);
 
-/**
- * Pins stop `code`, or unpins it if it's pinned: from the Stops tab and
- * from Nearby's signs, so both keep to the same limit and say the same.
- */
 export async function togglePin(code) {
   if (!profile.get()) await reloadProfile().catch(() => {});
   if (!profile.get()) return toast(t("Couldn't pin that. Check your connection."), { error: true });
@@ -337,13 +245,6 @@ export async function togglePin(code) {
   }
 }
 
-/**
- * Adds a favourite, called what was picked, short, as it reads on a button
- * ("KR MRT", "The Deck", "COM1" for School of Computing). One per stop.
- * Returns the one already there instead, if there is one. `keep` holds the
- * key given, so the same change made again (on the server's copy, when it's
- * saved) gives the same key while it's free.
- */
 export function withPlace(p, to, label, keep = {}) {
   const same = p.places.find((x) => x.to === to);
   if (same) return same;
@@ -361,10 +262,6 @@ export function withPlace(p, to, label, keep = {}) {
   return null;
 }
 
-/**
- * Takes a favourite off, with its usual times. Returns what was taken, for
- * restorePlace (Undo), or null if it wasn't there.
- */
 export function withoutPlace(p, key) {
   const index = p.places.findIndex((x) => x.key === key);
   if (index < 0) return null;
@@ -374,7 +271,6 @@ export function withoutPlace(p, key) {
   return { index, place, usual };
 }
 
-/** Undo for withoutPlace: back where it was. Not when the list is full, or that stop is a favourite again. */
 export function restorePlace(p, { index, place, usual }) {
   if (p.places.length >= (p.limits?.places ?? Infinity) || p.places.some((x) => x.to === place.to || x.key === place.key)) return;
   p.places.splice(Math.min(index, p.places.length), 0, place);

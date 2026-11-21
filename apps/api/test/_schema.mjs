@@ -1,20 +1,6 @@
-/**
- * A small JSON Schema checker for the subset src/openapi.ts uses: type (one
- * or a list, `integer` included), enum, required, properties,
- * additionalProperties, items, minItems/maxItems, minimum/maximum,
- * minLength/maxLength, pattern, $ref, allOf, oneOf and anyOf. Formats and
- * annotations are not checked.
- *
- * With `strict`, an object whose schema lists its properties (and says
- * nothing about others) may not carry keys the schema doesn't name: that is
- * how the spec and the Worker drift apart unnoticed. Under allOf, a key
- * counts as named when any branch names it.
- */
-
 const typeOf = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 const fits = (t, v) => t === typeOf(v) || (t === 'number' && typeOf(v) === 'integer');
 
-/** Errors (`path: why`) found checking `value` against `schema`; empty when it fits. */
 export function validate(schema, value, { root = schema, strict = false } = {}) {
   const errs = [];
   check(schema, value, '$', errs, { root, strict }, false);
@@ -33,7 +19,6 @@ function deref(s, root) {
   return s;
 }
 
-/** Every property name the schema names, through $ref and allOf. */
 function named(s, root) {
   s = deref(s, root);
   return [...Object.keys(s.properties ?? {}), ...(s.allOf ?? []).flatMap((b) => named(b, root))];

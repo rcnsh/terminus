@@ -6,7 +6,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The phone's clock error, from the API's `Date` header. */
 class ServerClockTest {
     private val at = Instant.parse("2026-10-07T01:00:00Z").toEpochMilli()
     private val date = "Wed, 07 Oct 2026 01:00:00 GMT"
@@ -15,7 +14,6 @@ class ServerClockTest {
 
     @Test
     fun aPhoneThatIsBehindIsMovedOn() {
-        // The phone says 00:58:00 when the server says 01:00:00.
         assertEquals(120_000L, ServerClock.skewOf(date, at - 120_000))
         assertEquals(-90_000L, ServerClock.skewOf(date, at + 90_000))
     }
@@ -49,7 +47,6 @@ class ServerClockTest {
         assertEquals(at, ServerClock.fromDevice(at - 60_000))
         val now = ServerClock.now() - System.currentTimeMillis()
         assertEquals(60_000.0, now.toDouble(), 50.0)
-        // Put right later: back to the phone's own clock.
         ServerClock.observe(date, at - 1_000)
         assertEquals(0L, ServerClock.skewMs)
     }

@@ -120,7 +120,10 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   the three, and CI fails on unformatted code. The Lefthook pre-commit hook
   formats and re-stages staged JS/TS/JSON and Swift; run `pnpm format`
   before committing anyway, and `pnpm format:kotlin` for Kotlin, which the
-  hook skips. No formatter touches HTML, CSS, htm templates or
+  hook skips (ktfmt runs through Gradle, too slow for every commit). The
+  hook's `exclude` in `.lefthook.yml` mirrors `ignorePatterns` in
+  `.oxfmtrc.json`; the root `prepare` script installs it, so lefthook's own
+  postinstall is off in `pnpm-workspace.yaml`. No formatter touches HTML, CSS, htm templates or
   `cloudflare.config.ts`; keep their layout as written when you edit them:
   the Worker fills pages by their exact markup, the website translates page
   text keyed by it, tests read CSS rule by rule, and release-beta.sh and a
@@ -147,7 +150,7 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   `scripts/strings.py` fills in what Android or the Mac already says, and
   `--check` (in CI) fails on anything missing.
 - Place and service names (KR MRT, COM3, D2) stay English in both.
-- One glossary for all of it, at the top of `src/i18n.ts` (class 课, stop
+- One glossary for all of it, "In Chinese" in [GLOSSARY.md](docs/GLOSSARY.md) (class 课, stop
   车站, favourite 收藏, packed 很挤, email address 邮箱, …), with a space
   between Chinese and Latin letters or digits. When you change a word,
   change it everywhere.
@@ -167,6 +170,11 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   and tests of how a guess is used run with one headway for every shuttle
   (`test/_headways.mjs`), so measuring headways again leaves them alone.
 - Account tests run the real migration SQL against `node:sqlite`.
+- Website tests load its modules with `await web('app/buses.js')` from
+  `apps/web/test/_web.mjs`, after importing it (a static import resolves
+  before its hook maps `/assets/…` to the files); component tests draw in
+  happy-dom (`_dom.mjs`), whose asserts compare DOM nodes by identity,
+  since printing a happy-dom node's getters never ends.
 - Add tests for API changes, and check each new test fails without your
   fix. Prefer tests on real data, such as the real `shapes.json` lines,
   over synthetic ones.
@@ -176,13 +184,13 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
 
 ## Code style
 
-- Match the surrounding code. Comments explain **why**, in plain English,
-  in the present tense, at the density of the file around them, and point
-  to internals.md rather than repeating it. A comment says what the name
-  and the next line don't. History ("used to", "since
-  3.2", dates) belongs in git log. The exception is evidence about the
-  outside feeds (NUS, LTA, NUSMods): what was observed and when stays,
-  because nothing else records it.
+- Match the surrounding code, and write **no comments** (ADR 0018). Say
+  it with names and shape; put a deliberate odd choice in an ADR, how
+  something works or what a feed was seen to do (with when) in
+  internals.md, and a hack in an issue. History belongs in git log.
+  `pnpm lint` fails on any comment (`scripts/comments.mjs`; tool
+  directives, shebangs and migrations aside). The `/delete-comment` skill
+  clears comments a file brings in.
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map", "your stop"),
   not internals.

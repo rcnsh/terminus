@@ -1,8 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Notifications and location, each showing what it gives before asking: the
-/// leave-by alert itself, and your dot finding its nearest stop. Both optional.
 struct SetupAlertsStep: View {
     let model: OnboardingModel
     private let locator = Locator.shared
@@ -33,8 +31,6 @@ struct SetupAlertsStep: View {
                         "So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored. Without it, terminus assumes you're at your last class or at home."
                     ),
                     done: locator.allowed ? L("Allowed.") : nil,
-                    // A neutral word before the system's own question: App Review
-                    // rejects a button that answers it for you ("Allow location").
                     ask: locator.denied ? L("Turn on in Settings") : L("Continue"),
                     id: "alerts.location"
                 ) {
@@ -48,7 +44,6 @@ struct SetupAlertsStep: View {
                 }
             }
         }
-        // Back from Settings: what was turned on there shows.
         .onChange(of: scenePhase) { _, p in if p == .active { Task { await model.refreshAlerts() } } }
     }
 }
@@ -56,7 +51,6 @@ struct SetupAlertsStep: View {
 private struct SetupPermissionCard<Preview: View>: View {
     let title: String
     let text: String
-    /// What it says once allowed; nil while it can still be asked for.
     let done: String?
     let ask: String
     let id: String
@@ -92,7 +86,6 @@ private struct SetupPermissionCard<Preview: View>: View {
     }
 }
 
-/// The leave-by alert, as it shows on the phone: an example class.
 private struct SetupAlertPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -112,7 +105,6 @@ private struct SetupAlertPreview: View {
     }
 }
 
-/// A few roads, a route line, a stop, and you: a dashed walk from your dot to the stop.
 private struct SetupLocationPreview: View {
     var body: some View {
         Canvas { g, size in

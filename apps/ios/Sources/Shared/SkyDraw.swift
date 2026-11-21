@@ -1,18 +1,8 @@
 import SwiftUI
 
-/*
- * The sky's colours and drawing: Now's sky and horizon, the band over a
- * page, and the widgets' top. Pure drawing in a GraphicsContext, shared by
- * the app and its extensions. The web (sky.js, daylight.js) and Android
- * (NightSky.kt) draw the same scene from the same numbers.
- */
-
-/// The sky's looks, in the order of the day.
 enum SkyPhase: Sendable {
     case night, dawn, day, golden, dusk
 
-    /// The sky at `min` minutes past midnight: dawn from 6:30, day from 8:30,
-    /// the golden hour from 4:30 PM, dusk from 6:45 PM and night from 7:40 PM.
     static func at(minute min: Int) -> SkyPhase {
         if min < 390 || min >= 1180 { return .night }
         if min < 510 { return .dawn }
@@ -21,7 +11,6 @@ enum SkyPhase: Sendable {
         return .dusk
     }
 
-    /// By the phone's clock.
     static func at(_ date: Date) -> SkyPhase {
         let c = Calendar.current.dateComponents([.hour, .minute], from: date)
         return at(minute: (c.hour ?? 0) * 60 + (c.minute ?? 0))
@@ -30,9 +19,6 @@ enum SkyPhase: Sendable {
     var lights: Bool { self == .dusk || self == .night }
 }
 
-/// How far each layer lags as the page scrolls down by `s` points: the moon
-/// and the stars at half speed, fading out by 160; the far hills, the city
-/// and a low sun sinking behind the near hill, by 18 at most.
 struct Parallax {
     var sky: CGFloat, far: CGFloat, fade: CGFloat
     init(_ s: CGFloat) {
@@ -43,22 +29,17 @@ struct Parallax {
     }
 }
 
-/// Your bus on the horizon's road: its colour, how far off it is (0 at the
-/// stop, 1 a quarter of an hour away), and whether that's live. A timetable
-/// guess is drawn as an outline.
 struct RoadBus: Equatable {
     var color: UInt32
     var far: CGFloat
     var live: Bool
 }
 
-/// What's on the horizon's road: your stop's sign and your bus, or a shuttle going by.
 struct Road: Equatable {
     var stop = false
     var bus: RoadBus?
     var shuttle = true
 
-    /// Your bus coming up to your stop's sign, nearer the sooner it's due. On foot, an empty road.
     static func of(_ j: Journey, now: Date) -> Road {
         guard let b = j.bus else { return Road(shuttle: false) }
         let due = max(0, j.boardDate?.timeIntervalSince(now) ?? 0)
@@ -66,11 +47,9 @@ struct Road: Equatable {
     }
 }
 
-/// An hour's colours, in the page's theme.
 struct SkyPalette {
     let sky: [Color]
     let far: Color, tree: Color, city: Color
-    /// The words over it are light.
     let lightInk: Bool
     let sun: Color?
     let road: Color, post: Color, postInk: Color, window: Color
@@ -107,7 +86,6 @@ struct SkyPalette {
         }
     }
 
-    /// The sky from top to horizon, as a gradient.
     var gradient: LinearGradient {
         LinearGradient(
             stops: [
@@ -117,34 +95,23 @@ struct SkyPalette {
     }
 }
 
-// MARK: ink
-
-/// The colours words take where they are: the page's, or over the sky,
-/// where every colour (the late red and the warning amber too) reads at
-/// 4.5:1 over any hour, and cards on it are glass, a faint pane on a dark
-/// sky and frosted on a light one. The web's --k-* and Android's SkyInk.
 struct Inks {
     var ink: Color = .ink
     var muted: Color = .muted
     var accent: Color = .brand
-    /// Small words in the accent (a countdown, the trip's phase): stronger in the sky.
     var smallAccent: Color = .brand
     var good: Color = .good
     var late: Color = .bad
     var warn: Color = .warn
-    /// What small coloured words sit on in the sky; nil on the page.
     var chip: Color?
-    /// A card's surface, and its hairline.
     var pane: Color = .surface
     var raised: Color = .surface2
     var line: Color = .line
-    /// The page under it: words on something filled in the ink (a chosen chip).
     var paper: Color = .page
     var inSky = false
 
     static let page = Inks()
 
-    /// Over a sky whose words are light (`light`) or dark.
     static func sky(light: Bool) -> Inks {
         func c(_ v: UInt32) -> Color { Color(rgb: v) }
         if light {
@@ -160,16 +127,11 @@ struct Inks {
     }
 }
 
-// MARK: drawing
-
-/// How much bigger than its numbers Now's horizon is drawn: the bus and your stop are the picture.
 let roadScale: CGFloat = 1.25
-/// The strip at the foot of the sky where Now's horizon is drawn.
 let horizonHeight: CGFloat = 92 * roadScale
 
 let moonColour = Color(rgb: 0xFDE9C9)
 
-/// Across (0–1), down (0–1.05 of the room above the words), brightness and size. Fixed, so they never twinkle.
 private let stars: [(CGFloat, CGFloat, Double, CGFloat)] = [
     (0.06, 0.30, 0.7, 1.3), (0.17, 0.62, 0.5, 1.1), (0.29, 0.18, 0.8, 1.4),
     (0.38, 0.80, 0.4, 1.0), (0.47, 0.42, 0.6, 1.2), (0.55, 0.10, 0.5, 1.0),
@@ -178,9 +140,6 @@ private let stars: [(CGFloat, CGFloat, Double, CGFloat)] = [
     (0.58, 0.98, 0.3, 1.0), (0.97, 0.16, 0.45, 1.1),
 ]
 
-/// The hills along the horizon, more or less Kent Ridge: how far down the
-/// 92-unit strip each is, x units across. Fixed waves, so a wider screen
-/// shows more hills rather than stretched ones.
 private func farY(_ x: CGFloat) -> CGFloat { 30 + 6 * sin(x / 47 + 0.6) + 4 * sin(x / 19 + 2.1) }
 func nearY(_ x: CGFloat) -> CGFloat { 52 + 3 * sin(x / 61 + 1.3) + 1.5 * sin(x / 27) }
 
@@ -194,22 +153,14 @@ private func dip(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
     return best
 }
 
-/// Now's horizon, `w` units across: your stop's sign, left of the flag.
 func roadSign(_ w: CGFloat) -> CGFloat { min((w * 0.7).rounded(), (w * 0.74).rounded() - 7) }
-/// Your bus, `far` along the road to the sign.
 func roadBusX(_ sign: CGFloat, _ far: CGFloat) -> CGFloat { (sign - 44 - min(1, max(0, far)) * (sign - 56)).rounded() }
 func shuttleX(_ w: CGFloat) -> CGFloat { (w * 0.58).rounded() - 19 }
 
-/// The shuttle going by when nothing's coming: dark, with A1's red along the bottom.
 let shuttlePaint = Color(rgb: 0x24211E)
 let shuttleBand = Color(rgb: 0xD32F2F)
 
 enum SkyDraw {
-    /// Where the sky ends, from `top` down: the hills, a building or two, rain
-    /// trees, Singapore's flag by the road, and Marina Bay Sands far off, in
-    /// `p`'s colours, with the lights on after dark and the sun low behind the
-    /// hills at dawn, in the golden hour and at dusk. The near hill is `page`'s
-    /// colour, so the sky meets the ground. `far` lowers the far layer (points).
     static func horizon(
         _ g: inout GraphicsContext, size: CGSize, top: CGFloat, page: Color, p: SkyPalette, phase: SkyPhase, road: Road, far: CGFloat = 0,
         scale: CGFloat = 1, withSun: Bool = true
@@ -246,7 +197,6 @@ enum SkyDraw {
         let sx = roadSign(w)
         let flag = across(0.76)
 
-        // The far layer sinks behind the near hill as the page scrolls, kept to the strip.
         var back = g
         back.clip(to: Path(CGRect(x: 0, y: top, width: size.width, height: 92 * d)))
         back.translateBy(x: 0, y: far)
@@ -260,7 +210,6 @@ enum SkyDraw {
             let c = at(cx, cy)
             back.fill(Path(ellipseIn: CGRect(x: c.x - r * d, y: c.y - r * d, width: 2 * r * d, height: 2 * r * d)), with: .color(sun))
         }
-        // Marina Bay Sands, far off and pale: three towers and the SkyPark across them.
         let mbs = dip(max(across(0.8) - 40, flag + 30), min(across(0.8) + 40, w - 29))
         if mbs + 25 <= w {
             let city = farY(mbs) + 3
@@ -284,7 +233,6 @@ enum SkyDraw {
             let c = across(f)
             rainTree(&g, foot: at(c, nearY(c)), d: d, color: p.tree)
         }
-        // A Singapore flag on its pole by the road.
         let pole = nearY(flag)
         var staff = Path()
         staff.move(to: at(flag, pole + 2))
@@ -294,7 +242,6 @@ enum SkyDraw {
         let white = Color(rgb: 0xF2EFEB)
         box(flag + 0.6, pole - 24, 12, 4, red, in: &g)
         box(flag + 0.6, pole - 20, 12, 4, white, in: &g)
-        // The crescent and its five stars, which tell it from Indonesia's.
         dot(&g, at(flag + 3.2, pole - 22), 1.5 * d, white)
         dot(&g, at(flag + 3.8, pole - 22), 1.3 * d, red)
         for i in 0..<5 {
@@ -308,7 +255,6 @@ enum SkyDraw {
         g.stroke(lane, with: .color(p.road), style: StrokeStyle(lineWidth: 1.5 * d, dash: [6 * d, 6 * d]))
 
         if road.stop {
-            // The sign: a bus on it, as on a real one.
             var post = Path()
             post.move(to: at(sx, 70))
             post.addLine(to: at(sx, 44))
@@ -318,7 +264,6 @@ enum SkyDraw {
             box(sx - 2.5, 36.5, 5, 3, p.post, 0.5, in: &g)
         }
         if let bus = road.bus, road.stop {
-            // Your bus pulls up just short of the sign.
             shuttle(
                 &g, origin: at(roadBusX(sx, bus.far), 57), d: d, paint: Color(rgb: bus.color), band: bus.live ? .white.opacity(0.85) : nil,
                 glass: p.window)
@@ -340,7 +285,6 @@ enum SkyDraw {
         g.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)), with: .color(color))
     }
 
-    /// A rain tree standing at `foot`: a trunk forking low under a wide, flat crown.
     static func rainTree(_ g: inout GraphicsContext, foot: CGPoint, d: CGFloat, color: Color) {
         func at(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: foot.x + x * d, y: foot.y + y * d) }
         let trunk: [(CGFloat, CGFloat)] = [
@@ -355,11 +299,6 @@ enum SkyDraw {
         g.fill(p, with: .color(color))
     }
 
-    /// A single-decker from the side, heading right: 38 by 12 from `origin`,
-    /// standing on its wheels at 12. With no `band` it's an outline in
-    /// `paint` (a timetable guess, so it never passes for live). Window `dim`
-    /// (0 to 3) has its light off. Without `wheels`, the arches only: the
-    /// caller draws them turning (`shuttleWheel`).
     static func shuttle(
         _ g: inout GraphicsContext, origin o: CGPoint, d: CGFloat, paint: Color, band: Color?, glass: Color, dim: Int = -1,
         wheels: Bool = true
@@ -421,10 +360,8 @@ enum SkyDraw {
         }
     }
 
-    /// Across a `shuttle`, in its units, where its wheels are.
     static let shuttleWheels: [CGFloat] = [7.5, 26]
 
-    /// A shuttle's wheel at `c`; turned `turn` radians, a spoke on its hub shows it going round.
     static func shuttleWheel(_ g: inout GraphicsContext, centre c: CGPoint, d: CGFloat, turn: CGFloat? = nil) {
         let tyre = Color(rgb: 0x151311)
         dot(&g, c, 2.2 * d, tyre)
@@ -437,7 +374,6 @@ enum SkyDraw {
         }
     }
 
-    /// The stars across the room above the words, and the moon among them on the right.
     static func starsAndMoon(_ g: inout GraphicsContext, width: CGFloat, room: CGFloat, alpha: Double = 1, moonRoom: CGFloat? = nil) {
         for (x, y, a, r) in stars {
             dot(&g, CGPoint(x: width * x, y: room * 0.85 * y / 1.05 + 4), r, .white.opacity(a * alpha))
@@ -447,7 +383,6 @@ enum SkyDraw {
         crescent(&g, centre: CGPoint(x: width - 16 - r, y: mr * 0.48), r: r, alpha: alpha)
     }
 
-    /// A crescent moon: a disc with a slightly smaller one taken out up and to the right.
     static func crescent(_ g: inout GraphicsContext, centre c: CGPoint, r: CGFloat, alpha: Double = 1) {
         var layer = g
         layer.opacity = alpha

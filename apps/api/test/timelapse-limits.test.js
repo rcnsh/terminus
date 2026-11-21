@@ -1,10 +1,3 @@
-/**
- * The timelapse recorder's limits on NUS (docs/agents/feeds.md, rule 2's
- * one exception), in time: the back-off while the feed fails, the interval a
- * day keeps once it has a longer one, a service that closes mid-round, and
- * a whole recorded day that asks for live buses and nothing else.
- * timelapse.test.js has the rest; this file has its own small harness.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -18,7 +11,7 @@ import { inService } from '../src/answer/hours.ts';
 import { GRAPH } from '../src/answer/graph.ts';
 
 const sgt = (date, hhmm) => Date.parse(`${date}T${hhmm}:00+08:00`);
-const DATE = serviceDate(FROZEN_NOW); // Thursday 2026-08-27, 09:00 SGT
+const DATE = serviceDate(FROZEN_NOW);
 const RUNNING = Object.keys(GRAPH.routes)
   .filter((svc) => inService(GRAPH, svc, FROZEN_NOW))
   .sort();
@@ -28,7 +21,6 @@ function busOn(svc, m, plate = `PX${svc}1`) {
   return { vehplate: plate, lat: p.lat, lng: p.lon, speed: 25, direction: p.bearing ?? 0, loadInfo: { capacity: 88, ridership: 20 } };
 }
 
-/** [base] with every request's URL, body and time kept in `log`, failed ones too. */
 function logged(base) {
   const log = [];
   const fn = async (input, init = {}) => {
@@ -74,14 +66,11 @@ test('backoffOf: 1, then 2, 4 and 8 rounds, and never longer', () => {
 test('a feed down all morning is asked 60, 120, 240, then every 240 s', async () => {
   const h = harness({ fetchImpl: makeFetch({ fail: true }) });
   await start(h);
-  // Rounds at 0, 60, 180, 420 and 660 s.
   await runUntil(h, FROZEN_NOW + 12 * 60_000);
   const asks = busAsks(h);
-  // The first service fails and opens the breaker, so the rest of each
-  // round is skipped without asking: one request a round.
   assert.ok(
     asks.every((r) => r.body.route_code === RUNNING[0]),
-    asks.map((r) => r.body.route_code).join(),
+    `the first service opens the breaker, so one request a round: ${asks.map((r) => r.body.route_code).join()}`,
   );
   const gaps = asks.slice(1).map((r, i) => (r.at - asks[i].at) / 1000);
   assert.deepEqual(gaps, [60, 120, 240, 240]);
@@ -91,7 +80,6 @@ test('a day that began with a longer interval keeps it', async () => {
   const h = harness({ fetchImpl: makeFetch({ buses: { D2: [busOn('D2', 400)] } }) });
   await start(h);
   const inst = h.ns.instances.get(DATE);
-  // As if the day began on an earlier deploy with more routes.
   const longer = pollInterval() * 2;
   inst.write('meta', { ...inst.read('meta'), pollMs: longer });
   await h.ns.fireDue(FROZEN_NOW);
@@ -100,8 +88,6 @@ test('a day that began with a longer interval keeps it', async () => {
 });
 
 test('a service that closes partway through a round is not asked, and is counted closed', async () => {
-  // A round that begins at 22:59:50 on a Thursday: most services close at
-  // 23:00, so the later ones close before their turn.
   const from = sgt(DATE, '22:59') + 50_000;
   const list = Object.keys(GRAPH.routes)
     .filter((svc) => inService(GRAPH, svc, from))
@@ -120,8 +106,7 @@ test('a service that closes partway through a round is not asked, and is counted
   for (const svc of closed) assert.ok(!asked.includes(svc), `${svc} asked after it closed`);
   assert.equal(round.closed, closed.length);
   assert.equal(round.answered, list.length - closed.length);
-  // Every service it asked answered with no bus: an idle round, not a failing one.
-  assert.equal(inst.read('meta').failing, 0);
+  assert.equal(inst.read('meta').failing, 0, 'every service it asked answered with no bus: idle, not failing');
   await runUntil(h, from + 30_000);
   assert.equal(inst.read('meta').idle, 1, 'the closed ones do not stop it counting as idle');
 });

@@ -3,16 +3,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
-// The third-party code the website serves (apps/web/public/vendor/), copied
-// from npm by scripts/vendor/vendor-*.sh, which check each tarball's integrity and
-// write every file's SHA-256 to vendor/SHA256SUMS. A file added, removed or
-// changed without the scripts (by hand, by a bad merge, by a tool rewriting
-// it) fails here. The README is ours, written by hand, so it isn't listed.
-
 const VENDOR = new URL('../public/vendor/', import.meta.url);
 const NOT_LISTED = new Set(['README.md', 'SHA256SUMS']);
 
-/** Every file under vendor/, as a path relative to it, but the README and the list. */
 function vendoredFiles(dir = VENDOR, prefix = '') {
   const out = [];
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -23,7 +16,6 @@ function vendoredFiles(dir = VENDOR, prefix = '') {
   return out.sort();
 }
 
-/** SHA256SUMS as path → hash, in `sha256sum`'s format: "<hex>  <path>". */
 function parseSums(text) {
   const sums = new Map();
   for (const line of text.split('\n')) {
@@ -36,7 +28,6 @@ function parseSums(text) {
   return sums;
 }
 
-/** What's wrong between the files and the list: one line per file. */
 function mismatches(files, sums, hashOf) {
   const out = [];
   for (const f of files) {
@@ -103,9 +94,8 @@ test('each vendor script pins its versions with their npm integrity and records 
     assert.match(src, /^record /m, `${name} rewrites its SHA256SUMS entries`);
     assert.doesNotMatch(src, /\|\| true/, `${name} hides no failure`);
     assert.doesNotMatch(src, /npm pack/, `${name} downloads through fetch(), which checks the integrity`);
-    // The pinned versions are the folders vendored.
     for (const [, pkg, ver] of src.matchAll(/integrity (\S+) "\$\w+" ([0-9.]+) /g)) {
-      if (pkg === 'htm') continue; // inside preact's folder
+      if (pkg === 'htm') continue;
       const dir = pkg === 'preact' ? `preact-${ver}` : `${pkg}@${ver}`;
       assert.ok(fs.existsSync(new URL(`${dir}/`, VENDOR)), `${name}: ${dir} is vendored`);
     }

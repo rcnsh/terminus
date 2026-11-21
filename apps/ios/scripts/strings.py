@@ -11,7 +11,7 @@ anything else -> Localizable.strings).
                                 app's and the Mac app's translations (the same
                                 English, the same Chinese), sorted, and lists
                                 what's still missing, to translate by hand
-                                (the glossary is at the top of apps/api/src/i18n.ts)
+                                (the glossary is in docs/GLOSSARY.md, "In Chinese")
     scripts/strings.py --check  fails if any phrase has no Chinese, or two
                                 tables give one phrase different Chinese (CI)
 """
@@ -24,12 +24,7 @@ IOS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPS = os.path.dirname(IOS)
 ZH = os.path.join(IOS, 'Support', 'zh-Hans.lproj')
 
-# L("...") and its first argument, a plain string literal (escapes allowed);
-# LocalizedStringResource("...") too, the widgets' intent titles.
 CALL = re.compile(r'\b(?:L|LocalizedStringResource)\(\s*"((?:[^"\\]|\\.)*)"')
-# L(...) whose phrase isn't a literal (a variable, a ternary): the check
-# can't see it, so its Chinese could be missing unseen. Not allowed. Read
-# over whole files: swift-format puts a long phrase on the line after `L(`.
 DYNAMIC = re.compile(r'\bL\((?!\s*")(?!\s*_ en: String)')
 
 
@@ -105,7 +100,6 @@ def android():
         for m in re.finditer(r'<string name="([^"]+)"[^>]*>(.*?)</string>', s, re.S):
             v = html.unescape(m.group(2)).replace("\\'", "'").replace('\\"', '"').replace('\\n', '\n')
             nums = re.findall(r'%(\d)\$[sd]', v)
-            # Chinese that takes the blanks in another order keeps their numbers (%2$@ ... %1$@).
             if keep_order and nums != sorted(nums):
                 v = re.sub(r'%(\d)\$[sd]', r'%\1$@', v)
             else:
@@ -138,7 +132,6 @@ def main():
     for t in tables.values():
         have.update(t)
     missing = sorted(p for p in phrases if p not in have)
-    # One English phrase, one Chinese, whichever table it's in.
     clashes = sorted(p for p in have if len({t[p] for t in tables.values() if p in t}) > 1)
     if clashes:
         print('Different Chinese for the same phrase in different tables:')

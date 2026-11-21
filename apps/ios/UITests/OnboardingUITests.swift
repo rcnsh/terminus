@@ -1,17 +1,11 @@
 import XCTest
 
-/// The welcome screen, signing in, pairing and the setup, tapped through
-/// against the dev stub. Sign-in codes and approval links are read from the
-/// stub's log (TERMINUS_STUB_LOG, /tmp/stub-onboarding.log by default): the
-/// tests run on the same Mac.
 @MainActor
 final class OnboardingUITests: XCTestCase {
     nonisolated override func setUp() {
         continueAfterFailure = false
         stubPost("/__stub/reset")
     }
-
-    // MARK: welcome
 
     func testWelcomeInEveryLook() {
         for (lang, theme) in [("en", "light"), ("en", "dark"), ("zh", "light"), ("zh", "dark")] {
@@ -33,15 +27,11 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Get started"].waitForExistence(timeout: 5))
     }
 
-    // MARK: setup
-
-    /// Get started, then every step of the setup with something chosen on each, to the tabs.
     func testGetStartedThroughSetup() {
         let app = XCUIApplication.terminus(lang: "en", theme: "light")
         app.launch()
         start(app)
 
-        // Home: nothing chosen yet, so the big button is the skip.
         XCTAssertTrue(app.buttons["setup.later"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["home.PGP"].waitForExistence(timeout: 10))
         shot("setup-1-home-empty", app)
@@ -57,7 +47,6 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["home.UTR"].tap()
         app.buttons["setup.next"].tap()
 
-        // Classes: a link imported, and the class the stub can't place (off campus) given a stop.
         let link = app.textFields["classes.link"]
         XCTAssertTrue(link.waitForExistence(timeout: 5))
         shot("setup-2-classes-empty", app)
@@ -82,7 +71,6 @@ final class OnboardingUITests: XCTestCase {
         shot("setup-2-classes-week", app)
         app.buttons["setup.next"].tap()
 
-        // Pace.
         XCTAssertTrue(app.buttons["pace.fast"].waitForExistence(timeout: 5))
         shot("setup-3-pace", app)
         app.buttons["pace.fast"].tap()
@@ -90,7 +78,6 @@ final class OnboardingUITests: XCTestCase {
         app.segmentedControls["pace.clock"].buttons["18:36"].tap()
         app.switches["pace.busy"].switches.firstMatch.tap()
         shot("setup-3-pace-changed", app)
-        // Back and on again keeps what was chosen.
         app.buttons["setup.back"].tap()
         XCTAssertTrue(app.textFields["classes.link"].waitForExistence(timeout: 5))
         app.buttons["setup.next"].tap()
@@ -98,7 +85,6 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pace.fast"].isSelected)
         app.buttons["setup.next"].tap()
 
-        // Alerts: both asked for, each answered by the system's own question.
         XCTAssertTrue(app.buttons["setup.back"].waitForExistence(timeout: 5))
         shot("setup-4-alerts", app)
         allowSystemAlert(app, tapping: app.buttons["alerts.notify"])
@@ -109,7 +95,6 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
     }
 
-    /// The steps in dark and in Chinese, ending with Skip setup.
     func testSetupLooks() {
         for (lang, theme) in [("en", "dark"), ("zh", "light"), ("zh", "dark")] {
             let app = XCUIApplication.terminus(lang: lang, theme: theme)
@@ -141,7 +126,6 @@ final class OnboardingUITests: XCTestCase {
         }
     }
 
-    /// A link that isn't one: the server's words, in the step, and Continue stays put.
     func testImportFailureIsSaid() {
         let app = XCUIApplication.terminus(lang: "en")
         app.launch()
@@ -159,9 +143,6 @@ final class OnboardingUITests: XCTestCase {
         shot("setup-2-classes-error", app)
     }
 
-    // MARK: signing in
-
-    /// The test account, with the code from the email typed in: it's set up, so straight to the tabs.
     func testSignInWithTheCode() {
         let app = XCUIApplication.terminus(lang: "en", theme: "light")
         app.launch()
@@ -180,7 +161,6 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         let (code, _) = signInEmail(after: before)
         shot("signin-2-waiting", app)
-        // A wrong code first: the server says so, and the boxes stay.
         field.typeText(code == "222222" ? "333333" : "222222")
         XCTAssertTrue(app.staticTexts["signIn.message"].waitForExistence(timeout: 10))
         shot("signin-3-wrong-code", app)
@@ -189,7 +169,6 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
     }
 
-    /// A new address, approved from the email by its number: a new account, so the setup follows.
     func testSignInApprovedFromTheEmail() {
         let app = XCUIApplication.terminus(lang: "zh", theme: "dark")
         app.launch()
@@ -211,7 +190,6 @@ final class OnboardingUITests: XCTestCase {
         shot("signin-zh-dark-then-setup", app)
     }
 
-    /// "Use a different email" goes back to the address; Back to the welcome screen.
     func testDifferentEmailAndBack() {
         let app = XCUIApplication.terminus(lang: "en")
         app.launch()
@@ -228,8 +206,6 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["welcome.start"].waitForExistence(timeout: 5))
     }
 
-    // MARK: pairing
-
     func testPairWithACode() {
         let app = XCUIApplication.terminus(lang: "en", theme: "light")
         app.launch()
@@ -238,7 +214,6 @@ final class OnboardingUITests: XCTestCase {
         let field = app.textFields["pair.code"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         shot("pair-1-empty", app)
-        // A code nobody made: the server's words.
         field.typeText("zz-zz zz")
         XCTAssertTrue(app.staticTexts["pair.error"].waitForExistence(timeout: 10))
         shot("pair-2-wrong", app)
@@ -265,8 +240,6 @@ final class OnboardingUITests: XCTestCase {
         shot("signin-zh-dark-email", app)
     }
 
-    // MARK: helpers
-
     private func start(_ app: XCUIApplication) {
         let start = app.buttons["welcome.start"]
         XCTAssertTrue(start.waitForExistence(timeout: 10))
@@ -275,11 +248,9 @@ final class OnboardingUITests: XCTestCase {
 
     private func dismissKeyboard(_ app: XCUIApplication) {
         guard app.keyboards.count > 0 else { return }
-        // A drag down the page dismisses it.
         app.swipeDown()
     }
 
-    /// Taps `button`, then Allow on the system's question if it asks one.
     private func allowSystemAlert(_ app: XCUIApplication, tapping button: XCUIElement) {
         guard button.waitForExistence(timeout: 3) else { return }
         button.tap()
@@ -299,7 +270,6 @@ final class OnboardingUITests: XCTestCase {
         ((try? String(contentsOfFile: logPath, encoding: .utf8)) ?? "").components(separatedBy: "\n").count
     }
 
-    /// The code and approval link from the sign-in email the stub logged after line `after`.
     private func signInEmail(after: Int) -> (String, String) {
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
@@ -316,7 +286,6 @@ final class OnboardingUITests: XCTestCase {
         return ("", "")
     }
 
-    /// Chooses `number` on the page the email links to, as someone reading it on a laptop would.
     private func approve(link: String, number: String) {
         guard let url = URL(string: link),
             let r = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "r" })?.value
@@ -330,7 +299,6 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertEqual(send(req).status, 200)
     }
 
-    /// A new pairing code for the stub's test account, as Settings › Add a device makes one.
     private func freshPairCode() -> String {
         let (token, _) = stubSession()
         var req = URLRequest(url: URL(string: stub + "/api/me/pair-code")!)
@@ -344,7 +312,6 @@ final class OnboardingUITests: XCTestCase {
         return code
     }
 
-    /// A request to the stub, waited for.
     private func send(_ req: URLRequest) -> (data: Data?, status: Int) {
         final class Box: @unchecked Sendable {
             var data: Data?

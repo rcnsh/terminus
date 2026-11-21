@@ -1,13 +1,3 @@
-/**
- * Static campus data for /api/campus: every stop and route line (on real
- * coordinates, with each service's colour) for the map, and a flat search
- * index of places for the destination search, in every client.
- *
- * Built here, not in the clients, for the same reason /api/me/next words
- * its card: one place computes it, and the web app, Android and the Mac
- * draw it without redoing the work.
- */
-
 import venuesJson from '../../data/venues.json' with { type: 'json' };
 import roomsJson from '../../data/rooms.json' with { type: 'json' };
 import shapesJson from '../../data/shapes.json' with { type: 'json' };
@@ -20,13 +10,9 @@ import type { Graph, Stop } from '../types.ts';
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
 const ROOMS = roomsJson as { rooms: Record<string, { name: string; stop: string; m: number }> };
 
-/** A service's path along the roads (scripts/data/route_shapes.py). */
 export interface RouteShape {
-  /** The stop sequence it was routed for. */
   stops: string[];
-  /** [lon, lat] points, GeoJSON order. */
   line: [number, number][];
-  /** Metres along `line` at each of `stops`. */
   at: number[];
 }
 
@@ -41,13 +27,7 @@ export interface ProjectedStop {
   y: number;
   lat: number;
   lon: number;
-  /** The services that stop here, in route order. */
   services: string[];
-  /** False for a small number of real stops that sit far off the dense
-   *  campus cluster (P's excursion to Botanic Gardens MRT is the current
-   *  case). The map fits its bounds to core stops only: fitting these too
-   *  would shrink the other ~30 stops to illegibility. Off-core stops are
-   *  otherwise like any other. */
   core: boolean;
 }
 
@@ -55,14 +35,9 @@ export interface ProjectedRoute {
   seq: string[];
   loop: boolean;
   color: string;
-  /** The path to draw, [lon, lat] (GeoJSON LineString coordinates). */
   line: [number, number][];
-  /** True when `line` follows the roads; false when it is straight lines
-   *  between stops, because the stops changed since the shapes were made. */
   shaped: boolean;
-  /** How it runs, by its stops' plate names: "Loop from KR Bus Ter", "Kent Vale to PGP". */
   name: string;
-  /** The stops worth naming on its way (via.ts): "via AS 5, PGP, KR MRT"; null when it passes none. */
   via: string | null;
 }
 
@@ -72,35 +47,22 @@ export interface CampusMap {
   routes: Record<string, ProjectedRoute>;
 }
 
-/**
- * Each service's colour, as NUS paints it on the buses and stop signs (as
- * students know them; D1 and P chosen to stay distinct). Every client takes
- * these from /api/campus rather than keeping its own copy, and writes on each in
- * white or near-black, whichever contrasts more: every one reaches 4.5:1
- * with one of them (campus.test.js).
- */
 export const ROUTE_COLORS: Record<string, string> = {
-  A1: '#d32f2f', // red, deep enough for white text (5:1)
-  A2: '#d9a000', // yellow: too light for white (2.3:1), so it takes dark text
-  D1: '#ec4fa0', // pink
-  D2: '#8e44c9', // purple
-  K: '#2b9ad6', // light blue: dark text, which reads better on it than white
-  P: '#8a939c', // grey
-  R1: '#f57c1f', // orange
-  R2: '#34a853', // green
+  A1: '#d32f2f',
+  A2: '#d9a000',
+  D1: '#ec4fa0',
+  D2: '#8e44c9',
+  K: '#2b9ad6',
+  P: '#8a939c',
+  R1: '#f57c1f',
+  R2: '#34a853',
 };
 
-/** A service's colour, grey for one NUS hasn't painted. */
 export const routeColor = (svc: string): string => ROUTE_COLORS[svc] ?? '#8b98a6';
 
 const VIEW_W = 1000;
 const PAD = 60;
 const METERS_PER_DEG_LAT = 111_320;
-/** A stop beyond this many times the median distance-from-centroid is a real
- *  outlier, not just a stop on the edge of campus. Picked from the actual
- *  data: NUS's 30 core stops sit within ~1.1km of the campus centroid; the
- *  3 that ride P out to Botanic Gardens MRT sit at ~5.3km+ -- a clean gap,
- *  not a borderline call, so a factor of 3 never misclassifies either group. */
 const CORE_RADIUS_FACTOR = 3;
 
 function median(nums: number[]): number {
@@ -111,9 +73,6 @@ function median(nums: number[]): number {
 
 export function buildCampusMap(graph: Graph): CampusMap {
   const stops = graph.stops;
-  // Classify core vs. outlier from distance to the median center, in real
-  // meters -- independent of whatever bounding box ends up driving the
-  // projection scale below.
   const clat = median(stops.map((s) => s.lat));
   const clon = median(stops.map((s) => s.lon));
   const metersPerDegLonAll = METERS_PER_DEG_LAT * Math.cos((clat * Math.PI) / 180);
@@ -127,7 +86,7 @@ export function buildCampusMap(graph: Graph): CampusMap {
   const isCore = (code: string) => (distFromCenter.get(code) ?? 0) <= med * CORE_RADIUS_FACTOR;
 
   const core = stops.filter((s) => isCore(s.code));
-  const coreStops = core.length >= 2 ? core : stops; // never end up with an empty core
+  const coreStops = core.length >= 2 ? core : stops;
 
   const lats = coreStops.map((s) => s.lat);
   const lons = coreStops.map((s) => s.lon);
@@ -147,7 +106,6 @@ export function buildCampusMap(graph: Graph): CampusMap {
     const mY = (s.lat - minLat) * METERS_PER_DEG_LAT;
     return {
       x: Math.round((PAD + mX * scale) * 10) / 10,
-      // Latitude grows north; SVG y grows down. Flip so north is up.
       y: Math.round((PAD + (heightM - mY) * scale) * 10) / 10,
     };
   }
@@ -162,9 +120,6 @@ export function buildCampusMap(graph: Graph): CampusMap {
   }
   const byCode = new Map(stops.map((s) => [s.code, s]));
 
-  // No client draws x/y or the viewBox (they all map from lat/lon); they stay
-  // in the response, deprecated in the spec, so an older client or a script
-  // reading /api/campus doesn't break.
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
     return {
@@ -182,13 +137,9 @@ export function buildCampusMap(graph: Graph): CampusMap {
   });
 
   const idx = indexGraph(graph);
-  // A stop's plate name kept on one line, so a wrap falls between names, never inside "KR Bus Ter".
   const plate = (code: string | undefined) => (code ? (byCode.get(code)?.name ?? code).replaceAll(' ', '\u00a0') : '');
   const routes: Record<string, ProjectedRoute> = {};
   for (const [svc, seq] of Object.entries(graph.routes ?? {})) {
-    // graph.routes stores the raw scraped sequence, which for a loop repeats
-    // its first stop as its last -- drop that so the polyline does not draw
-    // a zero-length closing segment on top of a real one.
     const closes = seq.length > 2 && seq[0] === seq[seq.length - 1];
     const loop = graph.loops?.[svc] ?? closes;
     const shape = shapeFor(svc, seq);
@@ -214,18 +165,12 @@ export function buildCampusMap(graph: Graph): CampusMap {
   return { viewBox: `0 0 ${VIEW_W} ${viewH}`, stops: projected, routes };
 }
 
-/** The road shape for a service, when it was made for the stops it runs now. */
 export function shapeFor(svc: string, seq: string[]): RouteShape | null {
   const shape = SHAPES[svc];
   if (!shape || shape.stops.length !== seq.length || shape.stops.some((c, i) => c !== seq[i])) return null;
   return shape;
 }
 
-/**
- * A best-effort starter set, not a verified official directory. Kept
- * deliberately small: shipping a wrong campus building name to a real
- * student is worse than an unlabelled code they can still search directly.
- */
 const CURATED_LABELS: Record<string, string> = {
   UTOWN: 'University Town',
   PGP: "Prince George's Park Residences",
@@ -246,8 +191,6 @@ const CURATED_LABELS: Record<string, string> = {
   CAPT: 'College of Alice & Peter Tan',
 };
 
-/** Mechanical, low-risk patterns: a faculty/lecture-theatre prefix is public
- *  and unambiguous, unlike guessing a specific hall or lab's proper name. */
 const MECHANICAL_LABELS: Array<[RegExp, (m: RegExpExecArray) => string]> = [
   [/^LT(\d+[A-Z]?)$/, (m) => `Lecture Theatre ${m[1]}`],
   [/^COM([123])$/, (m) => `School of Computing (COM${m[1]})`],
@@ -271,24 +214,14 @@ export function friendlyLabel(code: string): string | null {
 export interface Destination {
   code: string;
   label: string;
-  /** Always a real stop code -- the client never resolves a venue itself. */
   stopCode: string;
   kind: 'stop' | 'landmark' | 'building' | 'room';
-  /** A landmark's every stop, best first; the router takes the quicker. */
   stops?: string[];
-  /** What a landmark is ("Food court"). */
   detail?: string;
-  /** Metres on foot from `stopCode` to here. Absent for a stop. */
   walkM?: number;
-  /** Other names people search for ("soc", "mrt"). Lower case. */
   aliases?: string[];
 }
 
-/**
- * Short names students actually type. Only ones that are certain: a wrong
- * nickname sends someone to the wrong side of campus. Keyed by destination
- * code, or by a building-code pattern for whole faculties.
- */
 const ALIASES: Record<string, string[]> = {
   'KR-MRT': ['mrt', 'kent ridge mrt'],
   UTOWN: ['utown', 'university town'],
@@ -313,12 +246,6 @@ function aliasesFor(code: string): string[] | undefined {
   return out.length ? out : undefined;
 }
 
-/**
- * What the destination search offers: every stop, every building with a
- * real name, and NUSMods' rooms. Not the import lookup table (venues.json):
- * that also holds the NUS map's internal ids, bare room numbers and codes no
- * one would type, which still resolve when typed but are never listed.
- */
 export function buildDestinations(graph: Graph): Destination[] {
   const stops = new Set(graph.stops.map((s) => s.code));
   const out: Destination[] = [];
@@ -340,14 +267,8 @@ export function buildDestinations(graph: Graph): Destination[] {
       aliases: lm.aliases,
     });
   }
-  // Several codes can name one building (CLB, CLIB): list it once. And a place
-  // already listed by its code and name (Kent Vale's stop, KV; LT3, a lecture
-  // theatre that is a building and a room) isn't listed again.
   const listed = new Set(out.map((d) => `${d.code}|${d.label}`));
   const named = new Set<string>();
-  // Shortest code first, then in code-unit order: not localeCompare, which
-  // starts ICU for a thousand comparisons. For the real venues it keeps the
-  // same code for each building (campus.test.js).
   for (const [code, v] of Object.entries(VENUES.venues).sort(([a], [b]) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0))) {
     const label = friendlyLabel(code);
     if (!label || !stops.has(v.stop) || named.has(`${label}|${v.stop}`) || listed.has(`${code}|${label}`)) continue;

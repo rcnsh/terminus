@@ -41,7 +41,6 @@ import sh.rcn.terminus.hour12
 import sh.rcn.terminus.id
 import sh.rcn.terminus.whereResults
 
-/** One choice from a list, as a dropdown field. `null` is the blank option. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun <T> Choice(
@@ -85,7 +84,6 @@ internal fun <T> Choice(
     }
 }
 
-/** "Stop, building or room": the same search as the main screen's. Calls [onPick] with the result; the caller stores its `stopCode`. */
 @Composable
 internal fun WherePicker(
     label: String,
@@ -108,7 +106,6 @@ internal fun WherePicker(
         modifier = Modifier.fillMaxWidth(),
     )
     if (picked != null) return
-    // [pinned] comes first in its own group, before anything is typed too.
     val (top, rest) = whereResults(destinations, pinned, query)
     if (top.isEmpty() && rest.isEmpty() && query.isBlank()) return
     Column {
@@ -129,7 +126,6 @@ internal fun WherePicker(
         }
         for ((i, d) in (top + rest).withIndex()) {
             if (i == top.size && top.isNotEmpty()) HorizontalDivider(thickness = 2.dp)
-            // [leaving] (a result's [id]), just picked, folds away before it goes from the list.
             key(d.id) {
                 FoldRow(shown = d.id != leaving, arriving = false) {
                     Column {
@@ -162,10 +158,6 @@ internal fun WherePicker(
     }
 }
 
-/**
- * A time of day as a button that opens a time picker in the app's theme. With no time set yet, the picker starts at [initial] (minutes past
- * midnight).
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TimeButton(
@@ -178,7 +170,6 @@ internal fun TimeButton(
     val h12 = hour12(LocalContext.current)
     var open by rememberSaveable { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = modifier) {
-        // No label (a pair of times with "and" between): just the time, with no space before it.
         Text(if (minutes == null) label else listOf(label, minuteClock(minutes, h12)).filter { it.isNotEmpty() }.joinToString(" "))
     }
     if (open) {
@@ -197,7 +188,6 @@ internal fun TimeButton(
                 }
             },
             dismissButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) } },
-            // AM/PM in the same tint as the selected hour (the default is the theme's unset tertiary, a pink).
             text = {
                 TimePicker(
                     state,
@@ -212,16 +202,13 @@ internal fun TimeButton(
     }
 }
 
-/** [min] minutes past midnight, "09:38" or, with [h12], "9:38 AM". */
 internal fun minuteClock(min: Int, h12: Boolean): String = if (h12) hhmm12(min) else hhmm(min)
 
-/** A setting's explanation, under it. */
 @Composable
 internal fun Hint(text: String, modifier: Modifier = Modifier) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier)
 }
 
-/** A section heading in setup and settings. */
 @Composable
 internal fun Heading(text: String, modifier: Modifier = Modifier) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = modifier.padding(top = 20.dp, bottom = 6.dp))

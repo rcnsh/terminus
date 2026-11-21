@@ -1,12 +1,3 @@
-// The sky over Now, the web app's first tab: by the hour, from dawn to
-// night, ending on a horizon of the campus's hills with a bus on the road.
-// It says what time of day it is, not what the weather is: no sun or clouds
-// over the words, only a low sun behind the hills at dawn, in the golden hour
-// and at dusk, and the stars and the moon at night. There is one sky for the
-// whole tab, so it stays as the chips switch: whatever the card area shows
-// ends on a <Horizon>, and the sky reaches down to it. The hour only picks
-// classes (app.css draws the colours). Android draws the same scene from the
-// same numbers (NightSky.kt).
 import {
   Icon,
   html,
@@ -26,11 +17,6 @@ import { STARS, starTop } from '../assets/stars.js';
 
 export { phaseAt } from './daylight.js';
 
-/**
- * A few stars and a crescent moon. Fixed, so they never twinkle into a
- * distraction. `from`: only the stars across from there (0–1), clear of a
- * title on the left.
- */
 export const NightSky = ({ from = 0 }) => html`
   <span class="night-sky" aria-hidden="true">
     ${STARS.map(([x, y, a], i) => x >= from && html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: starTop(y), opacity: a }}></span>`)}
@@ -38,77 +24,37 @@ export const NightSky = ({ from = 0 }) => html`
   </span>
 `;
 
-/**
- * What's up in the short room above the words: at night, the stars and the
- * moon; by day, nothing (the sun stays low, behind the hills). `band`: beside
- * a page's title instead (Settings' pages), the moon on the right, with stars
- * only there.
- */
 export const Celestial = ({ band = false }) => html`
   <span class="celestial" aria-hidden="true">
     <${NightSky} from=${band ? 0.5 : 0} />
   </span>
 `;
 
-/**
- * The slim band of sky at the top of Settings, Nearby and Stops (and of
- * Settings' pages): `children` (the title) with the moon beside it at night,
- * ending on the low hills, the same height on every tab.
- */
 export const Band = ({ children }) =>
   html`<div class="page-band"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
 
-/**
- * The hills along the horizon, more or less Kent Ridge: how far down the
- * strip (92 px) each is, `x` px across. Fixed waves in pixels, so a wider
- * page shows more hills rather than stretched ones.
- */
 const farY = (x) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
 export const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
-/** The lowest point of the far hills between `lo` and `hi` px, where the city shows above them. */
 const dip = (lo, hi) => {
   let best = lo;
   for (let x = lo; x <= hi; x += 2) if (farY(x) > farY(best)) best = x;
   return best;
 };
-/**
- * A hill along `y`, filled down to `foot`. The far hills stop a little under
- * the near one's ridge (at most 56.5) rather than at the strip's bottom: two
- * edges on one line blur together as the tab zooms in, and the far colour
- * showed in a line under the road.
- */
 const ridge = (w, y, foot = 92) => {
   let d = `M0 ${foot}L0 ${y(0).toFixed(1)}`;
   for (let x = 4; x < w + 4; x += 4) d += `L${x} ${y(x).toFixed(1)}`;
   return `${d}L${w} ${foot}Z`;
 };
 
-/** The flag's five stars, in a ring around its middle (px). */
 const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
 
-/**
- * The horizons on Now, for the sky to reach down to the one on screen. A
- * hidden tab stays drawn, and a card can hand over to the next, so there can
- * be more than one.
- */
 const grounds = { now: store([]) };
 
-/** A shuttle's headlight beam, ahead of it on the road. */
 export const BEAM = 'M38 9L60 6L60 13Z';
 
-/**
- * A single-decker from the side, heading right: 38 by 12, standing on the
- * road 1 below. The air-con on its roof, a row of windows, the driver's,
- * the door ahead of the front wheel, the windscreen raking back to the
- * headlight, a tail light, and the wheels in their arches. `fill` and `band`
- * are the classes of its paint and of the stripe along the bottom; window
- * `dim` (0 to 3) has its light off.
- */
 const BUS_BODY = 'M1.5 0H33Q36 0 36.9 2.6L38 8.5V10.5Q38 12 36.5 12H1.5Q0 12 0 10.5V1.5Q0 0 1.5 0Z';
 export const arch = (x) => `M${x - 3.2} 12A3.2 3.2 0 0 1 ${x + 3.2} 12Z`;
-/** Its wheels' centres across, on the axle line (y 12). */
 export const WHEELS = [7.5, 26];
-/** `wheels`: false for a bus that draws its own, turning (pull.js). */
 export const busParts = (fill, band, dim = -1, wheels = true) => html`
   <rect class=${`${fill} roof`} x="5" y="-1.6" width="14" height="1.9" rx="0.8" />
   <path class=${fill} d=${BUS_BODY} />
@@ -122,51 +68,29 @@ export const busParts = (fill, band, dim = -1, wheels = true) => html`
   ${wheels && WHEELS.map((x) => html`<path class="arch" d=${arch(x)} /><circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
 `;
 
-/** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
 export const ROAD_SCALE = 1.25;
-/** Where your stop's sign stands across a horizon `vw` wide (in its own numbers): left of the flag. */
 export const signX = (vw) => Math.min(Math.round(vw * 0.7), Math.round(vw * 0.74) - 7);
 
-/** The driving shuttles paused (the button on each road with them): all of them at once. */
 const paused = store(false);
 
 const PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
 const PLAY = '<path d="M7 4.5v15l12-7.5z"/>';
 
-/**
- * Pause or play the shuttles driving along the road: anything that moves
- * on its own for more than a few seconds can be stopped (WCAG 2.2.2).
- */
 export function DriveToggle() {
   const now = useStore(paused);
-  // With less motion asked for they stand anyway: nothing to pause.
   if (useMedia('(prefers-reduced-motion: reduce)')) return null;
   return html`<button type="button" class="drive-toggle" aria-pressed=${String(now)} aria-label=${t('Pause the moving buses')} onClick=${() => paused.set(!now)}>
     <${Icon} paths=${now ? PLAY : PAUSE} />
   </button>`;
 }
 
-/** How many shuttles may be driving along the page's horizons at once, and how many are. */
 const MAX_DRIVING = 2;
 let driving = 0;
-/** The colour the last one to pull out wore, so the next is another service. */
 let lastColour = null;
 
-/**
- * One side of the road on a horizon with `drive`: a shuttle in one of
- * `colours` drives across, left to right (or right to left, `back`, on the
- * far side, behind), at a speed of its own, then after a pause another
- * comes. One pulls out only while `go` (the road is on screen) and while
- * fewer than MAX_DRIVING are out across the page, so there are never three
- * at once. `first`: the one that starts the page, at once.
- */
 function Lane({ colours, vw, y, back = false, go, first = false }) {
-  // The shuttle on the road (its colour and speed), or null between them.
   const [trip, setTrip] = useState(null);
   const started = useRef(false);
-  // Counted out once at pulling out and back once when it's off the road (or
-  // the lane goes, even before its shuttle is drawn), however often `go`
-  // changes meanwhile.
   const out = useRef(false);
   const release = () => {
     if (!out.current) return;
@@ -206,34 +130,12 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
   </g>`;
 }
 
-/**
- * Where the sky ends: the hills, a building or two, rain trees, Singapore's
- * flag by the road, and Marina Bay Sands far off in the city. The near hill
- * is the page's own colour, so the sky meets the ground instead of fading.
- * On the road, either your stop's sign (`stop`) with your bus (`bus`:
- * `color`, `far` from 0 at the stop to 1 a quarter of an hour away, and
- * `live`) coming up to it, or a shuttle going by (`shuttle`). It's a
- * picture with no words: drawn this small, they were too hard to read, so
- * the card says them under it (journey.js RoadLine).
- * An estimate is an outline, never a filled bus, so it doesn't pass
- * for live. The sun is only ever low behind the hills: rising at dawn, low in
- * the golden hour, setting at dusk (app.css shows the hour's). `on`: 'now',
- * for Now's sky to reach down to it, or null for one in a sky of its own.
- * `low`: just the hills, the trees and the city, with no road and drawn at
- * its own size (the band at the top of Settings' pages); otherwise it's
- * drawn ROAD_SCALE times bigger. `drive`: the services' colours, for
- * shuttles that drive along the road instead of one standing (the website's
- * landing page, Lane); for anyone who asks for less motion one stands.
- * Now's is the low one in a short window, so the card's steps fit under it.
- */
 export function Horizon({ stop = false, bus = null, shuttle = true, drive = null, on = 'now', low: lowAsked = false }) {
   const short = useShort();
   const low = lowAsked || (on === 'now' && short);
   const box = useRef(null);
   const [w, setW] = useState(0);
-  // Shuttles only pull out while the road is on screen.
   const [seen, setSeen] = useState(false);
-  // Less motion, asked for even after the page opened: the shuttles stand.
   const still = useMedia('(prefers-reduced-motion: reduce)');
   const stopped = useStore(paused);
   const moving = drive?.length > 0 && !still;
@@ -241,8 +143,6 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
     const el = box.current;
     const ground = on && grounds[on];
     ground?.set([...ground.get(), el]);
-    // Measured now, not only when the observer first reports: the hills are
-    // then drawn before the first paint, not a frame after it.
     setW(Math.round(el.clientWidth));
     const sized = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
     sized.observe(el);
@@ -254,20 +154,15 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
       ground?.set(ground.get().filter((x) => x !== el));
     };
   }, []);
-  // The low one: the strip from the city's top to the near hill (y 6 to 58).
   const [top, h] = low ? [6, 52] : [0, 92];
   const k = low ? 1 : ROAD_SCALE;
-  // How wide the strip is in its own numbers: the page's width, scaled down.
   const vw = Math.round(w / k);
   const at = (f) => Math.round(vw * f);
-  // Your stop's sign left of the flag; the flag right of anything on the
-  // road; the city clear of the flag and the edge.
   const sx = stop ? signX(vw) : 0;
   const [b1, b2, flag] = [at(0.18), at(0.62), at(0.76)];
   const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, vw - 29));
   const city = farY(mbs) + 3;
   const pole = nearY(flag);
-  // The bus pulls up just short of the sign.
   const bx = bus ? Math.round(sx - 44 - Math.min(1, Math.max(0, bus.far)) * (sx - 56)) : 0;
   const passing = at(0.58) - 19;
   return html`
@@ -294,7 +189,6 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
         <rect class="lit dim" x=${b2 + 3} y=${farY(b2) - 8} width="3" height="3" />
         </g>
         ${[0.06, 0.45, 0.9].map((f) => {
-          // A rain tree: a trunk forking low under a wide, flat crown.
           const c = at(f);
           const g = nearY(c);
           return html`<g class="tree">
@@ -352,30 +246,18 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
   `;
 }
 
-/**
- * Where `el`'s top is down the page as laid out, whatever transform is on it
- * or above it: the sky is drawn by the tab and zooms with it as it fades in,
- * so it wants the places before the zoom.
- */
 function layoutTop(el) {
   let y = 0;
   for (let n = el; n; n = n.offsetParent) y += n.offsetTop;
   return y;
 }
 
-/**
- * Keeps the page's --sky-end at the bottom of `on`'s horizon, down the page,
- * and --sky-top at the top of the tab it's in (which draws the sky up from
- * there to the window's top, app.css), while it's on screen; kept as they
- * were while it's hidden or between one horizon and the next.
- */
 function useSkyEnd(on) {
   const els = useStore(grounds[on]);
   useLayoutEffect(() => {
     if (!els.length) return;
     const body = document.body;
     const place = () => {
-      // The one on screen: hidden ones (another tab, a closed page) have no size.
       const el = els.find((x) => x.offsetHeight);
       if (!el) return;
       body.style.setProperty('--sky-end', `${Math.round(layoutTop(el) + el.offsetHeight)}px`);
@@ -390,10 +272,6 @@ function useSkyEnd(on) {
   }, [els]);
 }
 
-/**
- * The hour of the sky by the device's clock, ticking each minute whatever
- * is on screen, so Settings' bands turn with it too (Android's skyPhase()).
- */
 export function useSkyPhase() {
   const minute = () => {
     const d = new Date();
@@ -417,21 +295,10 @@ export function useSkyPhase() {
   return phaseAt(m);
 }
 
-/**
- * Now's sky, for as long as Now's card area is there: from the window's
- * top down to the horizon on screen, behind Now's tab, in the hour's
- * `phase` (app.css, body.sky). It stays put while the card changes, until
- * the next horizon says where it ends. The header and the chips take the
- * sky's colours over it, and so does the browser's own bar while Now is the
- * tab on screen. Settings has the sky only in the band at the top of its
- * list and its pages (body.set-sky, from settings.js).
- */
 export function useNowSky(phase) {
   useLayoutEffect(() => {
     const body = document.body;
     const meta = Object.assign(document.createElement('meta'), { name: 'theme-color' });
-    // Map and Settings are drawn over a hidden Now (app.js sets on-map and
-    // on-settings); Settings has the sky only in its band.
     const tab = () => {
       const has = (c) => body.classList.contains(c);
       if (has('on-map') || (has('on-settings') && !has('set-sky'))) return meta.remove();
@@ -453,10 +320,6 @@ export function useNowSky(phase) {
     for (const p of PHASES) document.body.classList.toggle(`sky-${p}`, p === phase);
   }, [phase]);
   useSkyEnd('now');
-  // Depth as the page scrolls (daylight.js parallax): the moon, the stars and
-  // the far hills lag behind, as CSS variables on the page (app.css), so a
-  // card that comes in as the chips switch has them at once. Off for anyone
-  // who asks for less motion.
   useEffect(() => {
     const body = document.body;
     const VARS = ['--par-sky', '--par-far', '--par-fade'];
@@ -474,7 +337,6 @@ export function useNowSky(phase) {
     };
     apply();
     window.addEventListener('scroll', soon, { passive: true });
-    // Back from Map or Settings, at whatever the page's scroll is now.
     const tabs = new MutationObserver(soon);
     tabs.observe(body, { attributes: true, attributeFilter: ['class'] });
     return () => {

@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Main
-
 struct Main: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
@@ -16,7 +14,6 @@ struct Main: View {
             Header(model: model)
 
             if model.updateRequired {
-                // Refused as too old (426): nothing refreshes until it's updated.
                 Banner(icon: "exclamationmark.arrow.circlepath", tint: Color.bad, text: L("Update terminus to keep using it.")) {
                     if Updater.shared.running {
                         Button(L("Update")) { Updater.shared.checkNow() }
@@ -26,8 +23,6 @@ struct Main: View {
                 }
             } else if let v = model.update {
                 Banner(icon: "arrow.down.circle.fill", tint: .orange, text: L("terminus %@ is out", v)) {
-                    // Sparkle usually gets there first; this is for when it hasn't
-                    // yet, or can't (a copy outside Applications).
                     if Updater.shared.running {
                         Button(L("Update")) { Updater.shared.checkNow() }
                     } else {
@@ -50,8 +45,6 @@ struct Main: View {
                     Button(L("Allow")) { model.askLocation() }
                 }
             } else if model.locationDenied {
-                // Updating from an ad-hoc build (1.3.7 or earlier, or a local
-                // one) can lose the permission; say so instead of quietly guessing.
                 Banner(icon: "location.slash", tint: .secondary, text: L("Location is off, so times are based on your timetable")) {
                     Button(L("Settings")) { model.openLocationSettings() }
                 }
@@ -59,12 +52,10 @@ struct Main: View {
 
             Tabs(model: model)
 
-            // Fixed minimum height: switching tabs never resizes the popover.
             ZStack(alignment: .top) {
                 if model.showNearby {
                     NearbyList(stops: model.nearby).transition(.opacity.combined(with: .offset(y: 6)))
                 } else if model.target == .plan, let p = model.offlinePick(at: model.clock) {
-                    // Offline, the stale answer's details would mislead: how to the day plan's next thing.
                     OfflineDetail(pick: p).transition(.opacity.combined(with: .offset(y: 6)))
                 } else {
                     AnswerDetail(
@@ -78,12 +69,10 @@ struct Main: View {
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.showNearby)
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.target)
 
-            // Somewhere other than the plan: going there later today, as on the phone and the web.
             if !model.showNearby, model.target != .plan {
                 GoLater(model: model)
             }
 
-            // Today, on the plan's tab: the rest of the day under the next trip.
             if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty || model.removed != nil {
                 TodayList(
                     day: day, removed: model.removed, removedAt: model.removedAt, removedBefore: model.removedBefore,
@@ -97,7 +86,6 @@ struct Main: View {
                 Text("✓ " + L("Reported, thanks")).font(.caption).foregroundStyle(Color.good).padding(.horizontal, 4)
                     .announced(L("Reported, thanks"))
             } else if !model.showNearby, answer?.card != nil {
-                // One quiet line, as on the web and Android; it's in the gear menu too.
                 Button(L("Is this wrong?")) { model.startReport() }
                     .buttonStyle(.link)
                     .font(.caption)
@@ -110,7 +98,6 @@ struct Main: View {
     }
 }
 
-/// A line above the tabs that wants something done: an icon, what, and a small button.
 private struct Banner<Tint: ShapeStyle, Action: View>: View {
     let icon: String
     let tint: Tint
@@ -128,7 +115,6 @@ private struct Banner<Tint: ShapeStyle, Action: View>: View {
     }
 }
 
-/// "Go later today at…": a time, then a one-off trip there, planned like a class.
 struct GoLater: View {
     @Bindable var model: AppModel
     @State private var open = false
@@ -136,19 +122,15 @@ struct GoLater: View {
     @State private var message: String?
     @State private var sending = false
 
-    /// Campus time, which the picker shows and the trip is planned in.
     private nonisolated static var calendar: Calendar {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .campus
         return cal
     }
 
-    /// Half an hour from `now` on campus, on a five-minute mark; 23:55 at
-    /// the latest, as the trip is later today. `now` is on the server's clock.
     nonisolated static func soon(now: Date) -> Date {
         let cal = calendar
         let d = now.addingTimeInterval(30 * 60)
-        // Half an hour on is tomorrow: the last mark today, not 00:10 (which is today's, long gone).
         guard cal.isDate(d, inSameDayAs: now) else { return cal.date(bySettingHour: 23, minute: 55, second: 0, of: now) ?? now }
         let c = cal.dateComponents([.hour, .minute], from: d)
         let m = min(((c.hour ?? 0) * 60 + (c.minute ?? 0) + 4) / 5 * 5, 23 * 60 + 55)
@@ -193,16 +175,11 @@ struct GoLater: View {
     }
 }
 
-/// "Is this wrong?": a reason picked from a few, a note, or both, sent with
-/// the answer on screen. The server takes reports only from an account with
-/// an email, so without one it asks for one.
 struct ReportForm: View {
     @Bindable var model: AppModel
     @FocusState private var focused: Bool
     @Environment(\.openWindow) private var openWindow
 
-    /// The reasons, as /api/me/feedback takes them (REASONS in apps/api's feedback.ts)
-    /// and worded as the phone and the web offer them.
     static var reasons: [(id: String, label: String)] {
         [
             ("never-came", L("Bus never came")),
@@ -213,13 +190,11 @@ struct ReportForm: View {
         ]
     }
 
-    /// The chips for a card: the reasons the server says fit it (`card.reasons`), or all of them from a server that doesn't say.
     static func offered(_ fitting: [String]?) -> [(id: String, label: String)] {
         guard let fitting else { return reasons }
         return reasons.filter { fitting.contains($0.id) }
     }
 
-    /// Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent.
     private static let nusReasons: Set<String> = ["never-came", "times-off"]
     private var aboutNus: Bool { model.reportFromNus && (model.reportReason.map(Self.nusReasons.contains) ?? false) }
 
@@ -255,7 +230,6 @@ struct ReportForm: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L("What was wrong?")).font(.callout.weight(.semibold))
             Text(L("Pick one, or say what happened")).font(.caption).foregroundStyle(.secondary)
-            // One reason at most; picking it again lets it go.
             Flow(spacing: 6) {
                 ForEach(Self.offered(model.reportReasons), id: \.id) { r in
                     let on = model.reportReason == r.id

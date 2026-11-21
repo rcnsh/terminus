@@ -1,15 +1,8 @@
-/**
- * A pretend authenticator for the passkey tests: makes a real key pair and
- * answers create() and get() as a browser would, in the shapes
- * apps/web/public/admin/passkey.js sends.
- */
-
 const enc = new TextEncoder();
 export const b64url = (b) => Buffer.from(b).toString('base64url');
 const sha256 = async (b) => new Uint8Array(await crypto.subtle.digest('SHA-256', b));
 const cat = (...parts) => Uint8Array.from(parts.flatMap((p) => [...p]));
 
-/** r‖s as DER, the way authenticators sign with ES256. */
 function rawToDer(raw) {
   const int = (v) => {
     let i = 0;
@@ -22,7 +15,6 @@ function rawToDer(raw) {
   return cat([0x30, body.length], body);
 }
 
-/** `alg`: -7 (ES256) or -8 (Ed25519). `flags` overrides the authenticator data's flags. */
 export async function makeAuthenticator({ alg = -7, origin = 'https://bus.example.test', rpId = new URL(origin).hostname } = {}) {
   const params = alg === -7 ? { name: 'ECDSA', namedCurve: 'P-256' } : { name: 'Ed25519' };
   const pair = await crypto.subtle.generateKey(params, true, ['sign', 'verify']);

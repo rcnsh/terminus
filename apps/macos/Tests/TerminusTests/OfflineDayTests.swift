@@ -3,9 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// The offline fallback, against the cases the web and Android apps are
-/// checked against too (fixtures/offline-day.json), on the
-/// API's own /api/me/day golden.
 private let fixtures = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("../../fixtures").standardized
@@ -37,7 +34,6 @@ private func load() throws -> (Spec, DayPlan) {
     }
 }
 
-/// The plan's pick at an ISO time. (A #require can't hold another #require.)
 private func pick(_ day: DayPlan, at iso: String) throws -> OfflineDay.Pick {
     let now = try #require(parseISODate(iso))
     return try #require(OfflineDay.next(day, now: now))

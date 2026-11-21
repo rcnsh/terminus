@@ -12,12 +12,9 @@ import { conflictMarkers, problems } from '../scripts/deploy/predeploy.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-// The config is a function of cf's --mode: none (or "production") for the
-// stable site, "beta" for the beta.
 const STABLE = defineSite({ mode: undefined }).worker;
 const BETA = defineSite({ mode: 'beta' }).worker;
 
-/** The account resources a binding points at, as "kind:value" (empty for one that names none, like a secret). */
 function resources(b) {
   switch (b.type) {
     case 'd1':
@@ -58,48 +55,47 @@ test('the beta shares no database, store, bucket, limit, dataset, Worker or doma
   }
   const shared = [...everything(STABLE)].filter((r) => everything(BETA).has(r));
   assert.deepEqual(shared, [], 'nothing on one site is used by any binding on the other');
-  // Rate-limit counters are per namespace: two limits on one would count each other's requests.
   const rl = [STABLE, BETA].flatMap((w) =>
     Object.values(w.env)
       .filter((b) => b.type === 'rate-limit')
       .map((b) => b.namespace),
   );
-  assert.equal(new Set(rl).size, rl.length, `rate-limit namespaces repeat: ${rl.join(' ')}`);
-  // Each Durable Object binding is to this Worker's own class.
+  assert.equal(
+    new Set(rl).size,
+    rl.length,
+    `rate-limit namespaces repeat, so two limits would count each other's requests: ${rl.join(' ')}`,
+  );
   for (const w of [STABLE, BETA]) {
-    for (const b of Object.values(w.env).filter((b) => b.type === 'durable-object')) assert.equal(b.worker, w.name);
+    for (const b of Object.values(w.env).filter((b) => b.type === 'durable-object'))
+      assert.equal(b.worker, w.name, "each Durable Object binding is to this Worker's own class");
   }
 });
 
 test('each site answers on its address and its old one, which older apps still call', () => {
-  // A deploy detaches any custom domain missing here, so a lost line takes
-  // that address offline at once, with every app that still calls it.
-  assert.deepEqual(STABLE.domains, ['terminus.run', 'terminus.rcn.sh']);
-  assert.deepEqual(BETA.domains, ['beta.terminus.run', 'beta.terminus.rcn.sh']);
+  const detached = 'a deploy detaches any domain missing here, taking it offline with every app that still calls it';
+  assert.deepEqual(STABLE.domains, ['terminus.run', 'terminus.rcn.sh'], detached);
+  assert.deepEqual(BETA.domains, ['beta.terminus.run', 'beta.terminus.rcn.sh'], detached);
 });
 
 test('sign-in email comes from an address the email binding may send from', () => {
-  // Outside the list, every send fails, and nobody can sign in by email.
   for (const w of [STABLE, BETA]) {
     assert.equal(w.env.EMAIL_FROM.value, 'login@terminus.run');
-    assert.ok(w.env.EMAIL.allowedSenderAddresses.includes(w.env.EMAIL_FROM.value));
+    assert.ok(
+      w.env.EMAIL.allowedSenderAddresses.includes(w.env.EMAIL_FROM.value),
+      'outside the allowed senders every send fails, and nobody can sign in by email',
+    );
   }
 });
 
 test('the beta knows it is the beta, and writes its analytics to its own dataset', () => {
-  // origin.ts isBeta reads PUBLIC_ORIGIN; admin.ts queries AE_DATASET.
   assert.equal(STABLE.env.PUBLIC_ORIGIN, undefined);
-  assert.equal(BETA.env.PUBLIC_ORIGIN.value, `https://${BETA.domains[0]}`);
+  assert.equal(BETA.env.PUBLIC_ORIGIN.value, `https://${BETA.domains[0]}`, 'origin.ts isBeta reads PUBLIC_ORIGIN');
   assert.equal(STABLE.env.AE.name, 'terminus', 'admin.ts falls back to "terminus" without AE_DATASET');
-  assert.equal(BETA.env.AE_DATASET.value, BETA.env.AE.name);
-  // Only one site polls NUS for the timelapse (docs/agents/feeds.md).
+  assert.equal(BETA.env.AE_DATASET.value, BETA.env.AE.name, 'admin.ts queries AE_DATASET');
   assert.equal(STABLE.env.TIMELAPSE_ENABLED.value, 'on');
-  assert.equal(BETA.env.TIMELAPSE_ENABLED.value, 'off');
+  assert.equal(BETA.env.TIMELAPSE_ENABLED.value, 'off', 'only one site polls NUS for the timelapse');
 });
 
-// The code reads columns from recent migrations (magic_links.code_tries,
-// feedback.reply_to), so a deploy to a database without them answers 500.
-// The guard runs first, so a dirty tree or a failed check changes nothing.
 test('each deploy checks the tree, then applies its own D1 migrations, then deploys its own mode', () => {
   assert.equal(
     pkg.scripts.deploy,
@@ -111,7 +107,6 @@ test('each deploy checks the tree, then applies its own D1 migrations, then depl
   );
 });
 
-/** Bucket names a shell script names: `BUCKET=`/`BUCKETS=` values and `r2 object put "<bucket>/...`. */
 function bucketsIn(script) {
   const names = new Set();
   for (const m of script.matchAll(/\bBUCKETS?=("[^"]*"|'[^']*'|[^\s;]+)/g)) {
@@ -132,7 +127,6 @@ test('the release and map scripts upload to the buckets each site reads from', (
   assert.deepEqual([...bucketsIn(script('release/release-beta.sh'))], [beta], 'scripts/release/release-beta.sh uploads to the beta bucket');
   const tiles = script('map-tiles.sh');
   assert.deepEqual([...bucketsIn(tiles)].sort(), [stable, beta].sort(), 'scripts/map-tiles.sh knows both buckets');
-  // Its CHANNEL arms, where it still picks the bucket with a case.
   const arm = (channel) => tiles.split('\n').find((l) => new RegExp(`^\\s*${channel}\\)`).test(l));
   for (const [channel, want] of [
     ['stable', [stable]],
@@ -142,7 +136,6 @@ test('the release and map scripts upload to the buckets each site reads from', (
     const line = arm(channel);
     if (line) assert.deepEqual([...bucketsIn(line)].sort(), want.sort(), `CHANNEL=${channel} in scripts/map-tiles.sh`);
   }
-  // And no script names a bucket that is neither.
   const dir = new URL('../../../scripts/', import.meta.url);
   for (const f of readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.sh'))) {
     for (const b of bucketsIn(readFileSync(new URL(f, dir), 'utf8')))
@@ -175,7 +168,6 @@ test('a release takes APKs signed with the release key, as apksigner 36 and 37 p
   const links = JSON.parse(readFileSync(new URL('../../web/public/.well-known/assetlinks.json', import.meta.url), 'utf8'));
   const ours = links[0].target.sha256_cert_fingerprints[0].replaceAll(':', '').toLowerCase();
   const foreign = 'ab'.repeat(32);
-  /** apks_signed on one APK, with an apksigner that prints `out`: what it says and whether it passed. */
   const check = (out) => {
     const sdk = mkdtempSync(join(tmpdir(), 'sdk-'));
     try {
@@ -221,7 +213,6 @@ test('migrations are numbered 0001, 0002, ... with no gap or repeat', () => {
   });
 });
 
-/** The statements of a SQL file, comments removed. */
 const statements = (sql) =>
   sql
     .replace(/--[^\n]*/g, '')
@@ -229,7 +220,6 @@ const statements = (sql) =>
     .map((s) => s.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-/** What in a migration would break the Worker still running during a deploy (docs/internals.md, "additive"). */
 function notAdditive(sql) {
   return statements(sql).filter((s) => {
     if (/^DROP (TABLE|COLUMN|VIEW)\b/i.test(s)) return true;
@@ -239,8 +229,6 @@ function notAdditive(sql) {
   });
 }
 
-// Written before this rule: 0002 renamed a table, 0006 rebuilt five. Both
-// are applied and locked below, so they can't change.
 const BEFORE_THE_RULE = ['0002_public_beta.sql', '0006_anonymous.sql'];
 
 test('migrations only add, unless one says it is the contract step', () => {
@@ -259,19 +247,12 @@ test('migrations only add, unless one says it is the contract step', () => {
   for (const f of migrationFiles()) {
     if (BEFORE_THE_RULE.includes(f)) continue;
     const sql = readFileSync(new URL(f, MIGRATIONS), 'utf8');
-    // The third step of expand-backfill-contract drops what no deployed
-    // code reads any more; it says so with a `-- contract:` line.
     if (/^-- contract:/m.test(sql)) continue;
     assert.deepEqual(notAdditive(sql), [], `${f} would break the Worker still running while it deploys`);
   }
 });
 
 test('an applied migration is never edited', () => {
-  // D1 records a migration by name and never runs it again, so an edit
-  // would reach no database that has it. The lock lists each migration
-  // already applied; a new one isn't in it until it has been applied to
-  // both databases, when its line is appended:
-  //   shasum -a 256 <file> >> test/fixtures/migrations.sha256 (from apps/api/migrations)
   const lock = readFileSync(new URL('./fixtures/migrations.sha256', import.meta.url), 'utf8')
     .split('\n')
     .filter(Boolean)

@@ -57,13 +57,8 @@ import sh.rcn.terminus.DeviceKind
 import sh.rcn.terminus.R
 import sh.rcn.terminus.codeEdit
 
-/** The site as people type it: terminus.run, or the beta's. */
 private val SITE_HOST = BuildConfig.SITE.removePrefix("https://")
 
-/**
- * Pair with a code from a signed-in phone or the account page. The code is the screen: six split-flap tiles that fill as it's typed, like a
- * departure board settling. Where to find the code sits under it, and Pair at the foot, above the keyboard.
- */
 @Composable
 internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -90,9 +85,7 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
             BasicTextField(
                 value = code,
                 onValueChange = { v ->
-                    // As the sign-in code's boxes: a pasted "Your code is 7KQ2XM" gives 7KQ2XM.
                     val clean = codeEdit(code, v)
-                    // The sixth character, typed or pasted, pairs.
                     val full = clean.length == CODE_LENGTH && code.length < CODE_LENGTH
                     code = clean
                     if (full && !state.pairing) onPair(clean)
@@ -103,7 +96,6 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
                 modifier = Modifier.fillMaxWidth().padding(top = 28.dp).focusRequester(focus).semantics { contentDescription = label },
                 decorationBox = { field ->
                     Box {
-                        // The field itself is there for the keyboard and the cursor; the tiles show what's typed.
                         Box(Modifier.alpha(0f)) { field() }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally)) {
                             for (i in 0 until CODE_LENGTH) Flap(
@@ -145,7 +137,6 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
     }
 }
 
-/** One character of the code on a split-flap tile: dark in light and dark, as the boards are. */
 @Composable
 private fun Flap(char: Char?, current: Boolean, modifier: Modifier) {
     val shape = RoundedCornerShape(9.dp)
@@ -185,7 +176,6 @@ private val FLAP_BOTTOM = Color(0xFF1C1A17)
 private val SEAM = Color(0xFF0A0908)
 private val EMPTY = Color(0xFF151311)
 
-/** Where to find a code: on a phone, or on the web (which opens it). */
 @Composable
 private fun WhereCard(icon: Int, title: String, how: String, modifier: Modifier, onClick: (() -> Unit)? = null) {
     LinkTile(onClick, modifier) {

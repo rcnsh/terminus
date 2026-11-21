@@ -1,5 +1,3 @@
-/* terminus: shared tokens and components for every page. */
-
 :root {
   --bg: #fafaf9;
   --surface: #ffffff;
@@ -8,34 +6,25 @@
   --muted: #6b6560;
   --faint: #a8a29e;
   --line: #e7e5e2;
-  /* Borders a control needs to be seen by: at least 3:1 on the surface. */
   --line-strong: #8a847e;
   --accent: #c2410c;
   --accent-bright: #fb923c;
   --accent-soft: #fff1e6;
-  /* A chosen row or card in a list pane: the accent at about 12%, in either theme (it follows --accent). */
   --chosen: color-mix(in srgb, var(--accent) 12%, transparent);
   --good: #15803d;
   --warn: #b45309;
   --bad: #b91c1c;
-  /* Small text on a tinted chip needs a darker shade to reach 4.5:1. */
   --good-ink: #166534;
   --warn-ink: #92400e;
   --bad-ink: #991b1b;
-  /* A skeleton's bars (.sk) and the highlight that sweeps them: a little darker than the page. */
   --sk: #ebe8e4;
   --sk-hi: #f8f6f3;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(28 25 23 / 0.04), 0 8px 24px -12px rgb(28 25 23 / 0.12);
-  /* Chinese falls back to each system's own CJK face. */
   --font: "Inter", "Inter Fallback", "Inter Fallback Roboto", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  /* Never Inter while Space Grotesk loads: it's wider, so a heading would
-     wrap one way, then the other (fonts.css). */
   --display: "Space Grotesk", "Space Grotesk Fallback", "Space Grotesk Fallback Roboto", var(--font);
   color-scheme: light;
 }
-/* Dark: the device's own dark mode, unless this browser chose light in
-   Settings › Appearance (theme.js sets data-theme); or dark, chosen there. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0f0e0d;
@@ -86,12 +75,8 @@
 }
 
 * { box-sizing: border-box; }
-/* Component display rules (.nav-links, .row...) must never beat [hidden]. */
 [hidden] { display: none !important; }
-/* For screen readers only: there to be heard, not seen. */
 .sr-only { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-/* A status line stays on the page empty, so a screen reader hears its words
-   when they come; empty, it takes no room. */
 [role="status"]:empty { margin: 0; padding: 0; border: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -100,23 +85,17 @@ body {
   color: var(--ink);
   font: 1rem/1.55 var(--font);
   -webkit-font-smoothing: antialiased;
-  /* Footer sits at the bottom even on short pages. */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 body > * { width: 100%; }
 body > main { flex: 1; }
-/* A page its script draws (the account page) keeps the footer out of view
-   until it has, so the footer isn't seen and then pushed away. */
 body > main#root:empty { min-height: 100vh; }
 a { color: var(--accent); text-underline-offset: 3px; }
 img, svg { display: block; }
-/* Chinese: hidden until i18n.js has translated the page, so English never flashes. */
 .i18n-wait body { visibility: hidden; }
-/* Letter-spacing and capitals are for Latin text. */
 :lang(zh) .eyebrow { letter-spacing: 0.02em; }
-/* Headings wrap into even lines, and paragraphs don't end on one word alone. */
 h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.15; margin: 0; text-wrap: balance; }
 p { margin: 0; text-wrap: pretty; }
 
@@ -126,14 +105,12 @@ p { margin: 0; text-wrap: pretty; }
 .nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding-top: 18px; padding-bottom: 18px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand img { width: 30px; height: 30px; border-radius: 8px; }
-/* The mark's dark tile vanishes on a dark page without an edge. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .brand img { box-shadow: 0 0 0 1px var(--line-strong); }
 }
 :root[data-theme="dark"] .brand img { box-shadow: 0 0 0 1px var(--line-strong); }
 .wordmark { font: 600 1.25rem/1 var(--display); letter-spacing: -0.03em; }
 .wordmark b { font-weight: inherit; color: var(--accent); }
-/* Only on beta.terminus.run, added by the Worker (apps/api/src/site/site.ts). */
 .beta-tag { margin-left: 6px; padding: 2px 6px; border-radius: 999px; background: var(--accent); color: var(--bg); font: 600 0.7rem/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle; }
 .nav-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; font-size: 0.95rem; }
 .nav-links a { color: var(--muted); text-decoration: none; padding: 10px 2px; }
@@ -146,8 +123,6 @@ p { margin: 0; text-wrap: pretty; }
 .nav-menu svg { transition: transform 0.15s ease; }
 .nav-menu[aria-expanded="true"] svg { transform: rotate(180deg); }
 
-/* The header's download menu. A native popover: Esc and clicking outside
-   close it. landing.js places it under its button. */
 .dl-menu {
   position: fixed; inset: auto; margin: 0; width: 280px; padding: 6px;
   background: var(--surface); color: var(--ink);
@@ -186,13 +161,11 @@ p { margin: 0; text-wrap: pretty; }
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: none; }
 .btn.accent { background: var(--accent-bright); color: #1c1917; }
-/* Quieter than accent, for a second way in that shouldn't outshine the page's own button. */
 .btn.soft { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
 .btn.small { padding: 8px 12px; font-size: 0.875rem; border-radius: 9px; min-height: 40px; }
 .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
 .link-btn { background: none; border: 0; padding: 8px 2px; color: var(--accent); font: inherit; cursor: pointer; }
-/* Inside a sentence it's a word like any other: no gap before the full stop. */
 p .link-btn { padding: 0; }
 
 input, select, textarea {
@@ -202,10 +175,7 @@ input, select, textarea {
 input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-visible, a:focus-visible, button:focus-visible {
   outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px;
 }
-/* A heading or row given the focus by a script (a page opened, a sheet) isn't
-   a control: it's read out, with no ring round it. */
 [tabindex="-1"]:focus { outline: none; }
-/* A hint in a box reads like any muted words: at 4.5:1, not the browser's paler grey. */
 ::placeholder { color: var(--muted); opacity: 1; }
 label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0 6px; }
 
@@ -217,7 +187,6 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 .hint { color: var(--muted); font-size: 0.9rem; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); display: inline-block; }
 
-/* The widget mock: what the phone widget and menu bar show. */
 .widget {
   border-radius: 22px; padding: 18px 20px; background: var(--surface);
   border: 1px solid var(--line); box-shadow: var(--shadow); min-width: 0;
@@ -232,11 +201,9 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 .ontime.tight { background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn-ink); }
 .ontime.late { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad-ink); }
 .beta { display: inline-block; margin-left: 8px; padding: 3px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; letter-spacing: 0.06em; vertical-align: 1px; }
-/* When the badge wraps under the eyebrow on a phone, it starts at the left edge with a gap above it. */
 .eyebrow:has(> .beta) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .eyebrow > .beta { margin-left: 0; }
 
-/* The widget preview's states, mirroring the apps. */
 .widget.old .big, .widget.old .detail { color: var(--muted); }
 .widget .note { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
 
@@ -244,9 +211,6 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   .nav-links .hide-sm { display: none; }
   .nav-links { gap: 8px; }
 }
-/* Open the app and Sign in (or Account, which is wider) both stay in the
-   header on a phone, so the name beside the mark gives way to them (screen
-   readers still hear it): sooner on the beta, whose tag takes room too. */
 @media (max-width: 420px) {
   .nav:has(.open-app) .wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
@@ -254,7 +218,6 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   .nav:has(.open-app):has(.beta-tag) .wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
-/* More contrast, when the device asks for it: the grey words and the lines darker (lighter in the dark). */
 @media (prefers-contrast: more) {
   :root { --muted: #45403c; --faint: #6b6560; --line: #8a847e; --line-strong: #5c5650; }
   :root[data-theme="dark"] { --muted: #d6d3d1; --faint: #a39d97; --line: #6f6964; --line-strong: #a39d97; }
@@ -263,12 +226,6 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   :root:not([data-theme="light"]) { --muted: #d6d3d1; --faint: #a39d97; --line: #6f6964; --line-strong: #a39d97; }
 }
 
-/* A skeleton: where words are still to come, a bar in the line box they'll
-   take (.sk-line, as tall as the line, so nothing moves when they land), or
-   a shape sized by what it stands for (.sk on a badge, a dot). A soft
-   highlight sweeps each one, moved by transform alone so it costs no
-   repaint. They fade in after 150 ms, so a quick answer never flashes. A
-   badge's shape (.svc-tag) takes the skeleton's colour over its own. */
 .sk-line { display: inline-flex; align-items: center; vertical-align: top; height: 1lh; max-width: 100%; }
 .sk-line > .sk { display: block; flex: none; width: 100%; height: 0.72em; }
 .sk { border-radius: 6px; }
@@ -279,7 +236,6 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   animation: sk-sweep 1.6s ease-in-out infinite;
 }
 .sk.round { border-radius: 999px; }
-/* On the sky the bars are its ink, faint, so the hour's colours show through. */
 .sky-head, .sky-panel { --sk: color-mix(in srgb, var(--ink) 13%, transparent); --sk-hi: color-mix(in srgb, var(--ink) 26%, transparent); }
 @keyframes sk-in { from { opacity: 0; } }
 @keyframes sk-sweep { to { transform: translateX(100%); } }
@@ -290,15 +246,10 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   .btn:hover { transform: none; }
 }
 
-/* A pairing code on six split-flap tiles, like a departure board's: dark in
-   light and dark, as the boards are (pair.js, Settings › Devices). */
 .flaps { display: flex; justify-content: center; gap: 7px; margin: 14px 0 6px; }
 .flap { display: grid; place-items: center; flex: 1; max-width: 56px; aspect-ratio: 0.72; border-radius: 9px; border: 1px solid #34302b; color: #f2efeb; font: 800 2rem/1 ui-monospace, "SF Mono", monospace; background: linear-gradient(#24211e 49%, #0a0908 49% 51%, #1c1a17 51%); }
 .flap.empty { background: #151311; }
 
-/* The livery over a card (account/livery.js, the pair page's): the stripes edge
-   to edge, the mark on them with a ring of the card round it. Sign-in lays it
-   across the page instead (account.css). */
 .livery { position: relative; height: 180px; margin: -32px -28px 18px; overflow: hidden; border-radius: var(--radius) var(--radius) 0 0; }
 .livery svg { display: block; width: 100%; height: 100%; }
 .livery-accent { fill: var(--accent-bright); }

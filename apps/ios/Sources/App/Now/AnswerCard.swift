@@ -8,8 +8,6 @@ extension NowShows {
     }
 }
 
-// MARK: the top, in the sky
-
 struct NowHead: View {
     let shows: NowShows
     let now: Date
@@ -54,8 +52,6 @@ struct NowHead: View {
     }
 }
 
-/// The card as VoiceOver says it: the server's words as sentences, then how
-/// long until it's time to go, to the minute.
 func spokenCard(_ a: NextAnswer, now: Date, withLead: Bool) -> String {
     var parts: [String] = []
     if withLead {
@@ -66,8 +62,6 @@ func spokenCard(_ a: NextAnswer, now: Date, withLead: Bool) -> String {
     return parts.joined(separator: " ")
 }
 
-/// What comes before any answer: NUS's live times being down, where the
-/// trip is, the ride's progress on the bus, and a warning.
 struct CardLead: View {
     let answer: NextAnswer
     let now: Date
@@ -81,7 +75,6 @@ struct CardLead: View {
     }
 }
 
-/// Words in a colour of their own; in the sky, on its chip, so they read over any hour.
 struct ToneText: View {
     let text: String
     let color: Color
@@ -98,7 +91,6 @@ struct ToneText: View {
     }
 }
 
-/// A pill whose tint, in the sky, sits on the sky's chip so it reads over any hour.
 struct SkyPill: View {
     let text: String
     let color: Color
@@ -114,8 +106,6 @@ struct SkyPill: View {
     }
 }
 
-/// On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3
-/// stops to go"; on a trip that changes, the second bus under it.
 struct RideProgress: View {
     let ride: Ride
     let now: Date
@@ -133,7 +123,6 @@ struct RideProgress: View {
     }
 }
 
-/// "On time" in green, "tight" in amber (the one that must not look calm), late in red.
 func timingColor(_ status: String?, _ inks: Inks) -> Color {
     switch status {
     case "late": inks.late
@@ -142,11 +131,7 @@ func timingColor(_ status: String?, _ inks: Inks) -> Color {
     }
 }
 
-/// The plain card: where to, the bus and its time, the countdown, the detail
-/// and when to leave. Past its staleAt the times are dimmed and "Updating
-/// times…" stands in until the refresh lands.
 struct PlainCard: View {
-    /// Follows the text size the phone is set to, as the rest of the card does.
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let old: Bool
@@ -156,7 +141,6 @@ struct PlainCard: View {
     var body: some View {
         let a = answer
         CardLead(answer: a, now: now)
-        // The server's ("Going to KR MRT", "Long gap · Home").
         if let head = a.plainHeading { Text(head).foregroundStyle(inks.muted).accessibilityAddTraits(.isHeader) }
         VStack(alignment: .leading, spacing: 4) {
             Text(a.title)
@@ -171,7 +155,6 @@ struct PlainCard: View {
                     Text(leave).font(.headline).padding(.top, 4)
                 }
             }
-            // On the bus, `detail` already says when it arrives: the pill would say it again, as on the Mac.
             let pills = [
                 (!old && a.card?.ride == nil ? a.timing?.text : nil).map { ($0, timingColor(a.timing?.status, inks)) },
                 a.crowdText.map { ($0, inks.muted) },
@@ -187,7 +170,6 @@ struct PlainCard: View {
     }
 }
 
-/// Ticks from `departsAt`, so the app never shows an old "4 min".
 struct Countdown: View {
     let answer: NextAnswer
     let now: Date
@@ -201,16 +183,10 @@ struct Countdown: View {
         }
     }
 
-    /// `left` seconds to the departure, in words. Gone: a minute ago from the
-    /// moment it leaves, never "0 min ago", as the web, Android and the Mac say it.
     nonisolated static func words(left: Int) -> String { JourneyText.leaves(left: left) }
 }
 
-/// A class: when to leave is the headline, the bus that goes with it and
-/// when it gets you there underneath, and the next bus as the "or go now"
-/// option. Every arrival sits next to the bus it belongs to.
 struct ClassPlan: View {
-    /// Follows the text size the phone is set to, as the rest of the card does.
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     let now: Date
@@ -225,7 +201,6 @@ struct ClassPlan: View {
             Text(a.leaveHeadline(now: now) ?? "")
                 .font(.system(size: 30 * scale, weight: .bold))
                 .foregroundStyle(late ? inks.late : inks.ink)
-            // Counting down to leaving; at the stop the headline is the bus and its time.
             let left = a.phase == "waiting" ? 0 : Int(at.timeIntervalSince(now))
             if left > 0 {
                 Text(JourneyText.inTime(left))
@@ -248,7 +223,6 @@ struct ClassPlan: View {
     }
 }
 
-/// Offline, the next thing on the day plan kept for it, on glass in the sky.
 struct OfflinePlan: View {
     let lines: OfflineDay.Lines
     @Environment(\.inks) private var inks
@@ -268,9 +242,7 @@ struct OfflinePlan: View {
     }
 }
 
-/// The day's done, or there's nothing to catch: the label large, and what's next on a card of its own.
 struct DayDoneHead: View {
-    /// Follows the text size the phone is set to, as the rest of the card does.
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let answer: NextAnswer
     @Environment(\.inks) private var inks
@@ -290,9 +262,7 @@ struct DayDoneHead: View {
     }
 }
 
-/// The next class on a card of its own: when in the accent, what, then where. Glass over the sky.
 struct UpcomingCard: View {
-    /// Follows the text size the phone is set to, as the rest of the card does.
     @ScaledMetric(relativeTo: .title) private var scale: CGFloat = 1
     let upcoming: Upcoming
     @Environment(\.inks) private var inks
@@ -311,8 +281,6 @@ struct UpcomingCard: View {
         .accessibilityElement(children: .combine)
     }
 }
-
-// MARK: the rest, on the ground
 
 struct NowGround: View {
     let shows: NowShows
@@ -346,7 +314,6 @@ struct NowGround: View {
     }
 }
 
-/// Under a day that's done: your favourites to plan a trip to instead, or where to look.
 struct DayDoneGround: View {
     let answer: NextAnswer
     @Environment(AppModel.self) private var app
@@ -389,9 +356,6 @@ struct DayDoneGround: View {
     }
 }
 
-/// "‹ Earlier bus" and "Later bus ›" under the bus they change, and "Best
-/// bus" between them once you've moved, as the website has them. A button
-/// with no bus that way is greyed out, not hidden, so the row keeps its place.
 struct StepBus: View {
     let answer: NextAnswer
     @Environment(AppModel.self) private var app
@@ -427,10 +391,6 @@ struct StepBus: View {
     }
 }
 
-/// The server's buttons (plans only: "Not going", "Not on campus today",
-/// "Back on campus", undo), in its order: the first one filled, the rest
-/// outlined. Directions to the stop when there's one to walk to. Then
-/// anything terminus has to suggest.
 struct CardActions: View {
     let answer: NextAnswer
     @Environment(AppModel.self) private var app
@@ -438,11 +398,8 @@ struct CardActions: View {
 
     var body: some View {
         let busy = app.signalling
-        // Undo once: on Today's row while it's there for this trip, not on the card as well.
         let undoing = app.removed.flatMap { $0.failed ? nil : $0.item.key }
         let all = (answer.card?.actions ?? []).filter { !($0.id == "reset" && $0.trip == undoing) }
-        // "Not going" and "Not on campus today" are the same no, for this
-        // class and for the whole day: with both, they share one menu.
         let both = all.filter { $0.id == "skipped" || $0.id == "away" }
         let skips = both.count > 1 ? both : []
         let actions = all.filter { a in !skips.contains(a) }
@@ -495,8 +452,6 @@ struct CardActions: View {
     }
 }
 
-/// The skips behind one button: ⋯ beside directions, or `label` on its own.
-/// Each choice says underneath how much it skips.
 struct SkipMenu: View {
     let skips: [CardAction]
     let label: String?
@@ -518,7 +473,6 @@ struct SkipMenu: View {
             if let label {
                 Text(label)
             } else {
-                // A circle as tall as the directions beside it.
                 Image(systemName: "ellipsis").frame(width: 16, height: 48)
             }
         }
@@ -529,7 +483,6 @@ struct SkipMenu: View {
     }
 }
 
-/// Buttons in a row, wrapping onto the next when they don't fit.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 

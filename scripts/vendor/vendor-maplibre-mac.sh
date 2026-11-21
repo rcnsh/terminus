@@ -1,25 +1,4 @@
 #!/bin/sh
-# MapLibre Native for the Mac app's map, built from source and kept in the
-# repo as apps/macos/Vendor/MapLibre.xcframework.zip (a SwiftPM binaryTarget).
-# No macOS build is published, so this builds one: Metal, on the main run
-# loop, arm64 and x86_64. It takes a while the first time (Bazel).
-#
-#   scripts/vendor/vendor-maplibre-mac.sh [checkout]
-#
-# The checkout defaults to ~/dev/vendor/maplibre-native, cloned if missing.
-# Bazel gives an iOS-style flat framework; macOS wants the versioned layout
-# (Versions/A, Resources/Info.plist) to sign and load it, so it's repacked.
-#
-# The tag is pinned to its commit (the peeled ios-v6.31.0^{}), so a tag
-# moved upstream stops the build instead of changing what's built. A new
-# version: change both, from
-#   git ls-remote https://github.com/maplibre/maplibre-native 'refs/tags/<tag>^{}'
-#
-# Afterwards it writes the zip's SHA-256 to MapLibre.xcframework.zip.sha256,
-# which CI checks, and prints the tag, commit and hash for the commit
-# message. The build isn't reproducible (Bazel, Xcode and the toolchain all
-# leave their mark), so the hash records what was committed; it doesn't
-# prove which source it came from. The tag and commit say that.
 set -eu
 cd "$(dirname "$0")/../.."
 TAG=ios-v6.31.0
@@ -38,18 +17,12 @@ if [ "$HEAD" != "$COMMIT" ]; then
   echo "$SRC is at $HEAD, not $TAG's pinned commit $COMMIT: the tag moved, or the checkout is elsewhere" >&2
   exit 1
 fi
-# Untracked and changed files count, in the submodules too: only the tag's own source is built.
 DIRTY=$(git -C "$SRC" status --porcelain --ignore-submodules=none)
 if [ -n "$DIRTY" ]; then
   echo "$SRC has local changes; build from a clean checkout of $TAG:" >&2
   printf '%s\n' "$DIRTY" >&2
   exit 1
 fi
-# MapLibre's Bazel files link -lpng -ljpeg -lwebp on macOS, though this
-# build decodes images with Apple's frameworks and calls none of them: the
-# linker then found Homebrew's copies and recorded them, so the framework
-# wouldn't load on a Mac without Homebrew. -dead_strip_dylibs drops a
-# library nothing uses; the check below fails the build if any remain.
 (cd "$SRC" && bazelisk build //platform/macos:MapLibre.dynamic \
   --//:renderer=metal --//platform/macos:macos_loop=cfrunloop --compilation_mode=opt \
   --linkopt=-Wl,-dead_strip_dylibs)
@@ -64,8 +37,6 @@ FW="$XC/$SLICE/MapLibre.framework"
 mkdir -p "$FW/Versions/A/Resources"
 cp "$WORK/in/MapLibre.xcframework/Info.plist" "$XC/Info.plist"
 cp "$FLAT/MapLibre" "$FW/Versions/A/MapLibre"
-# Only macOS's own libraries (/System, /usr/lib) and @rpath: anything else
-# isn't on the Mac the app runs on.
 FOREIGN=$(otool -L "$FW/Versions/A/MapLibre" | grep -v ':$' | awk '{ print $1 }' | grep -vE '^(/System/|/usr/lib/|@rpath/)' || true)
 if [ -n "$FOREIGN" ]; then
   echo "MapLibre links libraries a Mac doesn't have:" >&2
@@ -74,7 +45,6 @@ if [ -n "$FOREIGN" ]; then
 fi
 cp -R "$FLAT/Headers" "$FLAT/Modules" "$FW/Versions/A/"
 cp "$FLAT/Info.plist" "$FW/Versions/A/Resources/Info.plist"
-# Only the languages the app speaks; MapLibre's strings are its accessibility labels.
 for l in Base en zh-Hans; do
   [ -d "$FLAT/$l.lproj" ] && cp -R "$FLAT/$l.lproj" "$FW/Versions/A/Resources/"
 done
@@ -85,7 +55,6 @@ for f in MapLibre Headers Modules Resources; do ln -s "Versions/Current/$f" "$FW
 
 mkdir -p "$(dirname "$OUT")"
 rm -f "$OUT"
-# --keepParent: the zip holds MapLibre.xcframework/, as SwiftPM expects; ditto keeps the symlinks.
 xattr -cr "$XC"
 ditto -c -k --norsrc --noextattr --noqtn --keepParent "$XC" "$OUT"
 (cd "$(dirname "$OUT")" && shasum -a 256 "$(basename "$OUT")" > "$(basename "$OUT").sha256")

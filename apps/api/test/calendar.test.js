@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { BUNDLED, calendarThrough, importedClassRuns, sgtDate, termDay, termsForImport } from '../src/timetable/calendar.ts';
 import { DEFAULT_PROFILE, classesOn, needsReimport, nextClass, reimportReason, restDetail } from '../src/timetable/profile.ts';
 
-// Fixed calendar, so these tests don't move when data/calendar.json refreshes.
 const CAL = {
   semesters: [
     { acadYear: '2026/2027', semester: 1, start: '2026-08-10' },
@@ -16,7 +15,6 @@ const CAL = {
   ],
 };
 
-/** 10:00 SGT on a YYYY-MM-DD date. */
 const at = (date) => Date.parse(`${date}T02:00:00Z`);
 const SEM1 = { acadYear: '2026/2027', semester: 1 };
 
@@ -51,7 +49,6 @@ test('public holidays are flagged', () => {
 });
 
 test("NUS's own days off count as holidays, whatever the calendar lists", () => {
-  // Well-Being Day: in data/nus-days.json, not in CAL or MOM's list.
   assert.equal(termDay(at('2026-10-09'), CAL).holiday, 'Well-Being Day');
   assert.equal(termDay(at('2026-10-09'), { ...CAL, holidays: [] }).holiday, 'Well-Being Day');
   assert.equal(importedClassRuns(undefined, SEM1, at('2026-10-09'), CAL), false);
@@ -83,7 +80,6 @@ test('date-range lessons run on their own dates and interval', () => {
   assert.equal(importedClassRuns(range, SEM1, at('2026-09-15'), CAL), false, 'after the range');
 });
 
-// The profile helpers use the bundled calendar; AY2026/27 sem 1 starts 10 Aug.
 const lab = (day) => ({
   day,
   arriveByMin: 600,
@@ -116,7 +112,6 @@ test('classesOn: imported classes follow the calendar, manual ones run every wee
 
 test('the rest message skips recess to the first real class', () => {
   const p = { ...structuredClone(DEFAULT_PROFILE), trips: [lab(1)], term: SEM1 };
-  // Friday of recess week, evening.
   const n = nextClass(p, Date.parse('2026-09-25T12:00:00Z'));
   assert.equal(n.daysAhead, 3, 'Monday of week 7, not the recess Monday');
   assert.equal(restDetail(p, Date.parse('2026-09-18T12:00:00Z')), 'Next: CS2030 Lab, Mon 28 Sep 10:00');
@@ -145,7 +140,7 @@ test('import picks the coming semester: a sem-1 link in July means August', () =
 });
 
 test('past the end of the calendar data, imported classes run every week (fail open)', () => {
-  const far = at('2031-03-03'); // a Monday
+  const far = at('2031-03-03');
   assert.equal(termDay(far).kind, 'unknown');
   assert.equal(importedClassRuns([3], { acadYear: '2030/2031', semester: 2 }, far), true, 'a term the data has never heard of');
   assert.equal(importedClassRuns([3], null, far), true, 'no term recorded');
@@ -153,18 +148,15 @@ test('past the end of the calendar data, imported classes run every week (fail o
 });
 
 test('past the end of the calendar data, a semester the data says has finished stays finished', () => {
-  // The bundled calendar is good to late August 2027; a Monday after that.
   const after = at('2027-08-30');
   assert.equal(termDay(after, CAL).kind, 'unknown');
   assert.equal(importedClassRuns([3], { acadYear: '2026/2027', semester: 2 }, after, CAL), false, 'Sem 2 2026/27 ended in May');
-  // A date-range lesson runs on its own dates, covered by the calendar or not.
   const range = { start: '2027-06-21', end: '2027-07-26' };
   assert.equal(importedClassRuns(range, null, after, CAL), false, 'after its last date');
   assert.equal(importedClassRuns({ start: '2027-08-30', end: '2027-09-27' }, null, after, CAL), true, 'on its first date');
 });
 
 test('a calendar without the next academic year stops before its first semester would start', () => {
-  // Through Special Term II 2026/27 (ends 2 August 2027), but not semester 1 2027/28.
   const data = {
     semesters: [
       ...CAL.semesters,
@@ -176,16 +168,17 @@ test('a calendar without the next academic year stops before its first semester 
   assert.equal(calendarThrough(data), '2027-08-08', 'not three weeks of grace into the new year');
   assert.equal(termDay(at('2027-08-04'), data).kind, 'vacation');
   assert.equal(termDay(at('2027-08-09'), data).kind, 'unknown', 'week 1 of the new year: classes run, not hidden as vacation');
-  // A sem-1 link then is for the new year, with the old one to fall back on.
   assert.deepEqual(termsForImport(1, at('2027-08-12'), data), [{ acadYear: '2027/2028', semester: 1 }, SEM1]);
 });
 
-test('the real calendar covers the next 60 days, and warns from 120', (t) => {
-  // Fails when data/calendar.json has not been refreshed: the moment to
-  // redeploy. scrape.yml refreshes it weekly from NUSMods, so from 120 days
-  // out the test output says so first, without failing the scrape.
+test('the real calendar covers the next 60 days, and warns from 120 so a stale one is redeployed before it fails', (t) => {
   const now = Date.now();
-  for (let d = 0; d <= 60; d += 5) assert.notEqual(termDay(now + d * 86_400_000).kind, 'unknown');
+  for (let d = 0; d <= 60; d += 5)
+    assert.notEqual(
+      termDay(now + d * 86_400_000).kind,
+      'unknown',
+      'data/calendar.json is out of date: redeploy once scrape.yml has refreshed it',
+    );
   const left = (Date.parse(`${calendarThrough(BUNDLED)}T00:00:00+08:00`) - now) / 86_400_000;
   if (left < 120)
     t.diagnostic(
@@ -193,9 +186,7 @@ test('the real calendar covers the next 60 days, and warns from 120', (t) => {
     );
 });
 
-test('the real calendar lists the semester after today’s', () => {
-  // So the next semester's first day is never "unknown". With the real
-  // clock: it fails once the last listed semester starts.
+test('the real calendar lists the semester after today’s, so its first day is never unknown', () => {
   const today = sgtDate(Date.now());
   const started = BUNDLED.semesters.filter((s) => s.start <= today);
   assert.ok(started.length > 0, `nothing in data/calendar.json has started by ${today}`);
@@ -222,6 +213,5 @@ test('the real calendar: semesters in order, none listed twice, each 1 to 4', ()
 
 test('the rest message says why today is empty', () => {
   const p = { ...structuredClone(DEFAULT_PROFILE), trips: [lab(1)], term: SEM1 };
-  // Recess Monday evening: next class is week 7.
   assert.match(restDetail(p, Date.parse('2026-09-21T12:00:00Z')), /^Recess week · Next: /);
 });

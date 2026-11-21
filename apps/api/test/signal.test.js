@@ -1,15 +1,10 @@
-/**
- * A signal applied to the day (applySignal in signal.ts): the record "On it",
- * "Missed it", "Not going", "I'm there" or undo leaves for the trip, and the
- * outcome it records. No HTTP, no feed: the plate lookup is passed in.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { applySignal } from '../src/answer/signal.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/answer/graph.ts';
 
-const NOW = Date.parse('2026-08-27T01:00:00Z'); // Thursday 09:00 in Singapore
+const NOW = Date.parse('2026-08-27T01:00:00Z');
 const iso = (min) => new Date(NOW + min * 60_000).toISOString().replace('.000Z', 'Z');
 const THU = 4;
 const KEY = `${THU}:600:UTOWN`;
@@ -21,7 +16,6 @@ const PROFILE = {
   once: [],
 };
 
-/** The D2 from PGP to UTown in 4 minutes, as the answer planned before the signal. */
 const leave = {
   at: iso(1),
   estimated: false,
@@ -37,7 +31,6 @@ const planned = (over = {}, trip = {}) => ({
   trip: { key: KEY, phase: 'waiting', ...trip },
 });
 
-/** A plate lookup that records what it was asked. */
 function plates(answer = {}) {
   const asked = [];
   const lookup = async (stopCode, svc, graph) => {
@@ -139,14 +132,12 @@ test('undo forgets the record and the outcome; a trip home records none', async 
   assert.deepEqual(asked, [], 'only "On it" reads the feed');
 });
 
-/** K from PGP to Kent Vale, then P on to UTown: the second bus as a leave-by's change. */
 const TO_KV = { svc: 'P', from: 'Kent Vale', fromCode: 'KV', stop: 'Kent Vale', stopCode: 'KV', rideS: 600, estimated: false };
 
 test('"On it" on a trip that changes buses moves the second bus by how late the first is', async () => {
   const two = planned({
     leave: { ...leave, svc: 'K', arrive: iso(30), change: { ...TO_KV, reach: iso(12), board: iso(15) } },
   });
-  // The K pulling in 6 minutes after the plan's: at Kent Vale at 18, after the planned P at 15.
   const { asked, lookup } = plates({ plate: 'PA1234A', at: iso(10) });
   const { rec, outcome } = await applySignal('boarded', KEY, two, null, PROFILE, NOW, lookup);
   assert.deepEqual(asked, [{ stopCode: 'PGP', svc: 'K', graph: GRAPH }]);
@@ -183,7 +174,6 @@ test('after the planned bus of a trip that changes buses has left, "On it" is ab
     alightCode: 'KV',
     change: { svc: 'P', stop: 'Kent Vale', board: iso(12), arrive: iso(25), stopCode: 'KV', rideS: 600, alightCode: 'UTOWN' },
   };
-  // The answer has moved on to the next D2; the K that pulls in is 3½ minutes after the plan's.
   const { asked, lookup } = plates({ plate: 'PA1234A', at: iso(4) });
   const { rec } = await applySignal('boarded', KEY, planned({}, { plan }), null, PROFILE, NOW, lookup);
   assert.deepEqual(asked, [{ stopCode: 'PGP', svc: 'K', graph: GRAPH }]);

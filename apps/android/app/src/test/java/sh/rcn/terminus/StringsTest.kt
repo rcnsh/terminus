@@ -5,7 +5,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Chinese: every string has a translation, with the same blanks to fill, and none is left in the code. */
 class StringsTest {
     private val en = TestStrings.read("values")
     private val zh = TestStrings.read("values-zh")
@@ -25,11 +24,9 @@ class StringsTest {
 
     @Test
     fun theChineseIsChinese() {
-        // Chinese characters, or at least Chinese punctuation ("%1$s：%2$s").
         for ((k, v) in zh) assertTrue("$k: $v", v.any { it in '\u4e00'..'\u9fff' || it in '\u3000'..'\u303f' || it in '\uff00'..'\uffef' })
     }
 
-    /** A Text("Some words") in the code would be English in Chinese too. */
     @Test
     fun noTextIsWrittenInTheCode() {
         val allowed = setOf("terminus", "English", "中文")
@@ -49,7 +46,6 @@ class StringsTest {
         assertEquals(emptyList<String>(), found)
     }
 
-    /** The card colours the time inside "Leave in 6 min" (JourneyText.leaveTime): it must be there to find, in both languages. */
     @Test
     fun theLeaveTimeIsInsideTheHeadline() {
         for (strings in listOf(en, zh)) {

@@ -1,7 +1,3 @@
-/**
- * The edge-cache fetch (src/feeds/edgecache.ts) on its own: what a failure around
- * the fetch does to the answer and to the key's memo.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -36,7 +32,6 @@ test('a cache that cannot be written to still serves the good answer, and marks 
   assert.equal(await cache.match('https://terminus.internal/test-failed/A'), undefined, 'no failure memo for a good answer');
 });
 
-/** A promise and the function that settles it, for holding a cache write. */
 function gate() {
   let open;
   const p = new Promise((r) => (open = r));

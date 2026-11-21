@@ -1,16 +1,3 @@
-// The README's pictures, light and dark, from the real site run by the dev
-// stub: the web app's Now and Stops tabs, and the map with D2 picked. The
-// banner and the clients picture are composed from them afterwards:
-// node docs/readme/hero.mjs, then sh docs/readme/features.sh
-//
-//   node docs/readme/shots.mjs
-//
-// Needs Playwright (PLAYWRIGHT=/path/to/node_modules/playwright if it isn't
-// resolvable from here), a Chromium (CHROME, or Playwright's own) and cwebp.
-// Take it in Singapore's daytime: the stub's class is 50 minutes from the real
-// clock, and the app's sky follows the real hour. At any other hour, give the
-// stub and the pages one morning to be in, as the store screenshots have:
-//   STUB_NOW=2026-10-09T01:26:00Z CLASS_IN_MIN=34 SHOTS_AT=2026-10-09T01:26:00Z node docs/readme/shots.mjs
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,7 +10,6 @@ const { chromium } = await import(process.env.PLAYWRIGHT ? join(process.env.PLAY
 const origin = 'http://localhost:8787';
 const email = 'you@u.nus.edu';
 
-// The stub prints the sign-in code on its stdout.
 const stub = spawn(process.execPath, ['scripts/dev/dev-stub.mjs'], { cwd: join(root, 'apps/api'), stdio: ['ignore', 'pipe', 'inherit'] });
 let out = '';
 stub.stdout.on('data', (d) => {
@@ -41,16 +27,12 @@ try {
   await signIn.request.post(`${origin}/api/auth/login`, { data: { email } });
   await until(() => /sign-in code: (\w{6})/.test(out));
   await signIn.request.post(`${origin}/api/auth/code`, { data: { email, code: out.match(/sign-in code: (\w{6})/)[1] } });
-  // Two stops pinned, as in the store's screenshots, so the Stops tab shows a board.
   const profile = await (await signIn.request.get(`${origin}/api/me/profile`)).json();
   await signIn.request.put(`${origin}/api/me/profile`, { data: { ...profile, pinnedStops: ['COM3', 'PGP'] } });
   const storageState = await signIn.storageState();
   await signIn.close();
 
   const webp = (png, to) => execFileSync('cwebp', ['-quiet', '-q', '85', png, '-o', join(root, to)]);
-  // A phone's own room under the tab bar (its home indicator's), which a
-  // browser window doesn't have: without it the frames the README draws
-  // round the bar's first and last labels off at their corners.
   const HOME_ROOM =
     '.tabbar { padding-bottom: 28px; min-height: calc(var(--tabbar-h) + 28px); } body.app { padding-bottom: calc(var(--tabbar-h) + 28px); }';
   const shoot = async (scheme, { name, to, viewport, path, signedIn = true, at = process.env.SHOTS_AT, act, clip, css }) => {

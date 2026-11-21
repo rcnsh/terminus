@@ -37,10 +37,6 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.RequestLog
 import sh.rcn.terminus.Servers
 
-/**
- * The developer menu, at the bottom of About: the server (only with more than one built in, so in a debug build with the dev stub), then
- * what the app is doing, to copy into a bug report, then its recent requests.
- */
 @Composable
 internal fun DeveloperGroups() {
     if (Servers.choices.size > 1) ServerGroup()
@@ -48,7 +44,6 @@ internal fun DeveloperGroups() {
     RequestsGroup()
 }
 
-/** Moving to or from the dev stub sets the sign-in aside, so the app starts again. */
 @Composable
 private fun ServerGroup() {
     val ctx = LocalContext.current
@@ -90,14 +85,12 @@ private fun ServerRow(host: String, sub: String?, selected: Boolean, onClick: ()
     }
 }
 
-/** A new session (the dev stub's, or the site's again): start from the top, as after signing in. */
 private fun android.content.Context.restartApp() {
     val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
     startActivity(android.content.Intent.makeRestartActivityTask(launch.component))
     Runtime.getRuntime().exit(0)
 }
 
-/** Now, every second, so "ago" keeps up while the page is open. */
 @Composable
 private fun ticking(): Long {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -110,13 +103,11 @@ private fun ticking(): Long {
     return now
 }
 
-/** The state alerts, push and the widgets depend on, each in a row; then Copy diagnostics. Read again after each request. */
 @Composable
 private fun DiagnosticsGroup() {
     val ctx = LocalContext.current
     val changes by RequestLog.changes.collectAsState()
     val now = ticking()
-    // Off the main thread: the last answer is parsed, and the session read through the Keystore.
     val facts by produceState<Diagnostics.Facts?>(null, changes) { value = withContext(Dispatchers.IO) { Diagnostics.facts(ctx) } }
     val f = facts ?: return
     val allowed = stringResource(R.string.diag_allowed)
@@ -173,7 +164,6 @@ private fun DiagnosticsGroup() {
             {
                 val text = Diagnostics.report(f, RequestLog.entries(), System.currentTimeMillis())
                 ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("terminus diagnostics", text))
-                // Android 13 and later show their own note of what was copied.
                 if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
                     android.widget.Toast.makeText(ctx, L.s(R.string.diag_copied), android.widget.Toast.LENGTH_SHORT).show()
                 }
@@ -183,7 +173,6 @@ private fun DiagnosticsGroup() {
     }
 }
 
-/** The last requests to our server, newest first: what was asked, and how it went. */
 @Composable
 private fun RequestsGroup() {
     val changes by RequestLog.changes.collectAsState()
@@ -204,7 +193,6 @@ private fun RequestsGroup() {
     }
 }
 
-/** A row that does something at once (no page opens, so no ›): its name in the accent, and a line under it. */
 @Composable
 private fun ActionRow(title: String, onClick: () -> Unit, sub: String) {
     Column(
@@ -218,7 +206,6 @@ private fun ActionRow(title: String, onClick: () -> Unit, sub: String) {
     }
 }
 
-/** A name (and a line under it), and its value on the right, in grey; [warn] in the error colour. */
 @Composable
 private fun ValueRow(label: String, value: String, sub: String? = null, warn: Boolean = false) {
     FieldRow(label, sub = sub) {
@@ -230,12 +217,10 @@ private fun ValueRow(label: String, value: String, sub: String? = null, warn: Bo
     }
 }
 
-/** On screen, the phone's own time (the copied text has Singapore's). */
 private fun localTime(ms: Long): String =
     java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
         .format(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()))
 
-/** "3 min ago", in the app's language; "Never" for no time. */
 @Composable
 private fun ago(at: Long, now: Long): String {
     if (at <= 0) return stringResource(R.string.diag_never)

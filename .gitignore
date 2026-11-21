@@ -22,8 +22,9 @@ dev/
 # Local output of the impeccable design plugin (screenshots, hook cache).
 .impeccable/
 
-# Local Claude Code preview config
-.claude/
+# Local Claude Code config; the repo's own skills are shared
+.claude/*
+!.claude/skills/
 # Personal agent instructions (identity, how you push): never shared
 CLAUDE.local.md
 

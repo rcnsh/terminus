@@ -1,9 +1,3 @@
-/**
- * The Analytics Engine row layout (src/analytics-rows.ts). Rows already
- * written can't be rewritten, so the raw rows each kind writes are pinned
- * here position by position, and the queries that read them byte for
- * byte.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -52,7 +46,6 @@ const answer = {
   ],
 };
 
-/** Every kind written by its real logger, as the raw data points it writes. */
 async function written() {
   const ae = makeAnalytics();
   const kv = makeKV();
@@ -128,7 +121,6 @@ const RAW = [
 
 test('every kind is written at the positions it always was', async () => {
   const rows = await written();
-  // The board's fetchedAt is in the future so its lag is 0: the time is the feed's own.
   assert.deepEqual(rows, RAW);
   assert.deepEqual(new Set(rows.map((r) => r.blobs[0])), new Set(Object.keys(ROWS)), 'one row of every declared kind');
 });
@@ -178,7 +170,6 @@ test("'board' rows keep the columns 'arrival' rows do, so the ETA job reads both
     berth: 'blob9',
     etaS: 'double1',
   });
-  // And an arrival's doubles are its answer's, so a query over both reads the same meaning.
   assert.doesNotThrow(() => sharedColumns('answer', 'arrival'));
   assert.throws(() => sharedColumns('answer', 'tripwake'), /quality in different columns/);
 });
@@ -192,9 +183,8 @@ test('the queries reading the rows are the same, byte for byte', async () => {
   assert.deepEqual(asked, JSON.parse(readFileSync(new URL('fixtures/ae-sql.json', import.meta.url), 'utf8')));
 });
 
-test('the dev stub answers every query the dashboard makes', () => {
+test('the dev stub answers every query the dashboard makes, but the last, the ETA job’s, which it answers from R2', () => {
   const now = Date.parse('2026-10-20T04:00:00Z');
-  // The last query is the ETA job's, which the stub answers from R2 instead.
   for (const q of JSON.parse(readFileSync(new URL('fixtures/ae-sql.json', import.meta.url), 'utf8')).slice(0, -1)) {
     assert.ok(fakeAeRows(q, now)?.length, q);
   }

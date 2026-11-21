@@ -1,7 +1,3 @@
-// Settings' pages: what each group in the list opens (settings.js lays them
-// out and moves between them). Each saves as it changes, through the shared
-// profile (profile.js).
-
 import {
   Icon,
   Rich,
@@ -45,19 +41,14 @@ import { pickedStop } from './search.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
 const FULL_DAYS = [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
-/** The week as a timetable lists it: Monday first. */
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-/** Devices paired, for Devices' line in the list; null until loaded. */
 export const deviceCount = store(null);
-/** A NUSMods link shared to the app, waiting in the import box for the person to import. */
 export const importOffer = store(null);
 
 export const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-/** A time of day in the account's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
 export const clockMin = (min) =>
   spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
-/** "9:00–11:00 AM": the start's AM or PM left off when the end has the same. */
 export function clockSpan(from, to) {
   const a = clockMin(from);
   const b = clockMin(to);
@@ -67,7 +58,6 @@ export function clockSpan(from, to) {
 export const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
 const shortDate = (ms) => new Date(ms).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 
-/** A page of Settings: its heading with Back, then what's on it. */
 export function Page({ id, title, children, nodes, onBack, shown, leaving, sky = false }) {
   const head = html`
     <header class="page-head">
@@ -92,11 +82,9 @@ export function Page({ id, title, children, nodes, onBack, shown, leaving, sky =
   `;
 }
 
-/** A menu of every stop, with a blank first when `blank` is given. */
 export function StopSelect({ value, onChange, blank, ...props }) {
   const c = useStore(campus);
   const stops = useMemo(() => stopsByName(c), [c]);
-  // Keep a food court the class already goes to, rather than showing blank.
   const place = value && !stops.some((s) => s.code === value) ? c?.destinations?.find((d) => d.code === value) : null;
   return html`
     <select ...${props} value=${value ?? ''} onChange=${(e) => onChange(e.currentTarget.value)}>
@@ -107,26 +95,22 @@ export function StopSelect({ value, onChange, blank, ...props }) {
   `;
 }
 
-/** A picked search result, or text that names one exactly (a code, a stop). */
 function resolveWhere(picked, text) {
   if (picked) return picked;
   const c = campus.get();
   const typed = text.trim();
   const lower = typed.toLowerCase();
   const hit = c?.destinations?.find((d) => d.code.toLowerCase() === lower || d.label.toLowerCase() === lower);
-  // A food court or other landmark goes to itself (its stops are the router's to pick).
   if (hit) return hit.kind === 'landmark' ? hit.code : hit.stopCode;
   const code = typed.toUpperCase();
   return c?.stops.some((s) => s.code === code) ? code : null;
 }
 
-/** Says why a form can't be sent, on the field, as the browser does. */
 function refuse(input, message) {
   input.setCustomValidity(message);
   input.reportValidity();
 }
 
-/** One setting on a row of a group: its name, then its control. */
 function Field({ id, label, sub, children }) {
   return html`
     <div class="field">
@@ -136,11 +120,6 @@ function Field({ id, label, sub, children }) {
   `;
 }
 
-/**
- * A group's heading and its rows, with at most one line of explanation under
- * them: every page of Settings is made of these, as on Android. `id` names the
- * heading, for a control in the group to be labelled by it.
- */
 function Group({ title, hint, id, children }) {
   return html`
     <section class="trips-group">
@@ -151,11 +130,6 @@ function Group({ title, hint, id, children }) {
   `;
 }
 
-/**
- * Two or three choices as pills on one track (radios underneath); `full`
- * spreads them across the row. An option is [value, label], or [value,
- * label, lang] for a label in another language than the page's.
- */
 export function Pills({ name, value, options, onChange, labelledBy, full = false }) {
   return html`
     <div class=${full ? 'segmented full' : 'segmented'} role="radiogroup" aria-labelledby=${labelledBy}>
@@ -169,7 +143,6 @@ export function Pills({ name, value, options, onChange, labelledBy, full = false
   `;
 }
 
-/** − value +, for a number in small steps between `min` and `max`. */
 function Stepper({ label, value, text, min, max, step, less, more, onChange }) {
   return html`
     <span class="stepper" role="group" aria-label=${label}>
@@ -186,25 +159,17 @@ const PACES = () => [
   { value: 'fast', label: t('Fast'), hint: t('400 m in about 4 min. A brisk pace.') },
 ];
 
-/**
- * Where you live, your day's hours and how you walk: three short groups of
- * one-line rows, each group with one line of explanation. The first-time
- * setup (onboarding.js) asks the same things with more words.
- */
 export function Trips() {
   const p = useStore(profile);
   const c = useStore(campus);
   const now = p.home?.stops ?? [];
   const residences = useMemo(() => residencesByName(c), [c]);
   const residence = residenceFor(now);
-  // "Off campus" can be chosen while the stops are a residence's: it stays
-  // chosen (to pick a stop below) until the stops change.
   const [offCampus, setOffCampus] = useState(false);
   useEffect(() => setOffCampus(false), [now.join()]);
   const [msg, setMsg] = useState('');
   const picking = offCampus || !residence;
 
-  // The first stop is the one picked here; any others (from before) stay after it.
   const pickStop = (code) =>
     edit((x) => {
       const rest = (x.home?.stops ?? []).slice(1).filter((s) => s !== code);
@@ -212,7 +177,6 @@ export function Trips() {
       x.home = next.length ? { stops: next } : null;
     });
 
-  // Finds the nearest stop in the browser. The location itself is never sent.
   const locate = () => {
     if (!navigator.geolocation) return setMsg(t('This browser cannot share its location.'));
     setMsg(t('Finding the nearest stop…'));
@@ -254,7 +218,6 @@ export function Trips() {
             value=${picking ? '' : residence.code}
             onChange=${(e) => {
               const r = residences.find((x) => x.code === e.currentTarget.value);
-              // "Off campus": keep the stops, pick one below.
               if (!r) return setOffCampus(true);
               edit((x) => {
                 x.home = { stops: [...r.stops] };
@@ -350,12 +313,9 @@ export function Trips() {
 
 const PREF_TEXT = { earlier: t('One bus earlier'), quiet: t('No reminders') };
 
-/** Classes you leave a bus earlier for or get no reminders for, and the trip history. */
 export function Choices() {
   const version = useStore(lists);
   const [r, setR] = useState(null);
-  // Only the newest list asked for lands: one asked for before an Undo that
-  // comes back after the Undo's mustn't put the old list over the new.
   const asked = useRef(0);
   const load = () => {
     const n = ++asked.current;
@@ -428,11 +388,6 @@ export function Choices() {
   `;
 }
 
-/**
- * Where a class shown on the page is in the profile now. Every save replaces
- * the profile with the server's copy, sorted its own way, so a row finds its
- * class again by what it is, never by where it was.
- */
 const same = (a, b) => a.day === b.day && a.arriveByMin === b.arriveByMin && a.label === b.label && a.to === b.to;
 
 export function Timetable({ me }) {
@@ -445,9 +400,6 @@ export function Timetable({ me }) {
   const [unresolved, setUnresolved] = useState([]);
   const shareBox = useRef(null);
 
-  // A NUSMods link shared to the app: in the box, for the person to import.
-  // Never imported straight from the URL: any page could link here and
-  // replace a signed-in person's timetable. They press Import themselves.
   useEffect(() => {
     if (!offer) return;
     setShare(offer);
@@ -480,9 +432,7 @@ export function Timetable({ me }) {
     }
   };
 
-  // Keyed by what doesn't change when it's edited (not its stop), so a row stays open while its stop is changed.
   const seenKeys = new Map();
-  // `nth`: which of the classes just like it (same day, time, name and stop) it is, so a row edits its own.
   const nth = (list, c, i) => list.slice(0, i).filter((y) => same(y, c)).length;
   const all = [
     ...p.trips.map((c, i) => ({ c, list: 'trips', nth: nth(p.trips, c, i) })),
@@ -493,7 +443,6 @@ export function Timetable({ me }) {
     seenKeys.set(base, n + 1);
     return { ...r, key: `${base}-${n}` };
   });
-  // A favourite at its usual time each week: listed with the classes that day.
   const usual = (p.usual ?? [])
     .filter((u) => p.places.some((x) => x.key === u.place))
     .map((u) => ({ u, key: `usual-${u.place}-${u.day}-${u.atMin}` }));
@@ -541,14 +490,8 @@ export function Timetable({ me }) {
   `;
 }
 
-/** Bumped after an import: the list's "Re-import needed" goes. */
 export const importDone = store(0);
 
-/**
- * A class's weeks when it isn't every week, each run of them: "wk 1–6",
- * "wk 1, 3, 5, 7, 9, 11", "wk 1–3, 8–13", as the Mac app lists them. None
- * for 13 or more (every week).
- */
 export function weeksText(weeks) {
   if (!Array.isArray(weeks) || !weeks.length || weeks.length >= 13) return '';
   const runs = [];
@@ -561,7 +504,6 @@ export function weeksText(weeks) {
   return t('wk {0}', runs.map(([a, b]) => (a === b ? String(a) : `${a}–${b}`)).join(zh ? '，' : ', '));
 }
 
-/** One class: its name, then when and from which stop; opened, the stop to change and Remove. `nth`: which of the classes just like it. */
 function ClassRow({ c, list, nth }) {
   const time = c.endMin ? clockSpan(c.arriveByMin, c.endMin) : clockMin(c.arriveByMin);
   const weeks = weeksText(c.weeks) && ` · ${weeksText(c.weeks)}`;
@@ -589,7 +531,6 @@ function ClassRow({ c, list, nth }) {
           aria-label=${t('Remove {0}', c.label)}
           onClick=${(e) => {
             refocusAfterRemove(e.currentTarget, e.currentTarget.closest('.trips-group')?.querySelector('h3'));
-            // This one only, not every class just like it.
             edit((x) => {
               const at = x[list].filter((y) => same(y, c))[nth];
               x[list] = x[list].filter((y) => y !== at);
@@ -601,7 +542,6 @@ function ClassRow({ c, list, nth }) {
   `;
 }
 
-/** A favourite at its usual time: its name, then when and where; opened, Remove. */
 function UsualRow({ u }) {
   const place = profile.get().places.find((x) => x.key === u.place);
   return html`
@@ -627,7 +567,6 @@ function UsualRow({ u }) {
   `;
 }
 
-/** Classes from an import whose room couldn't be placed: pick a stop for each, or skip it. */
 function Unresolved({ list, onDone }) {
   if (!list.length) return null;
   return html`
@@ -666,7 +605,6 @@ function Unresolved({ list, onDone }) {
   `;
 }
 
-/** Before anything is typed: favourites, then where classes are. */
 function mySuggestions() {
   const p = profile.get();
   const places = (p?.places ?? []).map((x) => ({ code: x.to, label: x.label, stopCode: x.to, kind: 'place' }));
@@ -680,7 +618,6 @@ function mySuggestions() {
 
 const destinations = () => campus.get()?.destinations ?? [];
 
-/** "+ Add a class or commitment by hand": the last row of the classes, opening the form under it. */
 function AddClass() {
   const [open, setOpen] = useState(false);
   const where = useRef(null);
@@ -691,8 +628,6 @@ function AddClass() {
   const [label, setLabel] = useState('');
   const endBox = useRef(null);
   const form = useRef(null);
-  // The form opens below the list, often off the screen: scroll just far
-  // enough to show all of it, so opening it visibly does something.
   useEffect(() => {
     if (open) form.current?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
   }, [open]);
@@ -702,7 +637,6 @@ function AddClass() {
     if (!to) return refuse(where.current.input, t('Pick a stop, building or room from the list'));
     const a = toMin(start);
     const b = toMin(end);
-    // An end at or before the start is refused out loud, not left off the class.
     if (b != null && b <= a) return refuse(endBox.current, t('The end time must be after the start time'));
     edit((x) =>
       x.manual.push({ day: Number(day), arriveByMin: a, ...(b && b > a ? { endMin: b } : {}), to, label: label.trim(), venue: '' }),
@@ -751,10 +685,6 @@ function AddClass() {
   `;
 }
 
-/**
- * The stops your classes go to, for the top of the favourites picker: one
- * entry per stop, saying which classes use it, leaving out favourites already.
- */
 function timetableStops() {
   const p = profile.get();
   const byStop = new Map();
@@ -773,7 +703,6 @@ function timetableStops() {
 
 function addFavourite(to, label) {
   let already = null;
-  // The same key each time the change is made (it's made again on the server's copy when saved).
   const keep = {};
   edit((x) => {
     already = withPlace(x, to, label, keep);
@@ -784,8 +713,6 @@ function addFavourite(to, label) {
 export function Favourites() {
   const p = useStore(profile);
   const search = useRef(null);
-  // The favourites as last drawn: one not among them is new (added, or back
-  // with Undo), and unfolds (Place). Nothing is new the first time.
   const drawn = useRef(null);
   useEffect(() => {
     drawn.current = new Set(p.places.map((x) => x.key));
@@ -798,7 +725,6 @@ export function Favourites() {
           id="place-form"
           class="field"
           onSubmit=${(e) => {
-            // Enter on a typed stop code or name adds it; picking from the list does too.
             e.preventDefault();
             const to = resolveWhere(null, search.current.input.value);
             if (!to) return refuse(search.current.input, t('Pick a stop, building or room from the list'));
@@ -827,15 +753,8 @@ export function Favourites() {
   `;
 }
 
-/** How long a favourite takes to fold away; it's removed once it has. */
 const FOLD_MS = 220;
 
-/**
- * A favourite: its name, where it goes, and Remove (which takes its usual
- * times too, with Undo). It comes and goes gently rather than in one frame:
- * one `arriving` (added since the page drew) unfolds with a soft wash of the
- * accent, and Remove folds it away before it goes, so the list doesn't jump.
- */
 function Place({ place, arriving }) {
   const row = useRef(null);
   const [leaving, setLeaving] = useState(false);
@@ -851,7 +770,6 @@ function Place({ place, arriving }) {
       ],
       { duration: 260, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' },
     );
-    // Out to the card's edges (the list's 16px padding), fading after a moment.
     const edges = (c) => `-16px 0 ${c}, 16px 0 ${c}`;
     el.animate(
       [
@@ -865,12 +783,10 @@ function Place({ place, arriving }) {
   const remove = (e) => {
     if (leaving) return;
     setLeaving(true);
-    // The list's last one gone, the search box to add another is next.
     const refocus = noteRow(e.currentTarget);
     const go = () => {
       let removed = null;
       edit((x) => {
-        // Made again when saved: one already gone there keeps what Undo puts back.
         removed = withoutPlace(x, place.key) ?? removed;
       });
       refocus(document.querySelector('#place-form input'));
@@ -903,11 +819,6 @@ function Place({ place, arriving }) {
   `;
 }
 
-/**
- * The QR code library, from cdnjs, the first time a code is shown. Its
- * address is the one the CSP allows (QR_LIB in the API's src/http.ts;
- * http.test.js fails if the two differ).
- */
 function loadQr() {
   if (window.qrcode) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -921,7 +832,6 @@ function loadQr() {
   });
 }
 
-/** Each device's kind, drawn as the other apps draw it: a watch, a Mac, else a phone. */
 const DEVICE_ICONS = {
   phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
   mac: '<rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/>',
@@ -959,7 +869,6 @@ export function Devices({ me }) {
                 class="remove"
                 aria-label=${t('Remove {0}', d.name ?? t('Device'))}
                 onClick=${async (e) => {
-                  // Noted before the wait: by the time the list is back, the row has gone.
                   const refocus = noteRow(e.currentTarget);
                   try {
                     await api(`/api/me/devices/${d.id}`, { method: 'DELETE' });
@@ -984,7 +893,6 @@ export function Devices({ me }) {
   `;
 }
 
-/** A pairing code and its QR code, counting down, until a device uses it. */
 function Pairing({ count, reload }) {
   const [state, setState] = useState({ text: '', hint: '' });
   const qr = useRef(null);
@@ -1008,7 +916,6 @@ function Pairing({ count, reload }) {
         const q = window.qrcode(0, 'M');
         q.addData(link);
         q.make();
-        // The library's own SVG, of our link: not data from anywhere else.
         qr.current.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
       }
       const before = await reload().catch(() => count);
@@ -1020,9 +927,6 @@ function Pairing({ count, reload }) {
         if (qr.current) qr.current.replaceChildren();
         setState({ text, hint });
       };
-      // The code goes once a device has used it: the devices are asked every
-      // 4 s, but not while the page is hidden (a tab left open would ask for
-      // the code's whole ten minutes), and at once when it's shown again.
       const paired = async () => {
         if (done || gone || document.hidden) return;
         if ((await reload().catch(() => before)) > before && !done && !gone) {
@@ -1033,7 +937,6 @@ function Pairing({ count, reload }) {
       document.addEventListener('visibilitychange', paired);
       cleanup = () => document.removeEventListener('visibilitychange', paired);
       const tick = () => {
-        // The server's clock: `expires` is its time, and this device's may be off.
         const left = Math.max(0, Math.round((made.expires - serverNow()) / 1000));
         if (!left) return end(t('Expired'), t('Get a new code to pair.'));
         if (done) return;
@@ -1069,16 +972,13 @@ function Pairing({ count, reload }) {
   `;
 }
 
-/** The clock choices, shared with setup: one example time each, so the choice shows itself. */
 export const CLOCKS = () => [
   { value: '12', label: t('12-hour'), eg: t('6:36 PM') },
   { value: '24', label: t('24-hour'), eg: '18:36' },
 ];
 
-/** Each as a row of pills: Auto follows this browser. The languages are named in themselves. */
 export function Language() {
   const p = useStore(profile);
-  // Bumped when a language or clock isn't saved, so its pills are drawn again on the one still in use.
   const [langTry, setLangTry] = useState(0);
   const [clockTry, setClockTry] = useState(0);
   return html`
@@ -1097,14 +997,9 @@ export function Language() {
             labelledBy="lang-label"
             full
             onChange=${async (v) => {
-              // The account first, so emails and the other devices follow. If
-              // that fails, nothing changes here: switching reloads the page at
-              // once, which would hide the error, and the next load would
-              // follow the account's old choice back anyway.
               try {
                 await saveNow((x) => (x.lang = v));
               } catch (err) {
-                // It stays until closed, as every other problem does.
                 toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'), { error: true });
                 setLangTry((n) => n + 1);
                 return;
@@ -1136,10 +1031,8 @@ export function Language() {
   `;
 }
 
-/** This browser's theme: applied at once, with nothing to save. */
 export const theme = store(window.theme?.pref() ?? 'auto');
 
-/** Auto, Light or Dark, on its row in the list. */
 export function ThemeSwitch({ labelledBy, full = false }) {
   const now = useStore(theme);
   return html`
@@ -1161,15 +1054,8 @@ export function ThemeSwitch({ labelledBy, full = false }) {
   `;
 }
 
-/**
- * Appearance: the theme, then the card style, the chosen one drawn under its
- * pills with a made-up trip so the choice is made by looking. Both hold for
- * this browser only.
- */
 export function Appearance() {
   const chosen = useStore(cardStyle);
-  // Made again each minute (and when the clock style changes), so the
-  // sample always leaves in a few minutes, however long Settings was open.
   const p = useStore(profile);
   const [minute, setMinute] = useState(Date.now());
   useEffect(() => {
@@ -1195,7 +1081,6 @@ export function Appearance() {
   `;
 }
 
-/** A D2 from PGP to UTown, leaving in a few minutes, in this browser's clock style. */
 function sampleAnswer(now) {
   const iso = (ms) => new Date(ms).toISOString();
   const leave = now + 4 * 60_000;
@@ -1224,18 +1109,11 @@ function sampleAnswer(now) {
   };
 }
 
-/** An email that may wrap: after the @ first, so the name stays whole. */
 const breakAfterAt = (email) => {
   const at = email.indexOf('@');
   return at < 0 ? email : html`${email.slice(0, at + 1)}<wbr />${email.slice(at + 1)}`;
 };
 
-/**
- * Who you're signed in as with Sign out, then the everyday buttons at one
- * width, then API keys, with Delete account on its own at the bottom, away
- * from the rest. On the account page's wide layout the header shows who's
- * signed in, so that row is only for narrow screens there.
- */
 export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const [msg, setMsg] = useState('');
   const everywhere = async () => {
@@ -1323,7 +1201,6 @@ function Keys() {
                 class="remove"
                 aria-label=${t('Revoke {0}', k.name)}
                 onClick=${async (e) => {
-                  // Noted before the wait: by the time the list is back, the row has gone.
                   const refocus = noteRow(e.currentTarget);
                   if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
                   setMsg('');
@@ -1388,7 +1265,6 @@ function Keys() {
   `;
 }
 
-/** About's links, as rows like the Settings list: what each is, and where it goes. */
 const ABOUT_LINKS = () => [
   { title: t('Get the apps'), href: '/' },
   { title: t('Status'), href: '/status' },
@@ -1403,7 +1279,6 @@ const ABOUT_LINKS = () => [
   },
 ];
 
-/** Whether this browser sends error reports (/assets/errors.js keeps the choice), as a row of Your data, as in the apps. */
 function ErrorReports() {
   const reports = globalThis.terminusErrorReports;
   const [on, setOn] = useState(reports?.on ?? true);
@@ -1425,7 +1300,6 @@ function ErrorReports() {
   `;
 }
 
-/** The app's mark and name, what it does and where its data comes from, then its links, as on Android. */
 export function About() {
   return html`
     <div class="trips">
@@ -1452,17 +1326,9 @@ export function About() {
   `;
 }
 
-/** Longest note the API takes; the counter turns amber from `NOTE_WARN`. */
 const NOTE_MAX = 1000;
 const NOTE_WARN = 900;
 
-/**
- * A note to the operator about anything, laid out like a message: who it's
- * from, the note, then a counter and Send. Only an account with an email can
- * send one (so there's someone to reply to); without one, the page asks for
- * an email instead. A wrong answer is better sent from under the card, with
- * the answer.
- */
 export function Feedback({ me, onAddEmail }) {
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');

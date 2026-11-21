@@ -1,21 +1,3 @@
-/**
- * Crash and error reports from the apps and the website: POST /api/errors.
- *
- * A report says what broke, never who it broke for: the platform, the app
- * version, the OS or browser and its version, the error's type, its message
- * and stack. No account, session, device or install id is asked for or
- * kept, and the address it came from is only used for the rate limit, as on
- * every open route. The message and stack are scrubbed first (scrub), since
- * an exception can quote a URL with coordinates in it or a path with
- * someone's name. Each app has a switch to stop sending them.
- *
- * Reports go to Analytics Engine (analytics.ts logAppError), which keeps
- * them three months, and the dashboard groups them by fingerprint. Off
- * unless the operator turns `errors` on (collect.ts); while it's off a
- * report is answered the same and dropped. The operator can dismiss a
- * crash from the dashboard (admin.ts handleDismissCrash).
- */
-
 import type { Env } from '../types.ts';
 import { collecting } from './collect.ts';
 import { json } from '../http.ts';
@@ -27,32 +9,18 @@ export const ERROR_PLATFORMS = ['android', 'mac', 'ios', 'web'] as const;
 const MESSAGE_MAX = 300;
 const STACK_MAX = 3000;
 const STACK_LINES = 40;
-/** Frames the fingerprint is made of: the top of the stack, where crashes differ. */
 const FINGERPRINT_FRAMES = 5;
 
-/**
- * [text] without what could say who or where: a URL's query and fragment
- * (they can hold coordinates or a code), email addresses, a home folder's
- * name, coordinates and other long numbers, and token-like strings.
- */
 export function scrub(text: string): string {
-  return (
-    text
-      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi, '$1')
-      .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '<email>')
-      .replace(/(\/(?:Users|home)\/|\\Users\\)[^/\\\s]+/gi, '$1<user>')
-      .replace(/-?\b\d{1,3}\.\d{4,}\b/g, '<number>')
-      .replace(/\b\d{6,}\b/g, '<number>')
-      // A long run of letters and digits mixed is a token or an id, not a name.
-      .replace(/\b[A-Za-z0-9_-]{20,}\b/g, (w) => (/\d/.test(w) && /[A-Za-z]/.test(w) ? '<token>' : w))
-  );
+  return text
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi, '$1')
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '<email>')
+    .replace(/(\/(?:Users|home)\/|\\Users\\)[^/\\\s]+/gi, '$1<user>')
+    .replace(/-?\b\d{1,3}\.\d{4,}\b/g, '<number>')
+    .replace(/\b\d{6,}\b/g, '<number>')
+    .replace(/\b[A-Za-z0-9_-]{20,}\b/g, (w) => (/\d/.test(w) && /[A-Za-z]/.test(w) ? '<token>' : w));
 }
 
-/**
- * [stack] scrubbed line by line, keeping the offset at the end of an Apple
- * frame ("7   Terminus   0x00000001002244b1 Terminus + 66737"): it says
- * where in the app, which is what symbolicates the frame.
- */
 export function scrubStack(stack: string): string {
   return stack
     .split('\n')
@@ -63,10 +31,8 @@ export function scrubStack(stack: string): string {
     .join('\n');
 }
 
-/** A MetricKit-style frame, "Terminus +0x298a94 (0x1004aca94)": a binary and an offset, no symbol. */
 const BARE_FRAME = /^(\S+ \+0x[0-9a-f]+ |\?\?\? )\(0x[0-9a-f]+\)$|^--$/i;
 
-/** The same crash, the same fingerprint: its platform, type and top frames, without line numbers. */
 export async function fingerprintOf(platform: string, type: string, message: string, stack: string): Promise<string> {
   const top = stack
     .split('\n')
@@ -79,9 +45,6 @@ export async function fingerprintOf(platform: string, type: string, message: str
       .replace(/\b0x[0-9a-f]+\b/gi, '')
       .replace(/\+ ?\d+\b/g, ''),
   );
-  // With no stack, the message with its numbers blanked, so "index 3" and "index 4" are one. A
-  // stack of bare frames names only binaries, so the same type thrown anywhere looks alike: the
-  // message, with its addresses blanked too, tells those apart.
   const bare = top.length > 0 && top.every((f) => BARE_FRAME.test(f));
   const said = bare ? message.replace(/0x[0-9a-f]+/gi, '#').replace(/\d+/g, '#') : message.replace(/\d+/g, '#');
   const basis = [platform, type, ...frames, ...(frames.length && !bare ? [] : [said])].join('\n');
@@ -91,12 +54,10 @@ export async function fingerprintOf(platform: string, type: string, message: str
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
 
-/** POST /api/errors: 204 whether kept or not, 400 for a body that isn't a report. */
 export async function handleAppError(req: Request, env: Env): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
   const b = await readJson(req);
   const platform = ERROR_PLATFORMS.find((p) => p === b?.platform);
-  // The website is whatever this Worker serves: its version is the release's.
   const version = platform === 'web' ? API_VERSION : str(b?.version, 32);
   const os = str(b?.os, 40);
   const type = scrub(str(b?.type, 120)).trim();

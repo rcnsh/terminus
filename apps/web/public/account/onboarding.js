@@ -1,7 +1,3 @@
-// First sign-in setup, one step at a time: the timetable, where the day
-// starts, how fast you walk, and the apps. The profile is saved as it goes
-// (profile.js), so leaving halfway loses nothing.
-
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { browserHour12, clock, inkOn, locationError, t } from './dom.js';
 import {
@@ -28,18 +24,13 @@ const PACES = [
 
 const STEPS = [Welcome, TimetableStep, Home, Travel, Apps];
 
-/** Walks a brand-new account through setup; `onDone` runs when it's finished or skipped. */
 export function Onboarding({ onDone }) {
-  // `out`: the card leaving, before the next one comes in.
   const [step, setStep] = useState({ n: 0, dir: 1, out: null });
   const [leaving, setLeaving] = useState(false);
   const card = useRef(null);
   const { n, dir, out } = step;
 
   const finish = async () => {
-    // Not saved, setup comes back next time: say so, but let them in. The
-    // notice stays up here for its time first, since leaving may load
-    // another page (back to the web app), which would take it away unread.
     const saved = await saveNow((x) => (x.seen = [...new Set([...(x.seen ?? []), 'onboarding'])])).then(
       () => true,
       (err) => (toast(t('Not saved. {0}', err.message)), false),
@@ -70,7 +61,6 @@ export function Onboarding({ onDone }) {
     back: n > 0 ? () => go(n - 1, -1) : null,
   };
 
-  // Focus follows the step, for keyboards and screen readers.
   useEffect(() => {
     card.current?.querySelector('h1')?.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
@@ -97,13 +87,8 @@ export function Onboarding({ onDone }) {
   `;
 }
 
-/** Each step after the welcome, by its stop on the line. */
 const STOPS = () => [t('Classes'), t('Your stop'), t('Pace'), t('Apps')];
 
-/**
- * Where setup is, as a route: a stop per step, the line filled in the accent
- * up to this one, the stops passed filled, this one ringed.
- */
 function StepLine({ n }) {
   const stops = STOPS();
   return html`
@@ -117,7 +102,6 @@ function Heading({ text, sub }) {
   return html`<h1 tabindex="-1">${text}</h1>${sub && html`<p class="ob-sub">${sub}</p>`}`;
 }
 
-/** Back, then a skip link if any, then the main button, which shows any error from `onNext` as a toast. */
 function Actions({ nav, next = t('Continue'), skip, onNext }) {
   const [busy, setBusy] = useState(false);
   return html`
@@ -144,7 +128,6 @@ function Actions({ nav, next = t('Continue'), skip, onNext }) {
 }
 
 function Welcome({ nav }) {
-  // Untouched, times follow the browser; a pick is the account's, on every device.
   const [picked, setPicked] = useState(null);
   const shown = picked ?? (browserHour12() ? '12' : '24');
   return html`
@@ -183,7 +166,6 @@ function TimetableStep({ nav }) {
     const n = r.profile.trips.length;
     const text = n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term);
     setMsg(text);
-    // The next step replaces this one straight away: say it where it stays.
     toast(text);
   };
   return html`
@@ -209,7 +191,6 @@ function TimetableStep({ nav }) {
   `;
 }
 
-/** How many of the other halls show as tiles before "All of them". */
 const SHOWN = 4;
 
 function Home({ nav }) {
@@ -218,11 +199,9 @@ function Home({ nav }) {
   const current = profile.get().home?.stops ?? [];
   const [stop, setStop] = useState(current[0] ?? '');
   const [walk, setWalk] = useState(String(profile.get().homeWalkMin ?? 5));
-  // A residence's stops, when one is chosen; else off campus, or the full list open.
   const [picked, setPicked] = useState(() => residences.find((r) => r.stops[0] === current[0]) ?? null);
   const [mode, setMode] = useState(picked ? 'hall' : current.length ? 'off' : null);
   const [msg, setMsg] = useState('');
-  // The walk the account can save (the profile's limits), and how many home stops.
   const range = limit('homeWalkMin', { min: 0, max: 30 });
   const stopsMax = limit('homeStops', 3);
   const pick = (r) => {
@@ -246,13 +225,10 @@ function Home({ nav }) {
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
-  // Where most students live, on their own at the top; then a few of the
-  // other halls, and the one chosen if it's further down.
   const common = residences.filter((r) => r.common);
   const others = residences.filter((r) => !r.common);
   const tiles = others.slice(0, SHOWN);
   if (picked && !picked.common && !tiles.includes(picked)) tiles.push(picked);
-  // One tile is in the Tab order, the chosen one (or the first): the arrow keys move between them, as in a radio group.
   const chosen = mode === 'hall' && picked ? picked.code : mode;
   const first = common[0]?.code ?? tiles[0]?.code ?? 'more';
   const tabStop = (key) => (key === (chosen ?? first) ? 0 : -1);
@@ -304,9 +280,7 @@ function Home({ nav }) {
       nav=${nav}
       onNext=${() =>
         saveNow((x) => {
-          // An emptied box keeps the walk as it was, rather than reading as 0 minutes.
           const v = walk.trim() === '' ? NaN : Number(walk);
-          // A residence brings all its stops; otherwise the one chosen here first.
           if (mode === 'hall' && picked) x.home = { stops: [...picked.stops] };
           else if (stop) x.home = { stops: [stop, ...current.filter((code) => code !== stop)].slice(0, stopsMax) };
           if (Number.isInteger(v) && v >= range.min && v <= range.max) x.homeWalkMin = v;
@@ -315,12 +289,10 @@ function Home({ nav }) {
   `;
 }
 
-/** One choice of several, as a tile: outlined, or filled with the accent's soft colour and ticked when chosen. `tab`: its tabindex. */
 const Tile = ({ on, tab = -1, onClick, children }) => html`
   <button type="button" role="radio" aria-checked=${String(on)} tabindex=${tab} class=${on ? 'ob-tile on' : 'ob-tile'} onClick=${onClick}>${children}</button>
 `;
 
-/** The arrow keys in a group of radio tiles: the next or previous one is chosen and focused, round from the end. */
 function arrowKeys(e) {
   const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
   if (!k) return;
@@ -333,7 +305,6 @@ function arrowKeys(e) {
   next.focus();
 }
 
-/** A stop as its sign: the name on the plate, the services that call there under it, in their colours. */
 function StopSign({ code }) {
   const c = useStore(campus);
   const s = c?.stops.find((x) => x.code === code);
@@ -386,16 +357,10 @@ function Travel({ nav }) {
   `;
 }
 
-/** The R2's tag in the example, its words in the ink that reads on its green. */
 const R2_TAG = `--svc:#34a853;--svc-ink:${inkOn('#34a853')}`;
 
-/** Where you are on the track: on its lane line, round the far bend. */
 const RUNNER = [325 + 67.5 * Math.cos((-50 * Math.PI) / 180), 75 + 67.5 * Math.sin((-50 * Math.PI) / 180)];
 
-/**
- * A running track, from above: the lap's time at your pace in the infield,
- * and you on the far bend. The track's own red, the same in light and dark.
- */
 const Track = ({ min }) => html`
   <div class="ob-track">
     <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -410,7 +375,6 @@ const Track = ({ min }) => html`
   </div>
 `;
 
-/** Three cards, one chosen, moved between with the arrow keys as a radio group is. */
 function PacePicker({ value, onChange }) {
   const cards = useRef([]);
   const keys = (e) => {

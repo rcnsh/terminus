@@ -1,13 +1,3 @@
-/**
- * The trip engine: today's trips, the same on every device. Which phase
- * one is in, and when that changes, is phase.ts's; this is what it reads:
- * the plan (the bus a trip is about) and what the day's signals say: "On
- * the D2", "Missed it", "Not going", "I'm there", a location. The signals live in a Durable Object per user (`Trip`, keyed by
- * user id), so a tap on the phone changes the Mac's menu bar too. It holds
- * only today's signals, never a location, and deletes them at the end of the
- * day with an alarm. An idle object costs nothing.
- */
-
 import type { Env, Graph, Leave } from '../types.ts';
 import type { StepTarget } from './step.ts';
 import { haversineM } from '../geo.ts';
@@ -21,74 +11,38 @@ import { isoSeconds, shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
-/** What a client can send to /api/me/signal. */
 export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'away', 'back'] as const;
 export type SignalKind = (typeof SIGNALS)[number];
 
-/**
- * A trip's plan: the bus it is about, the same on every device. Set when the
- * answer plans one (plan.ts) or when you say you're on a bus, and settled by
- * its leave-by.
- */
 export interface Plan {
   svc: string;
   stop: string;
-  /** ISO: when it leaves the stop (`arrive`, below: when it gets you there). */
   board: string | null;
-  /** ISO: the leave-by time that went with it. From then on the trip is
-   *  about this bus, whatever later answers suggest (see next.ts). */
   leave?: string;
-  /** Planned from the device's location, not from where the timetable puts
-   *  you. A plan without one never replaces a plan with one. */
   located?: boolean;
   arrive: string | null;
-  /** The leave-by's own reason and whether it's an estimate, so a
-   *  plan shown again (see `leaveOf`) reads as it did when it was made. */
   note?: string;
   estimated?: boolean;
   off?: string;
-  /** Seconds on foot to the stop and on the bus, for the card's journey. */
   walkS?: number;
   rideS?: number;
-  /** Stop codes, and the bus's plate when the feed had one at the tap: its
-   *  arrival at `alightCode` is then read from the feed while you ride. */
   stopCode?: string;
   alightCode?: string;
   plate?: string;
-  /** A public bus, with a fare, and the graph's route for it when its number
-   *  can't name it (`151/1`). */
   paid?: true;
   route?: string;
-  /** Seen riding it: a location on its road, further on than you could have
-   *  walked since it left (seenOnBus). Devices without a location then take
-   *  you to be on it too. */
   seen?: true;
-  /**
-   * A trip that changes buses: the second bus, its `stopCode` where it goes
-   * from (`alightCode` above, or the stop across the road from it, `crossS`
-   * further) and its `arrive` the end of the trip. The fields above are then
-   * the first bus alone, `arrive` and `alightCode` at the change.
-   */
   change?: Plan;
-  /** On a trip's second bus: seconds across the road to its stop from where the first drops you. */
   crossS?: number;
 }
 
-/** A trip home (after the last class, or in a long gap), by its key: it has no name of its own. */
 export function isHomeKey(key: string): boolean {
   return key.startsWith('home:') || key.startsWith('gap-home:');
 }
 
-/**
- * A plan as a leave-by again: what every device shows once one device's plan
- * is the trip's (see next.ts), instead of each working out its own bus.
- */
 export function leaveOf(b: Plan): Leave {
   const c = b.change;
   if (c) {
-    // The first bus to catch, the trip's end where the second gets you: where
-    // you get off is the second bus's, never the change stop, even when the
-    // second's isn't known.
     const end = leaveOf(c);
     const { off: _off, offCode: _offCode, toStop: _toStop, ...first } = leaveOf({ ...b, change: undefined });
     return {
@@ -130,27 +84,16 @@ export function leaveOf(b: Plan): Leave {
   };
 }
 
-/** The graph a bus's route and stops are in: a public bus's has LTA's. */
 const busGraph = (b: Pick<Plan, 'paid'>): Graph => (b.paid ? GRAPH_PUBLIC : GRAPH);
 
-/**
- * Where you get off the bus you're on: across the road when the plan said so,
- * else the stop it drops you at ("UTown"), never the class ("GEA1000 @ UTown").
- */
 export function offStop(b: Plan): string | null {
   if (b.off) return b.off;
   const s = b.alightCode ? indexGraph(busGraph(b)).byCode.get(b.alightCode) : undefined;
   return s ? shortStop(s.name) : null;
 }
 
-/** When the trip ends, the second bus's arrival on a trip that changes buses. */
 export const tripEnd = (b: Plan): string | null => (b.change ? b.change.arrive : b.arrive);
 
-/**
- * The bus a leave-by's change of buses goes on to, as a plan's second bus
- * (Plan.change): to `alightCode`, the trip's end, unless the leave-by
- * names where it gets you off.
- */
 export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCode' | 'toCode'>, alightCode: string): Plan | undefined {
   const c = l.change;
   if (!c) return undefined;
@@ -168,12 +111,6 @@ export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCod
   };
 }
 
-/**
- * The second bus when you board a later first bus than planned (`shiftMs`
- * after it): if that gets you to the change (`reach`, as planned) after the
- * planned second bus, that one has gone, so a guess from when you get there,
- * a bus within a headway, and the trip's end moved with it.
- */
 export function laterChange(c: Plan | undefined, reach: string | null | undefined, shiftMs: number): Plan | undefined {
   if (!c?.board || !reach || shiftMs <= 0) return c;
   const there = Date.parse(reach) + shiftMs;
@@ -182,20 +119,15 @@ export function laterChange(c: Plan | undefined, reach: string | null | undefine
   return { ...c, board: isoSeconds(there), ...(c.arrive ? { arrive: isoSeconds(Date.parse(c.arrive) + by) } : {}), estimated: true };
 }
 
-/** The ride for a progress bar: the stops from boarding to getting off, and the times. */
 export interface Ride {
   svc: string;
-  /** The service's colour, `#rrggbb`: a card on the bus has no journey to take it from. */
   color: string;
   stops: Array<{ code: string; name: string }>;
   board: string;
   arrive: string;
-  /** On the first bus of a trip that changes buses: the bus to change to,
-   *  and "Then P at 9:15 from Kent Vale". The stops above end at the change. */
   change?: { svc: string; color: string; stop: string; board: string | null; text: string };
 }
 
-/** The ride on the bus you're on, when its stops are known. */
 export function rideOf(b: Plan): Ride | null {
   if (!b.stopCode || !b.alightCode || !b.board || !b.arrive) return null;
   const idx = indexGraph(busGraph(b));
@@ -210,15 +142,6 @@ export function rideOf(b: Plan): Ride | null {
   };
 }
 
-/**
- * Whether a location shows you on the bus `b`: on its road between where
- * you board and where you get off, and further from the stop than you could
- * have walked since it left (with a rough fix's error to spare), by road or
- * straight there. Anywhere short of that says nothing: you may have missed
- * it and set off on foot. Where the road runs both ways (or the line passes
- * the same place twice), no place on the line the fix could be may be
- * within that walk. Shuttles only: public buses have no road line here.
- */
 export function seenOnBus(b: Plan, lat: number, lon: number, nowMs: number): boolean {
   if (!b.board || !b.stopCode || !b.alightCode || b.paid) return false;
   const idx = indexGraph(GRAPH);
@@ -230,12 +153,10 @@ export function seenOnBus(b: Plan, lat: number, lon: number, nowMs: number): boo
   const walked = (WALK_MAX_MS * Math.max(0, nowMs - Date.parse(b.board))) / 1000 + MAX_FIX_ACC_M;
   if (haversineM(lat, lon, stop.lat, stop.lon) <= walked) return false;
   const start = shape.at[span.i];
-  // A loop's line closes at its first stop, so it can be measured round past it.
   const lap = r.loop ? shape.at[r.seq.length] : undefined;
   const end = span.i + span.hops;
   const rideM = end < shape.at.length ? shape.at[end] - start : lap !== undefined ? lap - start + shape.at[end - r.seq.length] : null;
   if (rideM === null) return false;
-  // Metres on from the stop, and back before it, to `m` along the line.
   const ahead = (m: number) => (m >= start ? m - start : lap !== undefined ? lap - start + m : Infinity);
   const behind = (m: number) => (m <= start ? start - m : lap !== undefined ? start + lap - m : Infinity);
   const near = alongNear(shape, lat, lon, ON_RIDE_M);
@@ -243,108 +164,60 @@ export function seenOnBus(b: Plan, lat: number, lon: number, nowMs: number): boo
   return near.some((m) => ahead(m) <= rideM);
 }
 
-/** The latest signal about one trip today. */
 export interface TripRecord {
   kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'>;
   at: number;
-  /** Skipped by "Not on campus today"; "Back on campus" undoes all of them. */
   away?: boolean;
-  /** The trip's name, for "Undo: going to CS2030". */
   label?: string;
   boarded?: Plan;
-  /** The departure you missed, ISO. */
   missed?: string | null;
 }
 
-/** Today's signals, by trip key (classKey, or a home key: see isHomeKey). */
 export interface DayRecord {
   date: string;
   trips: Record<string, TripRecord>;
-  /** The bus each trip's plan said to catch, kept from when the trip was due
-   *  and frozen once it left, so a trip taken to be on that bus ("On the
-   *  D2") stays about it after the answer has moved on to the next one. */
   plans?: Record<string, Plan>;
-  /** The bus the user stepped to for a trip ("Later bus"), by trip key, in
-   *  place of the answer's own (step.ts). */
   steps?: Record<string, StepTarget>;
-  /** Each trip's revision, by trip key (tripRev). */
   revs?: Record<string, number>;
-  /** When the object next wakes to push (epoch ms), or absent when it
-   *  won't: the Worker asks again only when that would be sooner
-   *  (needsWatch). Push only. */
   watch?: number;
 }
 
-/**
- * Whether a request should ask the Trip object to wake at `atMs`: when it
- * isn't going to wake at all, or would wake any later than `atMs`. Even a
- * few seconds count: the leave-by's push has only WALK.boardBufferS to
- * spare. A later or equal `atMs` needs nothing: the object works out the
- * card afresh when it wakes, and wakes again at that card's own next change.
- */
 export function needsWatch(day: DayRecord | null, atMs: number, nowMs: number): boolean {
   const w = day?.watch;
   return w === undefined || w <= nowMs || atMs < w;
 }
 
-/** Changes to today's record, any of them in one request (see updateTrip). */
 export interface TripUpdate {
   date: string;
-  /** The next Singapore midnight, when everything goes. */
   deleteAt: number;
-  /** Trip records; null deletes one. */
   items?: Array<{ key: string; rec: TripRecord | null }>;
-  /** Trip plans by key; null deletes one. */
   plans?: Record<string, Plan | null>;
-  /** A bus stepped to for a trip, or null for the answer's own again. Either
-   *  drops the trip's plan, so the next answer's bus becomes it. */
   steps?: Record<string, StepTarget | null>;
-  /** The revision of each of `plans`' trips that the plan was worked out
-   *  from (tripRev): a plan whose trip has changed since is dropped. */
   basis?: Record<string, number>;
-  /** Wake at `at` (no later than a wake already pending) to push the card. */
   watch?: { userId: string; at: number };
-  /** The day's card a tap pushed to the other devices, so the next wake
-   *  doesn't push it again (rider.ts nudgeOthers). */
   pushed?: { key: string | null; phase: string; gone?: boolean; at: number };
 }
 
-/**
- * A trip's revision in the day: the Trip object moves it on with every write
- * to the trip's plan, step or record. An answer reads the day, then waits for
- * D1 and the feed; a POST meanwhile (a step, a signal or a reset, another
- * device's plan) is newer, and the plan worked out before it would undo it,
- * so a plan is saved only while the revision it read is still the stored one.
- */
 export function tripRev(day: DayRecord | null, key: string): number {
   return day?.revs?.[key] ?? 0;
 }
 
-/** A location this close to the ride's road is on it: a phone's fix on a
- *  moving bus, plus the line's own error. */
 export const ON_RIDE_M = 60;
-/** Faster than anyone walks (WALK.speedMs is an average pace). */
 const WALK_MAX_MS = WALK.speedMs * 1.5;
-/** A plate is picked at the tap only from a bus due at the stop within this. */
 export const PLATE_WINDOW_S = 5 * 60;
 
-// The Singapore day a signal belongs to ("2026-09-30"), as calendar.ts has it.
 export { sgtDate };
 
-/** Next Singapore midnight, epoch ms: when the day's signals are deleted. */
 export function endOfDayMs(nowMs: number): number {
   return nowMs - (sgt(nowMs).minutes * 60_000 + (nowMs % 60_000)) + 86_400_000;
 }
 
-/** The trip's record as the planner reads it. */
 export function signalOf(day: DayRecord | null, key: string): TripRecord | undefined {
   return day?.trips[key];
 }
 
-/** A trip home's bus has had this long past its arrival to get you indoors. */
 export const HOME_GRACE_MS = 10 * 60_000;
 
-/** Keys reached or skipped today, and when each planned trip home has got you there, for the planner. */
 export function dayState(day: DayRecord | null): {
   skipped: Set<string>;
   done: Set<string>;
@@ -363,9 +236,6 @@ export function dayState(day: DayRecord | null): {
     if (r.kind === 'missed') missed.add(k);
     if (r.away) away = true;
   }
-  // A missed bus got you nowhere. The bus you said you caught gets you home
-  // when it arrives, not the plan's: a later one than planned arrives later.
-  // With no arrival known for it, the plan's.
   for (const k of new Set([...Object.keys(day?.plans ?? {}), ...Object.keys(day?.trips ?? {})])) {
     const r = day?.trips[k];
     const boarded = r?.kind === 'boarded' && r.boarded ? tripEnd(r.boarded) : null;
@@ -378,18 +248,11 @@ export function dayState(day: DayRecord | null): {
 
 function stub(env: Env, userId: string): DurableObjectStub | null {
   if (!env.TRIPS) return null;
-  // Its users are in Singapore, like the timelapse recorder's.
   return env.TRIPS.get(env.TRIPS.idFromName(userId), { locationHint: 'apac' });
 }
 
-/**
- * How long a call to the Trip object may take. It answers in milliseconds;
- * one that's stuck (a busy or restarting object) mustn't hold up the card,
- * which works without it.
- */
 export const TRIP_TIMEOUT_MS = 3_000;
 
-/** The Trip object's answer, or a thrown error once it's taken too long. */
 function ask(s: DurableObjectStub, path: string, init?: RequestInit): Promise<Response> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<never>((_, reject) => {
@@ -398,7 +261,6 @@ function ask(s: DurableObjectStub, path: string, init?: RequestInit): Promise<Re
   return Promise.race([s.fetch(`https://trip/${path}`, init), late]).finally(() => timer && clearTimeout(timer));
 }
 
-/** A change sent to the Trip object (tripdo.ts), as JSON. */
 function post(s: DurableObjectStub, path: string, body: unknown): Promise<Response> {
   return ask(s, path, {
     method: 'POST',
@@ -407,7 +269,6 @@ function post(s: DurableObjectStub, path: string, body: unknown): Promise<Respon
   });
 }
 
-/** Today's signals, or null when there are none (or no Durable Object binding). */
 export async function loadDay(env: Env, userId: string, nowMs: number): Promise<DayRecord | null> {
   const s = stub(env, userId);
   if (!s) return null;
@@ -415,8 +276,6 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
     const res = await ask(s, `day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
-    // A day with only revisions left (a signal undone) is kept: a plan from
-    // revision 0 would be dropped against the one stored.
     return day &&
       (Object.keys(day.trips).length ||
         Object.keys(day.plans ?? {}).length ||
@@ -426,16 +285,11 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
       ? day
       : null;
   } catch (err) {
-    // The answer works without trip state; a failure only loses the phase.
     console.error('trip state unavailable', err instanceof Error ? err.name : typeof err);
     return null;
   }
 }
 
-/**
- * Sends any of today's changes to the Trip object in one request, and
- * answers with the day as it then stands (null without the binding).
- */
 export async function updateTrip(
   env: Env,
   userId: string,
@@ -449,7 +303,6 @@ export async function updateTrip(
   return (await res.json()) as DayRecord;
 }
 
-/** Several trips' records in one call to the Trip object (null deletes one). */
 export async function saveSignals(
   env: Env,
   userId: string,
@@ -459,12 +312,6 @@ export async function saveSignals(
   return updateTrip(env, userId, { items }, nowMs);
 }
 
-/**
- * Empties a user's trip state at once, for an account that's being deleted
- * (it would otherwise go at midnight), and stops anything storing it again
- * today (tripdo.ts). Tried twice; a failure is then logged, not thrown: the
- * account still goes, and the state still expires with the day.
- */
 export async function clearTrip(env: Env, userId: string): Promise<void> {
   const s = stub(env, userId);
   if (!s) return;
@@ -481,12 +328,6 @@ export async function clearTrip(env: Env, userId: string): Promise<void> {
   }
 }
 
-/**
- * Asks the user's Trip object to wake at `atMs` (the card's nextChangeAt),
- * work out the card again and push it if it changed. Push only. Never
- * throws; false (logged) when the object didn't take it, so the cron can
- * ask again.
- */
 export async function watchTrip(env: Env, userId: string, atMs: number, nowMs: number): Promise<boolean> {
   try {
     await updateTrip(env, userId, { watch: { userId, at: atMs } }, nowMs);

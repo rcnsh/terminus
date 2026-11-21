@@ -1,17 +1,11 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Settings window
-
-/// Settings' groups, in the order the sidebar shows them: the same as the
-/// phone's and the website's.
 enum SettingsPane: String, CaseIterable, Identifiable {
     case trips, timetable, favourites, notifications, devices, language, appearance, account, about, feedback
 
     var id: String { rawValue }
 
-    /// The sidebar's groups, under their headings, as on the phone and the web;
-    /// About and Send feedback after them.
     static let groups: [(String?, [SettingsPane])] = [
         (L("Your day"), [.trips, .timetable, .favourites, .notifications]),
         (L("Account"), [.account, .devices]),
@@ -50,16 +44,12 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     }
 }
 
-/// A sidebar of groups and the chosen one beside it, like the Mac's own
-/// settings. The back arrow returns to the group shown before.
 struct SettingsWindow: View {
     @Bindable var app: AppModel
     @State private var setup: SetupModel
     @State private var pane: SettingsPane?
     @State private var visited: [SettingsPane] = []
-    /// Set while the back arrow changes the pane, so that isn't recorded as a visit.
     @State private var going = false
-    /// This window, and whether its first load is done, to load again when it's come back to.
     @State private var window: NSWindow?
     @State private var loaded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -124,9 +114,6 @@ struct SettingsWindow: View {
             await setup.loadDevices()
             loaded = true
         }
-        // Signed in from a guest (Settings' Add an email) or out: this window
-        // stays, with what it showed, so the account's setup goes and the new
-        // one's comes. A reply for the old one is dropped (SetupModel.load).
         .onChange(of: app.session) {
             setup.reset()
             guard app.paired else { return }
@@ -135,8 +122,6 @@ struct SettingsWindow: View {
                 await setup.loadDevices()
             }
         }
-        // Come back to while open: the account again, so a device added or a
-        // change made on another one shows here.
         .background { WindowReader { if window !== $0 { window = $0 } } }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { n in
             guard loaded, let window, n.object as? NSWindow === window else { return }
@@ -154,7 +139,6 @@ struct SettingsWindow: View {
     }
 }
 
-/// The settings window's scroll view, for a pane to show something it opened.
 struct SettingsScrollKey: EnvironmentKey { static var defaultValue: ScrollViewProxy? { nil } }
 extension EnvironmentValues {
     var settingsScroll: ScrollViewProxy? {
@@ -163,7 +147,6 @@ extension EnvironmentValues {
     }
 }
 
-/// One group's settings.
 struct SettingsPaneView: View {
     let pane: SettingsPane
     @Bindable var app: AppModel
@@ -175,7 +158,6 @@ struct SettingsPaneView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Devices shows its own, beside the list.
             if let message = setup.message, pane != .devices {
                 Text(message).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(message)
             }
@@ -229,8 +211,6 @@ struct SettingsPaneView: View {
                 FeedbackPane(app: app, setup: setup)
             }
         }
-        // The import's answer replaces the profile, so nothing that edits it
-        // takes a click until it's in (SetupModel.edit refuses them meanwhile).
         .disabled(setup.importing)
     }
 
@@ -244,7 +224,6 @@ struct SettingsPaneView: View {
             Updater.shared.checkNow()
         }
         .disabled(!Updater.shared.running)
-        // Sparkle's own preferences; with no updater (outside Applications) there's nothing to set.
         Toggle(
             L("Check for updates automatically"),
             isOn: Binding(get: { Updater.shared.checksAutomatically }, set: { Updater.shared.setChecksAutomatically($0) })
@@ -290,8 +269,6 @@ struct SettingsPaneView: View {
                 Button(L("Sign out"), role: .destructive) { app.unpair() }
             }
             Divider().padding(.vertical, 8)
-            // As on Android: the rest of the account is on the web, deleting it too
-            // (where you sign in again to confirm), but each has its own way there.
             VStack(alignment: .leading, spacing: 2) {
                 Button(L("Open the account page")) { openAccountPage() }
                     .buttonStyle(.link)
@@ -310,15 +287,10 @@ struct SettingsPaneView: View {
     private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.linkBase)/account/#account")!) }
 }
 
-/// Favourites, each with Remove, then the search to add one. Rows come and go
-/// gently rather than in one frame, as on the phone and the web: a new one (or
-/// one back with Undo) fades in with a moment's wash of the accent, and a
-/// removed one fades and the list closes up, with Undo under it for a while.
 private struct FavouritesPane: View {
     @Bindable var app: AppModel
     let setup: SetupModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The one just added or put back, washed in the accent for a moment.
     @State private var fresh: String?
     @State private var removed: SetupModel.RemovedPlace?
     @State private var undoTimer: Task<Void, Never>?
@@ -374,7 +346,6 @@ private struct FavouritesPane: View {
         if let key = r.place["key"] as? String { arrived(key) }
     }
 
-    /// The wash on a row just arrived, fading after a moment.
     private func arrived(_ key: String) {
         guard !reduceMotion else { return }
         fresh = key
@@ -385,13 +356,10 @@ private struct FavouritesPane: View {
     }
 }
 
-/// Adding a favourite: the same search as the popover's, a pick adds it.
 private struct FavouriteSearch: View {
     @Bindable var app: AppModel
     let setup: SetupModel
-    /// How the lists change as one is added: the pick leaves the suggestions as it joins the favourites.
     let motion: Animation?
-    /// The new favourite's key.
     let onAdded: (String) -> Void
     @State private var query = ""
     @State private var note: String?
@@ -403,7 +371,6 @@ private struct FavouriteSearch: View {
                 .onChange(of: query) { _, _ in app.loadDestinations() }
                 .onAppear { app.loadDestinations() }
             let q = query.trimmingCharacters(in: .whitespaces)
-            // The stops your classes go to come first, before anything is typed too.
             let favourite = Set(setup.places.map(\.to))
             let timetable = Array(Set(setup.classes.map(\.to))).filter { !favourite.contains($0) }.sorted()
                 .compactMap { to in app.destinations.first { $0.kind == "stop" && $0.code == to } }
@@ -428,7 +395,6 @@ private struct FavouriteSearch: View {
     }
 }
 
-/// A group's heading, its rows in one box, and at most one line under them.
 private struct TripsGroup<Content: View>: View {
     let title: String
     let hint: String
@@ -446,9 +412,6 @@ private struct TripsGroup<Content: View>: View {
     }
 }
 
-/// Your trips: where you live, your day's hours and how you walk, in three
-/// short groups of one-line rows, as on the phone and the web. Setup asks
-/// the same things with more words (HomeStep, PaceStep).
 struct TripsPane: View {
     let setup: SetupModel
     let app: AppModel
@@ -604,7 +567,6 @@ struct TripsPane: View {
         }
     }
 
-    /// Minutes after midnight as a time of day for a DatePicker, today on this Mac's calendar.
     private func time(get: @escaping () -> Int, set: @escaping (Int) -> Void) -> Binding<Date> {
         Binding(
             get: { Calendar.current.date(bySettingHour: get() / 60, minute: get() % 60, second: 0, of: Date()) ?? Date() },

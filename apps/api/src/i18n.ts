@@ -1,36 +1,6 @@
-/**
- * Every word the server writes, in English and Simplified Chinese.
- *
- * The language is per request: the profile's `lang` when it isn't "auto",
- * else `?lang=`, else the website's `terminus-lang` cookie, else the
- * request's Accept-Language (any zh* is Chinese), else English. It's carried in an AsyncLocalStorage set once at the top of
- * the request, so the formatters call `m()` instead of passing a language
- * through every function. Outside a request (tests, the cron) it's English.
- *
- * `zh` is typed from `en`: a message without a translation fails the
- * typecheck. Place and service names (KR MRT, COM3, D2) stay English in both.
- *
- * Glossary: leave 出发, board/catch 搭, get off 下车, stop 车站, bus 巴士,
- * walk 步行, timetable 课表, class 课, favourite 收藏, Today 今天,
- * Nearby 附近, widget 小组件, Settings 设置, sign in 登录, sign out 退出登录,
- * device 设备, pair 配对, sign-in code 验证码, pairing code 配对代码,
- * expired (a code, link or request) 失效, service 线路 (a drawn route line
- * or walking directions 路线), timetabled (a public bus's LTA timetable time) 按时刻表,
- * home stop 家附近的车站, shuttle 校园巴士, public bus 公共巴士, fare 车费,
- * account 账户, trip 行程, location (the setting) 定位 (where you are 位置),
- * a bus that's often packed 很挤, crowding 拥挤程度 (low 低, medium 中,
- * high 高; on the Buses tab Seats 有座位, Busy 有点挤, Packed 很挤),
- * estimate 估计, live 实时, change (buses) 换乘, an email address 邮箱 ("添加邮箱"), an email
- * sent 邮件. A space between Chinese and Latin letters or digits
- * ("9:41 的 D2"), none between two Chinese words ("搭约 9:41 的 D2"),
- * full-width punctuation in Chinese. The website and the apps follow the
- * same glossary.
- */
-
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type Lang = 'en' | 'zh';
-/** What a profile can say: a language, or follow each device. */
 export type LangPref = Lang | 'auto';
 export const LANG_PREFS: readonly LangPref[] = ['auto', 'en', 'zh'];
 
@@ -44,13 +14,11 @@ export function lang(): Lang {
   return store.getStore()?.lang ?? 'en';
 }
 
-/** The profile chose a language: it wins over the request's for the rest of the request. */
 export function useProfileLang(pref: LangPref | undefined): void {
   const s = store.getStore();
   if (s && pref && pref !== 'auto') s.lang = pref;
 }
 
-/** "zh-CN,zh;q=0.9,en;q=0.8" -> zh. The first supported language by q, else English. */
 export function langFromHeader(header: string | null | undefined): Lang {
   if (!header) return 'en';
   const tags = header
@@ -69,11 +37,6 @@ export function langFromHeader(header: string | null | undefined): Lang {
   return 'en';
 }
 
-/**
- * A request's language before the profile is known: ?lang=, then the
- * website's choice (the terminus-lang cookie, for pages the Worker serves
- * itself, like the sign-in link's), then Accept-Language.
- */
 export function langOfRequest(req: Request): Lang {
   const q = new URL(req.url).searchParams.get('lang');
   if (q === 'en' || q === 'zh') return q;
@@ -85,19 +48,15 @@ export function langOfRequest(req: Request): Lang {
 type Fn<A extends unknown[]> = (...a: A) => string;
 
 const en = {
-  // Durations (format.ts)
   now: 'now',
   oneMin: '1 min',
   nMin: ((n: number) => `${n} min`) as Fn<[number]>,
-  /** An estimate: "~5 min", "~9:41". */
   approx: ((s: string) => `~${s}`) as Fn<[string]>,
   noTimes: 'no times',
-  /** An old reading's age: "(3 min ago)"; under a minute, "(<1 min ago)", never "(0 min ago)". */
   staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin < 1 ? '<1' : ageMin} min ago)`) as Fn<
     [string, string, number]
   >,
 
-  // The answer's detail line (format.ts)
   crossRoad: 'cross the road',
   walkToStop: ((t: string) => `${t} walk`) as Fn<[string]>,
   shortWalk: 'short walk',
@@ -126,13 +85,10 @@ const en = {
   directionUnconfirmed: 'direction unconfirmed',
   minOld: ((n: number) => (n < 1 ? 'under a minute old' : `${n} min old`)) as Fn<[number]>,
   estimated: 'estimated',
-  /** The headline bus is a public one, with a fare. */
   publicBus: 'public bus',
   liveUnavailable: 'live times unavailable',
-  /** "or A1 in 14 min", "or A1 now", "or UTown in 3 min" (the same bus from another stop). */
   orAlt: ((name: string, eta: string, plain: boolean) => `or ${name} ${plain ? eta : `in ${eta}`}`) as Fn<[string, string, boolean]>,
 
-  // Nothing to board, or faster on foot (format.ts)
   noBuses: 'No buses running',
   walkLabel: ((t: string) => `Walk · ${t}`) as Fn<[string]>,
   noBusWalk: ((t: string) => `No bus · walk ${t}`) as Fn<[string]>,
@@ -145,34 +101,23 @@ const en = {
   fasterOnFoot: 'Faster on foot',
   fromStop: ((stop: string) => `from ${stop}`) as Fn<[string]>,
 
-  // A stop's board rows (resolve.ts): the Buses tab, Nearby, a stop on the map
-  /** The buses after the next, in minutes: "then 12, ~20 min". */
   thenMin: ((times: string) => `then ${times} min`) as Fn<[string]>,
-  /** Where a service goes from a stop: the next stop, then where it ends. */
   towardsOne: ((stop: string) => `to ${stop}`) as Fn<[string]>,
   towardsTwo: ((next: string, end: string) => `to ${next}, ${end}`) as Fn<[string, string]>,
   endsHere: 'Ends here',
-  /** Where a stop's buses go, by places a newcomer knows (via.ts): "to UTown, Kent Ridge MRT". */
   viaTo: ((places: string) => `to ${places}`) as Fn<[string]>,
-  /** A loop on Nearby, by the first well-known stop it passes: "via UTown". A line's stops too: "via AS 5, PGP". */
   loopVia: ((place: string) => `via ${place}`) as Fn<[string]>,
 
-  // The list of lines on the Stops tab (campus.ts, lines.ts)
-  /** A line that comes back to where it starts. */
   lineLoop: ((stop: string) => `Loop from ${stop}`) as Fn<[string]>,
   lineEnds: ((from: string, to: string) => `${from} to ${to}`) as Fn<[string, string]>,
-  /** How many of a line's buses are on the road now. */
   busesOut: ((n: number) => `${n} out`) as Fn<[number]>,
   noneOut: 'None out',
 
-  // Clock and lateness (clock.ts)
-  /** "6:36 PM", with a no-break space so a line never ends between the two. */
   clock12: ((hm: string, pm: boolean) => `${hm}\u00a0${pm ? 'PM' : 'AM'}`) as Fn<[string, boolean]>,
   earlyBy: ((n: number) => `${n} min early`) as Fn<[number]>,
   justInTime: 'just in time',
   lateBy: ((n: number) => `~${n} min late`) as Fn<[number]>,
 
-  // The card (card.ts)
   crowdLowCap: 'Crowding: low',
   crowdMediumCap: 'Crowding: medium',
   crowdHighCap: 'Crowding: high',
@@ -183,21 +128,17 @@ const en = {
   termSoonTitle: ((term: string, date: string) => `${term} starts ${date}`) as Fn<[string, string]>,
   termSoonBody: 'Import your new timetable from NUSMods, so your plans are right from the first day.',
   estimateNote: 'Estimated from the usual gap between buses. Live times show nearer the time.',
-  /** At the stop: "D2 at 9:41". */
   busAt: ((svc: string, t: string) => `${svc} at ${t}`) as Fn<[string, string]>,
   leaveBy: ((t: string) => `Leave by ${t}`) as Fn<[string]>,
   leaveNow: 'Leave now',
-  /** After the leave-by: "catch the 9:41 D2 at COM3, off at KR MRT". */
   leaveVia: ((t: string | null, svc: string, stop: string, off: string | null) =>
     `catch the ${t ? `${t} ` : ''}${svc} at ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string | null, string, string, string | null]>,
-  /** The class card: "Catch the 9:41 D2 at COM3". */
   catchBus: ((t: string | null, svc: string, stop: string, off: string | null) =>
     `Catch the ${t ? `${t} ` : ''}${svc} at ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string | null, string, string, string | null]>,
   walkThere: 'Walk there',
   arrive: ((t: string, slack: string) => `Arrive ${t} · ${slack}`) as Fn<[string, string]>,
   arriveLower: ((t: string, slack: string) => `arrive ${t} · ${slack}`) as Fn<[string, string]>,
   catchLine: ((c: string, t: string, slack: string) => `${c} · arrive ${t}, ${slack}`) as Fn<[string, string, string]>,
-  /** The class card's sooner bus: "Or go now: A2 at 09:03, off at Ventus · arrive 09:18". */
   goNow: ((svc: string, t: string, off: string | null, reach: string | null) =>
     `Or go now: ${svc} at ${t}${off ? `, off at ${off}` : ''}${reach ? ` · arrive ${reach}` : ''}`) as Fn<
     [string, string, string | null, string | null]
@@ -207,14 +148,12 @@ const en = {
   phaseWaiting: 'At the stop',
   phaseRiding: 'On the bus',
   phaseMissed: "Missed it. Here's the next way there.",
-  /** An iPhone notification's words when there's no card to word it from (push.ts). */
   pushTitle: 'Your trip',
   pushOpen: 'Open terminus for the latest on your trip.',
   phaseGone: "If you missed it, here's the next way there.",
   svcFrom: ((svc: string, stop: string) => `${svc} from ${stop}`) as Fn<[string, string]>,
   walk: 'walk',
   leaveGlance: ((t: string) => `Leave ${t}`) as Fn<[string]>,
-  /** "D2 9:41 at COM3". */
   svcAtStop: ((svc: string, t: string | null, stop: string) => `${svc} ${t ? `${t} ` : ''}at ${stop}`) as Fn<
     [string, string | null, string]
   >,
@@ -244,38 +183,28 @@ const en = {
   backOnCampus: 'Back on campus',
   undoHome: 'Undo: going home',
   undoTo: ((label: string) => `Undo: going to ${label}`) as Fn<[string]>,
-  /** Undo for a skipped trip with no name. */
   undoTrip: 'Undo: not going',
-  /** What a landmark is, under its name in the search ("Food court", from landmarks.json). */
   landmarkKind: ((kind: string) => kind) as Fn<[string]>,
-  // The small line above the card (card.heading)
   headClass: ((label: string) => `Next class · ${label}`) as Fn<[string]>,
   headGap: ((label: string) => `Long gap · ${label}`) as Fn<[string]>,
   headHome: 'Heading home',
   headPlace: ((label: string) => `Going to ${label}`) as Fn<[string]>,
-  // The trip as steps, worded (card.journey)
   journeyTo: ((dest: string) => `To ${dest}`) as Fn<[string]>,
   startsShort: ((t: string) => `starts ${t}`) as Fn<[string]>,
-  /** A one-off trip's or a usual time's arrive-by, where a class has startsShort. */
   thereBy: ((t: string) => `arrive by ${t}`) as Fn<[string]>,
   byTime: ((t: string) => `by ${t}`) as Fn<[string]>,
   arriveCap: ((t: string) => `Arrive ${t}`) as Fn<[string]>,
-  /** A class's sooner bus: "Or go now: R2 at 09:06 from PGP". */
   orGoNowFrom: ((svc: string, t: string, stop: string, off: string | null) =>
     `Or go now: ${svc} at ${t} from ${stop}${off ? `, off at ${off}` : ''}`) as Fn<[string, string, string, string | null]>,
-  /** A trip's other bus: "Or A1 at 09:09 from PGP". */
   orBusFrom: ((svc: string, t: string, stop: string) => `Or ${svc} at ${t} from ${stop}`) as Fn<[string, string, string]>,
   rideFor: ((t: string) => `${t} ride`) as Fn<[string]>,
   walkFrom: ((t: string, stop: string) => `${t} walk from ${stop}`) as Fn<[string, string]>,
   walkToPlace: ((place: string) => `Walk to ${place}`) as Fn<[string]>,
   atStop: ((stop: string) => `at ${stop}`) as Fn<[string]>,
-  /** A bus and its time, short: "D2 09:42". */
   busTime: ((svc: string, t: string) => `${svc} ${t}`) as Fn<[string, string]>,
-  // Today's timeline (day.ts)
   homeFrom: ((from: string) => `Home, from ${from}`) as Fn<[string]>,
   homeAfterClass: 'Home after your last class',
 
-  // Rest, the next class, will I make it (profile.ts, calendar.ts)
   dayStarts: ((t: string) => `Day starts ${t}`) as Fn<[string]>,
   doneForToday: 'Done for today',
   timetableFor: ((term: string) => `Your timetable is for ${term} · import this semester's in Settings`) as Fn<[string]>,
@@ -284,14 +213,12 @@ const en = {
   today: 'today',
   tomorrow: 'tomorrow',
   dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as readonly string[],
-  /** "Mon 28 Sep". */
   shortDate: ((dow: number, date: number, month: number) =>
     `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]} ${date} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month]}`) as Fn<
     [number, number, number]
   >,
   nextClass: ((off: string | null, label: string, when: string, t: string) =>
     `${off ? `${off} · ` : ''}Next: ${label}, ${when} ${t}`) as Fn<[string | null, string, string, string]>,
-  // The next class, on its own card under Done for today (card.upcoming).
   upcomingToday: 'Today',
   upcomingTomorrow: ((dow: number) => `Tomorrow · ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]}`) as Fn<[number]>,
   classAt: ((name: string, t: string) => `${name} at ${t}`) as Fn<[string, string]>,
@@ -302,10 +229,8 @@ const en = {
   readingWeek: 'Reading week',
   exams: 'Exams',
   vacation: 'Vacation',
-  /** A public holiday's name, as in data/calendar.json. */
   holiday: ((name: string) => name) as Fn<[string]>,
 
-  // The planned answer (next.ts, answer.ts)
   youreHome: "You're home",
   noTimetableYet: 'No timetable yet',
   noMoreClassesToday: 'No more classes today',
@@ -327,7 +252,6 @@ const en = {
   youreAt: ((stop: string) => `You're at ${stop}`) as Fn<[string]>,
   setUpHint: 'Send lat/lon for nearby buses, or ?to= a stop or venue',
 
-  // What terminus has learned (outcomes.ts, leave.ts)
   suggestQuiet: ((label: string, n: number) => `You've skipped ${label} ${n} weeks running. Stop reminders for it?`) as Fn<
     [string, number]
   >,
@@ -342,7 +266,6 @@ const en = {
   mayBeFull: ((busy: string) => `${busy}, and may be full`) as Fn<[string]>,
   soOneEarlier: ((busy: string) => `${busy}, so this is one bus earlier`) as Fn<[string]>,
 
-  // Timetable import errors (me.ts, nusmods.ts)
   nusmodsNoAnswer: ((mods: string) => `NUSMods didn't respond for ${mods}. Nothing was changed. Try again in a minute.`) as Fn<[string]>,
   modsNoClasses: ((mods: string, many: boolean, term: string) => `${mods} ${many ? 'have' : 'has'} no classes in ${term}`) as Fn<
     [string, boolean, string]
@@ -357,7 +280,6 @@ const en = {
   needsKey: ((site: string) => `this needs an API key: create one at ${site}/account and send it as x-api-key`) as Fn<[string]>,
   signalKinds: ((kinds: string) => `kind is one of ${kinds}`) as Fn<[string]>,
 
-  // Emails (accounts.ts, applogin.ts)
   checkEmail: 'Check your email for a sign-in code.',
   codeSubject: ((code: string) => `Your terminus code: ${code}`) as Fn<[string]>,
   codeIs: ((code: string) => `Your terminus sign-in code is ${code}`) as Fn<[string]>,
@@ -381,7 +303,6 @@ const en = {
     [string, string]
   >,
   aDevice: 'a device',
-  /** /api/pair/check's name for an account with no email, shown where the address would be. */
   accountWithoutEmail: 'an account without an email',
   singaporeTime: ((when: string) => `${when} Singapore time`) as Fn<[string]>,
   deviceAddedSubject: ((device: string) => `terminus was added to ${device}`) as Fn<[string]>,
@@ -392,7 +313,6 @@ const en = {
     [string, string, string]
   >,
 
-  // Pages the Worker serves itself (me.ts)
   pageLinkExpired: 'Link expired',
   linkExpiredHtml:
     '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>',
@@ -428,16 +348,8 @@ const en = {
 export type Msgs = typeof en;
 
 const HAN = /[\u3400-\u9fff]/;
-// Anything printable in ASCII: letters, digits, and the brackets, quotes and
-// tags a value can start or end with ("(PGP)", "<strong>Pixel 8</strong>").
 const LATIN = /[!-~]/;
 
-/**
- * Chinese text with values in it, spaced by the glossary's rule: a space
- * where Chinese meets Latin text (letters, digits, ASCII punctuation), none
- * between two Chinese words. Two values side by side need a literal space. Write the literal parts with no spaces round a value:
- * zs`在${stop}搭${t}的${svc}` gives "在 PGP 搭约 9:41 的 D2".
- */
 function zs(parts: TemplateStringsArray, ...values: unknown[]): string {
   let out = '';
   const add = (piece: string) => {
@@ -454,7 +366,6 @@ function zs(parts: TemplateStringsArray, ...values: unknown[]): string {
   return out;
 }
 
-/** "到 COM3", "到家". */
 const zhTo = (dest: string) => zs`到${dest}`;
 
 const zhDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -747,21 +658,14 @@ export function m(): Msgs {
   return MSGS[lang()];
 }
 
-/** A short list in running text: "12, 20" in English, "12、20" in Chinese. */
 export function listOf(items: string[]): string {
   return items.join(lang() === 'zh' ? '、' : ', ');
 }
 
-/** One language's messages, for tests and the review sheet. */
 export function msgsFor(l: Lang): Msgs {
   return MSGS[l];
 }
 
-/**
- * Error messages, which every route words in English (`json({ error })`),
- * translated where they're sent (http.ts). A test checks every literal
- * `error: '...'` in src has an entry, so a new one can't go untranslated.
- */
 export const ERRORS_ZH: Record<string, string> = {
   'unknown destination: pass ?to= a stop or venue code': '未知的目的地：用 ?to= 指定车站或地点代码',
   'pass lat and lon, or ?from= a stop code': '请提供 lat 和 lon，或用 ?from= 指定车站代码',
@@ -873,7 +777,6 @@ export const ERRORS_ZH: Record<string, string> = {
   "terminus can't reach your account right now; try again in a minute": 'terminus 现在无法访问你的账户，请一分钟后再试',
 };
 
-/** An error message in the current language. Unknown ones stay English. */
 export function errorText(en: string): string {
   if (lang() === 'en') return en;
   return ERRORS_ZH[en] ?? en;

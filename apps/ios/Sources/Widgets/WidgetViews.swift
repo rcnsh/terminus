@@ -1,11 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// A widget at one moment, drawn as Now is: the hour's sky over the top with
-/// the campus's hills, your stop and your bus on the horizon. It lays itself
-/// out by its size: a small square counting to the time to leave, the trip
-/// across a medium one, and on a large one your day: the trip's steps and
-/// what's left of today. On the Lock Screen, the same words plainly.
 struct BusWidgetView: View {
     let entry: BusEntry
     let kind: String
@@ -23,8 +18,6 @@ struct BusWidgetView: View {
                 GeometryReader { geo in
                     let w = geo.size.width
                     let h = geo.size.height
-                    // Before the first answer: a made-up one in its place, redacted to bars, so the
-                    // widget has the shape it will have. Widgets don't animate, so it doesn't shimmer.
                     let chipped = s.withChips(width: w)
                     let sc = chipped.waiting ? chipped.standIn(family: family) : chipped
                     Group {
@@ -51,8 +44,6 @@ struct BusWidgetView: View {
 private struct StandInKey: EnvironmentKey { static let defaultValue: String? = nil }
 
 extension EnvironmentValues {
-    /// Set while a widget draws a made-up answer in place of the one on its way:
-    /// what VoiceOver says for it instead.
     var widgetStandIn: String? {
         get { self[StandInKey.self] }
         set { self[StandInKey.self] = newValue }
@@ -60,9 +51,6 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Drawn from a made-up answer while the real one is on its way: redacted
-    /// to bars. Its words are kept from VoiceOver (`standInHidden`, `standInSpoken`),
-    /// which says `spoken` instead; its buttons stay real and reachable.
     @ViewBuilder func standingIn(_ on: Bool, spoken: String) -> some View {
         if on {
             redacted(reason: .placeholder).environment(\.widgetStandIn, spoken)
@@ -71,10 +59,8 @@ extension View {
         }
     }
 
-    /// Made-up words while standing in: not read.
     func standInHidden() -> some View { modifier(StandInWords(spoken: false)) }
 
-    /// The headline while standing in: read as what the widget is waiting for.
     func standInSpoken() -> some View { modifier(StandInWords(spoken: true)) }
 }
 
@@ -99,7 +85,6 @@ extension WidgetFamily {
     var isAccessory: Bool { self == .accessoryCircular || self == .accessoryInline || self == .accessoryRectangular }
 }
 
-/// Everything a layout needs, worked out once.
 struct Scene {
     let entry: BusEntry
     let look: WidgetLook
@@ -108,13 +93,9 @@ struct Scene {
     var mode: WidgetMode = .timetable
     var answer: NextAnswer?
     var face: WidgetFace
-    /// The card style chosen in Settings: steps or route.
     let style: String
-    /// No answer yet, and one on its way (or none asked for yet).
     var waiting = false
-    /// Drawing a made-up answer in place of the one on its way (`standIn`), to be redacted.
     var stood = false
-    /// The made-up stops Nearby draws while it's `stood`.
     private var standInStops: [NearbyStop]?
 
     init(entry: BusEntry, kind: String, family: WidgetFamily, dark: Bool) {
@@ -127,7 +108,6 @@ struct Scene {
         apply()
     }
 
-    /// The chips for a widget `width` across (the large one shares its row with ↻), and what's shown by them.
     func withChips(width: CGFloat) -> Scene {
         guard entry.paired, slot != nil, !entry.sample else { return self }
         var s = self
@@ -143,15 +123,12 @@ struct Scene {
         let onTimetable = mode == .timetable
         if case .to = mode { answer = entry.slot?.answer } else { answer = onTimetable ? entry.plan : nil }
         let error = onTimetable ? entry.error : entry.slot?.error
-        // Offline (the last refresh failed) with the plan gone stale, or none
-        // kept: the next thing on the day plan kept for it.
         var offline: OfflineDay.Pick?
         if onTimetable, entry.paired, let e = error, e != WidgetFace.updating, answer.map({ WidgetFace.isOld($0, now: now) }) ?? true {
             offline = OfflineDay.next(entry.day, now: now)
         }
         face = WidgetFace.of(paired: entry.paired, mode: mode, answer: answer, error: error, offline: offline, now: now)
         if mode == .nearby {
-            // Only while it's being fetched: a failed first fetch shows its error, as the Nearby widget does.
             waiting = entry.paired && !entry.sample && (entry.nearby?.isEmpty ?? true) && entry.slot?.error == WidgetFace.updating
         } else {
             let updating = error == nil || error == WidgetFace.updating
@@ -159,9 +136,6 @@ struct Scene {
         }
     }
 
-    /// This scene with the gallery's made-up trip (or Nearby's made-up stops)
-    /// in place of the answer still to come, for drawing redacted. Its road has
-    /// no bus: a made-up one would read as real, even greyed.
     func standIn(family: WidgetFamily) -> Scene {
         var s = self
         s.stood = true
@@ -178,8 +152,6 @@ struct Scene {
 
     var link: URL { entry.paired ? mode.link : URL(string: "terminus://plan")! }
 
-    /// The shared board of buses near you as this widget shows it: its own
-    /// swap, and `error` (Nearby's last fetch; none under the trip).
     func nearbyModel(error: String?) -> NearbyModel {
         NearbyModel(
             paired: entry.paired, all: standInStops ?? entry.nearby, swap: entry.slot?.swap,
@@ -187,10 +159,8 @@ struct Scene {
             skew: ServerClock.skew, slot: slot, refresh: refresh, standIn: standInStops != nil)
     }
     var refresh: Bool { entry.paired && !entry.sample }
-    /// The words on the chosen chip over the sky, and on the ground.
     var onChosenSky: Color { look.palette.lightInk ? Color(rgb: 0x1C1917) : Color(rgb: 0xFAFAF9) }
 
-    /// What VoiceOver says for the widget, as one sentence rather than fragments.
     var spoken: String {
         if stood { return mode == .nearby ? L("Checking…") : L("Loading…") }
         if mode == .nearby { return nearbyModel(error: entry.slot?.error).spoken }
@@ -201,7 +171,6 @@ struct Scene {
 
 private let pad: CGFloat = 14
 
-/// The line above the headline, with ↻ at its end.
 private struct HeadRow: View {
     let text: String?
     let s: Scene
@@ -219,7 +188,6 @@ private struct HeadRow: View {
     }
 }
 
-/// Under the headline: what it gets you ("Arrive 9:52"), with how sure its time is.
 private struct SubLine: View {
     let s: Scene
     let inks: Inks
@@ -238,8 +206,6 @@ private struct SubLine: View {
     }
 }
 
-/// The small square: the time to leave, big, with what it is ("Leave by");
-/// the countdown; the hills; then the bus and its stop along the ground.
 struct SquareLayout: View {
     let s: Scene
     let w: CGFloat, h: CGFloat
@@ -251,11 +217,9 @@ struct SquareLayout: View {
         let skyH = h - footH - 2
         let strip = min(max(skyH * 0.3, 24), 40)
         let color = f.dim ? sky.muted : f.late ? sky.late : sky.ink
-        // The bus and where to catch it; else the leg's words, or the next class.
         let foot =
             f.journey?.bus.map { WidgetLeg(svc: $0.svc, color: $0.color, paid: $0.paid, text: "\($0.stop) \($0.board)") } ?? f.leg
             ?? f.tile.map { WidgetLeg(text: $0.title) }
-        // Narrow: where you're going, short ("GEA1000"), when the headline has no label of its own.
         let head = f.big != nil && !f.bigFirst ? f.bigLabel : f.tile?.label ?? f.journey?.place ?? f.heading
         ZStack(alignment: .topLeading) {
             SkyBackdrop(look: s.look, height: skyH, scale: strip / 92, road: f.road, moon: CGPoint(x: 28, y: 92))
@@ -269,7 +233,6 @@ struct SquareLayout: View {
                             if f.bigFirst, let label = f.bigLabel { small(label, sky.muted, 13) }
                         }
                     } else {
-                        // No time in it ("Leave now", "No classes today"): the headline itself, as big as fits.
                         Text(verbatim: f.headline).font(.system(size: f.headline.count <= 12 ? 24 : 18, weight: .bold)).foregroundStyle(
                             color
                         ).lineLimit(2).minimumScaleFactor(0.7)
@@ -289,9 +252,6 @@ struct SquareLayout: View {
     }
 }
 
-/// The trip across a medium widget: the line above, the headline and how it
-/// gets you there in the sky, the hills with your stop and your bus, then the
-/// leg along the ground and, on the favourites widget, the chips.
 struct TripLayout: View {
     let s: Scene
     let w: CGFloat, h: CGFloat
@@ -301,7 +261,6 @@ struct TripLayout: View {
         let sky = s.look.sky
         let chipsH: CGFloat = s.chips.isEmpty ? 0 : 42
         let tileH: CGFloat = f.tile == nil ? 0 : 50
-        // As much as fits, the leg first to go, then the line under the headline.
         let textFull: CGFloat = 6 + 32 + 32
         var leg = f.leg != nil
         var sub = f.sub != nil || f.pill != nil
@@ -334,9 +293,6 @@ struct TripLayout: View {
     }
 }
 
-/// The large widget: the chips across the sky's top, the headline, then on
-/// the ground the trip's steps in the card style chosen in Settings and
-/// what's left of today's timetable.
 struct DayLayout: View {
     let s: Scene
     let w: CGFloat, h: CGFloat
@@ -351,9 +307,6 @@ struct DayLayout: View {
         let journey = s.answer?.phase == "riding" ? nil : f.journey
         let bodyH: CGFloat = journey.map { JourneyView.height($0, style: s.style) } ?? (f.leg != nil ? 30 : 0)
         var left = h - skyH - bodyH - 12
-        // The nearest stop's next two buses, under the trip, when they fit
-        // and the shared board is from the last half hour; then today's timetable.
-        // Under a trip there's seldom room for their tiles: then a line of them.
         let tiles = left >= NearbyPair.head + NearbyPair.tile
         let pairH = NearbyPair.head + (tiles ? NearbyPair.tile : NearbyPair.line)
         let fresh = s.entry.nearbyAt.map { s.entry.date.timeIntervalSince($0) <= NearbyShared.keep } ?? false
@@ -367,11 +320,8 @@ struct DayLayout: View {
             ? (s.entry.day.flatMap { $0.date == nil || $0.date == OfflineDay.sgtDate(now) ? $0 : nil }?.items.filter {
                 ["now", "next", "later"].contains($0.status)
             }.prefix(rows)).map(Array.init) ?? [] : []
-        // Nothing left of today: the room goes to two more of the stop's buses.
         let pairRows = !tiles ? 0 : nearby.map { today.isEmpty && left >= NearbyPair.tile + 1 && $0.buses.count > 2 } == true ? 2 : 1
         let nearbyH: CGFloat = nearby == nil ? 0 : pairH + (pairRows == 2 ? NearbyPair.tile + 1 : 0)
-        // A widget's size is fixed: what the steps and today leave over goes
-        // to the sky, rather than blank ground under them.
         let todayH: CGFloat = today.isEmpty ? 0 : 8 + 17 + 28 * CGFloat(today.count)
         let tallSky = max(skyH, h - 6 - bodyH - nearbyH - todayH - 14)
         return ZStack(alignment: .topLeading) {
@@ -411,7 +361,6 @@ struct DayLayout: View {
     }
 }
 
-/// What's left of today, from the day plan: a line each.
 private struct TodayList: View {
     let items: [DayPlan.Item]
     let inks: Inks
@@ -433,11 +382,6 @@ private struct TodayList: View {
     }
 }
 
-/// Nearby, as the Stops tab's board: the nearest stop's name big on the sky
-/// (the one across the road a tap away), then each service with its badge,
-/// where it stops next, Live and how full it is, and the time it's due at
-/// the end, with its minutes under 15. From the board every widget showing
-/// buses near you shares (NearbyShared), as Buses near you draws it.
 struct BoardLayout: View {
     let s: Scene
     let w: CGFloat, h: CGFloat
@@ -470,7 +414,6 @@ struct BoardLayout: View {
                     }
                     let other = first.flatMap { WidgetSwap.offer(all, v.swap, now: v.now, onScreen: [$0.stop.code]) }
                     HStack(spacing: 6) {
-                        // Once the times may be old, the line says so, and when they came.
                         if v.old, !buses.isEmpty, let at = v.fetchedAt {
                             small(L("Nearby") + " · " + L("Times may be old · %@", v.clock(at)), sky.late, 12, bold: true)
                         } else {
@@ -481,7 +424,6 @@ struct BoardLayout: View {
                             .standInHidden()
                         }
                         Spacer(minLength: 0)
-                        // None for made-up stops: there's no real one to swap to yet.
                         if let other, let slot = s.slot, let nearest = all.first, !v.standIn {
                             NearbySwapButton(slot: slot, from: nearest.stop.code, other: other, inks: sky)
                         }
@@ -507,7 +449,6 @@ struct BoardLayout: View {
                     } else {
                         let shown = Array(buses.prefix(rows))
                         VStack(spacing: 0) {
-                            // The medium widget, under its chips: no room for a row, so a line of the next three.
                             if rows == 0 { NearbyLine(v: v, buses: Array(buses.prefix(3)), inks: ground).frame(height: 34) }
                             ForEach(Array(shown.enumerated()), id: \.offset) { i, b in
                                 if i > 0 { Rectangle().fill(ground.line).frame(height: 1) }
@@ -531,8 +472,6 @@ struct BoardLayout: View {
     }
 }
 
-/// One service at the stop: its badge, where it stops next with Live and how
-/// full, and the time it's due with its minutes (or the bus after) under it.
 private struct BoardLine: View {
     let v: NearbyModel
     let b: StopBus
@@ -560,9 +499,6 @@ private struct BoardLine: View {
     }
 }
 
-// MARK: the Lock Screen
-
-/// Three lines: what it's for, the headline, and the countdown (else the line under it).
 struct RectangularView: View {
     let s: Scene
 
@@ -588,7 +524,6 @@ struct RectangularView: View {
     }
 }
 
-/// The bus and the time that matters: to leave, or to get off.
 struct CircularView: View {
     let s: Scene
 
@@ -613,7 +548,6 @@ struct CircularView: View {
     }
 }
 
-/// One line above the clock: the card's glance ("Leave 09:38").
 struct InlineView: View {
     let s: Scene
 

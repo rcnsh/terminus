@@ -1,7 +1,3 @@
-/**
- * The web app's tabs (apps/web/public/app/tabs.js): which one an address
- * opens, and that the bar, the sections and the styles each know all five.
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';

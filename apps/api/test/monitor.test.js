@@ -94,7 +94,6 @@ test('confirmed outages are kept for the status page, with a cause and no error 
   assert.equal((await readIncidents(e)).length, INCIDENTS_KEPT, 'capped');
 });
 
-/** Makes KV reads (or writes) of the keys matching `re` fail until undone. */
 function breakKV(e, re, op = 'get') {
   const real = e.KV[op];
   e.KV[op] = async (k, ...rest) => {
@@ -115,7 +114,6 @@ async function confirmedDown(e) {
 
 test('outside 07:00 to 23:30 Singapore time a failing feed is no outage', async () => {
   const e = env();
-  // 23:30 to 07:00 SGT is 15:30 to 23:00 UTC.
   const at = (h, m = 0) => Date.UTC(2026, 9, 22, h, m);
   await checkUpstream(e, at(15, 0), ok);
   await checkUpstream(e, at(15, 30), fail('network'));
@@ -125,13 +123,11 @@ test('outside 07:00 to 23:30 Singapore time a failing feed is no outage', async 
   assert.deepEqual(await readIncidents(e), []);
   assert.equal(e.EMAIL.sent.length, 0);
 
-  // Still failing at 07:00 after a night of it: down at once, from 07:00.
   await checkUpstream(e, at(23, 0), fail('network'));
-  assert.equal((await readUpstream(e)).up, false);
+  assert.equal((await readUpstream(e)).up, false, 'still failing at 07:00 after a night of it: down at once');
   assert.deepEqual(await readIncidents(e), [{ start: at(23, 0), end: null, cause: 'feed' }]);
   assert.equal(e.EMAIL.sent.length, 1);
 
-  // Down when the hours end, it stays down until the feed answers.
   const d = env();
   await checkUpstream(d, at(15, 0), fail('network'));
   await checkUpstream(d, at(15, 15), fail('network'));
@@ -152,7 +148,6 @@ test('the status page calls night-time failures maintenance, and a refused versi
   await checkUpstream(e, at(22, 0), ok);
   assert.equal(feedStatus(await readUpstream(e)).feed, 'up');
 
-  // 02:00 SGT: NUS refuses our version and no new one is found.
   const v = env();
   const refused = fail('auth rejected: code=10009 msg=We have a new release of uNivUS');
   const noFix = async () => ({ status: 'failed', note: 'nothing found' });
@@ -163,7 +158,6 @@ test('the status page calls night-time failures maintenance, and a refused versi
   assert.deepEqual(await readIncidents(v), [{ start: at(18, 15), end: null, cause: 'version' }]);
   assert.equal(v.EMAIL.sent.length, 1, 'emailed at night: it needs fixing before the buses run');
 
-  // In the day, anything else is an outage of the feed.
   const f = env();
   await checkUpstream(f, 1000, fail('network'));
   await checkUpstream(f, 2000, fail('network'));
@@ -171,8 +165,6 @@ test('the status page calls night-time failures maintenance, and a refused versi
 });
 
 test('a KV read that fails changes nothing: no state, no email, no incident', async () => {
-  // While the feed is down: read as "never checked", it would be marked up
-  // and the next failure would email "down" a second time.
   const e = env();
   await confirmedDown(e);
   const before = e.KV._map.get('monitor:upstream');
@@ -184,10 +176,9 @@ test('a KV read that fails changes nothing: no state, no email, no incident', as
   await checkUpstream(e, 6000, fail('network'));
   assert.equal(e.EMAIL.sent.length, 1, 'one "down" email');
   assert.deepEqual(await readIncidents(e), [{ start: 3000, end: null, cause: 'feed' }]);
-  // And once it's back, the incident closes.
   await checkUpstream(e, 7000, ok);
   await checkUpstream(e, 8000, ok);
-  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 7000, cause: 'feed' }]);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 7000, cause: 'feed' }], 'once the feed is back, the incident closes');
 });
 
 test('an incident whose close was not saved is closed on the next run', async () => {
@@ -348,10 +339,6 @@ test('an alert that fails to send is retried on the next run', async () => {
   assert.equal((await readUpstream(e)).pending, null);
 });
 
-/**
- * KV as Cloudflare runs it: a second write to a key within a second is
- * refused (429). Each check here is its own run, a second or more apart.
- */
 function oneWritePerKey(e) {
   const put = e.KV.put.bind(e.KV);
   const written = new Set();
@@ -376,7 +363,6 @@ test('each alert goes once, with KV taking one write a second to a key', async (
       await checkUpstream(e, 1000 * (i + 1), probe);
     }
     console.error = quiet;
-    // The beta logs its alerts in place of the email; nothing else is an error.
     const alerts = errors.filter((l) => l.startsWith('beta: '));
     assert.deepEqual(
       errors.filter((l) => !alerts.includes(l)),
@@ -512,7 +498,7 @@ test('cron: the large tables are swept once a Singapore day, the short-lived cod
   };
   const orig = console.error;
   console.error = () => {};
-  const day = Date.UTC(2026, 9, 7, 2); // 10:00 in Singapore
+  const day = Date.UTC(2026, 9, 7, 2);
   await runCron({ ...e, DB: db }, day);
   await runCron({ ...e, DB: db }, day + 15 * 60_000);
   await runCron({ ...e, DB: db }, day + 86_400_000);
@@ -658,7 +644,7 @@ test('the card says when the feed is down, on an answer without a live time', as
   const e = env();
   await checkUpstream(e, 1000, ok);
   assert.equal(await feedDownSince(e, 1000), null);
-  const down = Date.parse('2026-09-28T01:14:00Z'); // 9:14 in Singapore
+  const down = Date.parse('2026-09-28T01:14:00Z');
   await checkUpstream(e, down - 900_000, fail('HTTP 502'));
   assert.equal(await feedDownSince(e, down - 10_000), null, 'one failed check is a blip');
   await checkUpstream(e, down, fail('HTTP 502'));

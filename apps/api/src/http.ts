@@ -1,14 +1,6 @@
-/** Response helpers and query parsing shared by every route. */
-
 import { MAX_FIX_ACC_M, TTL } from './config.ts';
 import { errorText } from './i18n.ts';
 
-/**
- * Open to any origin, with the headers the API reads: an API key (x-api-key)
- * or a token, and if-match on PUT /api/me/profile. A page on another origin
- * sees only safelisted response headers unless they are exposed: the
- * profile's etag (sent back as if-match) and a 429's retry-after.
- */
 export const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'content-type, authorization, x-api-key, if-match, x-terminus-client',
@@ -17,7 +9,6 @@ export const CORS = {
 };
 
 export function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
-  // Errors are worded in English where they're raised; said in the request's language here.
   if (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string') {
     body = { ...body, error: errorText((body as { error: string }).error) };
   }
@@ -25,8 +16,6 @@ export function json(body: unknown, status = 200, extra: Record<string, string> 
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      // The answer is coordinate-specific and cheap to recompute. The caching
-      // that matters happens per stop code inside getArrivals().
       'cache-control': 'no-store',
       ...CORS,
       ...extra,
@@ -34,18 +23,12 @@ export function json(body: unknown, status = 200, extra: Record<string, string> 
   });
 }
 
-/** `scope` is 'private' for anything behind a key or a session: no shared cache may hand it on. */
 export function jsonCached(body: unknown, maxAge: number, scope: 'public' | 'private' = 'public'): Response {
   return new Response(JSON.stringify(body), {
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `${scope}, max-age=${maxAge}`, ...CORS },
   });
 }
 
-/**
- * LANDMINE: Number(null) === 0 and Number('') === 0, not NaN. A missing lat
- * silently resolves to the Gulf of Guinea and reports "no stop nearby"
- * instead of falling back to `?from=` or the profile's home stop.
- */
 export function numParam(url: URL, key: string): number | null {
   const raw = url.searchParams.get(key);
   if (raw === null) return null;
@@ -55,26 +38,14 @@ export function numParam(url: URL, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * A coordinate to four decimal places, about 11 metres: as precise as an
- * answer needs, and what the privacy policy promises. The apps round
- * before sending; this holds for any other caller of the API too.
- */
 export const roundCoord = (x: number): number => Math.round(x * 10_000) / 10_000;
 
-/**
- * The caller's location from `lat`, `lon` and, when sent, `acc` (metres),
- * rounded (roundCoord): a fix too rough to say where you are counts as none
- * (MAX_FIX_ACC_M).
- */
 export function coordsFrom(url: URL): Coords {
   return coords(numParam(url, 'lat'), numParam(url, 'lon'), numParam(url, 'acc'));
 }
 
-/** A location, or none. */
 export type Coords = { lat: number; lon: number } | { lat: null; lon: null };
 
-/** A location from its numbers, by coordsFrom's rules: out of range or too rough is none. */
 export function coords(lat: number | null, lon: number | null, acc: number | null = null): Coords {
   if (lat === null || lon === null) return { lat: null, lon: null };
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
@@ -82,17 +53,11 @@ export function coords(lat: number | null, lon: number | null, acc: number | nul
   return { lat: roundCoord(lat), lon: roundCoord(lon) };
 }
 
-/**
- * Rate-limit key for the caller. One IPv6 host usually owns a whole /64, so
- * keying on the full address gives it 2^64 buckets.
- */
 export function clientKey(req: Request): string {
   const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
   if (!ip.includes(':')) return ip;
-  // ::ffff:203.0.113.9 is an IPv4 address, keyed as one.
   const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
   if (v4) return v4[1];
-  // Expand '::' first: 2001:db8:5::1 and 2001:db8:5:0:a:b:c:d share a /64.
   const [head, tail] = ip.split('::');
   const left = head ? head.split(':') : [];
   const right = tail !== undefined ? (tail ? tail.split(':') : []) : [];
@@ -101,12 +66,6 @@ export function clientKey(req: Request): string {
   return `${prefix.join(':')}::/64`;
 }
 
-/**
- * A host that gave no answer at all: it timed out, or the connection
- * failed. Unlike an HTTP status, nothing upstream said why, and a host that
- * hangs costs more than one that says 503, so the feeds' breakers count it
- * as the host being down (fms.ts opensBreaker).
- */
 export class UpstreamUnreachable extends Error {
   readonly timedOut: boolean;
   constructor(message: string, timedOut: boolean) {
@@ -115,16 +74,8 @@ export class UpstreamUnreachable extends Error {
   }
 }
 
-/** Statuses whose Response may not carry a body. */
 const NO_BODY = new Set([204, 205, 304]);
 
-/**
- * fetch with a timeout whose error says what timed out. The body is read
- * here, under the same timeout, so a host that sends its headers and then
- * stalls fails the same way as one that never answers, rather than with a
- * raw TimeoutError from the caller's res.json(). Every caller reads a small
- * body anyway.
- */
 export async function timedFetch(what: string, url: string, init: RequestInit, ms = TTL.upstreamTimeoutMs): Promise<Response> {
   try {
     const res = await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
@@ -132,29 +83,11 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
     return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
   } catch (err) {
     if ((err as Error)?.name === 'TimeoutError') throw new UpstreamUnreachable(`${what} timeout after ${ms}ms`, true);
-    // Anything else thrown here is the connection failing, whatever its
-    // class: Node throws a TypeError, workerd a plain Error ('Network
-    // connection lost.', 'internal error; reference = ...'). The signal is
-    // ours alone, so nothing else can abort it.
     throw new UpstreamUnreachable(`${what} unreachable: ${(err as Error)?.message ?? String(err)}`, false);
   }
 }
 
-/**
- * Browser-facing hardening on every response. The CSP lists exactly what
- * the site loads: Turnstile, the QR library from cdnjs, the map's workers,
- * and Cloudflare Web Analytics (its beacon script, which Cloudflare adds to
- * each page, and where it reports page loads); fonts are the site's own. /docs
- * additionally loads Stoplight Elements from unpkg (pinned with SRI there).
- * The CDNs are allowed only for those files, not whole hosts: either serves
- * any library ever published, and an old one can be made to run a page's
- * text as script, which would undo the CSP if HTML were ever injected.
- */
-/** The QR library on the account page (settings-pages.js loads it, with SRI,
- *  from its own copy of this address: the website can't import the API's
- *  modules, and test/http.test.js keeps the two the same). */
 export const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
-/** Stoplight Elements for /docs (openapi.ts), pinned so a release can't change the page underneath us. */
 export const ELEMENTS = 'https://unpkg.com/@stoplight/elements@9.0.25';
 const CSP_BASE = [
   "default-src 'self'",
@@ -164,9 +97,6 @@ const CSP_BASE = [
   "font-src 'self'",
   "img-src 'self' data: blob:",
   "connect-src 'self' https://cloudflareinsights.com",
-  // MapLibre draws the map in web workers it starts from its own same-origin
-  // file (/vendor/maplibre-gl@…/maplibre-gl-worker.mjs); it makes a blob:
-  // URL only for a worker on another origin, which ours never is.
   "worker-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
@@ -174,21 +104,12 @@ const CSP_BASE = [
   "frame-ancestors 'none'",
 ];
 const CSP_SITE = CSP_BASE.join('; ');
-/** What /docs adds to a directive: Stoplight Elements (pinned), its fonts, and images from anywhere. */
 const DOCS_EXTRA: Record<string, string> = {
   'script-src': `${ELEMENTS}/`,
   'style-src': `${ELEMENTS}/`,
   'img-src': 'https:',
   'font-src': `data: ${ELEMENTS}/`,
 };
-/**
- * What the dashboard (/admin/) adds for its Timelapse section: Mediabunny,
- * its video encoder, starts its workers from blob: URLs of code it carries
- * inline. The section is a hash route (#/timelapse), which the server never
- * sees, so the dashboard's page has it; no other page needs blob: workers.
- * It lets the page's own scripts start a worker from code they hold, and
- * nothing more: script-src still decides what code runs.
- */
 const TIMELAPSE_EXTRA: Record<string, string> = {
   'worker-src': 'blob:',
 };
@@ -211,7 +132,6 @@ export function withSecurityHeaders(res: Response, path: string): Response {
   const h = out.headers;
   h.set('x-content-type-options', 'nosniff');
   h.set('strict-transport-security', 'max-age=31536000; includeSubDomains');
-  // Sign-in and pairing URLs carry a token or a code: never send them on.
   h.set('referrer-policy', path.startsWith('/auth/') || path.startsWith('/pair') ? 'no-referrer' : 'strict-origin-when-cross-origin');
   if ((h.get('content-type') ?? '').includes('text/html')) {
     h.set('content-security-policy', cspFor(path));

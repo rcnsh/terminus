@@ -1,18 +1,8 @@
-// The landing page: the page itself is plain HTML (it should read without
-// any script); this adds the live parts. The Worker writes in the version
-// next to the download buttons and Account for someone signed in
-// (src/site/landing.ts), so neither changes once the page is up; the version is
-// asked for here only when it couldn't. The sky's horizon and night are
-// sky-page.js's. The install steps' and the download menu's placement are
-// behaviours on the page's own markup, so they stay plain functions.
-
 import { html, render, useEffect, useState } from '/assets/ui.js';
 import { t } from '/account/dom.js';
 
-/** Less motion asked for, read when it's needed: it can change during a visit. */
 const still = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** " Version 2.1.0.": the current release, from its manifest. */
 function Version() {
   const [v, setV] = useState('');
   useEffect(() => {
@@ -28,10 +18,6 @@ for (const id of ['version', 'dl-version']) {
   if (box && !box.firstChild) render(html`<${Version} />`, box);
 }
 
-// "How to install" opens as a card over what's under it (its CSS is
-// index.html's), so opening it moves nothing. Like the download menu, a tap
-// anywhere else, Esc, or focus moving on closes it. A pointerdown, as iOS
-// sends no click for a tap on plain text or space.
 const install = document.getElementById('install');
 document.addEventListener('pointerdown', (e) => {
   if (install.open && !install.contains(e.target)) install.open = false;
@@ -41,20 +27,16 @@ install.addEventListener('focusout', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || !install.open) return;
-  // Focus goes back to the summary only from inside the card: elsewhere it stays, and the page doesn't jump to the hero.
   const inside = install.contains(document.activeElement);
   install.open = false;
   if (inside) install.querySelector('summary').focus();
 });
 
-// The header's download menu, placed under its button. It closes on scroll
-// rather than drifting away from the button it belongs to.
 {
   const button = document.getElementById('dl-button');
   const menu = document.getElementById('dl-menu');
   const close = () => menu.hidePopover();
   if (typeof menu.showPopover !== 'function') {
-    // No popover support: the button goes to the download buttons instead.
     button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: still() ? 'auto' : 'smooth' }));
   } else {
     menu.addEventListener('beforetoggle', (e) => {

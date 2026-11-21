@@ -1,50 +1,22 @@
-/**
- * "Earlier bus" and "Later bus": the user steps from the bus the server
- * picked to the one before or after it, and the card follows. The server
- * still works out every bus; the client only sends back the one the card
- * offered (`Steps.earlier` or `later`). The choice is kept per trip for the
- * day in the Trip object (`DayRecord.steps`), so the leave reminder, the
- * widgets and every device follow it. See docs/adr/0013-step-between-buses.md.
- *
- * Buses are ordered by when you'd leave for them, and a step keeps the
- * arrival moving the same way: a later bus never gets you there sooner than
- * the one you're on, an earlier one never later. "Later" stops at
- * STEP.lateMaxS late for a class, or STEP.laterMaxS after the server's bus
- * on any other trip; "Earlier" at the first bus you can still catch.
- */
-
 import type { Leave } from '../types.ts';
 import type { Departing } from './leave.ts';
 import { type Plan, tripEnd } from './trip.ts';
 import { SAME_BUS_MS } from './plan.ts';
 import { STEP } from '../config.ts';
 
-/** A bus chosen for a trip: the service as the graph names it (`151/1`), its stop's code, and when it leaves it. */
 export interface StepTarget {
   svc: string;
   stop: string;
   board: string;
 }
 
-/** The steps the card offers from the bus it shows. */
 export interface Steps {
-  /** The trip to send with a step (/api/me/step). */
   trip: string;
-  /** The bus one step earlier or later, to send back as it is; null at the limit. */
   earlier: StepTarget | null;
   later: StepTarget | null;
-  /** The bus is the user's choice, not the server's: "Best bus" puts it back. */
   moved: boolean;
 }
 
-/**
- * The steps from a plan kept past its leave-by while the answer names
- * another bus (next.ts): "Later bus" is the answer's, the next you can
- * still catch, for someone who hasn't set off, when it boards after the
- * plan's and gets you there no sooner. Nothing earlier, since the plan's
- * leave-by has passed too. Null once the plan's bus leaves, when you may
- * be on it. `moved`: the answer's bus is one you chose (its own steps say).
- */
 export function stepsPastLeave(plan: Plan, l: Leave | null | undefined, moved: boolean, trip: string, nowMs: number): Steps | null {
   const later = targetOf(l);
   if (!later || !l!.arrive || !plan.leave || !plan.board) return null;
@@ -54,12 +26,10 @@ export function stepsPastLeave(plan: Plan, l: Leave | null | undefined, moved: b
   return { trip, earlier: null, later, moved };
 }
 
-/** A leave-by's bus as a step target; null when it's a walk. */
 export function targetOf(l: Leave | null | undefined): StepTarget | null {
   return l?.svc && l.stopCode && l.board ? { svc: l.route ?? l.svc, stop: l.stopCode, board: l.board } : null;
 }
 
-/** A step target as the client sent it, checked; null when it isn't one. */
 export function parseTarget(v: unknown): StepTarget | null {
   if (!v || typeof v !== 'object') return null;
   const { svc, stop, board } = v as Record<string, unknown>;
@@ -71,26 +41,16 @@ export function parseTarget(v: unknown): StepTarget | null {
 const boardMs = (l: Leave) => Date.parse(l.board!);
 const atMs = (l: Leave) => Date.parse(l.at);
 const arriveMs = (l: Leave) => Date.parse(l.arrive!);
-/** Which of the departures a leave-by is (leave.ts `Departing`); undefined for the server's own. */
 const busOf = (l: Leave): string | undefined => (l as Partial<Departing>).bus;
 const isService = (l: Leave, t: StepTarget) => (l.route ?? l.svc) === t.svc && l.stopCode === t.stop;
 
-/** The same service from the same stop within SAME_BUS_MS: the feed moved its time a little. */
 export const sameAs = (l: Leave, t: StepTarget) => isService(l, t) && Math.abs(boardMs(l) - Date.parse(t.board)) <= SAME_BUS_MS;
 
-/** Of the buses `sameAs` the target, the one whose time is nearest it. */
 function closestSame<L extends Leave>(all: L[], t: StepTarget): L | undefined {
   const at = Date.parse(t.board);
   return all.filter((l) => sameAs(l, t)).sort((a, b) => Math.abs(boardMs(a) - at) - Math.abs(boardMs(b) - at))[0];
 }
 
-/**
- * The bus a target stands for now: the same bus, its time as the feed has
- * it now; when the feed no longer lists it, the next of that service from
- * that stop, never an earlier one. Null when it leaves before any bus of
- * that service you can still catch: you didn't set off for it, and the
- * choice lapses rather than sliding on to ever later buses.
- */
 export function findTarget(all: Leave[], t: StepTarget): Leave | null {
   const at = Date.parse(t.board);
   const mine = all.filter((l) => l.board && isService(l, t)).sort((a, b) => boardMs(a) - boardMs(b));
@@ -101,32 +61,19 @@ export function findTarget(all: Leave[], t: StepTarget): Leave | null {
 }
 
 export interface StepInput {
-  /** The trip's key, for the card's steps. */
   trip: string;
-  /** The server's own bus for the trip; null when it's a walk or nothing runs. */
   own: Leave | null;
-  /** Every bus that gets you there (leave.ts `departures`). */
   all: Departing[];
-  /** The bus the user chose for this trip, if any. */
   target: StepTarget | null;
-  /** A class: the latest arrival "Later" may offer. Null for any other trip. */
   lastArriveMs: number | null;
   nowMs: number;
 }
 
-/**
- * The bus to show, and the steps from it: the user's chosen bus while it's
- * still to come, else the server's own. Null without a bus to step from.
- */
 export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
-  // A chosen bus that has left is no longer a choice: the trip follows its plan from there.
   const target = f.target && Date.parse(f.target.board) > f.nowMs ? f.target : null;
   const found = target ? findTarget(f.all, target) : null;
-  // The server's own answer, or a walk that has since come to beat the chosen bus: still that bus.
   const own = targetOf(f.own) ? f.own! : found;
   if (!own) return null;
-  // Two of the departures are the same bus when they are the same
-  // departure; the server's own leave-by isn't one of them, and is matched by time.
   const same = (a: Leave, b: Leave) => (busOf(a) && busOf(b) ? busOf(a) === busOf(b) : sameAs(a, targetOf(b)!));
   const moved = found !== null && !same(found, own);
   const pick = moved ? found! : own;
@@ -135,9 +82,6 @@ export function stepFrom(f: StepInput): { leave: Leave; steps: Steps } | null {
     Boolean(l.board && l.arrive) &&
     (f.lastArriveMs === null || arriveMs(l) <= f.lastArriveMs) &&
     (lastLeaveMs === null || atMs(l) <= lastLeaveMs);
-  // Never the bus itself: when you're late its leave-by is now, and the same
-  // bus among the departures leaves a little after. Only that one: another
-  // of its service minutes behind (bunched) is still a step.
   const self = busOf(pick) ?? closestSame(f.all, targetOf(pick)!)?.bus;
   const other = (l: Departing) => l.bus !== self;
   const later =

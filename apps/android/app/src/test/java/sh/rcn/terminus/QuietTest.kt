@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** The waits after a 429 or a 503, and after a 426. */
 class QuietTest {
     private var now = 1_000_000L
 
@@ -31,7 +30,6 @@ class QuietTest {
         Quiet.after("/api/auth/app/start", "60")
         assertTrue(Quiet.blocked("/api/auth/app/poll"))
         assertTrue(Quiet.blocked("/api/pair/check"))
-        // The widget's answers still go out.
         assertFalse(Quiet.blocked("/api/me/next"))
         assertEquals(0, Quiet.remainingMs())
     }
@@ -60,7 +58,6 @@ class QuietTest {
         Quiet.later("30")
         assertFalse(Quiet.blocked("/api/me/next"))
         assertEquals(30_000, Quiet.waitMs())
-        // Without one, nothing changes.
         Quiet.reset()
         Quiet.later(null)
         assertEquals(0, Quiet.waitMs())
@@ -80,7 +77,6 @@ class QuietTest {
         assertFalse(Outdated.required)
     }
 
-    /** As the server: signing in or out and leaving still go to an outdated app. */
     @Test
     fun anOutdatedAppCanStillSignOutAndLeave() {
         assertTrue(Outdated.gated("GET", "/api/me/next"))

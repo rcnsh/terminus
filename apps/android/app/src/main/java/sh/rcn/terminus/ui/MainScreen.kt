@@ -107,10 +107,8 @@ import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
 
-/** Minutes past midnight on the phone's clock, for the sky's hour. */
 private fun minuteOfDay(): Int = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
 
-/** The hour of the sky over Now, and in Settings' bands: by the phone's clock, ticking each minute, whatever the chip shows. */
 @Composable
 internal fun skyPhase(): Phase {
     val minute by
@@ -135,40 +133,28 @@ internal fun MainScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val location = rememberLocationAsk { vm.load() }
 
-    // Keep the answer fresh while the app is on screen: every 30 s (POLL_MS).
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            // Location may have been allowed in system settings meanwhile.
             location.recheck()
             while (true) {
                 vm.load()
-                // Never sooner than a 429's or a 503's Retry-After.
                 delay(maxOf(POLL_MS, sh.rcn.terminus.Quiet.waitMs()))
             }
         }
     }
 
-    // Now's sky, by the hour: whatever's shown
-    // under the chips says where it ends, and the header, chips and status
-    // bar take its ink over it. One sky for the tab, so it stays as the
-    // chips switch.
     val scroll = rememberScrollState()
     val sky = rememberSky(scroll, skyPhase())
     val page = MaterialTheme.colorScheme.background
     val shown = sky.end != null
     val light = sky.palette.lightInk
     val wide = windowWidth() == Width.Wide
-    // A short window (a phone on its side): the low horizon, the wordmark on the chips' row, the notices under the card.
     val short = windowShort()
     val notices = Widths.notices(LocalWindowHeightDp.current)
     SideEffect { sky.short = short }
-    // Without a day to show beside the card when wide, all of Now is in the card's column.
     val hasDay = state.hasDay
     NightStatusBar(shown && light, sky.palette.sky[0])
-    // What needs doing before the answer can be right: an update, and location. Above the chips, or in a short window under the card's
-    // buttons, so the answer comes first ([Widths.notices]); [place] spaces each from what's beside it.
     val noticeCards: @Composable (Modifier) -> Unit = { place ->
-        // Refused as too old (426): the way to update, from where it was installed.
         if (state.updateRequired) {
             Card(Modifier.fillMaxWidth().then(place)) {
                 Row(
@@ -187,7 +173,6 @@ internal fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
-                        // The APK built for this phone's CPU (the site falls back to arm64).
                         TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
                     }
                 }
@@ -197,8 +182,6 @@ internal fun MainScreen(
     }
     CompositionLocalProvider(LocalSky provides sky) {
         Box(Modifier.fillMaxSize()) {
-            // Pulled down at the top, the card is asked for
-            // again: the sky stretches, and your bus drives to your stop on its horizon.
             BusPull(
                 sky.road.bus?.takeIf { sky.road.stop }?.color,
                 scene = { if (sky.short) PullScene(it, Pull.hillSign(it)) else roadScene(it, sky.road) },
@@ -213,20 +196,14 @@ internal fun MainScreen(
                         .column(Widths.nowColumn(LocalWindowDp.current, hasDay).dp)
                         .padding(horizontal = 16.dp)
                 ) {
-                    // The header and chips come down a little with a pull; the room opens under them.
                     SkyInk(shown, light) {
                         Column(Modifier.pullLead(pull)) {
                             if (!short) TabHeader { HeaderWordmark() }
 
                             if (notices == Notices.AboveChips) noticeCards(Modifier.padding(bottom = 12.dp))
 
-                            // Next first, then favourites and the
-                            // places added from "Go somewhere else" (each with an X); the row
-                            // scrolls, and the edge fades while there's more.
                             val chips = rememberScrollState()
                             var searching by rememberSaveable { mutableStateOf(false) }
-                            // Go somewhere else: worded, not a bare magnifier, so it reads as one
-                            // more place to go. The search opens under the chips.
                             val elsewhere: @Composable () -> Unit = {
                                 AssistChip(
                                     onClick = { searching = !searching },
@@ -240,11 +217,7 @@ internal fun MainScreen(
                                     },
                                 )
                             }
-                            // At the largest text sizes, Elsewhere beside the row would leave it room
-                            // for barely one chip: it's the row's last chip instead, as on the iPhone.
                             val searchInRow = LocalDensity.current.fontScale >= SEARCH_IN_ROW_SCALE
-                            // Short, the wordmark leads the row and scrolls with the chips, in place of a header row; the row keeps
-                            // that header's height.
                             Row(if (short) Modifier.heightIn(min = 56.dp) else Modifier, verticalAlignment = Alignment.CenterVertically) {
                                 Row(
                                     Modifier.weight(1f).fadeEnd(chips).horizontalScroll(chips),
@@ -289,16 +262,10 @@ internal fun MainScreen(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    // Under the chips: the card, "go later", Today, and the footer. Wide, the card is
-                    // in the left half and Today beside it, from the horizon down, with the footer under it.
                     val card: @Composable () -> Unit = {
-                        // A minimum height keeps the chips and search from jumping as views
-                        // switch or data arrives.
                         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-                            // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
                             val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
                             OfflinePlanOr(offline, state.answer, state.day) {
-                                // Undo once: on Today's row while it's there for this trip, not on the card as well.
                                 AnswerCard(
                                     withoutLocalUndo(state.answer, state.removed?.takeIf { !it.failed }?.item?.key),
                                     state.loading,
@@ -310,7 +277,6 @@ internal fun MainScreen(
                                 )
                             }
                         }
-                        // Somewhere else: going there later today, planned like a class.
                         if (state.target != Target.Plan && state.paired) {
                             TimeButton(
                                 stringResource(R.string.go_later),
@@ -330,7 +296,6 @@ internal fun MainScreen(
                                 )
                                 .joinToString(" · ")
                         val refreshing = stringResource(R.string.refreshing)
-                        // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?".
                         val small = MaterialTheme.typography.bodySmall
                         val muted = MaterialTheme.colorScheme.onSurfaceVariant
                         Row(
@@ -344,7 +309,6 @@ internal fun MainScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                             }
-                            // A failed refresh is said as it happens; "Updated 9:41" alone isn't.
                             val failed = state.error != null
                             Text(
                                 footer,
@@ -372,7 +336,6 @@ internal fun MainScreen(
                                                 opened = true
                                                 vm.reportOpened()
                                             }
-                                            // A target 48 dp tall, though the words are small, for a thumb.
                                             .heightIn(min = 48.dp)
                                             .wrapContentHeight()
                                             .padding(horizontal = 4.dp),
@@ -403,13 +366,10 @@ internal fun MainScreen(
                     when {
                         !wide -> {
                             card()
-                            // The rest of today under the planned answer.
                             if (state.target == Target.Plan) today()
                             footerRow()
                         }
-                        // Today shows whichever chip is chosen: it's your day either way.
                         hasDay -> BesideToday(sky, card, today, footerRow)
-                        // No day: the card alone, in the column the words above it are already in.
                         else -> {
                             card()
                             footerRow()
@@ -424,10 +384,6 @@ internal fun MainScreen(
     }
 }
 
-/**
- * Now when wide: [card] in the left half of the column (its top up in the sky, which runs across the window all the same), and in the right
- * half, from the horizon down, [today] with [footer] under it.
- */
 @Composable
 private fun BesideToday(sky: SkyState, card: @Composable () -> Unit, today: @Composable () -> Unit, footer: @Composable () -> Unit) {
     var top by remember { mutableFloatStateOf(0f) }
@@ -442,10 +398,6 @@ private fun BesideToday(sky: SkyState, card: @Composable () -> Unit, today: @Com
     }
 }
 
-/**
- * Asks for notification permission on the way to "on", and says so when it's refused, or when notifications (or this one's [channel]) are
- * off in the phone's settings, where asking can't help.
- */
 @Composable
 internal fun NotifyToggle(
     title: String,
@@ -468,7 +420,6 @@ internal fun NotifyToggle(
         when {
             !want -> onChange(false)
             LeaveAlerts.canNotify(ctx, channel) -> onChange(true)
-            // Android 13+, where the permission exists and isn't given yet.
             LeaveAlerts.needsPermission(ctx) -> @Suppress("InlinedApi") ask.launch(Manifest.permission.POST_NOTIFICATIONS)
             else -> refused = true
         }
@@ -476,7 +427,6 @@ internal fun NotifyToggle(
     if (refused && !on) Refused(stringResource(R.string.notifications_off), openSettings, inCard)
 }
 
-/** A setting's switch: its name and a line under it, the whole row the target. [inCard]: padded as a row of a group. */
 @Composable
 private fun ToggleLine(title: String, hint: String, on: Boolean, inCard: Boolean, onValueChange: (Boolean) -> Unit) {
     Row(
@@ -498,7 +448,6 @@ private fun ToggleLine(title: String, hint: String, on: Boolean, inCard: Boolean
     }
 }
 
-/** Why a switch stayed off (a permission refused), and the app's settings page to allow it there. */
 @Composable
 internal fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
     Text(
@@ -512,7 +461,6 @@ internal fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
     }
 }
 
-/** The reasons offered as chips, as /api/me/feedback takes them (REASONS in the API's feedback.ts). */
 private val REPORT_REASONS =
     listOf(
         "never-came" to R.string.report_never_came,
@@ -522,20 +470,11 @@ private val REPORT_REASONS =
         "wrong-class" to R.string.report_wrong_class,
     )
 
-/**
- * The chips for a card whose fitting reasons are [fits] (`card.reasons`), in the sheet's order; all of them when an older server sent none.
- */
 internal fun reportReasons(fits: List<String>?): List<Pair<String, Int>> =
     if (fits == null) REPORT_REASONS else REPORT_REASONS.filter { it.first in fits }
 
-/** Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent. */
 private val NUS_REASONS = setOf("never-came", "times-off")
 
-/**
- * "Is this wrong?", as the web's sheet: the answer it's about (`line`), the reasons that fit it as chips, a note, and who the reply goes
- * to. A reason or a note sends it; once `sent`, the sheet says so, which is the only confirmation. Without an email the server takes no
- * reports, so it asks for one instead.
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ReportSheet(
@@ -558,7 +497,6 @@ private fun ReportSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        // From 600 wide, no wider than the page's column, centred.
         sheetMaxWidth = Widths.sheetMax(LocalWindowDp.current).dp,
     ) {
         Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 20.dp).verticalScroll(rememberScrollState())) {
@@ -628,12 +566,10 @@ private fun ReportSheet(
                                 selected = on,
                                 onClick = { reason = if (on) null else key },
                                 label = { Text(stringResource(label)) },
-                                // The fill alone marks it: a tick would widen the chip and push the row onto the next line.
                                 colors = chosenChip(),
                             )
                         }
                     }
-                    // The live region stays in place and the note comes and goes inside it, so TalkBack reads it when it appears.
                     Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
                         if (aboutNus) {
                             Column(
@@ -662,7 +598,6 @@ private fun ReportSheet(
                     val noteLabel = stringResource(R.string.report_note)
                     TextField(
                         value = note,
-                        // A paste past the limit is cut there, rather than ignored.
                         onValueChange = { note = it.take(1000) },
                         placeholder = { Text(stringResource(R.string.report_placeholder)) },
                         minLines = 3,
@@ -722,23 +657,18 @@ private fun ReportSheet(
     }
 }
 
-/** `text` with the email address in it picked out, as the web's sheet shows it. */
 private fun withEmail(text: String, email: String, ink: Color) = buildAnnotatedString {
     append(text)
     val at = text.indexOf(email)
     if (at >= 0) addStyle(SpanStyle(color = ink, fontWeight = FontWeight.SemiBold), at, at + email.length)
 }
 
-/** The chip showing, filled in the ink (the web's too), so it stands out from the rest over any sky. */
 @Composable
 private fun chosenChip() =
     MaterialTheme.colorScheme.let {
         FilterChipDefaults.filterChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background)
     }
 
-/**
- * A place added from "Go somewhere else": a tab with an X that removes it. Scrolled into view when it's the one showing, as a new one is.
- */
 @Composable
 private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onRemove: () -> Unit) {
     val reveal = remember { BringIntoViewRequester() }
@@ -760,7 +690,6 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
             Icon(
                 painterResource(R.drawable.ic_close),
                 contentDescription = remove,
-                // A bigger target than the 18 dp X, as tall as the chip.
                 modifier =
                     Modifier.size(32.dp)
                         .clip(CircleShape)
@@ -781,10 +710,8 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
     )
 }
 
-/** The text size (font scale) from which Now's Elsewhere chip goes at the end of the chip row rather than beside it. */
 private const val SEARCH_IN_ROW_SCALE = 1.5f
 
-/** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
 private fun Modifier.fadeEnd(scroll: ScrollState, width: Dp = 32.dp): Modifier =
     graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
         drawContent()

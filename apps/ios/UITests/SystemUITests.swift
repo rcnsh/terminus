@@ -1,10 +1,5 @@
 import XCTest
 
-/// The widgets, through SpringBoard as a person adds them: signed in against
-/// the stub, then the widget gallery, then the home screen. SYS_LANG (en or
-/// zh, TEST_RUNNER_SYS_LANG on xcodebuild's command line) picks the language;
-/// the shots are named with SYS_TAG too, so a dark run (simctl ui appearance
-/// dark) keeps its own.
 @MainActor
 final class SystemUITests: XCTestCase {
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -17,7 +12,6 @@ final class SystemUITests: XCTestCase {
         stubPost("/__stub/reset")
     }
 
-    /// Signed in, the app has fetched the card once, so the widgets have it.
     func launchSignedIn(extra: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication.terminus(signedIn: true, lang: lang, extra: extra)
         app.launch()
@@ -66,11 +60,6 @@ final class SystemUITests: XCTestCase {
         shot("widget-places-large-\(tag)", springboard)
     }
 
-    /// Buses near you at each size, from the board the app fetched for its
-    /// Nearby tab (shared with the widgets): small and medium, then large; the
-    /// large Next bus widget's next buses under the trip, and the Nearby chip
-    /// on the favourites widget; then with New to NUS, which heads each side
-    /// with where its buses go.
     func testNearbyWidgets() {
         let app = launchSignedIn(extra: ["TERMINUS_NEW_TO_NUS": "0"])
         fetchNearby(app)
@@ -101,7 +90,6 @@ final class SystemUITests: XCTestCase {
             sleep(4)
             shot("widget-places-nearby-\(tag)", springboard)
         }
-        // New to NUS, switched on in the app: the widgets redraw.
         clearWidgets()
         app.terminate()
         app.launchEnvironment["TERMINUS_RESET"] = "0"
@@ -116,7 +104,6 @@ final class SystemUITests: XCTestCase {
         clearAfter()
     }
 
-    /// The Nearby tab opened, as a widget's tap does: the app fetches the board the widgets share.
     func fetchNearby(_ app: XCUIApplication) {
         app.open(URL(string: "terminus://nearby")!)
         allowLocationIfAsked()
@@ -125,7 +112,6 @@ final class SystemUITests: XCTestCase {
         sleep(1)
     }
 
-    /// A tap on the widget opens the app.
     func testTapOpensTheApp() throws {
         let app = launchSignedIn()
         clearWidgets()
@@ -138,9 +124,6 @@ final class SystemUITests: XCTestCase {
         clearAfter()
     }
 
-    /// With the leave alerts and the Live Activity on, and the trip under
-    /// way (the stub told "left"): the Live Activity in Notification Centre,
-    /// and its Turn off.
     func testLiveActivity() throws {
         let (token, email) = stubSession()
         let extra = ["TERMINUS_ALERTS": "1", "TERMINUS_LIVE": "1", "TERMINUS_TOKEN": token, "TERMINUS_EMAIL": email]
@@ -150,13 +133,10 @@ final class SystemUITests: XCTestCase {
         if allow.waitForExistence(timeout: 8) { allow.tap() }
         XCTAssertTrue(app.tabBars.buttons.firstMatch.waitForExistence(timeout: 10))
         sleep(3)
-        // Only a trip with a key can be started: a class, not the way home.
         guard signal("left", token: token) else { throw XCTSkip("the stub's plan now has no trip to start") }
-        // Opened again, the app fetches the card in its new phase and starts the Live Activity.
         app.terminate()
         app.launchEnvironment["TERMINUS_RESET"] = "0"
         app.launch()
-        // The Next tab asked for, as a widget's tap does: the app fetches the card.
         app.open(URL(string: "terminus://plan")!)
         sleep(6)
         XCUIDevice.shared.press(.home)
@@ -164,7 +144,6 @@ final class SystemUITests: XCTestCase {
         let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.005))
         top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.7)))
         sleep(2)
-        // Live Activities ask, the first time, whether to keep showing them.
         for label in ["Always Allow", "Allow"] where springboard.buttons[label].exists {
             springboard.buttons[label].tap()
             sleep(1)
@@ -172,7 +151,6 @@ final class SystemUITests: XCTestCase {
         let activity = springboard.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'terminus,'")).firstMatch
         XCTAssertTrue(activity.waitForExistence(timeout: 5), "the Live Activity shows")
         shot("live-activity-\(tag)", springboard)
-        // Turn off, as on Android's live notification: the activity goes (and the setting with it).
         let turnOff = springboard.buttons[lang == "zh" ? "关闭" : "Turn off"]
         XCTAssertTrue(turnOff.waitForExistence(timeout: 5), "the Live Activity has Turn off")
         turnOff.tap()
@@ -181,8 +159,6 @@ final class SystemUITests: XCTestCase {
         XCUIDevice.shared.press(.home)
     }
 
-    /// Tells the stub the trip's step ("left", "boarded", "reset"), for the
-    /// card's trip; false when the card has none.
     @discardableResult
     func signal(_ kind: String, token: String) -> Bool {
         func call(_ path: String, body: [String: Any]? = nil) -> [String: Any]? {
@@ -209,7 +185,6 @@ final class SystemUITests: XCTestCase {
         return call("/api/me/signal", body: ["kind": kind, "trip": trip]) != nil
     }
 
-    /// The Lock Screen's three: added through its Customise, then the Lock Screen itself.
     func testLockScreenWidgets() {
         _ = launchSignedIn()
         openCoverSheet()
@@ -220,7 +195,6 @@ final class SystemUITests: XCTestCase {
         let inlineSpot = springboard.buttons["inline-widget-reticle-view"]
         XCTAssertTrue(inlineSpot.waitForExistence(timeout: 5))
         sleep(1)
-        // Added on an earlier run: kept, as a Lock Screen holds only so many.
         if inlineSpot.label.hasPrefix("terminus"), springboard.icons.matching(identifier: "terminus").count >= 2 {
             springboard.buttons["editing-cancel"].tap()
         } else {
@@ -228,7 +202,6 @@ final class SystemUITests: XCTestCase {
             springboard.buttons["editing-done"].tap()
         }
         sleep(2)
-        // Out of editing, the Lock Screen as it shows.
         let poster = springboard.cells.matching(NSPredicate(format: "identifier BEGINSWITH 'posterboard-posteruuid'")).firstMatch
         if poster.exists { poster.tap() }
         sleep(3)
@@ -239,7 +212,6 @@ final class SystemUITests: XCTestCase {
         XCUIDevice.shared.press(.home)
     }
 
-    /// Rectangular and circular in the row under the clock, then the line above it.
     func addLockWidgets() {
         springboard.buttons["grouped-widgets-reticle-view"].firstMatch.tap()
         openLockGallery()
@@ -250,12 +222,10 @@ final class SystemUITests: XCTestCase {
             p.tap()
             sleep(1)
         }
-        // Back to the list, the sheet down, then the line above the clock.
         springboard.buttons["close"].firstMatch.tap()
         sleep(1)
         dismissSheet()
         springboard.buttons["inline-widget-reticle-view"].tap()
-        // The line's own list: a row per widget, "terminus, Next bus, …".
         let row = springboard.cells.matching(NSPredicate(format: "label BEGINSWITH 'terminus,'")).firstMatch
         XCTAssertTrue(springboard.cells.firstMatch.waitForExistence(timeout: 5))
         for _ in 0..<8 where !(row.exists && row.isHittable) {
@@ -274,7 +244,6 @@ final class SystemUITests: XCTestCase {
         sleep(2)
     }
 
-    /// The Lock Screen's widget sheet put away, by a swipe down on its grabber.
     func dismissSheet() {
         let grabber = springboard.buttons["Sheet Grabber"].firstMatch
         guard grabber.exists else { return }
@@ -283,7 +252,6 @@ final class SystemUITests: XCTestCase {
         sleep(1)
     }
 
-    /// In the Lock Screen's widget sheet, terminus's widgets.
     func openLockGallery() {
         let cell = springboard.cells["terminus"]
         XCTAssertTrue(springboard.cells.firstMatch.waitForExistence(timeout: 5))
@@ -297,21 +265,15 @@ final class SystemUITests: XCTestCase {
         sleep(1)
     }
 
-    // MARK: SpringBoard
-
     func widgets() -> XCUIElementQuery {
         springboard.icons.matching(NSPredicate(format: "identifier == 'terminus' AND value == 'Widget'"))
     }
 
-    /// How many terminus widgets are on the screen, not counting the copies
-    /// SpringBoard lists off its left edge (see `shownWidget`), whose number varies.
     func shownWidgets() -> Int {
         let screen = springboard.frame
         return widgets().allElementsBoundByIndex.filter { screen.contains($0.frame) }.count
     }
 
-    /// The terminus widget on the screen. SpringBoard also lists one off its
-    /// left edge (x < 0), where a tap does nothing, and lists it first.
     func shownWidget() -> XCUIElement? {
         let screen = springboard.frame
         for _ in 0..<10 {
@@ -334,15 +296,12 @@ final class SystemUITests: XCTestCase {
         sleep(1)
     }
 
-    /// Takes off every terminus widget from the home screen, on every page
-    /// (an earlier run can leave one on another), so each test starts from none.
     func clearWidgets() {
         guard widgets().count > 0 else { return }
         editHomeScreen()
         let screen = springboard.frame
         for _ in 0..<40 {
             guard let widget = widgets().allElementsBoundByIndex.first else { break }
-            // On another page: turned to, a page at a time.
             if widget.frame.maxX <= screen.minX || widget.frame.minX >= screen.maxX {
                 turnPage(back: widget.frame.maxX <= screen.minX)
                 continue
@@ -357,8 +316,6 @@ final class SystemUITests: XCTestCase {
         doneEditing()
     }
 
-    /// The home screen's next page, or the one before: a swipe low on the
-    /// screen, under the icons, so it moves no icon.
     func turnPage(back: Bool) {
         let from = springboard.coordinate(withNormalizedOffset: CGVector(dx: back ? 0.1 : 0.9, dy: 0.76))
         let to = springboard.coordinate(withNormalizedOffset: CGVector(dx: back ? 0.9 : 0.1, dy: 0.76))
@@ -372,7 +329,6 @@ final class SystemUITests: XCTestCase {
         clearWidgets()
     }
 
-    /// The gallery, searched for terminus, at its first widget.
     func openGallery() {
         editHomeScreen()
         springboard.buttons["Edit"].tap()
@@ -388,9 +344,6 @@ final class SystemUITests: XCTestCase {
         app.tap()
     }
 
-    /// The gallery's page'th terminus widget (1: Next bus small, 2 medium,
-    /// 3 large, 4 Next bus + favourites medium, 5 large, 6 Buses near you
-    /// small, 7 medium, 8 large), added.
     func addWidget(page: Int) {
         openGallery()
         let preview = springboard.buttons.matching(NSPredicate(format: "label BEGINSWITH 'terminus,'")).firstMatch

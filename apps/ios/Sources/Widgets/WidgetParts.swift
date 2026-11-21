@@ -2,15 +2,11 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The look of a widget at its moment: the hour's sky over the top, as on
-/// Now, its words in the sky's ink, and the page's colours under the horizon.
 struct WidgetLook {
     let phase: SkyPhase
     let dark: Bool
     var palette: SkyPalette { SkyPalette.of(phase, dark: dark) }
-    /// Words over the sky.
     var sky: Inks { Inks.sky(light: palette.lightInk) }
-    /// Words on the ground under the horizon.
     var ground: Inks { Inks.page }
     var page: Color { Color(rgb: dark ? 0x0F0E0D : 0xFAFAF9) }
 
@@ -20,11 +16,6 @@ struct WidgetLook {
     }
 }
 
-/// Now's sky, `height` tall across the widget, ending in the horizon (drawn
-/// `scale` times its numbers, with `road` on it) whose near hill is the
-/// page's colour, so the ground carries on under it. At night the stars and
-/// a small moon at `moon` (in from the right edge, down from the top), where
-/// the layout keeps it clear of its words.
 struct SkyBackdrop: View {
     let look: WidgetLook
     let height: CGFloat
@@ -44,7 +35,6 @@ struct SkyBackdrop: View {
                     startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
             let top = size.height - 92 * scale
             if look.phase == .night {
-                // The stars over the room above the hills, and the moon where the layout leaves room for it.
                 SkyDraw.starsAndMoon(&g, width: size.width, room: max(20, top), moonRoom: 0)
                 SkyDraw.crescent(&g, centre: CGPoint(x: size.width - moon.x, y: moon.y), r: 6)
             }
@@ -55,8 +45,6 @@ struct SkyBackdrop: View {
     }
 }
 
-/// The headline, with `face.big` (the time to leave) in the accent colour, as
-/// on Now. Late: all of it in the late colour; old: all of it muted.
 struct Headline: View {
     let face: WidgetFace
     let inks: Inks
@@ -77,7 +65,6 @@ struct Headline: View {
     }
 }
 
-/// "Live" in green, or "Estimate" plain, on a small pill.
 struct PillView: View {
     let pill: WidgetPill
     let inks: Inks
@@ -93,7 +80,6 @@ struct PillView: View {
     }
 }
 
-/// The leg on the ground: the service's badge, then where it goes from and to.
 struct LegRow: View {
     let leg: WidgetLeg
     let inks: Inks
@@ -108,7 +94,6 @@ struct LegRow: View {
     }
 }
 
-/// ↻: refreshes what the widget shows (a tap anywhere else opens the app), a round button as the app's own.
 struct RefreshButton: View {
     let slot: String?
     let inks: Inks
@@ -124,19 +109,15 @@ struct RefreshButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L("Refresh"))
-        // Real while the rest is a placeholder: it works.
         .unredacted()
     }
 }
 
-/// Timetable, Nearby, then the places you usually go, as the app's chips:
-/// each switches this widget in place, without opening the app. The one showing is filled.
 struct ModeChips: View {
     let chips: [WidgetMode]
     let showing: WidgetMode
     let slot: String
     let inks: Inks
-    /// The words on the chosen chip, which is filled with the ink.
     let onChosen: Color
 
     var body: some View {
@@ -157,12 +138,10 @@ struct ModeChips: View {
                 .accessibilityLabel(on ? L("Showing %@", m.label) : L("Show %@", m.label))
             }
         }
-        // Real while the rest is a placeholder: they work.
         .unredacted()
     }
 }
 
-/// Done for the day: the next class in a pane of glass on the sky, as on Now.
 struct TileView: View {
     let tile: WidgetTile
     let inks: Inks
@@ -182,7 +161,6 @@ struct TileView: View {
     }
 }
 
-/// A line of small words.
 func small(_ text: String, _ color: Color, _ size: CGFloat = 12, bold: Bool = false, lines: Int = 1) -> some View {
     Text(verbatim: text).font(.system(size: size, weight: bold ? .medium : .regular)).foregroundStyle(color).lineLimit(lines)
 }

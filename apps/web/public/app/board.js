@@ -1,8 +1,3 @@
-// A stop's board, a row per service: where it's going, its next bus and the
-// ones after, how full it is, or why it isn't running. Shared by the Buses
-// tab (buses.js) and the map's stop sheet (map.js), so a stop reads the same
-// in both.
-
 import { Bar, Icon, html, widthOf } from '/assets/ui.js';
 import { clock, inkOn, serverNow, t } from '/account/dom.js';
 import { campus } from '/account/profile.js';
@@ -16,13 +11,10 @@ const PEOPLE =
 
 const mins = (s) => Math.max(1, Math.round(s / 60));
 
-/** Whether a time is a guess, a timetable's or counted down from an old reading: marked "~", as the server marks it. */
 const approx = (quality) => quality === 'scheduled' || quality === 'stale';
 
-/** "~6 min", "7 min", as the server words it, for a row aged on this page (buses.js aged); worked out here for an older server. */
 export const etaText = (etaS, quality) => (approx(quality) ? t('~{0}', t('{0} min', mins(etaS))) : t('{0} min', mins(etaS)));
 
-/** How full the first bus is, as the feed says; nothing when it doesn't. */
 export function Crowd({ crowd }) {
   if (!crowd) return null;
   const word = { low: t('Seats'), medium: t('Busy'), high: t('Packed') }[crowd];
@@ -30,7 +22,6 @@ export function Crowd({ crowd }) {
   return html`<span class=${`bt-crowd ${crowd}`}><${Icon} paths=${crowd === 'low' ? SEAT : PEOPLE} />${word}</span>`;
 }
 
-/** Live, Estimate, or a live time that has stopped updating. Nothing without a time. */
 export function Quality({ r }) {
   if (r.etaS == null) return null;
   if (r.quality === 'live') return html`<span class="bt-live"><span class="dot"></span>${t('Live')}</span>`;
@@ -39,30 +30,16 @@ export function Quality({ r }) {
   return null;
 }
 
-/**
- * The big time, in the server's words (`eta`: "7 min", "~7 min", "now"),
- * its numbers large and the rest small; or why there's none. Worked out
- * here for an older server.
- */
 export function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  // An estimate is never "Arriving": that would pass for a bus at the stop; it says ~1 min.
   if (r.eta == null && r.etaS < 60 && !approx(r.quality)) return html`<span class="bt-big now">${t('Arriving')}</span>`;
   const parts = (r.eta ?? etaText(r.etaS, r.quality)).split(/(\d+)/).filter(Boolean);
   if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
-/** A time as it's said: "1 minute", "14 minutes", as the apps say it. Under 45 s a live bus is arriving; a guess is never under a minute. */
 const minutesSaid = (s) => (Math.round(s / 60) === 1 ? t('1 minute') : t('{0} minutes', Math.round(s / 60)));
 
-/**
- * A Nearby row as a screen reader says it, as the apps do: the line, where
- * it's going, then each bus in order, the first with whether it's live:
- * "Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26
- * minutes". An estimate is "about", never "~" (read as "tilde"), and never
- * arriving.
- */
 export function saidRow(b) {
   const end = b.towards?.at(-1);
   const where = b.dest ? b.dest.replaceAll('\u00a0', ' ') : end ? t('to {0}', end) : (b.toText ?? t('Ends here'));
@@ -82,10 +59,8 @@ export function saidRow(b) {
   return [b.paid ? t('Public bus {0}, fare applies', b.svc) : t('Bus {0}', b.svc), where, ...buses.filter(Boolean)].join(t(', '));
 }
 
-/** How many later buses "then …" names, as the server's (THEN_MAX in the API's src/answer/resolve.ts). */
 export const THEN_MAX = 2;
 
-/** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
 export const thenText = (r) =>
   r.laterText ??
   (r.later?.length
@@ -98,36 +73,23 @@ export const thenText = (r) =>
       )
     : '');
 
-/**
- * Where the bus is going: the end of its line, the last of `towards` (the
- * next stop and the end, one name when they're the same, none at the end of
- * the line). An older server with no `towards` has only its `toText`.
- */
 export function Dest({ r }) {
   const to = r.towards;
   if (to == null) return r.toText ?? t('Ends here');
   return to.length ? to[to.length - 1] : t('Ends here');
 }
 
-/** "Next stop AS 5", when the next stop isn't the end of the line already named. */
 const NextStop = ({ r }) => (r.towards?.length === 2 ? html`<span class="bt-next">${t('Next stop {0}', r.towards[0])}</span>` : null);
 
-/** A live time's mark beside it, said as "Live"; the board's foot explains it once (buses.js). */
 export const LiveDot = () => html`<span class="dot bt-dot" role="img" aria-label=${t('Live')}></span>`;
 
 export function Chip({ svc, color, paid, cls = '' }) {
   return html`<span class=${`svc-tag ${cls}`} style=${svcVars(color ?? colorOf(svc))}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
 }
 
-/** The date on campus (YYYY-MM-DD) of a moment, for "tomorrow". */
 const campusDate = (ms) => new Date(ms + 8 * 3600_000).toISOString().slice(0, 10);
 const WEEKDAYS = () => [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
 
-/**
- * Why a service isn't running and when it's back, from the API's `stopped`
- * and `resumesAt`: ["Stopped for today", "Back tomorrow at 7:40 am"]. The
- * second is null when the API knows no next start.
- */
 export function stoppedWords(stopped, resumesAt, now = serverNow()) {
   const first = stopped === 'notYet' ? t('Not running yet') : stopped === 'noService' ? t('No service today') : t('Stopped for today');
   if (!resumesAt) return [first, null];
@@ -139,16 +101,9 @@ export function stoppedWords(stopped, resumesAt, now = serverNow()) {
   return [first, t('Back {0} at {1}', WEEKDAYS()[new Date(at + 8 * 3600_000).getUTCDay()], time)];
 }
 
-/** The "opens a page" mark at a row's end (mirrored right to left, app.css). */
 export const NEXT = '<path d="m9 6 6 6-6 6"/>';
-/** The star that pins a stop: on its page, on the Stops tab's home and on Nearby's signs. */
 export const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>';
 
-/**
- * How a row looks for what a tap on it does: `chevron`, it opens a page (the
- * Stops tab); `picked` set, it picks its line on the map, and true when that
- * line is the one picked there (washed in its colour, and pressed).
- */
 function look(r, cls, chevron, picked) {
   const on = picked === true;
   return {
@@ -159,35 +114,22 @@ function look(r, cls, chevron, picked) {
   };
 }
 
-/**
- * A service that isn't running: its words greyed, saying so where the minutes go, still opening its line.
- * Its badge keeps its colour, so the row doesn't look switched off.
- */
 function StoppedRow({ r, now, onPick, chevron, picked }) {
   const [first, second] = stoppedWords(r.stopped, r.resumesAt, now);
-  // "Ends here" says nothing about a bus that isn't coming: no line then.
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
     <span class="bt-dir">${r.towards?.length ? html`<${Dest} r=${r} />` : ''}</span>
     <span class="bt-big none">${first}</span>
     <span class="bt-meta">${second}</span>
   `;
-  // A public bus has no line here, as when it's running.
   if (r.paid) return html`<div class="bt-row stopped">${body}</div>`;
   const l = look(r, 'bt-row stopped', chevron, picked);
   return html`<button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>${body}${l.chev}</button>`;
 }
 
-/**
- * A service's row on a board. Tapped, `onPick(svc)`: the Stops tab opens its
- * line (`chevron`, which says so), the map picks it (`picked`: whether it's
- * the line picked there). A public bus has no line here. `now`, on the
- * server's clock, says "tomorrow" for a service that isn't running.
- */
 export function Row({ r, now = serverNow(), onPick, chevron = false, picked }) {
   if (r.running === false) return html`<${StoppedRow} r=${r} now=${now} onPick=${onPick} chevron=${chevron} picked=${picked} />`;
   const cls = `bt-row run${r.old ? ' old' : ''}`;
-  // Live is the usual case, so it's a dot by the time rather than a word on every row; the other qualities still say so.
   const live = r.quality === 'live' && r.etaS != null;
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
@@ -203,13 +145,6 @@ export function Row({ r, now = serverNow(), onPick, chevron = false, picked }) {
   return html`<button type="button" class=${l.cls} style=${l.style} aria-pressed=${l.pressed} onClick=${() => onPick(r.svc)}>${body}${l.chev}</button>`;
 }
 
-/**
- * A board's rows while its times are on the way: a row per service that
- * calls there (`services`, from the campus data) with its badge drawn,
- * else `n` rows; where each is going and its times are bars. Laid out as
- * a running service's row, so nothing moves when the times land. Not
- * pressable yet: `chevron` only keeps the row's width.
- */
 export const WaitingRows = ({ services, n = 3, chevron = false }) =>
   (services?.length ? services : Array.from({ length: n }, () => null)).map(
     (svc, i) => html`
@@ -223,7 +158,6 @@ export const WaitingRows = ({ services, n = 3, chevron = false }) =>
     `,
   );
 
-/** The Stops tab's services before the campus data comes: `n` rows of shapes, as tall as its rows (buses.js Lines). */
 export const ServicesSkeleton = ({ n = 6 }) => html`
   <div class="card bt-services">
     ${Array.from(

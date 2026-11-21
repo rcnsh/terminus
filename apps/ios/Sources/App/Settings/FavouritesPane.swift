@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Settings › Favourites: your favourites in one card, each with Remove (and
-/// Undo at the foot), ending in "Add a favourite", where the stops your
-/// classes go to come first. As on Android.
 struct SettingsFavouritesPane: View {
     let model: SettingsModel
     @State private var adding = false
@@ -18,7 +15,6 @@ struct SettingsFavouritesPane: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(place.label).foregroundStyle(Color.ink)
-                            // Where it goes, when the name doesn't already say.
                             if let campus = model.campus, place.label != settingsStopName(campus, place.to) {
                                 SettingsHint(L("%@ stop", settingsStopName(campus, place.to)))
                             }
@@ -53,7 +49,6 @@ struct SettingsFavouritesPane: View {
         }
     }
 
-    /// The stops your classes go to that aren't favourites yet, each saying which classes use it.
     private func timetableStops(_ p: ProfileDoc) -> [WhereItem] {
         let favourite = Set(p.places.map(\.to))
         let classes = Dictionary(grouping: p.trips + p.manual, by: \.to).filter { !favourite.contains($0.key) }
@@ -68,7 +63,6 @@ struct SettingsFavouritesPane: View {
         .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
-    /// No name to type: it's called what was picked, short, as it reads on a button.
     private func add(_ d: WhereItem, _ p: ProfileDoc) {
         if let same = p.places.first(where: { $0.to == d.goesTo }) {
             note = L("Already a favourite: %@", same.label)

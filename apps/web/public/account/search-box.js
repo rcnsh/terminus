@@ -1,25 +1,10 @@
-// The destination search box: a text box with a short, ranked, grouped list
-// under it (the ranking is search.js's). Replaces the browser's <datalist>,
-// which listed every entry at once and couldn't say where a room or building
-// actually takes you. Used in Settings (a class's place, a favourite) and on
-// the web app's Now (Go somewhere else).
-
 import { html, useEffect, useId, useLayoutEffect, useRef, useState } from '../assets/ui.js';
 import { t } from './dom.js';
 import { walkSpeed } from './profile.js';
 import { groupKey, groupOf, grouped, metaOf, pickedText, results } from './search.js';
 
-/** The number of results is said this long after the last key typed. */
 const COUNT_AFTER_MS = 500;
 
-/**
- * `source()` gives the destinations, `suggestions()` what to offer before
- * anything is typed, `pinned()` what to list first whenever it matches,
- * `stopName(code)` a stop's name, `empty` what to say when nothing matches.
- * `onPick(d)` gets the result picked;
- * `onText(text)` each change typed (no result picked any more). `ctl`, a
- * ref, gets { clear(), focus(), input }. Other props go to the text box.
- */
 export function SearchBox({
   source,
   suggestions = () => [],
@@ -41,7 +26,6 @@ export function SearchBox({
   const wrap = useRef(null);
   const list = useRef(null);
 
-  // In the order shown, each kind once (grouped()), so the arrow keys go down the list as drawn.
   const items = open ? grouped(results(text, { source, suggestions, pinned })) : [];
   const shown = open && (items.length > 0 || text.trim() !== '');
 
@@ -58,8 +42,6 @@ export function SearchBox({
     };
   }
 
-  // Wide enough to read even under a narrow box; kept on screen by opening
-  // leftwards when there's no room to the right.
   useLayoutEffect(() => {
     if (!shown || !list.current) return;
     const box = wrap.current.getBoundingClientRect();
@@ -108,7 +90,6 @@ export function SearchBox({
     onKeyDown?.(e);
   };
 
-  // Results in groups (stops, buildings, …), each a group in the list with its name.
   const groups = [];
   items.forEach((d, i) => {
     if (groups.at(-1)?.kind !== groupKey(d)) groups.push({ kind: groupKey(d), name: groupOf(d), rows: [] });
@@ -120,7 +101,6 @@ export function SearchBox({
         class=${i === active ? 'active' : ''}
         aria-selected=${String(i === active)}
         onMouseDown=${(e) => {
-          // mousedown, not click: the box's blur would close the list first.
           e.preventDefault();
           pick(d);
         }}
@@ -130,8 +110,6 @@ export function SearchBox({
       </li>
     `);
   });
-  // How many there are, said once typing settles on it (the list itself isn't
-  // read out): half a second after the last key, not at every letter.
   const count =
     !shown || !text.trim() ? '' : items.length === 0 ? empty : items.length === 1 ? t('1 result') : t('{0} results', items.length);
   const [said, setSaid] = useState('');

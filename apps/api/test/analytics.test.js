@@ -1,8 +1,3 @@
-/**
- * Which answers are logged to Analytics Engine: the ones someone asked for,
- * not the ones the server works out for itself (the Trip object's wakes,
- * each class's leave-by on /api/me/day). On the frozen clock and a fake feed.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -76,11 +71,9 @@ test('/api/me/next, which someone asked for, is still logged', async () => {
 
 test('a signal logs one answer, the one it answers with, not the one it plans from first', async () => {
   const { ae, call, cookie } = await setup();
-  // "Not going" to the first class: the answer is the next one's bus.
   assert.equal((await call('/api/me/signal', { method: 'POST', cookie, body: { kind: 'skipped' } })).status, 200);
   const bySignal = ae.rows('answer').length;
   assert.ok(bySignal >= 1);
-  // The same answer asked for again, with the day as the signal left it.
   ae.events.length = 0;
   assert.equal((await call('/api/me/next', { cookie })).status, 200);
   assert.equal(bySignal, ae.rows('answer').length);

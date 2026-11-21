@@ -1,8 +1,3 @@
-// Passkeys for the operator's pages (/api/admin/passkey/*, src/accounts/passkey.ts).
-// Signing in gives a session, sent in x-health-token as the token is, that
-// lasts 12 hours; adding a passkey needs the HEALTH_TOKEN secret, once per
-// device. English only, as the pages are.
-
 const b64url = (buf) =>
   btoa(String.fromCharCode(...new Uint8Array(buf)))
     .replace(/\+/g, '-')
@@ -27,7 +22,6 @@ async function post(path, body, headers = {}) {
   return out.session;
 }
 
-/** A challenge; with the token, one for adding a passkey, which checks the token first. */
 async function challenge(token) {
   const res = await fetch(`/api/admin/passkey/challenge${token ? '?register=1' : ''}`, {
     headers: token ? { 'x-health-token': token } : {},
@@ -39,14 +33,12 @@ async function challenge(token) {
   return res.json();
 }
 
-/** The browser's own refusal (cancelled, timed out, none here) worded for the page. */
 function said(err) {
   if (err?.name === 'NotAllowedError') return new Error('No passkey was used. If this device has none, add one below.');
   if (err?.name === 'InvalidStateError') return new Error('This device already has a passkey for this page.');
   return err instanceof Error ? err : new Error(String(err));
 }
 
-/** Signs in with a passkey for this site; the session, or throws. */
 export async function signIn() {
   const c = await challenge();
   let cred;
@@ -66,7 +58,6 @@ export async function signIn() {
   });
 }
 
-/** Makes a passkey on this device, with the HEALTH_TOKEN; the session, or throws. */
 export async function addPasskey(token, name) {
   const c = await challenge(token);
   let cred;
@@ -75,7 +66,6 @@ export async function addPasskey(token, name) {
       publicKey: {
         challenge: bytes(c.challenge),
         rp: { id: c.rpId, name: 'terminus operator' },
-        // Its own id each time, so a second passkey never replaces the first in a password manager.
         user: { id: crypto.getRandomValues(new Uint8Array(16)), name: `operator@${c.rpId}`, displayName: `terminus operator (${c.rpId})` },
         pubKeyCredParams: c.algs.map((alg) => ({ type: 'public-key', alg })),
         excludeCredentials: c.exclude.map((id) => ({ type: 'public-key', id: bytes(id) })),

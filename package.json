@@ -5,7 +5,8 @@
   "scripts": {
     "prepare": "lefthook install",
     "test": "pnpm -r test",
-    "lint": "oxlint --deny-warnings --ignore-pattern 'apps/web/public/vendor/**' apps/api/src apps/api/test apps/api/scripts apps/web/public apps/web/test scripts docs/readme",
+    "lint": "oxlint --deny-warnings --ignore-pattern 'apps/web/public/vendor/**' apps/api/src apps/api/test apps/api/scripts apps/web/public apps/web/test scripts docs/readme && node scripts/comments.mjs --check",
+    "comments": "node scripts/comments.mjs",
     "check": "pnpm -r check",
     "deploy": "pnpm --filter @terminus/api run deploy",
     "format": "oxfmt",

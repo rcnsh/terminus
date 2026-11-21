@@ -1,10 +1,3 @@
-/* The hour's sky on the website's own pages (the landing page, status,
-   privacy, pair, not found): the web app's sky (app/app.css body.sky), on an
-   element instead of the page. Its colours are app.css's, rule for rule
-   (web-sky.test.js keeps them the same); sky-phase.js puts the hour on
-   <html data-sky> before the page is drawn; sky-page.js draws the horizon
-   and the night with sky.js, as Now does. */
-
 .sky-panel {
   --s0: #121a33; --s1: #181a30; --s2: #24243a; --s3: #2e2a44; --h-far: #3a3550; --h-tree: #5b5568; --h-city: #45405f;
   --h-road: #d6cfc7; --h-post: #1c1917; --h-post-ink: #fafaf9; --sun: transparent;
@@ -48,9 +41,6 @@
 :root[data-theme="dark"][data-sky="golden"] .sky-panel { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --h-win: #b9c7d6; }
 :root[data-theme="dark"][data-sky="dusk"] .sky-panel { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --sun: #f0915e; }
 
-/* The sky behind the panel, top to bottom, and the words over it in its ink:
-   dark on a light sky, light on a dark one. The page's own colour (--bg)
-   stays, for the near hill the panel ends on. */
 .sky-panel {
   position: relative; isolation: isolate;
   background: linear-gradient(var(--s0) 0, var(--s1) 50%, var(--s2) 86%, var(--s3) 100%);
@@ -59,25 +49,17 @@
   --good: var(--k-good); --good-ink: var(--k-good); --warn: var(--k-warn); --warn-ink: var(--k-warn); --bad: var(--k-bad); --bad-ink: var(--k-bad);
   color-scheme: var(--k-scheme); color: var(--ink);
 }
-/* A focus ring in the sky's ink: the accent can be under 3:1 on a day sky. */
 .sky-panel { --focus: var(--k-ink); }
-/* Small coloured words sit on the sky's chip, darker than a dark sky and
-   lighter than a light one, so they read wherever they fall. */
 .sky-panel .sky-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--k-chip); font-size: 0.85rem; font-weight: 600; }
-/* The accent's stronger shade, for words smaller than a headline. */
 .sky-panel .accent-small { color: var(--k-accent-small); }
-/* The orange button keeps its own colours over any sky; a quiet one is glass. */
 .sky-panel .btn.accent { background: #fb923c; color: #1c1917; }
 .sky-panel .btn.ghost { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
 .sky-panel .nav-links a, .sky-panel .nav-menu { color: var(--ink); }
 .sky-panel .nav-links a:hover, .sky-panel .nav-menu:hover { opacity: 0.8; }
 .sky-panel .brand img { box-shadow: none; }
 
-/* The stars and the moon (sky.js NightSky), at night only, behind the words. */
 .sky-panel .night-sky { position: absolute; z-index: -1; inset: 0; pointer-events: none; display: none; --room: var(--sky-room, 240px); }
 [data-sky="night"] .sky-panel .night-sky { display: block; }
-/* No star behind the logo and wordmark: on a narrow window one lands among the letters.
-   The corner from the left edge to past the wordmark (the .wrap's margin, then the brand) stays clear. */
 .sky-panel:has(> .nav .brand) .night-sky {
   -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) 0 0 / calc(max(0px, (100vw - 68rem) / 2) + 200px) 66px no-repeat;
   mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) 0 0 / calc(max(0px, (100vw - 68rem) / 2) + 200px) 66px no-repeat;
@@ -87,17 +69,10 @@
 .sky-panel .night-sky .moon { position: absolute; top: var(--moon-top, 84px); right: 7%; width: var(--moon, 40px); height: var(--moon, 40px); border-radius: 50%; background: #fde9c9;
   -webkit-mask: radial-gradient(44.6% 44.6% at 76% 28%, transparent 97%, #000 100%); mask: radial-gradient(44.6% 44.6% at 76% 28%, transparent 97%, #000 100%); }
 
-/* The horizon (sky.js Horizon): across the panel, the near hill in the
-   page's colour, the rest in the hour's. As app.css draws it on Now. */
 .sky-panel .horizon { display: block; width: 100%; height: 115px; }
 .sky-panel .horizon.low { height: 52px; }
-/* A page's horizon is drawn by a script (sky-page.js); until then its box
-   keeps the room, so nothing below it moves when it appears. */
 .sky-panel [data-horizon]:empty { height: 115px; }
 .sky-panel [data-horizon][data-low]:empty { height: 52px; }
-/* It comes a moment after the page is drawn, so it (and its pause button)
-   fades in rather than popping up under the stars, which are there from
-   the start (stars.js). */
 .sky-panel [data-horizon] > * { animation: horizon-in 0.35s ease-out; }
 @keyframes horizon-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sky-panel [data-horizon] > * { animation: none; } }
@@ -125,14 +100,11 @@
 .sky-panel .horizon .arch { fill: rgb(0 0 0 / 0.35); }
 .sky-panel .horizon .lamp { fill: #fef3c7; }
 .sky-panel .horizon .tail { fill: #ef4444; }
-/* Shuttles driving across (sky.js Lane): left to right, or right to left
-   on the far side. Each drives across once; the next is a new one. */
 @keyframes horizon-drive { from { transform: translateX(-60px); } to { transform: translateX(var(--to)); } }
 @keyframes horizon-drive-back { from { transform: translateX(var(--to)); } to { transform: translateX(-60px); } }
 .sky-panel .horizon .driving { animation-name: horizon-drive; animation-timing-function: linear; animation-fill-mode: both; }
 .sky-panel .horizon .driving.back { animation-name: horizon-drive-back; }
 .sky-panel .horizon.paused .driving { animation-play-state: paused; }
-/* Pause or play them (sky.js DriveToggle): up in the sky at the right, where the sky's ink reads. */
 .sky-panel [data-horizon] { position: relative; }
 .sky-panel .drive-toggle { position: absolute; right: 12px; top: 0; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
 .sky-panel .drive-toggle svg { width: 14px; height: 14px; fill: currentColor; }
@@ -141,34 +113,22 @@
 .sky-panel .horizon .sign .mark { fill: var(--h-post-ink); }
 .sky-panel .horizon :is(.coming, .driving, .parked) .body { fill: var(--svc); }
 .sky-panel .horizon :is(.coming, .driving, .parked) .band { fill: #fff; opacity: 0.85; }
-/* An estimate is the same bus in outline, so it never passes for live. */
 .sky-panel .horizon .coming.guess :is(.body, .arch) { fill: none; stroke: var(--svc); stroke-width: 1.2; stroke-linejoin: round; }
 .sky-panel .horizon .coming.guess .roof { stroke-width: 0.8; }
 .sky-panel .horizon .coming.guess .win { fill: none; stroke: var(--svc); stroke-width: 0.6; }
 .sky-panel .horizon .coming.guess :is(.band, .lamp, .tail) { display: none; }
 
-/* A slim band of sky at the top of a page (privacy, the full policy), as
-   Settings' pages have it: the header and the title in it, the low hills
-   at its foot. */
 .sky-band .band-title { padding-top: 18px; padding-bottom: 4px; }
 .sky-band .band-title h1 { font-size: clamp(2.1rem, 5vw, 3rem); letter-spacing: -0.03em; }
 .sky-band .band-title p { color: var(--muted); margin-top: 4px; }
 .sky-band .band-title .back { display: inline-block; margin-bottom: 8px; color: var(--ink); text-decoration: none; font-size: 0.9rem; }
 .sky-band .night-sky { --sky-room: 150px; --moon: 30px; --moon-top: 70px; }
 
-/* Less see-through, when the device asks: the glass on the sky solid. The
-   chip's colour is set on the panel by the hour's and the theme's rules,
-   which a plain .sky-panel rule loses to, so it's set on what's inside. */
 @media (prefers-reduced-transparency: reduce) {
   .sky-panel { --surface: var(--k-bg); --surface-2: var(--k-bg); }
   .sky-panel * { --k-chip: var(--k-bg); }
 }
 
-/* The beta's pages (data-site="beta", from markBeta in src/site/site.ts) are under
-   a blueprint at every hour instead: the plans for the next terminus, so it's
-   never taken for the real one. Only the page's own sky: the phone drawn on
-   the landing page keeps the app's, as the beta app does. The hills are
-   drawn in outline and the night is left out; the shuttles keep their colours. */
 :root[data-site="beta"] .sky-panel:not(.sky-panel .sky-panel) {
   --s0: #1a355a; --bp-foot: #24497a; --bp-line: rgb(255 255 255 / 0.07); --bp-major: rgb(255 255 255 / 0.14);
   --k-bg: #1a355a; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #dbe5f1; --k-faint: #c3d2e4;

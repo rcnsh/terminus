@@ -2,13 +2,9 @@ import XCTest
 
 @testable import Terminus
 
-/// The window's width picks the layout at 600 and 800 (ADR 0015), and wide
-/// the lists open a page beside them rather than over them.
 @MainActor
 final class WindowWidthTests: XCTestCase {
     func testTheWidthsAt600And800() {
-        // An iPhone, an iPad in a Split View third, an iPad mini, an 11-inch
-        // iPad in portrait and landscape, an unfolded iPhone Duo.
         XCTAssertEqual(WindowWidth(402), .narrow)
         XCTAssertEqual(WindowWidth(599.5), .narrow)
         XCTAssertEqual(WindowWidth(600), .medium)
@@ -35,10 +31,8 @@ final class WindowWidthTests: XCTestCase {
         m.split = true
         XCTAssertNil(m.chosen)
         m.open(.line(svc: "D2", from: nil))
-        // A stop opened from the line pushes in the detail pane.
         m.path.append(.stop("KR-MRT"))
         XCTAssertEqual(m.chosen, .line(svc: "D2", from: nil))
-        // Another row on the home replaces the pane's pages.
         m.open(.line(svc: "A1", from: nil))
         XCTAssertEqual(m.path, [.line(svc: "A1", from: nil)])
         XCTAssertEqual(m.chosen, .line(svc: "A1", from: nil))
@@ -48,7 +42,6 @@ final class WindowWidthTests: XCTestCase {
         let m = SettingsModel()
         XCTAssertNil(m.chosen)
         m.split = true
-        // Your trips, not the account: a first look shouldn't land on Sign out.
         XCTAssertEqual(m.shown, .trips)
         XCTAssertEqual(m.chosen, .trips)
         m.open(.about)
@@ -57,7 +50,6 @@ final class WindowWidthTests: XCTestCase {
         XCTAssertEqual(m.chosen, .about)
         m.open(.trips)
         XCTAssertEqual(m.path, [.trips])
-        // A page pushed over the first page, when none was picked, keeps it under.
         m.path = []
         m.pagesOver.wrappedValue = [.licences]
         XCTAssertEqual(m.path, [.trips, .licences])
@@ -66,11 +58,9 @@ final class WindowWidthTests: XCTestCase {
     func testOnlyAStopShowingAloneBesideTheHomeIsLeftToItsPage() {
         let m = BusesModel()
         m.path = [.stop("UTOWN")]
-        // On a phone the home isn't on screen with the page.
         XCTAssertNil(m.stopBeside)
         m.split = true
         XCTAssertEqual(m.stopBeside, "UTOWN")
-        // A line pushed over it: the stop's page has stopped refreshing it.
         m.path.append(.line(svc: "D2", from: "UTOWN"))
         XCTAssertNil(m.stopBeside)
         m.path = [.line(svc: "D2", from: nil)]
@@ -85,18 +75,14 @@ final class WindowWidthTests: XCTestCase {
     }
 
     func testAnIPhoneStaysUprightButTheDuoTurns() {
-        // iPhone 17 Pro Max, iPhone 17, iPhone SE: upright.
         XCTAssertFalse(WindowWidth.phoneTurns(shortSide: 440))
         XCTAssertFalse(WindowWidth.phoneTurns(shortSide: 402))
         XCTAssertFalse(WindowWidth.phoneTurns(shortSide: 375))
-        // The Duo's outer panel (the tent position) and its inner one.
         XCTAssertTrue(WindowWidth.phoneTurns(shortSide: 466))
         XCTAssertTrue(WindowWidth.phoneTurns(shortSide: 669))
     }
 
     func testShortUnder500Tall() {
-        // iPhone 17 Pro Max, iPhone 17 and iPhone SE on their side; a Duo's
-        // outer panel on its side; an iPhone and an iPad mini upright.
         XCTAssertTrue(WindowWidth.short(440))
         XCTAssertTrue(WindowWidth.short(402))
         XCTAssertTrue(WindowWidth.short(375))

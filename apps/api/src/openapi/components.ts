@@ -1,5 +1,3 @@
-/** The spec's security schemes and schemas (openapi.ts puts them in the spec). */
-
 import { quality } from './parts.ts';
 
 export function components(): Record<string, unknown> {

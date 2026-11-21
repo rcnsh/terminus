@@ -1,15 +1,10 @@
 import Foundation
 import Observation
 
-/// What the watch shows: Next (the plan, shared with the complications
-/// through WatchPlan), Nearby, or a favourite, and whether it's signed in.
-/// Fetched when it appears and at the answer's next moment while it's on
-/// screen (WatchPlan's rules); never on a timer of its own.
 @MainActor @Observable
 final class WatchModel {
     static let shared = WatchModel()
 
-    /// What the list chooses between, in the phone's order: Next, Nearby, then the favourites.
     enum View: Hashable {
         case plan
         case nearby
@@ -33,32 +28,25 @@ final class WatchModel {
     }
 
     private(set) var paired = TokenStore.read() != nil
-    /// Why it was signed out, said on the setup screen.
     private(set) var signedOutReason = WatchSession.signedOutReason
     var view: View = .plan
-    /// A favourite's answer; Next's is the one kept for the complications.
     private(set) var placeAnswers: [String: NextAnswer] = [:]
     private(set) var plan: NextAnswer?
     private(set) var nearby: [NearbyStop]?
-    /// When `nearby` came, on the server's clock, for its times to count down from.
     private(set) var nearbyAt: Date?
     private(set) var loading = false
     private(set) var error: String?
     private(set) var signalling = false
-    /// A pairing code from the phone being redeemed, and why the last one failed.
     private(set) var pairing = false
     private var waitingCode: WatchHandoff.Code?
     private(set) var pairError: String?
-    /// Changes with every sign-in and out: a reply from before one is dropped.
     private var session = 0
-    /// Bumped when the account's language changes, so every word is drawn again.
     private(set) var lang = Lang.pref
 
     init() {
         plan = paired ? WidgetStore.plan()?.0 : nil
     }
 
-    /// The favourites, from the plan's answer, as the phone's chips have them.
     var places: [Place] { plan?.places ?? [] }
 
     var answer: NextAnswer? {
@@ -81,10 +69,6 @@ final class WatchModel {
         error = nil
     }
 
-    // MARK: fetching
-
-    /// Whatever is on screen, asked for now (Next only if it's due or a
-    /// moment old: WatchPlan.refresh skips one that just came).
     func load() async {
         guard paired, let token = TokenStore.read() else { return }
         let gen = session
@@ -102,7 +86,6 @@ final class WatchModel {
             plan = WidgetStore.plan()?.0
             error = WidgetStore.error
             if Lang.pref != before { lang = Lang.pref }
-            // The complications show the new answer; one that didn't change needs no redraw.
             if WidgetStore.answerAt != came || Lang.pref != before { WatchPlan.redraw() }
         case .nearby:
             do {
@@ -126,9 +109,6 @@ final class WatchModel {
         }
     }
 
-    /// When what's on screen next wants asking for again: the answer's next
-    /// moment (WidgetTiming), a minute for Nearby as its widget on the phone
-    /// has it; never sooner than the server asked for quiet.
     func nextLoad(now: Date = ServerClock.now) -> TimeInterval {
         let wait: TimeInterval
         switch view {
@@ -148,7 +128,6 @@ final class WatchModel {
         return max(wait, Quiet.wait(), WidgetTiming.minGap)
     }
 
-    /// While on screen: now, then at each next moment.
     func follow() async {
         while !Task.isCancelled {
             await load()
@@ -167,7 +146,6 @@ final class WatchModel {
         }
     }
 
-    /// "Earlier bus" or "Later bus" (`to` the bus the card offered), or "Best bus".
     func step(_ s: Step, to: StepTarget?, dir: String?) {
         guard let token = TokenStore.read(), !signalling else { return }
         signalling = true
@@ -193,12 +171,7 @@ final class WatchModel {
         }
     }
 
-    // MARK: signing in and out
-
-    /// A pairing code from the phone: redeemed for this watch's own token.
     func redeem(_ c: WatchHandoff.Code) async {
-        // A code that comes while one is redeeming waits its turn rather than
-        // being dropped: the server has already replaced the one in flight with it.
         guard !pairing else {
             waitingCode = c
             return
@@ -212,7 +185,6 @@ final class WatchModel {
             do {
                 let token = try await Api(token: nil).pair(code: c.code, name: watchName)
                 WatchSession.signedIn(token: token, lang: c.lang, clock: c.clock)
-                // A code sent to a watch that was signed in replaces its session: the old one goes.
                 if let old, old != token { Task.detached { try? await Api(token: old).logout() } }
                 session += 1
                 paired = true
@@ -238,8 +210,6 @@ final class WatchModel {
         syncSignedOut()
     }
 
-    /// The watch was signed out (here, by the server, or by the
-    /// complications' extension finding its token refused): back to setup.
     func syncSignedOut() {
         guard TokenStore.read() == nil else { return }
         session += 1
@@ -253,13 +223,11 @@ final class WatchModel {
         PhoneLink.shared.report()
     }
 
-    /// Opened again: what the complications' extension kept meanwhile.
     func reopened() {
         if paired && TokenStore.read() == nil { syncSignedOut() }
         if paired { plan = WidgetStore.plan()?.0 ?? plan }
         if lang != Lang.pref { lang = Lang.pref }
     }
 
-    /// What the account's Devices list calls this watch.
     private var watchName: String { "Apple Watch" }
 }

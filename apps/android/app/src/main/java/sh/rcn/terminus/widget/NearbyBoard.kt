@@ -5,44 +5,26 @@ import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.R
 import sh.rcn.terminus.parseColor
 
-/**
- * A service's next bus at a stop, as a Nearby widget shows it: worked out once from a fetched board, its times on the phone's clock. Shown
- * as clock times ("9:42"), which stay true between redraws where a countdown would stand still.
- */
 internal data class StopBus(
     val svc: String,
     val color: Long,
     val paid: Boolean,
-    /** When it's due, epoch ms on the phone's clock. */
     val atMs: Long,
     val live: Boolean,
-    /** How full it is ("low", "medium", "high"); only the server's next bus has one. */
     val crowd: String?,
-    /** Its next stop (`towards[0]`); null at the end of the line, or from an older server. */
     val next: String?,
-    /** Where its line ends, when that isn't the next stop. */
     val end: String?,
     val endsHere: Boolean,
-    /** The buses after it, epoch ms on the phone's clock. */
     val later: List<Long>,
-    /** The service's first bus when it starts again: none of the stop's services is running now. A timetable's time. */
     val first: Boolean = false,
-    /** The well-known places it passes from here (the server's `via`), for New to NUS; empty with none, or from an older server. */
     val via: List<String> = emptyList(),
 )
 
 internal object NearbyBoard {
-    /** A bus stays shown this long after it's due: it may be at the stop, or a little late. */
     const val GONE_MS = 60_000L
 
     private const val GREY = 0xFF8A939CL
 
-    /**
-     * The services at [stop] with a time, soonest first, from a board fetched at [fetchedAt] (the phone's clock, as [now]). A bus gone by
-     * [now] gives way to the service's next one; a service with none left isn't shown. With none running at all, each service's first bus
-     * when it starts again ([StopBus.first]), from a board asked for with `stopped=1`; [skewMs] puts the server's times on the phone's
-     * clock.
-     */
     fun buses(stop: NearbyStop, fetchedAt: Long, now: Long, skewMs: Long = 0L): List<StopBus> =
         running(stop, fetchedAt, now).ifEmpty { firsts(stop, now, skewMs) }
 
@@ -95,28 +77,15 @@ internal object NearbyBoard {
 
     private data class Due(val s: Int, val live: Boolean, val crowd: String?)
 
-    /**
-     * Where [bus] ends, when the widget should say so: another bus in [shown] has the same next stop but ends somewhere else, so the next
-     * stop alone wouldn't tell them apart (A1, D2 and K all stop next at LT27 from Kent Ridge MRT).
-     */
     fun endIfNeeded(bus: StopBus, shown: List<StopBus>): String? {
         val end = bus.end ?: return null
         return end.takeIf { shown.any { it !== bus && it.next == bus.next && it.end != end } }
     }
 
-    /** A bus says how many minutes until it under this; further off, its clock time says enough, and the widget redraws less. */
     const val MINUTES_MS = 15 * 60_000L
 
-    /**
-     * Whole minutes until a bus due at [atMs], rounded down so it's never later than said ("6 min" from 6:59 to 6:00 away), 0 in its last
-     * minute ("now"); null from [MINUTES_MS] away.
-     */
     fun minutesLeft(atMs: Long, now: Long): Int? = (atMs - now).takeIf { it < MINUTES_MS }?.let { maxOf(0L, it / 60_000L).toInt() }
 
-    /**
-     * [left] whole minutes in words: "6 min", "~6 min" for a timetable's time, "now" in a seen bus's last minute; an estimate's is "~1
-     * min".
-     */
     fun minutesWords(left: Int, live: Boolean): String =
         when {
             !live -> L.s(R.string.nearby_min_approx, maxOf(1, left))
@@ -124,11 +93,6 @@ internal object NearbyBoard {
             else -> L.s(R.string.nearby_min, left)
         }
 
-    /**
-     * When the widget next looks different with nothing new: a shown bus going ([GONE_MS] after it's due), and before [minutesUntil] each
-     * minute off a shown bus's count ([minutesLeft]). Null [minutesUntil]: no counts shown, as without exact alarms, which could leave one
-     * a minute or more behind. A bus after a shown one counts once it's shown, from the redraw as the one before it goes.
-     */
     fun redrawAt(buses: List<StopBus>, now: Long, minutesUntil: Long? = null): Long? {
         val gone = buses.flatMap { listOf(it.atMs) + it.later }.map { it + GONE_MS }
         val ticks = minutesUntil?.let { until ->
@@ -137,25 +101,15 @@ internal object NearbyBoard {
         return (gone + ticks.orEmpty()).filter { it > now }.minOrNull()
     }
 
-    /**
-     * When the shared board's widgets ([stops], fetched at [fetchedAt], the phone's clock like [now]) next look different with nothing new:
-     * the times turning old, or sooner [redrawAt]'s moments, counting minutes only with [exact] alarms. The nearest two stops: a swap shows
-     * the opposite stop, which is one of them.
-     */
     fun boardRedrawAt(stops: List<NearbyStop>, fetchedAt: Long, now: Long, exact: Boolean, skewMs: Long = 0L): Long? {
         val old = fetchedAt + WidgetModes.NEARBY_OLD_MS
         val buses = stops.take(2).flatMap { buses(it, fetchedAt, now, skewMs) }
         return listOfNotNull(old, redrawAt(buses, now, old.takeIf { exact })).filter { it > now }.minOrNull()
     }
 
-    /**
-     * When a redraw of the shared board also fetches it again: once its times turn old, or sooner when a bus shown at [fetchedAt] goes. A
-     * minute ticking off a count only redraws; fetching then too would ask for the board every minute.
-     */
     fun boardRefetchAt(stops: List<NearbyStop>, fetchedAt: Long, skewMs: Long = 0L): Long =
         boardRedrawAt(stops, fetchedAt, fetchedAt, exact = false, skewMs) ?: (fetchedAt + WidgetModes.NEARBY_OLD_MS)
 
-    /** Page [page] of [buses], [per] to a page, counting round; with which page it is and how many there are. */
     fun page(buses: List<StopBus>, per: Int, page: Int): Paged {
         val pages = maxOf(1, (buses.size + per - 1) / per)
         val p = Math.floorMod(page, pages)
@@ -164,27 +118,17 @@ internal object NearbyBoard {
 
     data class Paged(val buses: List<StopBus>, val page: Int, val pages: Int)
 
-    /**
-     * The stop beside the first of [stops] (as shown) on a widget showing both sides of the road: its opposite stop where the board has it,
-     * else the next stop with a bus ([buses] gives each stop's). Null with neither: the widget shows the one stop.
-     */
     fun beside(stops: List<NearbyStop>, buses: (NearbyStop) -> List<StopBus>): NearbyStop? {
         val first = stops.firstOrNull() ?: return null
         return stops.drop(1).firstOrNull { it.code == first.opposite } ?: stops.drop(1).firstOrNull { buses(it).isNotEmpty() }
     }
 }
 
-/**
- * How a Nearby widget lays itself out by its size: one bus (2×1), two side by side in a bar (4×1), rows with the time at the end (narrow
- * ones, 3×2), or tiles under the sky, two or three across, more rows as it gets taller. One row of tiles pages through the rest ([pager])
- * when there's room for the arrows; more rows list the rest along the bottom ([footer]).
- */
 internal data class NearbyFit(
     val kind: Kind,
     val cols: Int = 1,
     val rows: Int = 1,
     val pager: Boolean = false,
-    /** Room under the rows for the services that don't fit. */
     val footer: Boolean = false,
 ) {
     enum class Kind {
@@ -192,7 +136,6 @@ internal data class NearbyFit(
         BAR,
         ROWS,
         TILES,
-        /** Two stops side by side, a column each: your side of the road and across it ([sides]). */
         SIDES,
     }
 
@@ -200,31 +143,19 @@ internal data class NearbyFit(
         get() = cols * rows
 
     companion object {
-        /**
-         * A tile at its smallest: the time, two lines for the next stop, the pills; three across, the later buses have a line of their own
-         * too.
-         */
         fun tileDp(cols: Int): Float = if (cols >= 3) 112f else 98f
 
         const val ROW_DP = 36f
-        /** Tall enough to tap the pager's arrows. */
         const val PAGER_DP = 20f
         const val FOOTER_DP = 22f
-        /** A Glance Column holds at most 10 children: rows and the rules between them. */
         private const val MAX_ROWS = 5
 
-        /** Both sides of the road: a row a bus, and the heading over each side; New to NUS adds a line to each. */
         const val SIDE_ROW_DP = 30f
         const val SIDE_ROW_NEW_DP = 34f
         const val SIDE_HEAD_DP = 20f
         const val SIDE_HEAD_NEW_DP = 34f
-        /** The slim sky over both sides: the stop's name, Now and ↻ on one line. */
         const val SIDES_SKY_DP = 42f
 
-        /**
-         * Both sides of the road, a column each ([Kind.SIDES]), where the widget is wide and tall enough for a few rows in each: as many
-         * rows as fit, up to [MAX_ROWS]. Null where it isn't: [of]'s layouts then.
-         */
         fun sides(widthDp: Float, heightDp: Float, skyDp: Float, newcomer: Boolean): NearbyFit? {
             if (widthDp < 300f || heightDp < 130f) return null
             val head = if (newcomer) SIDE_HEAD_NEW_DP else SIDE_HEAD_DP
@@ -233,19 +164,14 @@ internal data class NearbyFit(
             return if (rows < 2) null else NearbyFit(Kind.SIDES, cols = 2, rows = rows.coerceAtMost(MAX_ROWS))
         }
 
-        /** Clear of the widget's rounded corners. */
         const val BOTTOM_DP = 6f
 
-        /** [skyDp]: the sky over the buses, taller with the chips on it. */
         fun of(widthDp: Float, heightDp: Float, skyDp: Float): NearbyFit {
             if (heightDp < 130f) return if (widthDp < 220f) NearbyFit(Kind.MINI) else NearbyFit(Kind.BAR, cols = 2)
-            // The home screen's sizes come a fraction short of whole dp: a dp to spare.
             val area = heightDp - skyDp + 1f
             val cols = if (widthDp >= 380f) 3 else 2
             val tile = tileDp(cols)
-            // Too narrow for two columns, or too short for a tile: rows.
             if (widthDp < 300f || area < tile) return NearbyFit(Kind.ROWS, rows = (area / ROW_DP).toInt().coerceIn(1, MAX_ROWS))
-            // More rows of tiles where they fit, else room for the rest under them.
             val bare = (area / tile).toInt()
             val withFooter = ((area - FOOTER_DP) / tile).toInt()
             if (bare < 2) return NearbyFit(Kind.TILES, cols, 1, pager = area >= tile + PAGER_DP)

@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// The small pieces every screen is built from, so the tabs look like one app
-/// and like the Android app and the web: the same capsule buttons, cards on
-/// the page, pills and section labels.
-
-/// Words in a colour of their own on a tint of it: "On time", "Crowding: low".
 struct Pill: View {
     let text: String
     var color: Color = .muted
@@ -19,7 +14,6 @@ struct Pill: View {
     }
 }
 
-/// A section's name, small and upper case, above what it names ("MOST COMMON").
 struct SectionLabel: View {
     let text: String
     var color: Color = .muted
@@ -38,21 +32,15 @@ struct SectionLabel: View {
     }
 }
 
-/// How wide the page's words and cards go, gutters included: the web app's
-/// column. On a wider screen (an iPad, an iPhone Duo open) they sit in the
-/// middle and the sky goes on to the edges.
 let columnWidth: CGFloat = 560
 
 extension View {
-    /// The page's column: `gutter` points in from each side, centred and no
-    /// wider than `width` (`columnWidth` unless said), its content to the leading edge.
     func column(gutter: CGFloat = 16, width: CGFloat = columnWidth) -> some View {
         padding(.horizontal, gutter)
             .frame(maxWidth: width, alignment: .leading)
             .frame(maxWidth: .infinity)
     }
 
-    /// A card on the page: the surface colour, a hairline and rounded corners.
     func cardStyle(padding: CGFloat = 16, radius: CGFloat = 18) -> some View {
         self.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,19 +48,16 @@ extension View {
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.line))
     }
 
-    /// Says `message`, which this view shows, to VoiceOver when it appears and when it changes.
     func announced(_ message: String?) -> some View {
         onAppear { announce(message) }.onChange(of: message) { _, m in announce(m) }
     }
 }
 
-/// Says `message` to VoiceOver now; nothing for nil or empty.
 @MainActor func announce(_ message: String?) {
     guard let message, !message.isEmpty else { return }
     UIAccessibility.post(notification: .announcement, argument: message)
 }
 
-/// The filled capsule for the one thing a screen is for ("Continue", "Get started").
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
 
@@ -89,7 +74,6 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// The outlined capsule for the other choice beside it ("I already have an account").
 struct SecondaryButtonStyle: ButtonStyle {
     var full = true
     @Environment(\.isEnabled) private var enabled
@@ -107,12 +91,9 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// A smaller filled or outlined capsule, for buttons that sit in a row ("Not going", "Undo").
 struct ChipButtonStyle: ButtonStyle {
     var filled = false
-    /// Across the rest of its row, and taller: the one thing to do (directions, "Go there").
     var wide = false
-    /// An equal share of its row with the buttons beside it, narrower inside so three fit.
     var even = false
     @Environment(\.isEnabled) private var enabled
 
@@ -131,7 +112,6 @@ struct ChipButtonStyle: ButtonStyle {
 }
 
 extension Color {
-    /// Words on the accent: white on the light theme's deep orange, the dark ink on the dark theme's light one, as on Android.
     static let onBrand = themed(0xFFFFFF, 0x1C1917)
 }
 
@@ -143,7 +123,6 @@ extension ButtonStyle where Self == SecondaryButtonStyle {
     static var secondary: SecondaryButtonStyle { SecondaryButtonStyle() }
 }
 
-/// A notice above what it's about: an update, location being off, a failure.
 struct Banner<Actions: View>: View {
     let text: String
     var tint: Color = .brand

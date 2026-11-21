@@ -19,17 +19,12 @@
 <link rel="stylesheet" href="/assets/sky.css">
 <script type="module" src="/assets/stars.js" blocking="render"></script>
 <style>
-  /* The feed's state is the picture: a live shuttle in its colour on the
-     road when NUS's feed answers, the same bus in outline (the apps' sign
-     for an estimate) when it doesn't. Outages follow as a route line. */
   .head .nav-links .btn.ghost { background: var(--surface); }
   .state { padding-top: 36px; }
   .state h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); letter-spacing: -0.035em; margin-top: 10px; }
   .state p { color: var(--muted); margin-top: 10px; max-width: 34rem; }
-  /* Close under the line above it; with no line under the headline, the usual gap. */
   .state [aria-live]:has(h1 + p) + p.checked { margin-top: 2px; }
   .state .sky-chip { margin-top: 16px; }
-  /* The headline takes two lines on a phone, one wider. */
   .state .sk-more { display: block; }
   @media (min-width: 640px) { .state .sk-more { display: none; } }
   .state .sk-chip { display: block; width: 5.4rem; height: 2.05rem; margin-top: 16px; }
@@ -55,7 +50,6 @@
   .outages .ongoing { color: var(--warn-ink); font-weight: 600; }
   @media (max-width: 640px) { .facts { grid-template-columns: 1fr; } }
 </style>
-<!-- Every module the page starts with, asked for at once (web-sw.test.js keeps this list right). -->
 <link rel="modulepreload" href="/assets/ui.js">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/preact.mjs">
 <link rel="modulepreload" href="/vendor/preact-10.29.8/hooks.mjs">
@@ -73,7 +67,6 @@
     <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
     <nav class="nav-links"><a class="btn small ghost" href="/account">Account</a></nav>
   </header>
-  <!-- Whether the live feed is working, drawn by status.js; the road under it too. -->
   <div class="wrap narrow state" id="state"><div aria-live="polite"><p class="eyebrow">Status</p><h1>Checking…</h1></div></div>
   <div id="road" style="margin-top:12px"></div>
 </section>

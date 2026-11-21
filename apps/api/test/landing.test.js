@@ -10,8 +10,6 @@ import { ensureUser, openSession, SESSION_COOKIE } from '../src/accounts/account
 const INDEX = await readFile(new URL('../../web/public/index.html', import.meta.url), 'utf8');
 const NOW = 1_790_000_000_000;
 
-// The website as the ASSETS binding serves it, with the headers that made a
-// browser keep its copy.
 const ASSETS = {
   async fetch(req) {
     if (new URL(req.url).pathname !== '/') return new Response('not found', { status: 404 });
@@ -107,7 +105,6 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
   assert.equal(kept.headers.get('cache-control'), 'private, no-cache');
   assert.equal((await get({ cookie, 'if-none-match': etag.slice(2) })).status, 304, 'strong or weak, the same');
 
-  // Signed out, another release, the beta, or a new page: the whole page.
   const out = await get({ 'if-none-match': etag });
   assert.equal(out.status, 200);
   assert.ok((await out.text()).includes('id="account-link">Sign in</a>'));

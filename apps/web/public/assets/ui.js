@@ -1,12 +1,3 @@
-// The website's UI: Preact and its hooks, with htm for templates (vendor/,
-// copied by scripts/vendor/vendor-preact.sh), and the few helpers every page shares.
-// No build step: pages import this file as it is. Components are written as
-//
-//   html`<button class="btn" onClick=${go}>${t('Go there')}</button>`
-//
-// Every word on screen goes through t() (account/dom.js), so the Chinese in
-// assets/zh.js applies; web-i18n.test.js checks templates for bare English.
-
 import { Fragment, createContext, h, render } from '../vendor/preact-10.29.8/preact.mjs';
 import {
   useCallback,
@@ -38,18 +29,12 @@ export {
   useState,
 };
 
-/**
- * A value shared by components, and by code outside them, that redraws the
- * components using it when it changes. Set it to a new object rather than
- * changing the one inside: a store holds one value, not a copy of it.
- */
 export function store(value) {
   const subs = new Set();
   return {
     get: () => value,
     set(next) {
       value = typeof next === 'function' ? next(value) : next;
-      // A copy: a subscriber may unsubscribe while it's told.
       for (const f of Array.from(subs)) f(value);
     },
     subscribe(f) {
@@ -59,12 +44,10 @@ export function store(value) {
   };
 }
 
-/** A store's value, redrawing this component whenever it's set. */
 export function useStore(s) {
   const [, redraw] = useReducer((n) => n + 1, 0);
   const seen = useRef(s.get());
   useLayoutEffect(() => {
-    // Set between the first draw and now: draw again with it.
     if (s.get() !== seen.current) redraw();
     return s.subscribe((v) => {
       seen.current = v;
@@ -74,7 +57,6 @@ export function useStore(s) {
   return s.get();
 }
 
-/** Whether a media query matches, following it as it changes. */
 export function useMedia(query) {
   const mq = useMemo(() => window.matchMedia(query), [query]);
   const [on, set] = useState(mq.matches);
@@ -86,19 +68,10 @@ export function useMedia(query) {
   return on;
 }
 
-/**
- * A window under this many CSS px tall is short (docs/agents/window-sizes.md):
- * the top of Now, Stops and Settings goes compact, so the answer fits on a
- * phone on its side. The width still picks the layout, at 600 and 800
- * (`min-width: 800px` where it's read); the height only changes the top.
- */
 export const shortBelow = 500;
-/** A short window, as app.css asks for it. */
 export const SHORT = `(max-height: ${shortBelow - 0.02}px)`;
-/** Whether the window is short, following it as it's resized or turned. */
 export const useShort = () => useMedia(SHORT);
 
-/** location.hash, following it as it changes. */
 export function useHash() {
   const [hash, set] = useState(location.hash);
   useEffect(() => {
@@ -109,7 +82,6 @@ export function useHash() {
   return hash;
 }
 
-/** Runs `f` every `ms` while this component is drawn; null pauses it. */
 export function useInterval(f, ms) {
   const latest = useRef(f);
   latest.current = f;
@@ -120,25 +92,14 @@ export function useInterval(f, ms) {
   }, [ms]);
 }
 
-/**
- * A sentence from zh.js with markup in it (a link inside it): t() of a
- * constant, as text with its tags. Our own strings only, never data.
- */
 export const Rich = ({ as = 'span', text, ...props }) => h(as, { ...props, dangerouslySetInnerHTML: { __html: text } });
 
-/** What t() is given for a blank that Fill fills with a node. */
 export const MARK = '\u0000';
 
-/**
- * A translated sentence with nodes in its blanks, in the sentence's own
- * order (Chinese puts them elsewhere): Fill({ text: t('Sent to {0}.', MARK),
- * parts: [html`<strong>${email}</strong>`] }).
- */
 export function Fill({ text, parts }) {
   return text.split(MARK).flatMap((bit, i) => (i < parts.length ? [bit, parts[i]] : [bit]));
 }
 
-/** An inline icon: `paths` is SVG markup we wrote, never data. */
 export const Icon = ({ paths, size, ...props }) =>
   h('svg', {
     viewBox: '0 0 24 24',
@@ -148,37 +109,16 @@ export const Icon = ({ paths, size, ...props }) =>
     dangerouslySetInnerHTML: { __html: paths },
   });
 
-/**
- * A skeleton's bar where words are still to come (site.css .sk-line): as
- * tall as the line it stands in for, the bar centred in it. `w` its width,
- * `h` the bar's height when the words' own would look wrong (a large figure).
- */
 export const Bar = ({ w, h = null }) =>
   html`<span class="sk-line" style=${{ width: w }} aria-hidden="true"><span class="sk" style=${h ? { height: h } : undefined}></span></span>`;
 
-/**
- * Something still on its way, drawn as `children`'s shapes: hidden from
- * screen readers, which hear `said` ("Checking…") instead. `quiet`: there to
- * be read, not announced (a status elsewhere says it, or nothing should be
- * heard). `cls` is the box's class, `inner` the shapes' own box's, for a
- * layout that needs its items directly inside it (a grid).
- */
 export const Skeleton = ({ said, quiet = false, cls = null, inner = null, children }) =>
   html`<div class=${cls} aria-busy="true"><div class=${inner} aria-hidden="true">${children}</div><p class="sr-only" role=${quiet ? undefined : 'status'}>${said}</p></div>`;
 
-/** A width from `set` for row `i`: bars that differ row to row, the same on every draw. */
 export const widthOf = (set, i) => set[i % set.length];
 
-/** Prefers reduced motion, read when asked. */
 export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/*
- * One status line for screen readers on each page, unseen, in the page from
- * the start: a live region only speaks a change, so it must be there before
- * the words are. Parts that redraw often (the card, Nearby, the offline
- * banner) say a short line here when what they mean changes, instead of
- * being live regions themselves and read out whole on every redraw.
- */
 let spoken = null;
 let lastSaid = '';
 let sayTimer = null;
@@ -191,35 +131,19 @@ function speaker() {
 }
 if (globalThis.document?.body) speaker();
 
-/**
- * Says `text` once on the page's status line, unless it was the last thing
- * said: the same card drawn again says nothing. `again`: say it even so.
- */
 export function announce(text, { again = false } = {}) {
   if (!text || (!again && text === lastSaid)) return;
   lastSaid = text;
   const el = speaker();
-  // Emptied first, then filled a moment later: the same words twice are a change.
   el.textContent = '';
   clearTimeout(sayTimer);
   sayTimer = setTimeout(() => (el.textContent = text), 50);
 }
 
-/**
- * A row's Remove (`button`) pressed: once the row has gone, the focus goes to
- * the row now in its place (or the one before, at the end of the list), else
- * to `fallback`, a heading with tabindex="-1". Without it, focus would be
- * lost to the top of the page.
- */
 export function refocusAfterRemove(button, fallback) {
   noteRow(button)(fallback);
 }
 
-/**
- * refocusAfterRemove for a Remove that waits on the server first: notes where
- * the row is now, while it's still on the page, and returns the function to
- * call once the list has been loaded again (with its `fallback`).
- */
 export function noteRow(button) {
   const row = button.closest('li, details');
   const list = row?.parentElement;
@@ -227,7 +151,6 @@ export function noteRow(button) {
   const at = rows().indexOf(row);
   return (fallback) =>
     focusSoon(() => {
-      // Not yet redrawn: the row is still there.
       if (row?.isConnected) return null;
       const left = rows();
       const next = left[Math.min(at, left.length - 1)];
@@ -235,12 +158,6 @@ export function noteRow(button) {
     });
 }
 
-/**
- * Focuses `el` once it's on the page, after the redraw under way: `el` is a
- * function returning the element, asked again until it is there (or 10 tries).
- * `preventScroll`: leave every scroller where it is (a pager the redraw has
- * just put back on its page would otherwise jump to the focused one).
- */
 export function focusSoon(el, { preventScroll = false } = {}, tries = 10) {
   requestAnimationFrame(() => {
     const node = typeof el === 'function' ? el() : el;

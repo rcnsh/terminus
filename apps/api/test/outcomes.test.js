@@ -1,8 +1,3 @@
-/**
- * The suggestions drawn from how trips went (outcomes.ts): exactly when
- * "leave one bus earlier" and "stop reminders" are offered, and when not.
- * Straight against tripPrefs() on the real migrations, at a fixed clock.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -10,7 +5,7 @@ import { makeD1 } from './_d1.mjs';
 import { tripPrefs } from '../src/accounts/outcomes.ts';
 import { sgtDate } from '../src/answer/trip.ts';
 
-const NOW = Date.parse('2026-08-27T01:00:00Z'); // Thursday 09:00 in Singapore
+const NOW = Date.parse('2026-08-27T01:00:00Z');
 const DAY = 86_400_000;
 const USER = 'u1';
 const KEY = '4:600:UTOWN';
@@ -53,8 +48,7 @@ test('three misses in 30 days suggest a bus earlier; two do not', async () => {
   );
 });
 
-test('a miss older than 30 days does not count toward the three', async () => {
-  // Still kept (35 days), but outside the month the count looks at.
+test('a miss older than 30 days, though still kept, does not count toward the three', async () => {
   assert.equal(
     await suggestion(
       setup([
@@ -92,7 +86,6 @@ test('"Not going" is offered only when the last three were all skipped', async (
     ).id,
     `quiet:${KEY}`,
   );
-  // Newest first: skipped, went, skipped. Not three in a row.
   assert.equal(
     await suggestion(
       setup([
@@ -115,8 +108,6 @@ test('"Not going" is offered only when the last three were all skipped', async (
 });
 
 test('a turned-down "stop reminders" is not suggested again for 30 days', async () => {
-  // Written as a row: turning it down through setPref() also clears the
-  // skips, which would hide whether the dismissal itself is honoured.
   const dismissed = (db, at) =>
     db._db.prepare("INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES (?, ?, 'no-quiet', NULL, ?)").run(USER, KEY, at);
   const db = setup([

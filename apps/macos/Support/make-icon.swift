@@ -1,6 +1,3 @@
-// Renders ../web/public/assets/mark.svg into Support/AppIcon.icns, or with
-// a BETA band across the bottom into Support/AppIcon-beta.icns.
-//   swift Support/make-icon.swift [beta]
 import AppKit
 
 let beta = CommandLine.arguments.dropFirst().first == "beta"
@@ -11,7 +8,6 @@ let set = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("A
 try? FileManager.default.removeItem(at: set)
 try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
 
-// macOS icons sit inside a margin: the artwork is ~80% of the canvas.
 for (points, scale) in [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), (256, 1), (256, 2), (512, 1), (512, 2)] {
     let px = points * scale
     let rep = NSBitmapImageRep(
@@ -22,7 +18,6 @@ for (points, scale) in [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), 
     let inset = CGFloat(px) * 0.1
     mark.draw(in: NSRect(x: inset, y: inset, width: CGFloat(px) - 2 * inset, height: CGFloat(px) - 2 * inset))
     if beta && px >= 32 {
-        // The site's accent (#C2410C) band with white type, over the artwork's lower edge.
         let band = NSRect(x: inset, y: inset, width: CGFloat(px) - 2 * inset, height: CGFloat(px) * 0.2)
         NSColor(srgbRed: 0xC2 / 255, green: 0x41 / 255, blue: 0x0C / 255, alpha: 1).setFill()
         NSBezierPath(roundedRect: band, xRadius: band.height * 0.3, yRadius: band.height * 0.3).fill()

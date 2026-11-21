@@ -7,7 +7,7 @@ import { WALK, RIDE } from '../src/config.ts';
 import { footS } from '../src/answer/format.ts';
 import { venueStops } from '../src/timetable/nusmods.ts';
 
-const NOW = Date.UTC(2026, 8, 29, 1, 0); // 09:00 SGT
+const NOW = Date.UTC(2026, 8, 29, 1, 0);
 const MIN = 60_000;
 const GRAPH = { generated: '', stops: [], routes: {}, headwayS: { D2: 600 } };
 const BUF = WALK.boardBufferS * 1000;
@@ -37,7 +37,6 @@ const arrivals = (...etaMin) => ({
   available: true,
 });
 const base = { candidates: [], graph: GRAPH, walkAllS: null, nowMs: NOW };
-// One option (or none) with its stop's arrivals.
 const one = (b, sa) => ({ options: b ? [b] : [], byStop: new Map(sa ? [['COM3', sa]] : []) });
 const ms = (l) => Date.parse(l.at);
 
@@ -58,9 +57,7 @@ test('no class: untimed or no bus says nothing', () => {
 
 test('class: the latest live bus that still makes it', () => {
   const b = best();
-  // Class at 09:40, venue next to the stop.
   const arriveBy = { atMs: NOW + 40 * MIN, venueWalkS: 0 };
-  // latestBoard = 09:40 - 3 min slack - ride 6m20s = 09:30:40. Buses at 5, 12, 25 min.
   const l = leaveBy({ ...base, ...one(b, arrivals(5, 12, 25)), arriveBy });
   assert.equal(ms(l), NOW + 25 * MIN - 100_000 - BUF);
   assert.equal(Date.parse(l.board), NOW + 25 * MIN);
@@ -70,7 +67,6 @@ test('class: the latest live bus that still makes it', () => {
 
 test('class: past the live times, projected by headway and marked estimated', () => {
   const arriveBy = { atMs: NOW + 60 * MIN, venueWalkS: 60 };
-  // latestBoard = 09:60 - 3 - 1 - 6:20 = 09:49:40. Live 5, 15; projected 25, 35, 45.
   const l = leaveBy({ ...base, ...one(best(), arrivals(5, 15)), arriveBy });
   assert.equal(ms(l), NOW + 45 * MIN - 100_000 - BUF);
   assert.equal(l.estimated, true);
@@ -83,8 +79,7 @@ test('class: a timetabled time (a public bus LTA does not see) is a time, but st
   const l = leaveBy({ ...base, ...one(best(), sa), arriveBy });
   assert.equal(Date.parse(l.board), NOW + 25 * MIN, 'the bus it would take');
   assert.equal(l.estimated, true);
-  // Live, the same bus is not estimated.
-  assert.equal(leaveBy({ ...base, ...one(best(), arrivals(5, 12, 25)), arriveBy }).estimated, false);
+  assert.equal(leaveBy({ ...base, ...one(best(), arrivals(5, 12, 25)), arriveBy }).estimated, false, 'live, the same bus is not estimated');
 });
 
 test('class hours ahead with no live times: a full headway early', () => {
@@ -97,20 +92,17 @@ test('class hours ahead with no live times: a full headway early', () => {
 });
 
 test('class after the service has closed, with no live times: the last buses before it closes, not "leave now"', () => {
-  // D2 runs 07:00 to 11:00 on a Tuesday (NOW); the class is at 13:00.
   const graph = { ...GRAPH, serviceHours: { D2: { weekday: ['07:00', '11:00'], saturday: null, sunday: null } } };
   const arriveBy = { atMs: NOW + 240 * MIN, venueWalkS: 0 };
   const b = best({ quality: 'scheduled' });
   const l = leaveBy({ ...base, graph, ...one(b, arrivals()), arriveBy });
   const closes = NOW + 120 * MIN;
-  // A headway before the close, so a bus is sure to come before it.
-  assert.equal(Date.parse(l.board), closes - 600_000);
+  assert.equal(Date.parse(l.board), closes - 600_000, 'a headway before the close, so a bus is sure to come');
   assert.equal(ms(l), closes - 600_000 - 100_000 - BUF);
   assert.equal(Date.parse(l.arrive), closes + b.rideS * 1000);
   assert.equal(l.estimated, true);
-  // Once the close is too near to be at the stop a headway before it: as soon as you can.
   const soon = leaveBy({ ...base, graph, nowMs: closes - 5 * MIN, ...one(b, arrivals()), arriveBy });
-  assert.equal(ms(soon), closes - 5 * MIN);
+  assert.equal(ms(soon), closes - 5 * MIN, 'too near the close for a headway before it: as soon as you can');
 });
 
 test('class before buses run: falls back to the candidate legs', () => {
@@ -148,7 +140,6 @@ test('homeWalkMin: defaults to 5, 0 to 30 whole minutes', () => {
 
 test('class: the latest leave across services, naming the bus and stop', () => {
   const arriveBy = { atMs: NOW + 40 * MIN, venueWalkS: 0 };
-  // D2 leaves in 5 then every 10 (headway); A1 at 28 min with a short ride.
   const d2 = best();
   const a1 = best({ svc: 'A1', hops: 1, rideS: RIDE.secondsPerHop, stop: { code: 'KR', name: 'Kent Ridge Terminal', lat: 0, lon: 0 } });
   const byStop = new Map([
@@ -163,7 +154,6 @@ test('class: the latest leave across services, naming the bus and stop', () => {
 });
 
 test('for a class, a stop further off must buy back more than its walk: walking counts sunWeight times', () => {
-  // Thursday 27 Aug 2026, 09:00 SGT; the class at 09:40.
   const now = Date.UTC(2026, 7, 27, 1, 0);
   const stop = (code) => ({ code, name: code, lat: 0, lon: 0 });
   const opt = (code, walkS, boardS) => ({
@@ -185,8 +175,6 @@ test('for a class, a stop further off must buy back more than its walk: walking 
     code,
     { code, arrivals: [{ svc: 'D2', etaS, crowd: null, plate: null, berth: null }], fetchedAt: now, stale: false, available: true },
   ];
-  // Near: a 1 min walk, the bus in 20 min. Far: a 7 min walk, the bus in
-  // 27:20, so you leave 100 s later for it, for 340 s more in the sun.
   const near = opt('NEAR', 60, 1200);
   const far = opt('FAR', 400, 1640);
   const f = {
@@ -204,7 +192,6 @@ test('for a class, a stop further off must buy back more than its walk: walking 
 });
 
 test('for a class in a room two stops serve, the walk on from each stop counts sunWeight times, as in the ranking', () => {
-  // COM1, served by COM3 and CLB: the real walks from each to the room.
   const room = venueStops('COM1');
   const walkByStopS = Object.fromEntries(Object.entries(room.walkM).map(([code, m]) => [code, Math.round(m / 1.3)]));
   const extraS = walkByStopS.CLB - walkByStopS.COM3;
@@ -228,7 +215,6 @@ test('for a class in a room two stops serve, the walk on from each stop counts s
     ambiguousBerth: false,
     to: stop(to),
   });
-  // To COM3, the bus at 26:40; to CLB, 10 s later, for extraS more on foot at the other end.
   const toCom3 = opt('D1', 'COM3', 1600);
   const toClb = opt('D2', 'CLB', 1610);
   const endWalk = (o) => walkByStopS[o.to.code];
@@ -253,7 +239,6 @@ test('for a class in a room two stops serve, the walk on from each stop counts s
     arriveBy: { atMs: now + 40 * 60_000, venueWalkS: walkByStopS.COM3, walkByStopS, fullBusMargin: false },
   };
   assert.equal(leaveBy({ ...f, walkWeight: 1 }).toCode, 'CLB', 'minutes as they are: the later leave');
-  // The ranking's cost, with the walk from the stop to the room weighed too.
   const cost = (o) => o.totalS + endWalk(o) + (WALK.sunWeight - 1) * footS(o, endWalk(o));
   assert.ok(cost(toCom3) < cost(toClb), 'the ranking prefers COM3');
   assert.equal(leaveBy(f).toCode, 'COM3', 'in the heat: 10 s at home is not worth the longer walk from CLB');

@@ -1,61 +1,32 @@
-/**
- * What happened to each planned trip, and what terminus learns from it
- * without being creepy about it.
- *
- * One row per trip per day in `trip_outcomes`: what detection saw from the
- * phone's location (boarded, missed, arrived) or "Not going" (skipped). terminus
- * never asks what happened; `none` is allowed by the schema but never written,
- * and nothing acts on it. Kept 35 days. `at` is the start of that day, not the
- * moment: the suggestions only count days, and a time of day would say when
- * you got off a bus. From it:
- *
- * - **Three misses of the same trip in 30 days** suggest leaving one bus
- *   earlier for it. Only a suggestion; nothing changes until it's accepted.
- * - **"Not going" three weeks running** offers to stop reminders for it.
- *
- * Accepted and turned-down suggestions are `trip_prefs`, per weekly trip.
- */
-
 import { endOfDayMs, sgtDate } from '../answer/trip.ts';
 import { m } from '../i18n.ts';
 
 export type Outcome = 'boarded' | 'missed' | 'skipped' | 'arrived' | 'none';
 export type PrefKind = 'earlier' | 'quiet';
 
-/** Rows older than this are deleted by the cron. */
 export const KEEP_DAYS = 35;
-/** This many misses of one trip within MISS_DAYS suggest a bus earlier. */
 export const MISSES = 3;
 export const MISS_DAYS = 30;
-/** This many "Not going" for one trip, its last occurrences in a row. */
 export const SKIPS = 3;
-/** A turned-down suggestion isn't offered again for this long. */
 export const DISMISS_DAYS = 30;
 
 const DAY_MS = 86_400_000;
 
-/** A suggestion for the card: accept or turn down with /api/me/choice. */
 export interface Suggestion {
-  /** `earlier:<trip>` or `quiet:<trip>`. */
   id: string;
   text: string;
   accept: string;
   dismiss: string;
 }
 
-/** What the planner and the card need to know about the user's trips. */
 export interface TripPrefs {
-  /** Trip keys to leave one bus earlier for. */
   earlier: Set<string>;
-  /** Trip keys with no reminders. */
   quiet: Set<string>;
-  /** At most one pending suggestion. */
   suggestion: Suggestion | null;
 }
 
 export const NO_PREFS: TripPrefs = { earlier: new Set(), quiet: new Set(), suggestion: null };
 
-/** Records (or replaces) today's outcome for a trip. */
 export async function recordOutcome(
   db: D1Database,
   userId: string,
@@ -71,15 +42,12 @@ export async function recordOutcome(
     .run();
 }
 
-/** "Undo": today's outcome for that trip is forgotten. */
 export async function clearOutcome(db: D1Database, userId: string, key: string, nowMs: number): Promise<void> {
   await db.prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND day = ?').bind(userId, key, sgtDate(nowMs)).run();
 }
 
-/** More than any timetable has trips: the trip key comes from the client, so the rows are capped. */
 export const MAX_PREFS = 200;
 
-/** Accepts or turns down a suggestion, or undoes an accepted one. */
 export async function setPref(
   db: D1Database,
   userId: string,
@@ -97,13 +65,9 @@ export async function setPref(
       db
         .prepare('INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES (?, ?, ?, ?, ?)')
         .bind(userId, key, choice === 'accept' ? pref : `no-${pref}`, label, nowMs),
-      // Either answer, accepting or turning it down, starts the count again
-      // (misses for "leave earlier", skips for "stop reminders"), so the same
-      // days can't suggest it twice; a turned-down one also waits DISMISS_DAYS.
       db
         .prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?')
         .bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'),
-      // The oldest go first past the cap.
       db
         .prepare(
           'DELETE FROM trip_prefs WHERE user_id = ? AND rowid IN (SELECT rowid FROM trip_prefs WHERE user_id = ? ORDER BY set_at DESC, rowid DESC LIMIT -1 OFFSET ?)',
@@ -114,7 +78,6 @@ export async function setPref(
   await db.batch(stmts);
 }
 
-/** Accepted choices, for the settings screen. */
 export async function listPrefs(
   db: D1Database,
   userId: string,
@@ -135,11 +98,6 @@ interface OutcomeRow {
   at: number;
 }
 
-/**
- * Everything the planner and the card need, in one round trip. `labelOf`
- * names a trip key ("CS2030 Lecture"), or null for a trip that no longer
- * exists (a suggestion about it would make no sense).
- */
 export async function tripPrefs(
   db: D1Database,
   userId: string,
@@ -169,7 +127,6 @@ export async function tripPrefs(
     for (const [key, list] of byTrip) {
       const label = labelOf(key);
       if (!label) continue;
-      // "Not going" on its last three occurrences (the list is newest first).
       const last = list.slice(0, SKIPS);
       if (
         !quiet.has(key) &&
@@ -188,22 +145,16 @@ export async function tripPrefs(
   }
 }
 
-/** How many trips are in the history, for "Clear trip history". */
 export async function historySize(db: D1Database, userId: string): Promise<number> {
   const row = await db.prepare('SELECT COUNT(*) AS n FROM trip_outcomes WHERE user_id = ?').bind(userId).first<{ n: number }>();
   return row?.n ?? 0;
 }
 
-/**
- * "Clear trip history": forgets every trip's outcome, so nothing is suggested
- * from them. Choices already made (trip_prefs) stay; each has its own Undo.
- */
 export async function clearHistory(db: D1Database, userId: string): Promise<number> {
   const r = await db.prepare('DELETE FROM trip_outcomes WHERE user_id = ?').bind(userId).run();
   return r.meta.changes ?? 0;
 }
 
-/** For the account export: the history and the choices, as they're kept. */
 export async function exportOutcomes(db: D1Database, userId: string): Promise<{ tripOutcomes: unknown[]; tripChoices: unknown[] }> {
   const [o, p] = await db.batch([
     db.prepare('SELECT trip_key AS trip, day, outcome FROM trip_outcomes WHERE user_id = ? ORDER BY at').bind(userId),

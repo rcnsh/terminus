@@ -3,7 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// The header's countdowns, which tick on the Mac between refreshes.
 private let at = Date(timeIntervalSince1970: 1_790_000_000)
 
 @Test func theLastPartOfASecondIsStillToCome() {
@@ -25,7 +24,6 @@ private let at = Date(timeIntervalSince1970: 1_790_000_000)
     #expect(Header.countdown(to: at, now: at.addingTimeInterval(-270), minutes: true) == "Leaves in 5 min")
 }
 
-/// As the phone's "Leave in 45 s": seconds alone under a minute, not "0 min 45 s".
 @Test func theLeaveByCountsDownAsOnThePhone() {
     #expect(Header.leaveIn(45) == "in 45 s")
     #expect(Header.leaveIn(65) == "in 1 min 5 s")

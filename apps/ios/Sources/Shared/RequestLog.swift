@@ -1,12 +1,6 @@
 import Foundation
 
-/// The app's last requests to our server, kept in memory for the developer
-/// menu (Settings, About) and the diagnostics it copies. Only the path is
-/// kept, never the query: /api/me/next is asked with where you are. Each
-/// process keeps its own: the widgets' and the notification service's
-/// requests aren't in the app's.
 enum RequestLog {
-    /// One request: `status` nil when no answer came (`failure` says why).
     struct Entry: Equatable, Sendable {
         let at: Date
         let method: String
@@ -30,7 +24,6 @@ enum RequestLog {
         }
     }
 
-    /// Newest first.
     static var entries: [Entry] { list.withLock { $0 } }
 
     static func clear() { list.withLock { $0 = [] } }
@@ -39,8 +32,6 @@ enum RequestLog {
         String(path.prefix { $0 != "?" && $0 != "#" })
     }
 
-    /// A URLError by its code (`URLError -1003`), anything else by its type.
-    /// A request the app called off (a newer refresh took its place) says so.
     static func describe(_ error: Error) -> String {
         if (error as? URLError)?.code == .cancelled || error is CancellationError { return "cancelled" }
         if let e = error as? URLError { return "URLError \(e.code.rawValue)" }

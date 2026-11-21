@@ -3,9 +3,7 @@ import SwiftUI
 struct Search: View {
     @Bindable var model: AppModel
     @Binding var query: String
-    /// The result Return goes to, moved with the arrow keys.
     @State private var highlighted = 0
-    /// The number of results VoiceOver last heard, while something is typed.
     @State private var countSaid: Int?
 
     private var q: String { query.trimmingCharacters(in: .whitespaces) }
@@ -49,7 +47,6 @@ struct Search: View {
                 Text(L("No matches")).font(.callout).foregroundStyle(.secondary).padding(.horizontal, 10)
             } else if !found.isEmpty {
                 let stopName = { (code: String) in model.destinations.first { $0.kind == "stop" && $0.code == code }?.label ?? code }
-                // Walk times at the user's pace, as the server last said it.
                 let walkSpeed = model.plan?.walkSpeedMs ?? 1.3
                 VStack(spacing: 0) {
                     ForEach(Array(found.enumerated()), id: \.element) { i, d in
@@ -93,8 +90,6 @@ struct Search: View {
                 .transition(.opacity)
             }
         }
-        // How many came up, said once typing settles (half a second after the
-        // last key), and only when it's a different count from the last said.
         .task(id: "\(model.destinations.count)|\(q)") {
             guard !q.isEmpty else {
                 countSaid = nil
@@ -122,8 +117,6 @@ struct Search: View {
     }
 }
 
-/// Left-to-right layout that wraps to a new line when the next item
-/// wouldn't fit.
 struct Flow: Layout {
     var spacing: CGFloat = 6
 

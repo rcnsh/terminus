@@ -1,18 +1,4 @@
 #!/bin/sh
-# Puts the iPhone app on your own iPhone with a free Apple ID, until it's on
-# the App Store. Two ways (SIDELOAD.md says more):
-#
-#   scripts/sideload.sh          On a Mac with Xcode, the iPhone plugged in:
-#                                builds it, signs it with your Apple ID and
-#                                installs it. Run it again within 7 days.
-#   scripts/sideload.sh --ipa    Makes build/sideload/terminus-<version>.ipa
-#                                for AltStore, SideStore or Sideloadly, which
-#                                sign it with the Apple ID of whoever installs it.
-#
-# Both build the Sideload configuration: the stable servers, without push or
-# Time Sensitive notifications, which a free Apple ID can't sign. TEAM=<id>
-# picks the team when Xcode has several; DEVICE=<udid> the iPhone when
-# several are plugged in.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -27,8 +13,6 @@ OUT=build/sideload
 mkdir -p "$OUT"
 
 if [ "${1:-}" = --ipa ]; then
-  # Unsigned, then signed ad hoc so the entitlements (the app group) ride in
-  # the binary: the installer re-signs it under its own team and group.
   xcodebuild -project terminus.xcodeproj -scheme Terminus -configuration Sideload \
     -destination 'generic/platform=iOS' -derivedDataPath "$OUT/dd" -quiet \
     CODE_SIGNING_ALLOWED=NO build
@@ -40,8 +24,6 @@ if [ "${1:-}" = --ipa ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>com.apple.security.application-groups</key><array><string>$GROUP</string></array></dict></plist>
 EOF
-  # Inside out: frameworks, then the extensions, the watch app (its
-  # complications first), then the app.
   for f in "$APP"/Frameworks/*.framework; do [ -e "$f" ] && codesign -f -s - "$f"; done
   for x in "$APP"/PlugIns/*.appex; do codesign -f -s - --entitlements "$ENT" "$x"; done
   for w in "$APP"/Watch/*.app; do
@@ -57,7 +39,6 @@ EOF
   exit 0
 fi
 
-# Your team: TEAM, else the Personal Team that signing into Xcode made.
 if [ -z "${TEAM:-}" ]; then
   TEAM=$(defaults export com.apple.dt.Xcode - 2>/dev/null | python3 -I -c '
 import plistlib, sys
@@ -71,7 +52,6 @@ if [ -z "$TEAM" ]; then
   exit 1
 fi
 
-# The iPhone: plugged in (or on the same Wi-Fi once paired) and paired.
 devicectl_json=$(mktemp)
 trap 'rm -f "$devicectl_json"' EXIT
 xcrun devicectl list devices --json-output "$devicectl_json" >/dev/null 2>&1 || true
@@ -97,7 +77,6 @@ if [ $# -lt 2 ]; then
 fi
 ID=$1 UDID=$2 NAME=$(echo "$3" | tr _ ' ')
 
-# Your own bundle IDs and group: a free team can't use sh.rcn.terminus, which is ours.
 SUFFIX=".sideload.$TEAM"
 BUNDLE="sh.rcn.terminus$SUFFIX"
 echo "Building terminus $VERSION for $NAME, signed by team $TEAM…"

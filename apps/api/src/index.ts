@@ -1,9 +1,3 @@
-/**
- * terminus: answers one question, when is my bus and should I run. Fetch on
- * demand through a 15-second edge cache, with no poll loop. See internals.md,
- * *How it works*, and docs/agents/feeds.md for the few reads made on a schedule.
- */
-
 import type { Env, ResolveInput } from './types.ts';
 import { sgt } from './config.ts';
 import { venueAt, venueToStop } from './timetable/nusmods.ts';
@@ -52,21 +46,13 @@ import { type MeDeps, answerFor, arrivedAnswer, collectArrivals, needsSetupAnswe
 import { lang, langOfRequest, m, withLang } from './i18n.ts';
 import type { Lang } from './i18n.ts';
 
-// Pure functions of the static GRAPH, computed once per isolate on first
-// use (not at module scope: every cold start would pay for them, ~1000
-// destinations included, whatever it was started for), served with a long
-// client cache, same spirit as GRAPH itself: /api/stops/pairs here, /api/campus in
-// handleCampus.
 let stopPairsMemo: ReturnType<typeof stopPairs> | null = null;
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
-// The trip engine's Durable Object (one per user), bound as TRIPS.
 export { Trip } from './push/tripdo.ts';
-// The timelapse recorder (one per Singapore day), bound as TIMELAPSE.
 export { TimelapseRecorder } from './map/timelapsedo.ts';
 export { FeedGate } from './feeds/feedgate.ts';
 
-/** `?to=` as a stop code or a NUSMods venue code; `?from=` as an origin stop. */
 function resolveDestination(url: URL) {
   const idx = indexGraph(GRAPH);
   const raw = url.searchParams.get('to')?.trim().toUpperCase() || null;
@@ -75,8 +61,6 @@ function resolveDestination(url: URL) {
   if (!raw) return null;
 
   const stop = idx.byCode.get(raw);
-  // Abbreviated like every other stop name ("Information Technology" -> "IT").
-  // A stop nearby will do too, with the walk on from it.
   if (stop)
     return { to: stop.code, also: [] as string[], from, label: shortStop(stop.name, 14), at: null, near: nearStopWalks(GRAPH, stop.code) };
   const lm = landmark(raw);
@@ -85,7 +69,6 @@ function resolveDestination(url: URL) {
     return { to: t.to, also: t.also, from, label: lm.name, at: null };
   }
 
-  // A room or building: where it is too, so standing in it counts as there.
   const venue = venueToStop(raw);
   if (venue) return { to: venue.stop, also: [] as string[], from, label: raw.split('-')[0], at: venueAt(raw) };
   return null;
@@ -98,15 +81,10 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   const to = dest?.to ?? null;
   const originCode = dest?.from ?? null;
 
-  // Nothing to work with: no location and no destination. Rather
-  // than fabricate a trip, tell the user how to get an answer.
   if (lat === null && to === null && originCode === null) {
     return json(needsSetupAnswer(nowMs));
   }
 
-  // With coordinates but no destination, `to` stays null and the resolver
-  // simply reports the next buses at the nearest stop. `?public=1` counts
-  // the public buses too, as an account's `publicBuses` does for /api/me/next.
   const input: ResolveInput = {
     lat,
     lon,
@@ -146,35 +124,18 @@ async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   );
 }
 
-/**
- * `?probe=1` attempts a real token mint and reports what came back.
- * It never returns the token, and it goes through the ordinary cached path, so
- * hammering it does not hammer upstream.
- */
 async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknown>> {
   if (!authConfigured(env)) return { ok: false, reason: 'auth not configured' };
 
-  // Goes through the ORDINARY cached path: minting a fresh token on every
-  // call draws intermittent 400s from upstream.
   const before = await env.KV.get('auth:session').catch(() => null);
   try {
     const s = await getSession(env, nowMs);
     return { ok: true, cached: Boolean(before), domain: s.domain, expiresIn: `${Math.round((s.expMs - nowMs) / 3600_000)}h` };
   } catch (err) {
-    // getSession reports the HTTP status, the envelope code, or the first 80
-    // bytes of a non-JSON body, so this message is usually the whole story.
     return { ok: false, cached: Boolean(before), reason: (err as Error).message };
   }
 }
 
-/**
- * GET /api/campus -- static map + search data for the map and the
- * destination search. Pure function of the bundled stop graph and the
- * request's language (a landmark's kind is worded): it only changes when a
- * deploy ships a new scrape. So it's written once per isolate and language,
- * with an ETag of its own bytes, and a client that already has it (the
- * browser revalidating after max-age) gets a 304 instead of the 100 KB again.
- */
 const campusBodies = new Map<Lang, Promise<{ body: string; etag: string }>>();
 
 async function handleCampus(req: Request): Promise<Response> {
@@ -198,7 +159,6 @@ async function handleCampus(req: Request): Promise<Response> {
           .join('')}"`,
       };
     })();
-    // A failure isn't kept: the next request builds it again.
     made.catch(() => campusBodies.delete(l));
     campusBodies.set(l, made);
   }
@@ -214,44 +174,23 @@ async function handleCampus(req: Request): Promise<Response> {
   return new Response(body, { headers });
 }
 
-/**
- * GET /api/arrivals?stop=<code> -- what is coming at one stop, for the map's
- * tap-a-stop popover. Goes through the same per-stop 15s edge cache as
- * /api/next, so a map open does not cost more than checking that one stop would
- * on its own -- there is no bulk "every stop at once" fetch anywhere.
- */
 async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
   const code = url.searchParams.get('stop')?.trim().toUpperCase() || '';
-  // `?public=1`, or a stop only public buses call at (LTA's code): the board
-  // with the public buses on it.
   const graph = url.searchParams.get('public') === '1' || !indexGraph(GRAPH).byCode.has(code) ? GRAPH_PUBLIC : GRAPH;
   const idx = indexGraph(graph);
   const stop = idx.byCode.get(code);
   if (!stop) return json({ error: 'unknown stop', stop: code }, 400);
 
-  // Same failure handling as /api/next: a rejected fetch means "we never reached
-  // the feed", not "no bus is coming" -- those are different answers, and
-  // /api/next never lets this surface as a 500, so /api/arrivals must not either.
   const sa = (await collectArrivals(env, ctx, [code], nowMs, graph)).get(code)!;
-  // `?stopped=1`: the services not running now too, for the Buses tab.
   const board = boardAt(graph, idx, code, sa, nowMs, { stopped: url.searchParams.get('stopped') === '1' });
   return json({
-    // Its opposite stop, for "This side | Across the road" (or the other stop's name, when
-    // it's only near rather than across).
     stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...oppositeOf(stop, idx.byCode) },
     board,
-    // As old as the times on the board (counted from now in boardAt).
     asOf: new Date(boardAsOf([sa], nowMs)).toISOString(),
     available: sa.available,
   });
 }
 
-/**
- * GET /api/buses?svc=<service> -- where that service's buses are now, for the
- * map. One upstream call per service per 5 s however many people watch it
- * (getBuses). Like /api/arrivals, an unreachable feed is `available: false`, not
- * an error and not "no buses".
- */
 async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
   const svc = url.searchParams.get('svc')?.trim().toUpperCase() || '';
   if (!GRAPH.routes?.[svc]) return json({ error: 'unknown service', svc }, 400);
@@ -270,19 +209,10 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   );
 }
 
-/** A service's buses out, worded: /api/lines's entry, and /api/line's `out`, so the list can match a page just opened. */
 function lineOut(out: number, stale: boolean): { out: number; outText: string; stale: boolean } {
   return { out, outText: out ? m().busesOut(out) : m().noneOut, stale };
 }
 
-/**
- * GET /api/lines -- how many of each service's buses are out now, worded, for
- * the list of lines on the Stops tab. The one read of every service at once:
- * each goes through getBuses, so its 5 s cache and the feed gate hold (one
- * feed call per service per window, however many ask), and the response is
- * kept 30 s; the apps ask at most once a minute while the list is on screen.
- * A service the feed didn't answer for is null, not "None out".
- */
 async function handleLines(env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
   const svcs = Object.keys(GRAPH.routes ?? {});
   const got = await Promise.all(
@@ -295,13 +225,6 @@ async function handleLines(env: Env, ctx: ExecutionContext, nowMs: number): Prom
   return json({ lines: Object.fromEntries(got), asOf: new Date(nowMs).toISOString() }, 200, { 'cache-control': 'private, max-age=30' });
 }
 
-/**
- * GET /api/line?svc=<service>[&stop=<code>] -- one service's whole line, for a
- * service's page: its stops in route order, its buses placed on that list,
- * and with `stop`, that service's board row there. Costs what /api/buses does,
- * plus one /api/arrivals read with `stop`, both through their caches. No times
- * are worked out for the other stops: only the feed's own are shown.
- */
 async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
   const svc = url.searchParams.get('svc')?.trim().toUpperCase() || '';
   if (!GRAPH.routes?.[svc]) return json({ error: 'unknown service', svc }, 400);
@@ -313,14 +236,10 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 
   const [live, sa] = await Promise.all([
     getBuses(env, ctx, svc, nowMs).catch(() => null),
-    // A rejected fetch is "never reached the feed", as on /api/arrivals.
     code ? collectArrivals(env, ctx, [code], nowMs, GRAPH).then((m) => m.get(code)) : Promise.resolve(undefined),
   ]);
   const placed = live ? await trackedBuses(GRAPH, svc, live, ctx) : [];
   const ends = serviceEndsAt(GRAPH, svc, nowMs);
-  // A bus out on the line runs, whatever the hours say: the feed is the
-  // truth and the hours a hint, as on a board, so the page never says
-  // "Stopped" over a moving bus.
   const stopped = placed.length ? null : stoppedReason(GRAPH, svc, nowMs);
   const resumes = stopped ? serviceResumesAt(GRAPH, svc, nowMs) : null;
   return json(
@@ -328,20 +247,16 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
       svc,
       color: ROUTE_COLORS[svc] ?? null,
       endsAt: ends === null ? null : new Date(ends).toISOString(),
-      // By its hours unless a bus is out; `stopped` and `resumesAt` are null while it runs.
       running: stopped === null,
       stopped,
       resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
       stops: lineStops(idx, svc),
       buses: busesOnLine(route.seq, route.loop, placed),
-      // Counted as /api/lines counts, and fresher than the list's minute-old copy.
       out: live ? lineOut(placed.length, Boolean(live.stale)) : null,
       ...(code
         ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs, { stopped: true }).find((r) => r.svc === svc) ?? null } }
         : {}),
       available: Boolean(live),
-      // As old as the oldest thing on the page: the buses, and your stop's row,
-      // which can come from a kept or stale board.
       asOf: new Date(Math.min(live?.stale ? live.fetchedAt : nowMs, code ? boardAsOf([sa], nowMs) : nowMs)).toISOString(),
     },
     200,
@@ -349,25 +264,12 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   );
 }
 
-/**
- * Opening the web app with no session goes straight to sign-in, before any
- * page is drawn, rather than the app flashing up and then leaving on its
- * first 401. Only a page being opened (a document, whether the browser or
- * the service worker passing it on asks): the service worker keeping its
- * copy of the app still gets the app. A session that has ended but left its
- * cookie is still sent on by the app itself (signedOut()).
- */
 export function signInFirst(req: Request, url: URL): boolean {
   return (
     (url.pathname === '/app/' || url.pathname === '/app') && req.headers.get('sec-fetch-dest') === 'document' && !hasSessionCookie(req)
   );
 }
 
-/**
- * A page of the website. One that isn't there, asked for by a browser, is
- * the not-found page (web/public/not-found/), still with a 404; anything
- * else, a script or a client, gets what the website answered.
- */
 async function sitePage(req: Request, assets: Fetcher): Promise<Response> {
   const res = await assets.fetch(req);
   if (res.status !== 404 || !(req.headers.get('accept') ?? '').includes('text/html')) return res;
@@ -376,13 +278,8 @@ async function sitePage(req: Request, assets: Fetcher): Promise<Response> {
   return new Response(page.body, { status: 404, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
 }
 
-/** The cron runs every 15 minutes; older than this and it has stopped. */
 const CRON_STALE_MS = 40 * 60_000;
 
-/**
- * The public status page's data: whether NUS's live feed is answering, as
- * the cron sees it, and recent outages. Causes are a kind, never NUS's error.
- */
 async function handleStatus(env: Env, nowMs: number): Promise<Response> {
   const { upstream: u, incidents, publicFeed: pub } = await statusRecords(env, nowMs);
   const iso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());
@@ -391,13 +288,10 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
     {
       feed: f?.feed ?? 'unknown',
       since: f ? iso(f.since) : null,
-      // Why it's down: NUS refusing our uNivUS version, or anything else.
       cause: f?.cause ?? null,
       checkedAt: u ? iso(u.checkedAt) : null,
-      // Checks every 15 minutes; if they've stopped, what's above is old news.
       checking: u ? nowMs - u.checkedAt <= CRON_STALE_MS : false,
       incidents: incidents.map((i) => ({ start: iso(i.start), end: iso(i.end), cause: i.cause })),
-      // LTA DataMall, for the public buses: extra, so no incidents and no alerts.
       publicFeed: pub ? (pub.up ? 'up' : 'down') : 'unknown',
       publicSince: pub ? iso(pub.since) : null,
     },
@@ -409,20 +303,13 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
 async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Promise<Response> {
   const idx = indexGraph(GRAPH);
   const t = sgt(nowMs);
-  // Read fresh, not through /api/status.json's minute-long memo: the uptime
-  // check and the operator want the record as it is.
   const u = await readUpstream(env);
   const cronStale = u ? nowMs - u.checkedAt > CRON_STALE_MS : null;
   const through = calendarThrough();
   const daysLeft = Math.floor((Date.parse(`${through}T00:00:00Z`) - nowMs) / 86_400_000);
-  // Unhealthy means something an operator must act on. No record yet (a
-  // fresh deploy before the first cron run) is not that.
   const ok = (!u || answering(u)) && cronStale !== true && daysLeft > 0;
-  // The probe spends an upstream call, so only the operator gets it.
   const operator = await isOperator(env, req, nowMs);
   const probe = operator && url.searchParams.get('probe') === '1';
-  // Reads the Play page (no NUS calls), to see what the
-  // automatic version update would find today.
   const versions = operator && url.searchParams.get('versions') === '1';
   return json(
     {
@@ -436,7 +323,6 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         services: [...idx.routes.keys()],
       },
       calendar: { through, daysLeft, source: calendarSource() },
-      // Presence only. Never the values.
       config: {
         auth: authConfigured(env),
         proxy: fmsConfigured(env),
@@ -445,12 +331,10 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         accounts: accountsConfigured(env),
         email: Boolean(env.EMAIL && env.EMAIL_FROM),
         alerts: Boolean(env.EMAIL && env.EMAIL_FROM && env.ALERT_EMAIL),
-        // Set and usable: a secret that won't parse turns that push off.
         pushAndroid: fcmEnabled(env),
         pushWeb: webPushEnabled(env),
         pushIos: apnsEnabled(env),
       },
-      // From the cron probe: whether the NUS feed answered, and since when.
       upstream: u
         ? { up: answering(u), since: new Date(answeringSince(u)).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale }
         : null,
@@ -475,29 +359,20 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
 
 const ME_DEPS: MeDeps = { answerFor, collectArrivals };
 
-/** Routes that need an API key or a signed-in account. */
 const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/lines', '/api/line', '/api/campus', '/api/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     scopeCache(env);
-    // Awaited, not left to waitUntil: a run that outlives the handler could be
-    // cut off partway, with the trigger's history still saying it succeeded.
     await runCron(env, Date.now());
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     scopeCache(env);
-    // Every word the server writes is in this request's language (i18n.ts).
     const [res, written] = await withLang(langOfRequest(req), async () => [await route(req, env, ctx), lang()] as const);
-    // What still uses the old address, the old paths or an app too old to serve (legacy.ts).
     noteLegacy(env, ctx, req, res.status);
     const path = new URL(req.url).pathname;
-    // A redirect or a download body passes through untouched apart from headers.
     const out = withSecurityHeaders(res, path);
-    // The language the answer is in, which the account's choice decides over
-    // Accept-Language (useProfileLang): an app that has just switched asks in
-    // the new one before the account has it, and keeps what came back as that.
     if (path.startsWith('/api/')) out.headers.set('content-language', written === 'zh' ? 'zh-Hans' : 'en');
     return out;
   },
@@ -510,15 +385,11 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const moved = movedPage(req, env) ?? movedApi(req, url);
   if (moved) return moved;
-  // The calendar the cron keeps fresh in KV (calendarsync.ts), read every few minutes.
   await loadCalendar(env, nowMs);
 
   try {
     const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
     if (me) return me;
-    // Public routes: a per-IP ceiling. The per-stop cache already protects
-    // NUS; this protects the Worker from being a free proxy, and D1/R2 from
-    // being a free bill.
     const keyed = KEYED.includes(url.pathname);
     if (
       env.RL_PUBLIC &&
@@ -537,14 +408,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
       if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
-    // The answers need an API key or a signed-in account, and are limited
-    // by who's asking: on campus Wi-Fi hundreds of students share one IP,
-    // and the map alone asks every 5 s. A key has its own ceiling wherever
-    // it's used from; a request with neither is limited by IP.
     if (keyed) {
-      // /api/buses, which the map asks every 5 s: who it is, remembered a little
-      // while (recentCallerFor says what that costs). D1 failing there is
-      // the 503 the catch below gives.
       const { caller, down } =
         url.pathname === '/api/buses'
           ? { caller: await recentCallerFor(env, req, nowMs, ctx), down: false }
@@ -560,7 +424,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
             ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
             : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
       const limited = Boolean(bucket.rl && !(await bucket.rl.limit({ key: bucket.key })).success);
-      // KEYED's paths hold no ids, so the route is the path as sent.
       if (caller?.kind === 'key') noteKeyUse(env, ctx, caller.keyId, url.pathname, limited ? 'limited' : 'ok');
       if (limited) {
         return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, {
@@ -572,23 +435,18 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           'www-authenticate': 'Bearer realm="terminus"',
         });
       }
-      // As under /api/me: an app older than config:minClient is told to update.
       if (caller.kind === 'account' && (await clientOutdated(env, req, nowMs))) return json(UPDATE_REQUIRED, 426);
     }
     const dl = await handleDownload(url.pathname, env, url);
     if (dl) return dl;
-    // A recorded day of buses: the operator or a TIMELAPSE_TOKEN holder.
     const timelapse = await handleTimelapse(req, url, env, nowMs);
     if (timelapse) return timelapse;
-    // Passkeys for the operator's pages: adding one needs HEALTH_TOKEN itself.
     if (url.pathname.startsWith('/api/admin/passkey/')) return await handlePasskey(req, url, env, nowMs, holdsHealthToken(env, req));
-    // The street map: open like the website, and served from R2 or built.
     const map = await handleMap(req, url, env, ctx);
     if (map) return map;
 
     switch (url.pathname) {
       case '/docs':
-        // The beta's docs, like its pages, ask not to be indexed.
         return new Response(docsPageFor(phaseAt(sgtMinute(nowMs))), {
           headers: {
             'content-type': 'text/html; charset=utf-8',
@@ -601,8 +459,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' },
         });
       case '/.well-known/apple-app-site-association': {
-        // On every address of the site, never redirected (STAYS in site.ts):
-        // Apple fetches it from each domain the app claims.
         const aasa = appSiteAssociation(env);
         if (!aasa) return json({ error: 'not found' }, 404);
         return new Response(JSON.stringify(aasa), {
@@ -619,10 +475,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' },
         });
       case '/api/openapi.json':
-        // servers[] is this request's origin, so the docs' "Send API Request"
-        // hits whichever deployment is serving them.
-        // Built once per origin (openApiJson), already JSON, so the headers
-        // jsonCached would write are written here.
         return new Response(openApiJson(url.origin), {
           headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300', ...CORS },
         });
@@ -635,33 +487,25 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/api/status.json':
         return await handleStatus(env, nowMs);
       case '/api/admin/stats':
-        // The dashboard's data: operator only, never cached.
         if (!(await isOperator(env, req, nowMs))) return json({ error: 'not found' }, 404);
         return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
       case '/api/admin/appversion': {
-        // The version string the Workers send NUS, kept current by the cron
-        // (appversion.ts), so the weekly scrape sends the one the cron found.
         if (!(await canReadAppVersion(env, req, nowMs))) return json({ error: 'not found' }, 404);
         const version = await appVersion(env, nowMs);
         if (!version) return json({ error: 'the NUS feed is not configured' }, 503);
         return json({ version }, 200, { 'cache-control': 'no-store' });
       }
       case '/api/admin/collect':
-        // The dashboard's switches for what's collected (collect.ts).
         return await handleCollect(req, env, nowMs);
       case '/api/admin/crashes/dismiss':
-        // Hides a crash report from the dashboard (Analytics Engine can't delete one).
         return await handleDismissCrash(req, env, nowMs);
       case '/api/admin/reports/delete':
-        // Deletes a user's report from the dashboard and D1.
         return await handleDeleteReport(req, env, nowMs);
       case '/api/errors':
-        // Crash and error reports from the apps and the website, with no one's name on them.
         return await handleAppError(req, env);
       case '/api/campus':
         return await handleCampus(req);
       case '/api/stops/pairs':
-        // Static like /api/campus: changes only with a new scrape.
         return jsonCached((stopPairsMemo ??= stopPairs(GRAPH)), 3600, 'private');
       case '/api/arrivals':
         return await handleArrivals(url, env, ctx, nowMs);
@@ -672,7 +516,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/api/lines':
         return await handleLines(env, ctx, nowMs);
       default:
-        // Everything else is the website; the landing page with its version and account link.
         if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) {
           if (url.pathname === '/') return markBeta(await landingPage(req, env.ASSETS, env, nowMs, ctx), env);
           if (signInFirst(req, url))
@@ -682,12 +525,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return json({ error: 'not found' }, 404);
     }
   } catch (err) {
-    // Logged, because a caught error never shows up as an exception in the
-    // dashboard. The path only: the query can hold coordinates.
     console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
     logError(env, url.pathname);
-    // D1 down for a moment (on /api/me/*, say) is worth trying again; the apps
-    // read a 503 that way, and a 500 as a fault.
     if (d1Unavailable(err)) return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
     return json({ error: 'something went wrong on our side' }, 500);
   }

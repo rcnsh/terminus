@@ -1,16 +1,6 @@
-/**
- * What search engines read about the site: robots.txt and the sitemap. The
- * pages to index are the public ones; the account page, the web app,
- * the dashboard and the pairing page say noindex in their own HTML. The beta
- * is a copy of the real site, so it asks not to be crawled at all (its pages
- * also send x-robots-tag: noindex, markBeta in site.ts). AI agents get
- * /llms.txt, a short guide to the site and the API (llmstxt.org).
- */
-
 import { isBeta, STABLE_ORIGIN } from '../origin.ts';
 import type { Env } from '../types.ts';
 
-/** The pages in the sitemap, on the stable site. */
 export const SITEMAP_PAGES = ['/', '/privacy/', '/privacy/zh/', '/privacy/policy/', '/privacy/policy/zh/', '/status/', '/docs'];
 
 export const SITEMAP = `<?xml version="1.0" encoding="UTF-8"?>
@@ -19,15 +9,11 @@ ${SITEMAP_PAGES.map((p) => `  <url><loc>${STABLE_ORIGIN}${p}</loc></url>`).join(
 </urlset>
 `;
 
-/** robots.txt: everything public on the stable site, with its sitemap; nothing on the beta. */
 export function robotsTxt(env: Env): string {
   if (isBeta(env)) return 'User-agent: *\nDisallow: /\n';
   return [
     'User-agent: *',
     'Allow: /',
-    // The API and the account pages answer people and apps, not search.
-    // The docs (/docs, /api/openapi.json, /llms.txt) and the status page
-    // and its data stay open: the longer rule wins.
     'Allow: /api/openapi.json',
     'Allow: /api/status.json',
     'Disallow: /api/',
@@ -41,12 +27,6 @@ export function robotsTxt(env: Env): string {
   ].join('\n');
 }
 
-/**
- * /llms.txt: what terminus is and how to use its API, in Markdown, for an
- * AI agent to read before the full spec. Links are to [origin], the site
- * serving it. The detail lives in the spec; this says what it can't: what
- * the answers are for, and that a person makes the key.
- */
 export function llmsTxt(origin: string): string {
   return `# terminus
 

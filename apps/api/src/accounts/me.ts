@@ -1,8 +1,3 @@
-/**
- * The personal layer: sign-in, pairing, profile, and the answers that use
- * them (/api/me/next, /api/me/nearby). Everything here needs the DB binding.
- */
-
 import { mailFeedback, parseFeedback, saveFeedback } from '../ops/feedback.ts';
 import { logNextTook, logSignal, logStep } from '../ops/analytics.ts';
 import { approvable, decide, enterCode, holdAppLogins, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
@@ -80,11 +75,6 @@ import { ROUTE_COLORS } from '../map/campus.ts';
 const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...extra } });
 
-/**
- * The shuttles' livery across the top of the Worker's pages, as sign-in's
- * (account/livery.js, drawn there with the same numbers): a stripe per
- * service, P's grey left out, then a thin line in the accent.
- */
 function liveryHtml(): string {
   const u = 180 / 300;
   const left = 180 - 60 * u + 50;
@@ -95,12 +85,6 @@ function liveryHtml(): string {
   return `<div class="livery" aria-hidden="true"><svg viewBox="0 0 400 180" preserveAspectRatio="none">${band(0, 6 * u, 'var(--accent-bright)')}${colours.map((c, i) => band((16 + 20 * i) * u, (36 + 20 * i) * u + 0.6, c)).join('')}</svg></div>`;
 }
 
-/**
- * Minimal pages served by the Worker itself, laid out as the account page's
- * sign-in is (account.css): the livery under the header, then the words, and
- * from 900px the form beside them. A page with nothing to fill in has no
- * form (notice() below), and there its words are one centred column instead.
- */
 const page = (title: string, intro: string, form = '') => `<!doctype html>
 <html lang="${lang() === 'zh' ? 'zh-Hans' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>${title} · terminus</title>
@@ -125,22 +109,11 @@ const NOTICE_ICONS = {
   cancelled: stroke('<path d="M7 7l10 10M17 7 7 17"/>'),
 };
 
-/**
- * A page that only says how something ended, with its tile over the heading
- * as sign-in's "Check your inbox" has its envelope: a tick, a clock or a cross.
- */
 const notice = (title: string, icon: keyof typeof NOTICE_ICONS, inner: string) =>
   page(title, `<div class="sent-icon ${icon}" aria-hidden="true">${NOTICE_ICONS[icon]}</div>${inner}`);
 
-/** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
 
-/**
- * Where emailed links point. The request's own origin only for local
- * development; otherwise always this Worker's site (stable or beta, as
- * site.ts linkOrigin says), whatever hostname the request came in on (a
- * workers.dev preview).
- */
 function emailOrigin(url: URL, env: Env): string {
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.test');
   return local ? url.origin : linkOrigin(env);
@@ -150,13 +123,6 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 
 const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
 
-/**
- * A trip key a client sent: one of the profile's classes, today's usual
- * times and one-off trips, or a trip home. The key becomes stored rows
- * (signals, outcomes, choices), so anything else would let a script make as
- * many as it likes.
- */
-/** A trip a bus can be stepped on: one of today's, a favourite, or a stop or room asked for (next.ts). */
 function stepTrip(profile: Profile, key: string, nowMs: number): boolean {
   if (key.startsWith('place:')) return profile.places.some((p) => `place:${p.key}` === key);
   if (key.startsWith('to:')) return /^to:[A-Za-z0-9_-]{1,24}$/.test(key);
@@ -168,15 +134,8 @@ function knownTrip(profile: Profile, key: string, nowMs: number): boolean {
   return [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].some((t) => classKey(t) === key);
 }
 
-/**
- * "Pixel 8": what the app calls itself, shown in emails and the device list.
- * '' when it gives no name: the emails then say "a device", and the device
- * list shows each app's own word for one.
- */
 function deviceName(body: Record<string, unknown> | null): string {
   if (typeof body?.name !== 'string') return '';
-  // It goes into sign-in emails: a device's name, not a message. Letters,
-  // digits and a little punctuation; no links, no line breaks.
   const name = body.name
     .replace(/[^\p{L}\p{N} ()'_-]+/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -185,7 +144,6 @@ function deviceName(body: Record<string, unknown> | null): string {
   return name;
 }
 
-/** The client header, or the platform an app names in its body when it has no header. */
 function clientWith(req: Request, body: Record<string, unknown> | null) {
   const c = clientFrom(req);
   if (c.client) return c;
@@ -193,7 +151,6 @@ function clientWith(req: Request, body: Record<string, unknown> | null) {
   return named ? { ...c, platform: named } : c;
 }
 
-/** "14:05, 30 Sep" in Singapore time. */
 function sgtTime(ms: number): string {
   const d = new Date(ms + 8 * 3_600_000);
   const hm = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
@@ -203,12 +160,8 @@ function sgtTime(ms: number): string {
 }
 
 export async function readJson(req: Request): Promise<Record<string, unknown> | null> {
-  // The exact type, not one that merely mentions it: `text/plain;
-  // x=application/json` is a type a page on another site can send without
-  // asking first, cookie and all.
   const type = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return null;
-  // Refuse a big body before reading it, not after.
   if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return null;
   try {
     const text = await readCapped(req, MAX_BODY_BYTES);
@@ -220,7 +173,6 @@ export async function readJson(req: Request): Promise<Record<string, unknown> | 
   }
 }
 
-/** A sign-in form: a token or two, never more than a few KB. Refused unread when bigger. */
 const MAX_FORM_BYTES = 4096;
 async function readForm(req: Request): Promise<URLSearchParams | null> {
   if (Number(req.headers.get('content-length') ?? 0) > MAX_FORM_BYTES) return null;
@@ -228,10 +180,6 @@ async function readForm(req: Request): Promise<URLSearchParams | null> {
   return text !== null ? new URLSearchParams(text) : null;
 }
 
-/**
- * The body as text, or null once it passes `max` bytes. Read in pieces, so a
- * chunked body (no content-length to refuse up front) can't fill memory.
- */
 export async function readCapped(req: Request, max: number): Promise<string | null> {
   if (!req.body) return '';
   const reader = req.body.getReader();
@@ -256,12 +204,8 @@ export async function readCapped(req: Request, max: number): Promise<string | nu
   return new TextDecoder().decode(all);
 }
 
-/** Past WRONG_CODES_PER_DAY: the link in the email is the way in until tomorrow. */
 const LOCKED = 'too many wrong codes for this address today; use the link in the email';
 
-/** The header every 429 carries, saying when to try again: [seconds], by
- *  default the window of the per-minute limiters (RL_*) and the sign-in
- *  cooldowns. Clients wait this long rather than guessing. */
 const retryAfter = (seconds = 60): Record<string, string> => ({ 'retry-after': String(seconds) });
 
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
@@ -270,25 +214,16 @@ async function limited(env: Env, req: Request, scope: string): Promise<boolean> 
   return !success;
 }
 
-/** The global ceiling on pairing-code lookups (both /pair and /pair/check). */
 async function pairBusy(env: Env): Promise<boolean> {
   if (!env.RL_PAIR) return false;
   return !(await env.RL_PAIR.limit({ key: 'pair:global' })).success;
 }
 
-/** The language an iPhone's notifications are worded in: the account's choice, else this request's. */
 async function pushLang(db: D1Database, userId: string): Promise<Lang> {
   const chosen = ((await loadProfileJson(db, userId).catch(() => null)) as { lang?: unknown } | null)?.lang;
   return chosen === 'en' || chosen === 'zh' ? chosen : lang();
 }
 
-/**
- * The account's language changed, or may have: the iPhones are pushed in
- * it from now on, not in the one they registered in. Back to following each
- * device, only this one's is known (this request's); another iPhone keeps
- * its language until it registers again, as it does each launch. Writes
- * nothing when nothing changes.
- */
 async function refreshPushLang(db: D1Database, userId: string, tokenHash: string, pref: LangPref): Promise<void> {
   try {
     if (pref === 'auto') {
@@ -303,21 +238,13 @@ async function refreshPushLang(db: D1Database, userId: string, tokenHash: string
         .run();
     }
   } catch (err) {
-    // The profile is saved; the push language catches up when the iPhone next registers.
     console.error('push language not saved', err instanceof Error ? err.message : typeof err);
   }
 }
 
-/** Tries before a read-modify-write of the profile gives up to another device's writes. */
 const PROFILE_TRIES = 3;
 const PROFILE_CHANGED = 'your settings were changed on another device; try again';
 
-/**
- * A change to the saved profile that can't lose another device's write made
- * meanwhile: it saves only if nothing was saved since it read, and otherwise
- * reads again and redoes the change. `change` returns the new profile, or a
- * Response to answer with instead (a refusal).
- */
 async function changeProfile(
   db: D1Database,
   userId: string,
@@ -335,9 +262,6 @@ async function changeProfile(
   return json({ error: PROFILE_CHANGED }, 409);
 }
 
-/** The version in an If-Match header (`"123"`, or weakened by compression,
- *  `W/"123"`; `"0"` for a profile never saved); undefined when there is none
- *  to go by, and the write is unconditional. */
 export function ifMatchVersion(req: Request): number | null | undefined {
   const m = /^\s*(?:W\/)?"(\d{1,16})"\s*$/.exec(req.headers.get('if-match') ?? '');
   if (!m) return undefined;
@@ -356,29 +280,16 @@ interface MeContext {
   deps: MeDeps;
   db: D1Database;
   session: SessionInfo;
-  /** What follows a prefix path ("/api/me/keys/<id>"). */
   rest: string;
 }
 
 interface MeRoute {
   method: string;
-  /** Exact, or a prefix when it ends in '/'. */
   path: string;
-  /**
-   * 'web': changes the account itself, from the account page only, never a
-   * device (API keys, sign out everywhere).
-   */
   access?: 'web';
   run: (c: MeContext) => Promise<Response>;
 }
 
-/**
- * The plate of the `svc` bus at `stopCode` right now: the one due soonest,
- * within a few minutes (at the tap it's pulling in or just leaving), and
- * when it's due there (`at`, ISO). Empty when the feed has no plates or no
- * such bus is near, so the ride falls back to the estimate. `graph` is the
- * bus's own: a public bus's stop is asked of LTA, not NUS.
- */
 async function plateAt(
   env: Env,
   ctx: ExecutionContext,
@@ -400,12 +311,10 @@ async function plateAt(
   }
 }
 
-/** Everything that needs a session, by method and path. */
 export const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/api/me',
-    // From the account page; an anonymous account has no page, so its app can.
     run: async ({ env, db, session }) => {
       if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
       if (session.paired) return json({ error: 'only the device that started this account can do that' }, 403);
@@ -429,7 +338,6 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/sessions',
     access: 'web',
     run: async ({ db, session }) => {
-      // Sign out everywhere, including this browser.
       const ended = await endAllSessions(db, session.user);
       return json({ ok: true, ended }, 200, { 'set-cookie': sessionCookie('', 0) });
     },
@@ -438,7 +346,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/api/me',
     run: async ({ req, nowMs, db, session }) => {
-      // Every page load asks /api/me first: a web session in use keeps going.
       const token = session.kind === 'web' ? tokenFrom(req) : null;
       const renewed = token !== null && (await renewWebSession(db, session.tokenHash, nowMs));
       const saved = await loadProfileJson(db, session.user.id);
@@ -463,10 +370,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/api/me/profile',
     run: async ({ db, session }) => {
-      // The limits ride along, so clients needn't hard-code them; a client
-      // that sends the whole profile back sends them too, and they're ignored.
-      // The version goes in the ETag, not the body, for the same reason: a
-      // client that sends it back as If-Match has asked for the check.
       const row = await loadProfileRow(db, session.user.id);
       const profile = await getProfile(db, session.user.id, GRAPH, row?.json ?? null);
       return json({ ...profile, limits: profileLimits() }, 200, { etag: versionTag(row?.updated) });
@@ -486,10 +389,7 @@ export const ME_ROUTES: MeRoute[] = [
         pinnable(GRAPH),
       );
       if (!r.ok) return json({ error: r.error }, 400);
-      // One-off trips are done with once their day has passed.
       r.profile.once = r.profile.once.filter((o) => o.date >= sgtDate(nowMs));
-      // With If-Match (the ETag of the profile it started from), the save
-      // happens only if no other device saved since.
       const from = ifMatchVersion(req);
       const version =
         from === undefined
@@ -504,13 +404,8 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/once',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
-      // A one-off trip: "Science library at 14:00 today". Planned
-      // like a class on its day; "Not going" drops it. Answers with /api/me/next.
       const body = await readJson(req);
-      // Read, changed and saved again if another device saved meanwhile, so
-      // neither write is lost.
       const changed = await changeProfile(db, session.user.id, GRAPH, nowMs, (profile) => {
-        // A favourite by its key, or a stop, food court or room by its code.
         const saved = typeof body?.place === 'string' ? profile.places.find((p) => p.key === body.place) : undefined;
         const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(GRAPH, body.to) : null;
         if (!dest) return json({ error: "send place (a favourite's key) or to (a stop, place or room code)" }, 400);
@@ -519,8 +414,6 @@ export const ME_ROUTES: MeRoute[] = [
           return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
         const today = sgtDate(nowMs);
         const date = typeof body?.date === 'string' ? body.date : today;
-        // A real day: 2026-10-45 passes the pattern and sorts inside the week.
-        // 2026-13-01 is no date at all, and toISOString() would throw on it.
         const day = Date.parse(`${date}T00:00:00Z`);
         const real = /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === date;
         if (!real || date < today || date > sgtDate(nowMs + 7 * 86_400_000))
@@ -543,7 +436,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/import',
     run: async ({ env, req, nowMs, db, session }) => {
-      // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
       if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
         return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
       }
@@ -564,7 +456,6 @@ export const ME_ROUTES: MeRoute[] = [
         throw err;
       }
       const term = termName(r.term);
-      // An incomplete import must never replace a timetable that works.
       if (r.failed.length) {
         return json({ error: m().nusmodsNoAnswer(r.failed.join(', ')), failed: r.failed }, 502);
       }
@@ -572,8 +463,6 @@ export const ME_ROUTES: MeRoute[] = [
         const why = r.missing.length ? m().modsNoClasses(r.missing.join(', '), r.missing.length !== 1, term) : m().linkNoClasses(term);
         return json({ error: m().nothingImported(why), missing: r.missing }, 422);
       }
-      // The timetable replaces the old one; the rest of the profile is read
-      // again if another device saved it meanwhile, so that write isn't lost.
       const changed = await changeProfile(db, session.user.id, GRAPH, nowMs, (profile) => ({
         ...profile,
         trips: r.trips.slice(0, PROFILE_LIMITS.trips),
@@ -582,7 +471,6 @@ export const ME_ROUTES: MeRoute[] = [
       }));
       if (changed instanceof Response) return changed;
       const { profile } = changed;
-      // Over the limit, the latest classes of the week are left out: say how many.
       const dropped = Math.max(0, r.trips.length - PROFILE_LIMITS.trips);
       return json(
         {
@@ -601,7 +489,6 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/api/me/pair-code',
-    // An account without an email too: its phone pairs its watch this way.
     run: async ({ nowMs, db, session }) => {
       if (session.paired) return json({ error: 'only the device that started this account can do that' }, 403);
       return json(await createPairCode(db, session.user.id, nowMs));
@@ -619,7 +506,6 @@ export const ME_ROUTES: MeRoute[] = [
     path: '/api/me/keys',
     access: 'web',
     run: async ({ req, nowMs, db, session }) => {
-      // Made on the account page, not from a phone that happens to be paired.
       const body = await readJson(req);
       const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
       if (!name) return json({ error: 'give the key a name, so you know what uses it' }, 400);
@@ -647,9 +533,6 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/api/me/devices/',
-    // An account without an email too: once it has paired a watch, this is
-    // how a lost one is cut off without deleting the account.
-    // Not from a paired one, which could otherwise cut off the phone and keep the account.
     run: async ({ db, session, rest }) => {
       if (session.paired) return json({ error: 'only the device that started this account can do that' }, 403);
       const name = await revokeDevice(db, session.user.id, rest);
@@ -687,26 +570,18 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/signal',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
-      // "On the D2", "Missed it", "Not going", "I'm there": what
-      // actually happened, for every device. Answers with the new /api/me/next.
       if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
       const body = await readJson(req);
       const kind = SIGNALS.find((k) => k === body?.kind);
       if (!kind) return json({ error: m().signalKinds(SIGNALS.join(', ')) }, 400);
       const profile = await getProfile(db, session.user.id, GRAPH);
-      // A location travels in the body; it's used for this answer and not kept.
       const asked = askOf(url);
       const here = typeof body?.lat === 'number' && typeof body?.lon === 'number' ? { ...asked, at: coords(body.lat, body.lon) } : asked;
       const day = await loadDay(env, session.user.id, nowMs);
-      // Older Android apps send a location every 20 seconds or so during a
-      // trip. It's answered like /api/me/next from there, and nothing is kept.
       if (kind === 'location') {
         return json(await answerRequest(env, ctx, deps, await loadRider(env, session.user.id, nowMs, { profile, day }), here, nowMs));
       }
       if (kind === 'away' || kind === 'back') {
-        // "Not on campus today" skips every trip left today (not the ones
-        // already answered); "Back on campus" brings them all back. Neither is
-        // an outcome: a day away says nothing about a class.
         const items: { key: string; rec: TripRecord | null }[] =
           kind === 'away'
             ? classesOn(profile, nowMs)
@@ -715,30 +590,22 @@ export const ME_ROUTES: MeRoute[] = [
             : Object.entries(day?.trips ?? {})
                 .filter(([, r]) => r.away)
                 .map(([key]) => ({ key, rec: null }));
-        // One call to the Trip object, however many classes.
         const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const rider = await loadRider(env, session.user.id, nowMs, { profile, day: after });
         return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
       }
-      // Not logged: the answer this signal sends back is the one that counts.
       const now = await planned(env, ctx, unlogged(deps), { userId: session.user.id, profile, day, prefs: NO_PREFS }, here, nowMs);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
-      // The bus pulling in now, for its plate: a feed read through the cache, only for "On it".
       const plate: PlateLookup = (stopCode, svc, graph) => plateAt(env, ctx, deps, stopCode, svc, nowMs, graph);
       const { rec, outcome } = await applySignal(kind, key, now, day, profile, nowMs, plate);
       const next = await updateTrip(env, session.user.id, { items: [{ key, rec }] }, nowMs);
       logSignal(env, kind);
-      // What happened to the trip, for what terminus learns (outcomes.ts),
-      // recorded before the answer reads the trip choices again.
       if (outcome === 'clear') await clearOutcome(db, session.user.id, key, nowMs);
       else if (outcome) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      // A tap here changes the other phones' cards now, not at their next
-      // refresh; an iPhone pushed in the other language gets the card in its
-      // own, and one whose trip the tap ended has its Live Activity ended.
       return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
     },
   },
@@ -746,8 +613,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/step',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
-      // "Earlier bus", "Later bus" or "Best bus" (step.ts): the bus the card
-      // offered, kept for the trip today on every device. Answers with the new /api/me/next.
       if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
       const body = await readJson(req);
       const trip = typeof body?.trip === 'string' ? body.trip : '';
@@ -761,7 +626,6 @@ export const ME_ROUTES: MeRoute[] = [
       if (!stepTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
       const next = await updateTrip(env, session.user.id, { steps: { [trip]: to } }, nowMs);
       logStep(env, body?.to === null ? 'best' : body?.dir === 'earlier' ? 'earlier' : 'later', trip);
-      // Answered for the trip stepped on: a favourite's or a stop's own card, whatever the query says.
       const query = askOf(url);
       const at = typeof body?.lat === 'number' && typeof body?.lon === 'number' ? coords(body.lat, body.lon) : query.at;
       const asked = trip.startsWith('place:')
@@ -770,7 +634,6 @@ export const ME_ROUTES: MeRoute[] = [
           ? { ...query, at, place: null, to: trip.slice(3) }
           : { ...query, at };
       const rider = await loadRider(env, session.user.id, nowMs, { profile, day: next });
-      // The other devices' cards and the leave reminder follow now, not at their next refresh.
       return json(await answerRequest(env, ctx, deps, rider, asked, nowMs, session.tokenHash));
     },
   },
@@ -778,10 +641,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/push',
     run: async ({ req, env, db, session }) => {
-      // This device's push address: the Trip object nudges it when the card
-      // changes. An app sends its Firebase token, or an iPhone its APNs
-      // token (and its trip Live Activity's, and the one that starts it); the web app its Web Push
-      // subscription (PushSubscription.toJSON()).
       const body = await readJson(req);
       if (body?.subscription !== undefined) {
         if (!webPushEnabled(env)) return json({ error: 'web push is not set up on this server' }, 503);
@@ -792,7 +651,6 @@ export const ME_ROUTES: MeRoute[] = [
       }
       const token = typeof body?.token === 'string' ? body.token.trim() : '';
       if (looksApns(token)) {
-        // Taken with APNs off too: the iPhone is pushed once it's set up.
         const t = parseApnsToken(token);
         if (!t)
           return json(
@@ -802,16 +660,9 @@ export const ME_ROUTES: MeRoute[] = [
             },
             400,
           );
-        // With the phone's token, whether its leave alerts are on: off, the
-        // trip's pushes to it are silent. Not said (an older build): alerts as
-        // before. And whether its Live Activity setting is on: off, it forgets
-        // the token that starts one, so none is started by push. And whether
-        // a Live Activity of its runs: none, its token goes, so the next trip's
-        // can be started.
         const alerts = typeof body?.alerts === 'boolean' ? body.alerts : null;
         const live = typeof body?.live === 'boolean' ? body.live : null;
         const activity = typeof body?.activity === 'boolean' ? body.activity : null;
-        // And whether it shows 12-hour times, for the words it's pushed.
         const h12 = typeof body?.h12 === 'boolean' ? body.h12 : null;
         if (t.kind === 'live') await setLiveToken(db, session.tokenHash, formatApnsToken(t));
         else if (t.kind === 'start') await setStartToken(db, session.tokenHash, formatApnsToken(t));
@@ -829,7 +680,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/api/me/push/key',
     run: async ({ env }) => {
-      // What the web app subscribes with (applicationServerKey).
       const key = vapidPublicKey(env);
       return key ? json({ key }) : json({ error: 'web push is not set up on this server' }, 503);
     },
@@ -846,8 +696,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/choice',
     run: async ({ req, nowMs, db, session }) => {
-      // A suggestion accepted or turned down ({id, choice}), or an accepted
-      // one undone from settings ({trip, pref, choice: 'undo'}).
       const body = await readJson(req);
       const choice = CHOICES.find((c) => c === body?.choice);
       const [pref, trip] =
@@ -862,7 +710,6 @@ export const ME_ROUTES: MeRoute[] = [
       }
       const profile = await getProfile(db, session.user.id, GRAPH);
       if (!knownTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
-      // A trip home has no name of its own: its label stays null.
       const label = [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].find((t) => classKey(t) === trip)?.label ?? null;
       await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
       return json({ ok: true, choices: await listPrefs(db, session.user.id) });
@@ -871,7 +718,6 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/api/me/notice',
-    // The new semester's reminder, for an app that was pushed only its kind (push.ts).
     run: async ({ db, session, nowMs }) => {
       return json({ notice: termNoticeFor((await loadProfileJson(db, session.user.id)) as Parameters<typeof termNoticeFor>[0], nowMs) });
     },
@@ -887,7 +733,6 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'DELETE',
     path: '/api/me/history',
     run: async ({ db, session }) => {
-      // "Clear trip history": the outcomes go, the choices made from them stay.
       const cleared = await clearHistory(db, session.user.id);
       return json({ ok: true, cleared });
     },
@@ -896,16 +741,11 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/api/me/feedback',
     run: async ({ req, env, ctx, nowMs, db, session }) => {
-      // Anonymous accounts are free to make, so reports come only from a known address.
       const email = session.user.email;
       if (!email) return json({ error: 'sign in to send feedback' }, 403);
       const parsed = parseFeedback(await readJson(req));
       if (!parsed.ok) return json({ error: parsed.error }, 400);
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
-      // The cap counts the last 24 hours, but every client holds back all
-      // its requests until Retry-After is up (at most 5 minutes), so a day
-      // here would stall the whole app for a capped report: one minute,
-      // and the message says when to try again.
       if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429, retryAfter());
       ctx.waitUntil(
         mailFeedback(env, id, parsed.value, nowMs).catch((e) =>
@@ -933,18 +773,11 @@ export const ME_ROUTES: MeRoute[] = [
   },
 ];
 
-/** The browser's own account without an email, when its session is one: a sign-in from it adds the email there. */
 async function browserAnon(db: D1Database, req: Request, nowMs: number): Promise<string | null> {
   const s = await authenticate(db, req, nowMs);
   return s?.kind === 'web' && s.user.email === null ? s.user.id : null;
 }
 
-/**
- * Routes under /api/auth, /api/pair and /api/me, and the two pages an email
- * links to (/auth/verify, /auth/approve), which stay outside /api so a link
- * already sent keeps working. Returns null for any other path so the caller
- * can fall through to the public routes.
- */
 export async function handleMe(
   req: Request,
   url: URL,
@@ -968,12 +801,6 @@ export async function handleMe(
     return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
-  // Changes made with the browser's session, or that start one, come from our
-  // own pages. Without this, another site could post a sign-in link or code
-  // it holds and sign the visitor in to its account, or sign them out. A page
-  // on another subdomain of the same site (the beta, say) gets the Lax cookie
-  // sent with its POSTs, so this also covers every request carrying it.
-  // Apps send no such header; a bearer token isn't sent by a browser on its own.
   const fetchSite = req.headers.get('sec-fetch-site');
   if (
     req.method !== 'GET' &&
@@ -993,14 +820,12 @@ export async function handleMe(
     if (setsSession || (!bearer && hasSessionCookie(req))) return json({ error: 'that request came from another site' }, 403);
   }
 
-  // Pages and lookups that cost a D1 read but need no session.
   if ((path === '/auth/verify' || path === '/api/auth/config') && env.RL_PUBLIC) {
     if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success)
       return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
 
   if (path === '/api/auth/config' && req.method === 'GET') {
-    // What the sign-in form needs to render. Public by design.
     return json({ turnstileSiteKey: env.TURNSTILE_SECRET ? (env.TURNSTILE_SITE_KEY ?? null) : null });
   }
 
@@ -1010,7 +835,6 @@ export async function handleMe(
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
     const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
-    // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
     if (human === 'unavailable')
       return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
@@ -1018,17 +842,14 @@ export async function handleMe(
     try {
       outcome = await requestLink(env, db, email, emailOrigin(url, env), nowMs, body?.next === '/app/');
     } catch (err) {
-      // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
     if (outcome === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
-    // Same answer whether or not the address is blocked or already has an account.
     return json({ ok: true, message: m().checkEmail });
   }
 
   if (path === '/api/auth/code' && req.method === 'POST') {
-    // The emailed code, typed on the page that asked for it.
     if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
@@ -1046,13 +867,8 @@ export async function handleMe(
 
   if (path === '/auth/verify') {
     if (req.method === 'GET') {
-      // Mail scanners (Outlook Safe Links) open every link in an email. If
-      // opening the link spent it, the user's own click would fail. So GET
-      // only shows a button; the POST spends the token.
       const t = url.searchParams.get('t') ?? '';
       const safe = t.replace(/[^A-Za-z0-9_-]/g, '');
-      // Name the account, so a link someone else requested can't sign you in
-      // to their account without you noticing. A dead link says so now.
       const email = safe ? await linkEmail(db, safe, nowMs) : null;
       if (!email) return html(notice(m().pageLinkExpired, 'expired', m().linkExpiredHtml), 400);
       return html(
@@ -1073,8 +889,6 @@ export async function handleMe(
       if (!token) {
         return html(notice(m().pageLinkExpired, 'expired', m().linkExpiredHtml), 400);
       }
-      // Only ever one of two places: the account page, or (by way of it, for
-      // first-time setup) the web app.
       const location = form?.get('next') === 'app' ? '/account/?next=/app/' : '/account';
       return new Response(null, {
         status: 303,
@@ -1084,9 +898,6 @@ export async function handleMe(
   }
 
   if (path === '/api/auth/anon' && req.method === 'POST') {
-    // An app's first launch: an account with no email, so it's useful
-    // before any sign-in. Apps can't run Turnstile, so: per IP, one global
-    // ceiling, and the cron deletes the ones left unused.
     if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
       return json({ error: 'terminus is busy, try again in a minute' }, 429, retryAfter());
@@ -1097,13 +908,9 @@ export async function handleMe(
   }
 
   if (path === '/api/auth/anon/web' && req.method === 'POST') {
-    // "Use terminus without an email" on the website (an iPhone has no app):
-    // the same account as an app's first launch, as a web session. A browser
-    // can run Turnstile, so it does, on top of the app's limits.
     if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
-    // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
     if (human === 'unavailable')
       return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
@@ -1119,11 +926,8 @@ export async function handleMe(
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
-    // The app's anonymous account, if it sends its token: it's either kept
-    // (with the email added) or folded into the account the email has.
     const current = tokenFrom(req) ? await authenticate(db, req, nowMs) : null;
     if (current?.user.email) return json({ error: 'this device is already signed in' }, 409);
-    // A paired device signs in on its own: the account it shares isn't its to give an email.
     const anonUserId = current && !current.paired ? current.user.id : null;
     let started;
     try {
@@ -1141,8 +945,6 @@ export async function handleMe(
     if (started === 'cooldown')
       return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
     if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
-    // Not a 429: the apps take a 429 as "wait", and hold back pairing too,
-    // which is the way in this tells them to use.
     if (started === 'held')
       return json(
         {
@@ -1155,8 +957,6 @@ export async function handleMe(
   }
 
   if ((path === '/api/auth/app/poll' || path === '/api/auth/app/code') && req.method === 'POST') {
-    // Every 3 seconds while the app is waiting: a per-IP ceiling of its own.
-    // A typed code is a guess, so it counts against the sign-in limit too.
     if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `poll:${clientKey(req)}` })).success) {
       return json({ error: 'too many requests, slow down' }, 429, retryAfter(10));
     }
@@ -1185,15 +985,10 @@ export async function handleMe(
     if (req.method === 'GET') {
       if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success)
         return json({ error: 'too many requests, slow down' }, 429, retryAfter());
-      // Like /auth/verify: GET only shows the page (mail scanners open every
-      // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
       const a = link ? await approvable(db, link, nowMs) : null;
       if (!a) return html(notice(m().pageRequestExpired, 'expired', m().approveExpiredHtml), 400);
       const device = escapeHtml(a.device || m().aDevice);
-      // The question and when it was asked, then a box for the number the
-      // device shows, saying what a wrong one does; "This wasn't me" one
-      // line under it. Typed, not picked: see applogin.ts.
       return html(
         page(
           m().pageApprove,
@@ -1227,16 +1022,12 @@ export async function handleMe(
   }
 
   if (path === '/api/pair/check' && req.method === 'POST') {
-    // Lets an app show whose account a code belongs to before spending it,
-    // so a link someone sent you cannot quietly pair your phone to theirs.
     if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     const owner = code ? await pairCodeOwner(db, code, nowMs, clientFrom(req)) : null;
     if (!owner) return json({ error: 'that code is wrong or has expired' }, 400);
-    // An account without an email has nothing to recognise it by: the apps
-    // show this in place of the address, so the warning still reads.
     if (owner.email === null) return json({ account: m().accountWithoutEmail, anonymous: true });
     return json({ account: maskEmail(owner.email), anonymous: false });
   }
@@ -1246,30 +1037,25 @@ export async function handleMe(
     if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
-    // It goes into the email to the account's owner: cleaned as at /auth/app/start.
     const name = deviceName(body);
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
-    // The platform an app names in its body when it has no header, as /auth/anon takes it.
     const paired = await redeemPairCode(db, code, name, nowMs, clientWith(req, body));
     if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);
     ctx.waitUntil(mailDeviceAdded(env, paired.email, name, nowMs).catch(mailFailed));
     return json({ token: paired.token });
   }
 
-  // The answers read the profile straight after: it comes with the session, in one D1 round trip.
   const readsProfile = req.method === 'GET' && (path === '/api/me/next' || path === '/api/me/day');
   const session = await authenticate(db, req, nowMs, ctx, readsProfile);
 
   if (path === '/api/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
-    // A token that isn't one cost a D1 read, as under /api/me: capped per address the same way.
     else if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
       return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
 
   if (path === '/api/auth/app/merge' && req.method === 'POST' && session) {
-    // After a sign-in where both the device and the account had a setup.
     const body = await readJson(req);
     const keep = body?.keep === 'device' ? 'device' : body?.keep === 'account' ? 'account' : null;
     if (!keep || typeof body?.anon !== 'string')
@@ -1281,20 +1067,13 @@ export async function handleMe(
   }
 
   if (!session) {
-    // Each bad token costs a D1 read, so guessing is capped per address.
-    // No token at all is just "signed out" (the homepage asks), not a guess.
     if (tokenFrom(req) && (await limited(env, req, 'badtoken')))
       return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ error: 'sign in first' }, 401);
   }
-  // An app too old to keep serving (config:minClient): it shows "update" and
-  // stops asking, rather than breaking on an answer it can't read. It can
-  // still take itself off pushes, and delete its account (an anonymous one
-  // has no account page), as it can still sign out.
   const leaving = req.method === 'DELETE' && (path === '/api/me/push' || path === '/api/me');
   if (!leaving && (await clientOutdated(env, req, nowMs))) return json(UPDATE_REQUIRED, 426);
 
-  // Per account: generous for a widget, an app and a browser tab together.
   if (env.RL_ME) {
     const { success } = await env.RL_ME.limit({ key: `me:${session.user.id}` });
     if (!success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
@@ -1310,13 +1089,6 @@ export async function handleMe(
   return json({ error: 'not found' }, 404);
 }
 
-/**
- * /api/me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
- * each ask every 30 s or so, and planning the whole day is the expensive
- * part. Kept under everything it's worked out from (the profile, today's
- * record, the clock style, the language, roughly where you are) and the
- * minute, so a change to any of them plans afresh at once.
- */
 async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknown[], plan: () => Promise<T>): Promise<T> {
   const round = (x: unknown) => (typeof x === 'number' ? Math.round(x * 1000) / 1000 : x);
   const seed = JSON.stringify([...inputs, Math.floor(nowMs / 60_000)], (_, v) => round(v));
@@ -1339,15 +1111,10 @@ async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknow
 
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;
 
-/**
- * Whether the account page should walk someone through setup first: an
- * account that has never saved anything and hasn't been through it.
- */
 export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | null {
   return !hasProfile && !seen.includes('onboarding') ? 'full' : null;
 }
 
-/** One stop's board as Nearby shows it: Nearby's own stops and the pinned ones. */
 function nearbyStop<T extends object>(
   graph: Graph,
   idx: GraphIndex,
@@ -1359,18 +1126,15 @@ function nearbyStop<T extends object>(
 ) {
   const boards = new Map<string, ServiceBoard>();
   const board = boardAt(graph, idx, stop.code, sa, nowMs, { stopped, boards });
-  // Which way this side of the road's buses go, for a heading over its board.
   const via = stopVia(board);
   return {
     stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
     ...oppositeOf(stop, idx.byCode),
-    // How far it is: before the board, where Nearby has always had it.
     ...where,
     available: sa.available !== false,
     via,
     viaText: viaText(via),
     board: board.map((r) => ({
-      // Guessed buses only where nearbyRow adds them: a shuttle with a time to follow.
       ...nearbyRow(
         r,
         nowMs,
@@ -1383,15 +1147,8 @@ function nearbyStop<T extends object>(
   };
 }
 
-/** How many stops one /api/me/stops call may ask for: the most a profile can pin. */
 const STOPS_MAX = 8;
 
-/**
- * GET /api/me/stops?codes=<code>,<code>[&lat&lon]: the pinned stops' boards,
- * as Nearby shows them, for the Stops tab. Only the stops asked for (the one
- * on screen, usually), each through the per-stop cache. With a location, each
- * says your walk; without, `walkS` is null.
- */
 async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   const asked = (url.searchParams.get('codes') ?? '')
     .split(',')
@@ -1399,9 +1156,6 @@ async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number
     .filter((c, i, all) => c && all.indexOf(c) === i);
   if (!asked.length) return json({ error: 'codes is required' }, 400);
   if (asked.length > STOPS_MAX) return json({ error: 'too many stops at once' }, 400);
-  // With public buses on, the graph that has them. A pinned stop only public
-  // buses call at (LTA's code) has them whatever the setting, as on
-  // /api/arrivals, without adding them to the other stops' boards.
   const shuttles = { graph: GRAPH, idx: indexGraph(GRAPH) };
   const pub = { graph: GRAPH_PUBLIC, idx: indexGraph(GRAPH_PUBLIC) };
   const usual = profile.publicBuses ? pub : shuttles;
@@ -1421,7 +1175,6 @@ async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number
   for (const m of read) for (const [k, v] of m) byStop.set(k, v);
   const { lat, lon } = coordsFrom(url);
   const stopped = url.searchParams.get('stopped') === '1';
-  // Walked as Nearby walks it: in a residence or a building by its paths, else from where you are.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
   const inside =
     lat === null || lon === null
@@ -1448,10 +1201,7 @@ async function stopsFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number
 
 async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   let { lat, lon } = coordsFrom(url);
-  // With public buses on, the graph that has them: the same stops with more
-  // services, and the public stops of their own.
   const graph = profile.publicBuses ? GRAPH_PUBLIC : GRAPH;
-  // Without a location, start from the first home stop.
   const homeStop = profile.home ? indexGraph(graph).byCode.get(profile.home.stops[0]) : undefined;
   if (lat === null && homeStop) ({ lat, lon } = homeStop);
   if (lat === null || lon === null) return json({ error: 'turn on location, or add a home stop in Settings' }, 400);
@@ -1461,14 +1211,9 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon), footM: footM(lat!, lon!, stop) }))
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
-  // In a residence or a building: its own stops, walked by the paths, like
-  // /api/me/next, and at home your own walk to your stop.
   const homeWalk = profile.home ? { stops: profile.home.stops, m: profile.homeWalkMin * 60 * paceSpeed(profile.walkPace) } : null;
   const inside = residenceStops(lat, lon, idx.byCode, homeWalk) ?? buildingStops(lat, lon, idx.byCode);
   const picked = inside?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
-  // The nearest stop's opposite or partner stop (PGP and PGP Foyer), always:
-  // a location a few metres out puts you at the wrong one, and the widget
-  // offers the other.
   const otherCode = picked[0] ? oppositeOrPartner(picked[0].stop) : null;
   const other = otherCode ? ranked.find((c) => c.stop.code === otherCode) : undefined;
   if (other && !picked.some((c) => c.stop.code === other.stop.code)) picked.push(other);
@@ -1480,7 +1225,6 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     nowMs,
     graph,
   );
-  // `?stopped=1`: the services not running now too, for the Buses tab.
   const stopped = url.searchParams.get('stopped') === '1';
   const stops = picked.map(({ stop, distM, footM: foot }) =>
     nearbyStop(graph, idx, stop, byStop.get(stop.code)!, nowMs, stopped, {
@@ -1488,7 +1232,6 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
     }),
   );
-  // As old as the oldest times on it, so "Updated N ago" is true.
   return json({
     stops,
     asOf: new Date(

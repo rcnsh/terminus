@@ -2,15 +2,10 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// "Add your email": the email sign-in, which keeps this phone's setup. The
-/// welcome flow owns that screen; it answers this notification.
 @MainActor func settingsAddEmail() {
     NotificationCenter.default.post(name: .settingsSignIn, object: nil)
 }
 
-/// Settings › Devices: each device on the account, removable (this phone
-/// signs out), then Add a device, which shows a pairing code and its QR.
-/// An account without an email has no other devices, so it asks for one.
 struct SettingsDevicesPane: View {
     let model: SettingsModel
     @Environment(AppModel.self) private var app
@@ -19,7 +14,6 @@ struct SettingsDevicesPane: View {
     var body: some View {
         devices
         SettingsWatchGroup()
-            // The watch signed in or out: the list shows it.
             .onChange(of: WatchLink.shared.watch) { _, _ in Task { await model.loadDevices() } }
     }
 
@@ -51,7 +45,6 @@ struct SettingsDevicesPane: View {
                     }
                 }
             } else {
-                // The devices on their way: two rows in bars, in a device row's box.
                 SettingsGroup(title: L("Your devices")) {
                     ForEach(0..<2, id: \.self) { i in
                         if i > 0 { GroupDivider() }
@@ -145,9 +138,6 @@ struct SettingsDevicesPane: View {
     }
 }
 
-/// "Set up your watch", when a watch is paired with this phone: sends the
-/// watch a pairing code, so it signs in to this account by itself. Quiet,
-/// under the devices: most people set it up once.
 struct SettingsWatchGroup: View {
     @Environment(AppModel.self) private var app
     private var link: WatchLink { WatchLink.shared }
@@ -197,8 +187,6 @@ func settingsPlatformName(_ d: Device) -> String? {
     }
 }
 
-/// The code to type on a Mac, and a QR code another phone's camera opens,
-/// with Share to send the link. Black on white whatever the theme: cameras read it best.
 struct SettingsPairCodeSheet: View {
     let code: String
     let onDone: () -> Void
@@ -253,8 +241,6 @@ struct SettingsPairCodeSheet: View {
     }
 }
 
-/// `text` as a QR code, one pixel a module (scaled up without smoothing), with
-/// the standard quiet zone of four modules: Core Image's own one, and three more.
 func pairingQR(_ text: String) -> UIImage? {
     let f = CIFilter.qrCodeGenerator()
     f.message = Data(text.utf8)
@@ -270,9 +256,6 @@ func pairingQR(_ text: String) -> UIImage? {
     return UIImage(cgImage: cg)
 }
 
-/// Settings › Account: who you're signed in as, with Sign out; your data; the
-/// account page for API keys and signing out everywhere (the web's alone);
-/// then Delete this account on its own at the foot, the only red anywhere.
 struct SettingsAccountPane: View {
     let model: SettingsModel
     @Environment(AppModel.self) private var app
@@ -332,13 +315,11 @@ struct SettingsAccountPane: View {
                 }
             }
             GroupDivider()
-            // Kept on this phone, not in the account: it's about this app's crashes.
             SettingSwitch(
                 label: L("Send crash reports"),
                 sub: L("When terminus crashes, send what broke and the app version. Never who you are or where."), isOn: $sendCrashReports,
                 id: "settings.crashReports")
         }
-        // An account with an email is deleted from the account page, signed in on the web (the server insists).
         SettingsGroup {
             if app.email == nil {
                 SettingLink(title: L("Delete this account"), color: .bad, id: "settings.delete") { confirmDelete = true }
@@ -376,7 +357,6 @@ struct SettingsAccountPane: View {
     }
 }
 
-/// The export, as a file the system's Save sheet writes where the person picks.
 struct SettingsExportDocument: FileDocument {
     static let readableContentTypes: [UTType] = [.json]
     let data: Data
@@ -385,9 +365,6 @@ struct SettingsExportDocument: FileDocument {
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
-/// Settings › Send feedback: a note to the operator about anything, laid out
-/// as a message: who it's from, the note, a counter and Send. Only an account
-/// with an email can send one, so there's someone to reply to.
 struct SettingsFeedbackPane: View {
     let model: SettingsModel
     @Environment(AppModel.self) private var app
@@ -399,9 +376,7 @@ struct SettingsFeedbackPane: View {
 
     static let limit = 1000
     static let near = 900
-    /// The note's length as the server counts it (JavaScript's, in UTF-16 units).
     static func length(_ s: String) -> Int { s.utf16.count }
-    /// At most `limit` of those, never cutting a character in half.
     static func clipped(_ s: String) -> String { clippedUTF16(s, limit) }
 
     var body: some View {

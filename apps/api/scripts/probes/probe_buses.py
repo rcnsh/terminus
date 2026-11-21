@@ -27,20 +27,13 @@ import statistics
 import sys
 import time
 
-# The feed client is the weekly scrape's (scripts/data/scrape_stops.py).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
 from scrape_stops import REQUIRED, get_session, load_dev_vars, pick_list, proxy, use_live_version
 
 
-# The floor under --every, and the cap on --minutes: this calls NUS directly,
-# past the Worker's cache, so it must never ask faster than the map's cache
-# would (TTL.busesMs) nor for long. CLAUDE.md, rule 2.
 MIN_EVERY_S = 5.0
 MAX_MINUTES = 10.0
-# And the cap on services in one run: each is its own call every --every
-# seconds, so more services is more load on NUS, outside any cache.
 MAX_SERVICES = 6
-# What a service name looks like (A1, D2, K, BTC); anything else is refused.
 SERVICE_NAME = re.compile(r"[A-Za-z0-9]{1,8}")
 
 
@@ -62,7 +55,6 @@ def main() -> int:
     args.services = list(dict.fromkeys(args.services))
     if len(args.services) > MAX_SERVICES:
         ap.error(f"{len(args.services)} services; at most {MAX_SERVICES} in one run")
-    # NaN fails both comparisons, so it is caught here too.
     if not args.every >= MIN_EVERY_S:
         print(f"--every {args.every:g} is below the floor; using {MIN_EVERY_S:g} s", file=sys.stderr)
         args.every = MIN_EVERY_S
@@ -78,10 +70,9 @@ def main() -> int:
         return 2
 
     session = get_session()
-    names: dict = {}  # plate -> "#n"
-    # (svc, bus) -> [(t, lat, lng, speed)] for each poll that saw it
-    seen: dict = {}
-    stamps: dict = {svc: [] for svc in args.services}  # the reply's TimeStamp
+    bus_number: dict[str, str] = {}
+    seen: dict[tuple[str, str], list[tuple]] = {}
+    stamps: dict[str, list[tuple[float, str]]] = {svc: [] for svc in args.services}
     errors = 0
     trace = open(args.trace, "w") if args.trace else None
     start = time.monotonic()
@@ -96,8 +87,6 @@ def main() -> int:
                 print(f"{svc}: {exc}", file=sys.stderr)
                 if errors > 5:
                     return 1
-                # Back off before a fresh token: 10 s, 20 s, 40 s... A feed
-                # that is refusing us is not helped by asking again at once.
                 time.sleep(min(60, 10 * 2 ** (errors - 1)))
                 session = get_session()
                 continue
@@ -107,7 +96,7 @@ def main() -> int:
             for b in pick_list(data, "activebus", "activeBus", "ActiveBus", "buses"):
                 if not isinstance(b, dict) or not b.get("vehplate"):
                     continue
-                bus = names.setdefault(b["vehplate"], f"#{len(names) + 1}")
+                bus = bus_number.setdefault(b["vehplate"], f"#{len(bus_number) + 1}")
                 try:
                     speed = float(b.get("speed") or 0)
                 except (TypeError, ValueError):
@@ -136,8 +125,6 @@ def main() -> int:
             for prev, cur in zip(rows, rows[1:]):
                 if (cur[1], cur[2]) != (prev[1], prev[2]):
                     changes += 1
-                    # Only gaps between two changes of a moving bus: a
-                    # standing bus holds its position because it stands.
                     if last_change is not None and cur[3] > 0:
                         held.append(cur[0] - last_change)
                     last_change = cur[0]

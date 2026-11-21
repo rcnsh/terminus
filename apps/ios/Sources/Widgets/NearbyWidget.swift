@@ -1,10 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// "Buses near you": the nearest stop's buses, and the stop across the road
-/// beside them where there's room, at every size the Home Screen has and on
-/// the Lock Screen. Draws the board every widget showing buses near you
-/// shares (NearbyShared). As Android's NearbyWidget.
 struct NearbyWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "nearby", provider: NearbyProvider()) { entry in
@@ -17,21 +13,16 @@ struct NearbyWidget: Widget {
     }
 }
 
-/// One moment of a Buses near you widget: the shared board as kept, read once.
 struct NearbyEntry: TimelineEntry {
     var date: Date
     var paired: Bool
-    /// In the API's order, nearest first; nil before any board.
     var stops: [NearbyStop]?
     var fetchedAt: Date?
     var error: String?
-    /// The slot this size keeps its swap in (WidgetStore.nearbySlots).
     var slot: String
     var swap: WidgetSwap.Swap?
     var newcomer: Bool
-    /// Made-up buses for the widget gallery, before the app has fetched any.
     var sample = false
-    /// Drawing made-up stops while the real board is on its way (NearbyWidgetView.shown).
     var standIn = false
 
     var model: NearbyModel {
@@ -41,12 +32,6 @@ struct NearbyEntry: TimelineEntry {
     }
 }
 
-/// The widget's timeline. Each time WidgetKit asks: the shared board fetched
-/// again if it's over a minute old, then an entry for now and for each moment
-/// the widget looks different by itself (a bus going, a minute off a bus's
-/// count while the times are new, the times turning old, the sky's hour). No
-/// more polling than that: WidgetKit spaces the asks out, and the app
-/// redraws the widget whenever it fetches the board itself.
 struct NearbyProvider: TimelineProvider {
     func placeholder(in context: Context) -> NearbyEntry { Self.sampleEntry(family: context.family) }
 
@@ -90,7 +75,6 @@ struct NearbyProvider: TimelineProvider {
         if let f = first.fetchedAt, let stops = first.model.stops {
             let old = f.addingTimeInterval(WidgetMode.nearbyOld)
             moments.append(old.addingTimeInterval(1))
-            // The first few as shown: your stop, and the one beside it on the larger sizes.
             moments += NearbyBoard.redraws(
                 Array(stops.prefix(3)), fetchedAt: f, now: now, until: horizon, minutesUntil: old, skew: ServerClock.skew)
             running = stops.prefix(3).contains { s in s.board.contains { $0.etaS != nil } }
@@ -103,16 +87,10 @@ struct NearbyProvider: TimelineProvider {
                 e.date = Date(timeIntervalSince1970: t)
                 return e
             }
-        // Asked again for a new board, but no sooner than WidgetTiming.minReload;
-        // with nothing running, a timetable's first buses don't change.
         let next = now.addingTimeInterval(running || first.stops == nil ? WidgetTiming.minReload : 30 * 60)
         return Timeline(entries: entries, policy: .after(next))
     }
 
-    // MARK: the gallery's sample
-
-    /// Buses to show in the widget gallery before there's a board: UTown and
-    /// the stop across the road, as the server words them.
     static func sampleEntry(family: WidgetFamily) -> NearbyEntry {
         func row(_ svc: String, _ color: String, _ eta: Int, _ towards: [String], later: [Int] = [], crowd: String? = nil) -> [String: Any]
         {
@@ -150,28 +128,18 @@ struct NearbyProvider: TimelineProvider {
     }
 }
 
-/// What a Buses near you layout draws from: the board as kept, in the order
-/// shown, and how old it is; worked out once. The Nearby chip and the large
-/// widget's next buses draw from one too. As Android's NearbyView.
 struct NearbyModel {
     let paired: Bool
-    /// In the API's order, for the swap button.
     let all: [NearbyStop]?
     let swap: WidgetSwap.Swap?
-    /// When the board came, on this phone's clock.
     let fetchedAt: Date?
-    /// The last fetch's problem, or WidgetFace.updating.
     let error: String?
-    /// This phone's clock.
     let now: Date
     let skew: TimeInterval
-    /// Where its ↻ and swap button keep their state; nil for none.
     let slot: String?
     let refresh: Bool
-    /// Made-up stops drawn redacted while the real board is on its way: said as "Checking…".
     var standIn = false
 
-    /// As shown: the stop across the road first after a swap.
     var stops: [NearbyStop]? { all.map { WidgetSwap.order($0, swap, now: now) } }
     var first: NearbyStop? { stops?.first }
 
@@ -181,53 +149,40 @@ struct NearbyModel {
 
     var buses: [StopBus] { first.map(busesAt) ?? [] }
 
-    /// Past WidgetMode.nearbyOld: the times are dimmed and the line above says
-    /// so. First buses are a timetable's, so they don't go old.
     var old: Bool {
         (fetchedAt.map { now.timeIntervalSince($0) > WidgetMode.nearbyOld } ?? true) && buses.contains { !$0.first }
     }
 
-    /// Whole minutes until `b`, when it shows them: not while the times may
-    /// be old (a count would claim more than an old guess knows), and not for
-    /// a first bus, which is a timetable's. Nil: the clock time alone.
     func minutes(_ b: StopBus) -> Int? { old || b.first ? nil : NearbyBoard.minutesLeft(b.at, now: now) }
 
-    /// A time on this phone's clock as campus time, short ("9:42").
     func clock(_ d: Date) -> String { shortCampusTime(d.addingTimeInterval(skew)) }
 
-    /// "9:42", "~9:48" for a timetable's guess.
     func timeText(_ b: StopBus) -> String { (b.live || b.first ? "" : "~") + clock(b.at) }
 
     func firstLabel(_ b: StopBus) -> String { NearbyBoard.firstLabel(b.at.addingTimeInterval(skew), now: now.addingTimeInterval(skew)) }
 
-    /// "Next Yusof Ishak House"; with where it ends when another bus shown stops there next too; "Ends here".
     func nextLine(_ b: StopBus, _ shown: [StopBus]) -> String {
         guard let next = b.next else { return b.endsHere ? L("Ends here") : "" }
         if let end = NearbyBoard.endIfNeeded(b, shown: shown) { return L("Next %@, to %@", next, end) }
         return L("Next %@", next)
     }
 
-    /// "then 9:50, 9:58"; empty with none after it.
     func laterLine(_ b: StopBus) -> String {
         b.later.isEmpty ? "" : L("then %@", b.later.prefix(2).map(clock).joined(separator: L(", ")))
     }
 
-    /// The stop's name, or what to call the widget before there is one.
     var title: String {
         guard paired else { return "terminus" }
         return first.map { $0.stop.longName ?? $0.stop.name } ?? L("Nearby")
     }
 
-    /// The stop's short name ("PGP Foyer"), where the full one wouldn't fit.
     var shortTitle: String { paired ? first?.stop.name ?? title : title }
 
-    /// "2 min walk", or "here" under a minute.
     static func walk(_ stop: NearbyStop) -> String {
         let s = stop.walkS ?? 0
         return s < 60 ? L("here") : L("%@ min walk", "\((s + 30) / 60)")
     }
 
-    /// The words shown instead of buses; nil when there are buses to show.
     func problem(_ buses: [StopBus]) -> String? {
         if !paired { return error ?? L("Open terminus to sign in") }
         if error == WidgetFace.updating && (first == nil || buses.isEmpty) { return L("Checking…") }
@@ -237,7 +192,6 @@ struct NearbyModel {
         return nil
     }
 
-    /// What VoiceOver says: the stop and its next few buses, as one sentence.
     var spoken: String {
         if standIn { return L("Checking…") }
         let buses = buses

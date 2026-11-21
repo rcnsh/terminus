@@ -1,5 +1,3 @@
-# Every ecosystem has a cooldown: a new release sits a few days first, as a
-# compromised version is usually caught and pulled within that.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,7 +7,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-    # Conventional Commits, as every commit here: "ci(deps): bump ...".
     commit-message:
       prefix: ci
       include: scope
@@ -27,9 +24,6 @@ updates:
       include: scope
     cooldown:
       default-days: 5
-  # The version catalog (gradle/libs.versions.toml), the build scripts and
-  # the Gradle wrapper. It doesn't write the lockfiles or the dependency
-  # hashes: the android deps workflow writes them and pushes them to its PR.
   - package-ecosystem: gradle
     directory: /apps/android
     schedule:
@@ -42,8 +36,6 @@ updates:
       include: scope
     cooldown:
       default-days: 5
-  # Package.swift and Package.resolved (Sparkle); CI builds with exactly
-  # the resolved versions.
   - package-ecosystem: swift
     directory: /apps/macos
     schedule:

@@ -1,9 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// The widgets, as Android's three: "Next bus" (also on the Lock Screen),
-/// "Next bus + favourites" with buttons for Nearby and your places, and
-/// "Buses near you"; and the Live Activity for a trip under way.
 @main
 struct TerminusWidgets: WidgetBundle {
     var body: some Widget {

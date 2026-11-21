@@ -4,13 +4,9 @@ import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The account's setup, edited from the Mac: the same four steps as
-/// the phone's onboarding, and the devices on the account. Everything goes
-/// through the routes the account page uses, with this Mac's token.
 @MainActor
 @Observable
 final class SetupModel {
-    /// The profile as the server keeps it; unknown fields survive a save.
     private(set) var profile: [String: Any]?
     private(set) var campus: Campus?
     @ObservationIgnored private var campusChanges = 0
@@ -19,29 +15,19 @@ final class SetupModel {
     private(set) var imported: ImportResult?
     private(set) var devices: [Device]?
     private(set) var pairCode: String?
-    /// When the code was made: it works for 10 minutes (accounts.ts `pairCodeMs`).
     private var pairCodeAt = Date()
     static let pairCodeS: TimeInterval = 10 * 60
     private(set) var busy = false
-    /// Imported classes whose room couldn't be placed, until each gets a stop or is skipped.
     private(set) var unplaced: [Unplaced] = []
-    /// Who's signed in (/api/me): the email, and whether the timetable needs importing again.
     private(set) var me: Me?
-    /// Classes with a bus earlier or no reminders, and the trips remembered (/api/me/choices).
     private(set) var choices: Choices?
 
     private var api: Api { Api(token: TokenStore.read()) }
-    /// Which sign-in this Mac is on (AppModel's `session`): a reply for an
-    /// earlier one (a guest's, before signing in with an email) is dropped.
     private let session: @MainActor () -> Int
-    /// The sign-in what's shown belongs to; nil until it has loaded.
     private var owner: Int?
-    /// What's shown belongs to an account signed out of since.
     var stale: Bool { owner != nil && owner != session() }
-    /// Still the sign-in a request was made for.
     private func current(_ s: Int) -> Bool { s == session() }
 
-    /// After each save: the popover's favourites (its tabs) follow.
     var onSaved: @MainActor () -> Void = {}
 
     init(session: @escaping @MainActor () -> Int = { AppModel.shared.session }) {
@@ -49,7 +35,6 @@ final class SetupModel {
     }
 
     #if DEBUG
-        /// Filled in, for snapshot renders.
         init(
             profile: [String: Any], campus: Campus, devices: [Device]? = nil, pairCode: String? = nil,
             session: @escaping @MainActor () -> Int = { 0 }
@@ -63,9 +48,6 @@ final class SetupModel {
         }
     #endif
 
-    /// Everything of the account's goes: another one is signed in, or none.
-    /// A save still waiting is dropped; one on its way can't be called back,
-    /// and its answer is ignored (it was for the account it was made for).
     func reset() {
         owner = nil
         saveTask?.cancel()
@@ -85,15 +67,12 @@ final class SetupModel {
         choices = nil
     }
 
-    /// The account's setup, for whoever is signed in now: another account's
-    /// (one signed out of, or a guest's before signing in) goes first.
     func load() async {
         let s = session()
         if owner != s { reset() }
         message = nil
         do {
             async let p = api.profile()
-            // A newer campus from the background check, landing while the rest is on its way, isn't put back.
             let changes = campusChanges
             async let c = CampusStore.shared.load(self, token: TokenStore.read()) { [weak self] in
                 guard let self, let c = $0.campus else { return }
@@ -108,7 +87,6 @@ final class SetupModel {
             let chosen = await ch
             guard current(s) else { return }
             owner = s
-            // A change still being saved stays on screen.
             if !saving { profile = loaded }
             Clock.pref = clock
             if campusChanges == changes { campus = cam }
@@ -120,29 +98,21 @@ final class SetupModel {
         }
     }
 
-    // MARK: profile fields (as profile.ts names them)
-
     var homeStops: [String] { (profile?["home"] as? [String: Any])?["stops"] as? [String] ?? [] }
     var homeWalkMin: Int { profile?["homeWalkMin"] as? Int ?? 5 }
     var walkPace: String { profile?["walkPace"] as? String ?? "normal" }
-    /// auto (each device's own), 12 or 24.
     var clock: String { profile?["clock"] as? String ?? "auto" }
     var fullBusMargin: Bool { profile?["fullBusMargin"] as? Bool ?? true }
-    /// Count the public buses (95, 151, ...) at the campus's stops too. Off until asked for: they have a fare.
     var publicBuses: Bool { profile?["publicBuses"] as? Bool ?? false }
     var preferBus: Bool { profile?["preferBus"] as? Bool ?? true }
-    /// The day's hours, in minutes after midnight, and the gap long enough to go home in.
     var dayStartMin: Int { profile?["dayStartMin"] as? Int ?? 360 }
     var dayEndMin: Int { profile?["dayEndMin"] as? Int ?? 1080 }
     var gapHours: Double { (profile?["gapHours"] as? NSNumber)?.doubleValue ?? 2 }
     var share: String? { profile?["share"] as? String }
     var importedClasses: Int { (profile?["trips"] as? [Any])?.count ?? 0 }
 
-    /// The residence whose stops are the home stops, if they're one's.
     var residence: Campus.Residence? { campus?.residences.first { $0.stops == homeStops } }
 
-    /// The account's limits, as the server sends them with the profile
-    /// (`limits`); today's values, worked out here for an older server.
     struct Limits: Sendable {
         var homeStops = 3
         var places = 12
@@ -169,14 +139,10 @@ final class SetupModel {
         edit { $0["home"] = home.isEmpty ? NSNull() : ["stops": home] }
     }
 
-    /// The home stop picker: `code` first, the other stops after it. "Choose
-    /// a stop" (a blank code) clears the first one rather than saving a blank stop.
     func setFirstHomeStop(_ code: String) {
         setHomeStops((code.isEmpty ? [] : [code]) + homeStops.dropFirst().filter { $0 != code })
     }
 
-    /// "Pick the stop nearest me": this Mac's nearest stop first among the
-    /// home stops. What happened, to show under the button.
     func pickNearestStop(app: AppModel, campus: Campus) async -> String {
         guard let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) else {
             return L("Couldn't get this Mac's location. Choose your stop instead.")
@@ -194,14 +160,11 @@ final class SetupModel {
         }
     }
 
-    /// The residence's walk to its stop at a normal pace, as the server works
-    /// it out (`walkMin`); from `walkM` at 1.3 m/s, worked out here for an older server.
     nonisolated static func homeWalk(_ r: Campus.Residence, within range: ClosedRange<Int>) -> Int {
         let walk = r.walkMin ?? max(1, Int(((r.walkM ?? 0) / 1.3 / 60).rounded()))
         return min(range.upperBound, max(range.lowerBound, walk))
     }
 
-    /// Favourites, as the profile keeps them: key, label, and the stop (or food court) they go to.
     var places: [(key: String, label: String, to: String)] {
         (profile?["places"] as? [[String: Any]] ?? []).compactMap { p in
             guard let key = p["key"] as? String, let label = p["label"] as? String, let to = p["to"] as? String else { return nil }
@@ -209,15 +172,8 @@ final class SetupModel {
         }
     }
 
-    /// How many favourites the account may have (PROFILE_LIMITS.places in the API).
     var maxPlaces: Int { limits.places }
 
-    /**
-     A favourite from a search result, called what was picked, short, as it
-     reads on a button: a building or room by its code ("COM1"), anything
-     else by its name. One per stop. Returns the existing one's label if the
-     stop is already a favourite.
-     */
     @discardableResult
     func addPlace(_ d: Destination) -> String? {
         let to = d.goesTo
@@ -236,7 +192,6 @@ final class SetupModel {
         return nil
     }
 
-    /// A favourite just removed, kept for Undo: where it was, and its usual times.
     struct RemovedPlace {
         let index: Int
         let place: [String: Any]
@@ -244,7 +199,6 @@ final class SetupModel {
         var label: String { place["label"] as? String ?? "" }
     }
 
-    /// A favourite gone, with its usual times; what's returned puts them back (restorePlace).
     @discardableResult
     func removePlace(_ key: String) -> RemovedPlace? {
         let list = profile?["places"] as? [[String: Any]] ?? []
@@ -257,12 +211,10 @@ final class SetupModel {
         return RemovedPlace(index: index, place: list[index], usual: usual)
     }
 
-    /// Undo for removePlace: back where it was. Not when the list is full, or that stop is a favourite again.
     func restorePlace(_ r: RemovedPlace) {
         let now = places
         guard now.count < maxPlaces, !now.contains(where: { $0.to == r.place["to"] as? String || $0.key == r.place["key"] as? String })
         else { return }
-        // JSON values only, read by nothing else while they're saved.
         nonisolated(unsafe) let place = r.place
         nonisolated(unsafe) let usual = r.usual
         let index = r.index
@@ -283,40 +235,25 @@ final class SetupModel {
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
     func setPublicBuses(_ on: Bool) { edit { $0["publicBuses"] = on } }
     func setPreferBus(_ on: Bool) { edit { $0["preferBus"] = on } }
-    /// The start stays before the end; a change that would cross them is refused.
     func setDayStart(_ min: Int) { if min < dayEndMin { edit { $0["dayStartMin"] = min } } }
     func setDayEnd(_ min: Int) { if min > dayStartMin { edit { $0["dayEndMin"] = min } } }
     func setGapHours(_ h: Double) {
         let hours = Swift.min(12, Swift.max(0.5, h))
         edit { $0["gapHours"] = hours }
     }
-    /// Times on every device; the menu bar follows at once, the card once saved.
     func setClock(_ pref: String) {
         Clock.pref = pref
         edit { $0["clock"] = pref }
     }
 
-    /// The 0.4 s wait before a save, so a run of clicks goes as one.
     private var saveTask: Task<Void, Never>?
-    /// The save on its way. Never cancelled: whether it saved is only known from its answer.
     private var sending: Task<Void, Never>?
-    /// Counts the saves sent, so one that answers after a reset() doesn't end a newer one.
     private var sends = 0
-    /// The changes made since the last save was sent, shown already, to send next.
     private var pending: [@Sendable (inout [String: Any]) -> Void] = []
-    /// The profile as the server last had it, to go back to if a save fails.
     private var confirmed: [String: Any]?
-    /// Whether a change is waiting or on its way: the profile shown is ahead of the server's.
     private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
 
-    /// Changes shown at once, saved a moment later (a run of clicks is one
-    /// save, as on the web), put back if the save fails. Only the change is
-    /// saved, made on the profile as the server has it then: what another
-    /// device saved since this one loaded stays.
     func edit(_ change: @escaping @Sendable (inout [String: Any]) -> Void) {
-        // While an import runs, its answer replaces the profile: an edit now
-        // would save the old timetable over it.
-        // Only on the account it was loaded for.
         guard let current = profile, !importing, owner == session() else { return }
         if !saving { confirmed = current }
         var next = current
@@ -332,12 +269,8 @@ final class SetupModel {
         }
     }
 
-    /// Sends the changes waiting, made again on the profile as the server has
-    /// it now (If-Match, read again on a 412). One save at a time: changes
-    /// made meanwhile go next.
     private func send() {
         guard sending == nil, !pending.isEmpty else { return }
-        // Signed out or into another account since: these changes were for that one.
         guard let mine = owner, current(mine) else {
             pending = []
             return
@@ -352,11 +285,9 @@ final class SetupModel {
                 let saved = try await api.changeProfile { p in
                     for change in changes { change(&p) }
                 }
-                // Done, whoever is signed in now: flush() waits for this.
                 if sends == id { sending = nil }
                 guard current(mine) else { return }
                 confirmed = saved
-                // Changes made since this was sent stay on screen, on top of what it saved.
                 var shown = saved
                 for change in pending { change(&shown) }
                 profile = shown
@@ -375,8 +306,6 @@ final class SetupModel {
         }
     }
 
-    /// Sends what's waiting now, and returns once every save has its answer
-    /// (or another account is signed in, and they're no longer this one's).
     func flush() async {
         if saveTask != nil {
             saveTask?.cancel()
@@ -387,9 +316,6 @@ final class SetupModel {
         while let s = sending, current(mine) { await s.value }
     }
 
-    // MARK: the timetable, class by class
-
-    /// A class as the profile keeps it, imported (`trips`) or added by hand (`manual`), by its place in that list.
     struct Class: Identifiable {
         let list: String
         let index: Int
@@ -413,9 +339,6 @@ final class SetupModel {
         }
     }
 
-    /// Where the class is in `list`: a change is made again on the profile as
-    /// the server has it, where another device may have moved or removed it,
-    /// so by what it is, not only where it was. Nil once it's gone.
     nonisolated static func find(_ c: Class, in list: [[String: Any]]) -> Int? {
         func same(_ o: [String: Any]) -> Bool {
             o["day"] as? Int == c.day && o["arriveByMin"] as? Int == c.arriveByMin && o["to"] as? String == c.to
@@ -443,7 +366,6 @@ final class SetupModel {
         }
     }
 
-    /// "Add a class or commitment by hand"; it survives a re-import.
     func addManual(day: Int, at: Int, end: Int?, to: String, label: String, venue: String = "") {
         edit {
             var list = $0["manual"] as? [[String: Any]] ?? []
@@ -454,7 +376,6 @@ final class SetupModel {
         }
     }
 
-    /// A favourite at its usual time each week (the profile's `usual`), with its place.
     var usual: [(place: String, day: Int, atMin: Int, label: String, to: String)] {
         (profile?["usual"] as? [[String: Any]] ?? []).compactMap { u in
             guard let key = u["place"] as? String, let day = u["day"] as? Int, let at = u["atMin"] as? Int,
@@ -472,7 +393,6 @@ final class SetupModel {
         }
     }
 
-    /// An unplaced class given a stop: added by hand there, as the account page does.
     func place(_ u: Unplaced, to: String) {
         addManual(
             day: u.day, at: u.arriveByMin, end: u.endMin, to: to,
@@ -481,8 +401,6 @@ final class SetupModel {
     }
 
     func skip(_ u: Unplaced) { unplaced.removeAll { $0 == u } }
-
-    // MARK: trip choices and history
 
     func loadChoices() async {
         let s = session()
@@ -515,9 +433,6 @@ final class SetupModel {
         }
     }
 
-    // MARK: feedback, your data
-
-    /// Send feedback; nil once sent, else why not.
     func sendFeedback(_ note: String) async -> String? {
         do {
             try await api.feedback(note: note.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -527,12 +442,10 @@ final class SetupModel {
         }
     }
 
-    /// Download my data: the export, saved where the person picks.
     func export() async {
         let s = session()
         do {
             let data = try await api.export()
-            // Signed out meanwhile: not this Mac's to save now.
             guard current(s) else { return }
             let panel = NSSavePanel()
             panel.nameFieldStringValue = "terminus-export.json"
@@ -555,11 +468,8 @@ final class SetupModel {
         imported = nil
         message = nil
         defer { importing = false }
-        // Only into the account whose setup is shown, and still signed in once the saves are done.
         let s = session()
         guard owner == s else { return }
-        // A setting's save still waiting would land after the import and put
-        // the old timetable back: it goes first.
         await flush()
         guard current(s) else { return }
         do {
@@ -577,8 +487,6 @@ final class SetupModel {
         }
     }
 
-    /// Setup done (or skipped): the account page and the apps stop offering
-    /// it. Returns once it, and anything else waiting, is saved.
     func finish() async {
         if !(profile?["seen"] as? [String] ?? []).contains("onboarding") {
             edit {
@@ -589,8 +497,6 @@ final class SetupModel {
         }
         await flush()
     }
-
-    // MARK: devices
 
     func loadDevices() async {
         let s = session()
@@ -631,7 +537,6 @@ final class SetupModel {
         } catch {
             guard current(s) else { return }
             if let e = error as? ApiError {
-                // 403: an account without an email can't add devices.
                 message =
                     e.status == 403
                     ? L("Add an email to your account first. Devices can only be added to an account with an email.") : e.message
@@ -641,13 +546,8 @@ final class SetupModel {
         }
     }
 
-    /// The device just paired, while its tick shows.
     var added: String?
 
-    /// While the code is showing, checks every few seconds for a device
-    /// that wasn't there before, and goes back to the list once one is.
-    /// Cancelled with the card (Done, or the window closing). Once the code
-    /// has expired nothing can use it: back to the list, saying so.
     func waitForNewDevice() async {
         let known = Set((devices ?? []).map(\.id))
         let code = pairCode
@@ -662,13 +562,10 @@ final class SetupModel {
             }
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, pairCode == code, let now = try? await api.devices() else { continue }
-            // Signed out or into another account meanwhile: the code was the other one's.
             guard current(s) else { return }
             if let added = now.first(where: { !known.contains($0.id) }) {
-                // A tick over the code for a moment, then back to the list.
                 self.added = added.name ?? L("Device")
                 try? await Task.sleep(for: .seconds(1.2))
-                // Signed out meanwhile: reset() has cleared it all.
                 guard current(s) else { return }
                 self.added = nil
                 guard pairCode == code else { return }
@@ -679,7 +576,6 @@ final class SetupModel {
         }
     }
 
-    /// Back to the list, fetched again: the code may just have added a device.
     func closePairCode() async {
         pairCode = nil
         await loadDevices()
@@ -693,10 +589,6 @@ final class SetupModel {
     }
 }
 
-// MARK: - Setup window
-
-/// "Set up terminus": home, timetable, pace, then notifications and location.
-/// Each step saves as it goes and can be skipped; so can the lot.
 struct SetupView: View {
     @Bindable var app: AppModel
     @State private var setup: SetupModel
@@ -743,7 +635,6 @@ struct SetupView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
-                        // As in Settings: no edits while an import's answer is on its way.
                         .disabled(setup.importing)
                     }
                 }
@@ -761,15 +652,12 @@ struct SetupView: View {
         }
         .padding(20)
         .frame(width: 460, height: 540)
-        // Again for another account: signing in from a guest, or after
-        // signing out, keeps this window's state (a closed Window isn't discarded).
         .task(id: app.session) { if setup.profile == nil || setup.stale { await setup.load() } }
         .onChange(of: app.session) { step = 0 }
     }
 
     private func finish() {
         app.needsSetup = false
-        // What's waiting to be saved goes first, then the popover asks for the plan.
         Task {
             await setup.finish()
             await app.refresh()
@@ -796,7 +684,6 @@ struct Hint: View {
     var body: some View { Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
 }
 
-/// A residence menu's items: where most students live in a section of their own at the top.
 struct ResidenceItems: View {
     let residences: [Campus.Residence]
 
@@ -811,7 +698,6 @@ struct ResidenceItems: View {
     }
 }
 
-/// Where do you live? A residence brings all its stops; off campus, pick one.
 struct HomeStep: View {
     let setup: SetupModel
     let app: AppModel
@@ -877,7 +763,6 @@ struct HomeStep: View {
     }
 }
 
-/// A setup step in bars while the profile is on its way: its title, the line under it, its settings.
 struct SetupSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -890,10 +775,8 @@ struct SetupSkeleton: View {
     }
 }
 
-/// Settings rows in bars: a name, and its control's place at the end.
 struct SkeletonRows: View {
     let count: Int
-    /// Read as "Checking…" on its own; off inside a skeleton that already is.
     var spoken = true
 
     var body: some View {
@@ -935,7 +818,6 @@ struct TimetableStep: View {
     }
 }
 
-/// The walking paces as the profile names them, with what each means.
 enum WalkPace {
     static var all: [(String, String, String)] {
         [
@@ -979,7 +861,6 @@ struct PaceStep: View {
             }
         }
         .padding(.top, 6)
-        // Untouched, this Mac's own style is the one shown picked.
         Picker(
             L("Show times as"),
             selection: Binding(get: { setup.clock != "auto" ? setup.clock : (usesHour12 ? "12" : "24") }, set: { setup.setClock($0) })
@@ -992,7 +873,6 @@ struct PaceStep: View {
     }
 }
 
-/// Notifications and location, each with what it's for, each skippable.
 private struct PermissionsStep: View {
     @Bindable var app: AppModel
 
@@ -1019,9 +899,6 @@ private struct PermissionsStep: View {
     }
 }
 
-// MARK: - Devices window
-
-/// The devices on the account: remove one, or add one with a code and a QR code.
 struct DevicesView: View {
     @State private var setup: SetupModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1031,7 +908,6 @@ struct DevicesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("Devices")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
-            // The code takes the list's place, so the window keeps its size.
             if let code = setup.pairCode {
                 PairCodeCard(code: code) { Task { await setup.closePairCode() } }
                     .transition(.opacity)
@@ -1081,7 +957,6 @@ struct DevicesView: View {
                 }
                 Hint(L("Removing a device signs it out. You'll get an email whenever a device is added or removed."))
             } else {
-                // The devices on their way: two rows in bars, a name and a line under it.
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(0..<2, id: \.self) { i in
                         VStack(alignment: .leading, spacing: 2) {
@@ -1099,7 +974,6 @@ struct DevicesView: View {
     }
 }
 
-/// "Android", "iPhone": product names, the same in every language.
 func devicePlatformName(_ d: Device) -> String? {
     if d.watch == true { return "Apple Watch" }
     return switch d.platform {
@@ -1110,13 +984,11 @@ func devicePlatformName(_ d: Device) -> String? {
     }
 }
 
-/// Each device's kind, drawn as the iPhone app draws it: a watch, a Mac, else a phone.
 func deviceSymbol(_ d: Device) -> String {
     if d.watch == true { return "applewatch" }
     return d.platform == "mac" ? "laptopcomputer" : "iphone"
 }
 
-/// Over the code once it's been used: a tick that springs in, and the device's name.
 private struct AddedTick: View {
     let name: String
     @State private var shown = false
@@ -1127,7 +999,6 @@ private struct AddedTick: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(.white, .green)
-                // With reduced motion it fades in rather than springing.
                 .scaleEffect(shown || reduceMotion ? 1 : 0.4)
                 .opacity(shown ? 1 : 0)
             Text(L("%@ added", name)).font(.headline)
@@ -1139,7 +1010,6 @@ private struct AddedTick: View {
     }
 }
 
-/// The code to type on another device, and a QR code a phone's camera opens.
 private struct PairCodeCard: View {
     let code: String
     let onDone: () -> Void
@@ -1150,7 +1020,6 @@ private struct PairCodeCard: View {
             Text("\(code.prefix(3)) \(code.dropFirst(3))").font(.system(size: 30, weight: .bold, design: .monospaced)).textSelection(
                 .enabled
             )
-            // A character at a time: read as a word, "K7Q" is mumbled.
             .accessibilityLabel(L("Pairing code") + L(", ") + code.map(String.init).joined(separator: " "))
             Text(L("Or scan this with a phone's camera:")).font(.callout)
             if let qr = qrImage("\(Api.linkBase)/pair?code=\(code)") {
@@ -1164,8 +1033,6 @@ private struct PairCodeCard: View {
         .card()
     }
 
-    /// Black on white with a quiet zone, whatever the theme: cameras read it best.
-    /// The standard four modules of it: Core Image's own one, and three more.
     private func qrImage(_ text: String) -> NSImage? {
         let f = CIFilter.qrCodeGenerator()
         f.message = Data(text.utf8)

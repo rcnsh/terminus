@@ -21,7 +21,6 @@ test('a building listed by hand is served by the stops students use, the first a
     assert.equal(v.stop, o.stops[0], `${code}: venues.json is stale, run scripts/data/walk_routes.py`);
     assert.deepEqual(Object.keys(v.stops ?? { [v.stop]: v.m }), o.stops, `${code}: venues.json is stale`);
   }
-  // LT21: University Hall is nearer on the map, but the path goes to S17 and LT27.
   assert.equal(venueToStop('LT21')?.stop, 'S17');
   assert.equal(venueToStop('LT21-0001')?.stop, 'S17');
 });
@@ -56,7 +55,6 @@ test('leaving LT21 without a location starts at S17 and LT27, even on a timetabl
 
 test("leaving a room two stops serve: both are starting points, each with the room's own walk to it", () => {
   const origin = originOf({ from: 'COM3', fromVenue: 'COM1-0208' }, 'PGP', 5, SPEED);
-  // A room uNivUS lists on its own: its building's stops, walked from the room.
   const walks = venueStops('COM1-0208').walkM;
   assert.deepEqual(Object.keys(walks), ['COM3', 'CLB']);
   assert.equal(origin.code, 'COM3');
@@ -75,10 +73,8 @@ test("leaving a room two stops serve: both are starting points, each with the ro
   const cands = candidateStops(GRAPH, input);
   const walkAt = Object.fromEntries(cands.map((c) => [c.stop.code, c.walkS]));
   assert.equal(walkAt.CLB, origin.walkByStopS.CLB, 'CLB is walked to from the room, not from COM3');
-  // The far side of CLB's road is a crossing further than CLB.
   if (walkAt.IT !== undefined) assert.ok(walkAt.IT > walkAt.CLB);
 
-  // Walking all the way goes out by whichever stop makes it shortest.
   const viaCom3 = walkAllTheWayS(GRAPH, { ...input, originAlso: [], originWalkByStopS: undefined }, byCode.get('COM3'));
   assert.ok(walkAllTheWayS(GRAPH, input, byCode.get('COM3')) <= viaCom3);
 });
@@ -100,11 +96,9 @@ test("a building's way out lists its stops in reach, and only the hand-kept ones
 test('in LT21, home to PGP is the walk out by S17, not the 400 m across the hill', () => {
   const { lat, lon } = venuesJson.venues.LT21;
   const pgp = byCode.get('PGP');
-  // In a straight line PGP is near enough to look like a short walk.
   assert.ok(footM(lat, lon, pgp) < 500);
   const walkS = walkAllTheWayS(GRAPH, { lat, lon, to: 'PGP', walkSpeedMs: SPEED }, null);
   assert.ok(walkS >= Math.round(venuesJson.venues.LT21.out.S17 / SPEED) + 600, `${walkS} s`);
-  // The bus is caught at S17 or across the road at LT27, never University Hall.
   const codes = candidateStops(GRAPH, { lat, lon, to: 'PGP', walkSpeedMs: SPEED }).map((c) => c.stop.code);
   assert.ok(codes.includes('S17') || codes.includes('LT27'), codes.join());
   assert.ok(!codes.includes('UHALL') && !codes.includes('UHALL-OPP'), `never University Hall: ${codes}`);
@@ -113,32 +107,25 @@ test('in LT21, home to PGP is the walk out by S17, not the 400 m across the hill
 test('in a building, the walk to a stop in reach follows the paths from it', () => {
   const { lat, lon, out } = venuesJson.venues.MD6;
   const pgp = byCode.get('PGP');
-  // The straight line with PGP's usual detour undersells this walk.
   assert.ok(out.PGP > footM(lat, lon, pgp) + 100);
   assert.equal(walkAllTheWayS(GRAPH, { lat, lon, to: 'PGP', walkSpeedMs: SPEED }, null), Math.round(out.PGP / SPEED));
   const inside = buildingStops(lat, lon, byCode);
   assert.equal(inside.find((c) => c.stop.code === 'PGP')?.footM, out.PGP);
-  // Nearest on foot first.
   for (let i = 1; i < inside.length; i++) assert.ok(inside[i].footM >= inside[i - 1].footM);
 });
 
 test('at a stop beside a building you are at the stop, not in the building', () => {
   const s17 = byCode.get('S17');
   assert.equal(buildingStops(s17.lat, s17.lon, byCode), null);
-  // Away from every building: the straight line, as before.
   assert.equal(buildingStops(1.3, 103.79, byCode), null);
 });
 
 test('in a building, a stop only public buses call at does not switch off the walks along its paths', () => {
-  // In CELC, nearer an LTA stop on the road outside than the building's point.
   const [lat, lon] = [1.29644, 103.77087];
   const walks = (graph, publicBuses) =>
     candidateStops(graph, { lat, lon, to: 'UTOWN', walkSpeedMs: 1.25, publicBuses })
       .filter((c) => !c.stop.public)
       .map((c) => [c.stop.code, Math.round(c.walkS)]);
-  // The stops likeliest to get you there soonest, nearest first: IT has the
-  // same buses as LT13-OPP a stop on. The D1 from CLB or LT13 goes round
-  // through its terminal, and is one you'd be at LT13-OPP for.
   const along = [
     ['LT13-OPP', 161],
     ['IT', 244],

@@ -1,14 +1,5 @@
-/**
- * The hour's sky, with the campus's hills along its foot, as Settings' pages
- * have it in the apps: the /docs page's bar (openapi/docs.ts).
- * The page is plain HTML with no script, so the hour is the server's, in
- * Singapore. The colours and hours are the web app's (app.css, daylight.js);
- * pagesky.test.js keeps them the same.
- */
-
 export type Phase = 'night' | 'dawn' | 'day' | 'golden' | 'dusk';
 
-/** The sky at `min` minutes past midnight, Singapore time: daylight.js phaseAt. */
 export function phaseAt(min: number): Phase {
   if (min < 390 || min >= 1180) return 'night';
   if (min < 510) return 'dawn';
@@ -17,10 +8,8 @@ export function phaseAt(min: number): Phase {
   return 'dusk';
 }
 
-/** Minutes past midnight in Singapore (UTC+8, no daylight saving) at `ms`. */
 export const sgtMinute = (ms: number) => Math.floor((ms / 60_000 + 8 * 60) % 1440);
 
-/** One hour's colours: the sky top to bottom, the far hills, the trees, the city. */
 export interface PageSky {
   sky: [string, string, string, string];
   far: string;
@@ -28,7 +17,6 @@ export interface PageSky {
   city: string;
 }
 
-/** app.css body.sky-<phase>, on a light page and on a dark one. */
 export const PAGE_SKIES: Record<'light' | 'dark', Record<Phase, PageSky>> = {
   light: {
     dawn: { sky: ['#8fc1e8', '#b7d6ee', '#f1d6c2', '#f7c9a4'], far: '#b3b0c3', tree: '#6a7568', city: '#cfc8d8' },
@@ -46,10 +34,8 @@ export const PAGE_SKIES: Record<'light' | 'dark', Record<Phase, PageSky>> = {
   },
 };
 
-/** Light words on the sky: always at dusk and at night, and on a dark page. */
 const LIGHT_INK: ReadonlySet<Phase> = new Set(['dusk', 'night']);
 
-// The hills, as sky.js draws them: fixed waves, so a wider card shows more hills.
 const farY = (x: number) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
 const nearY = (x: number) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -58,26 +44,14 @@ const ridge = (w: number, y: (x: number) => number) => {
   for (let x = 4; x < w + 4; x += 4) d += `L${x} ${r1(y(x))}`;
   return `${d}L${w} 92Z`;
 };
-/** The lowest point of the far hills between `lo` and `hi`, where the city shows over them. */
 const dip = (lo: number, hi: number) => {
   let best = lo;
   for (let x = lo; x <= hi; x += 2) if (farY(x) > farY(best)) best = x;
   return best;
 };
 
-/** The band's width in its own units; a narrower card shows its middle. A
- * wider one (the API docs' bar) goes on along unbroken hills, BAND_W at a
- * time, so it shows more of them, not bigger ones: the first stretch as a
- * card has it, then trees on every one, the tall building on every other
- * with the flag, and the city on every third, so it doesn't read as a
- * pattern. */
 const BAND_W = 400;
 
-/**
- * The low horizon (sky.js Horizon `low`): the city's top to the near hill,
- * with two buildings, rain trees and the flag, and the near hill in the
- * card's colour. Lit windows after dark. Colours come from the band's CSS.
- */
 export function horizonSvg(lights: boolean, W = BAND_W): string {
   const city: string[] = [];
   const far: string[] = [];
@@ -109,8 +83,6 @@ export function horizonSvg(lights: boolean, W = BAND_W): string {
     const tall = n % 2 === 0;
     far.push(`<rect x="${b1 - 8}" y="${r1(farY(b1) - 14)}" width="16" height="20"/>`);
     lit.push(`<rect x="${b1 - 3}" y="${r1(farY(b1) - 9)}" width="3" height="3" opacity=".6"/>`);
-    // The first tree only on the first stretch: elsewhere it would stand
-    // beside the last one of the stretch before.
     trees.push((n === 0 ? [0.06, 0.45, 0.9] : [0.45, 0.9]).map((f) => tree(at(f))).join(''));
     if (!tall) continue;
     far.push(`<rect x="${b2 - 13}" y="${r1(farY(b2) - 22)}" width="26" height="28"/>`);
@@ -132,9 +104,7 @@ ${flags.join('')}
 const vars = (s: PageSky, lightInk: boolean) =>
   `--s0:${s.sky[0]};--s1:${s.sky[1]};--s2:${s.sky[2]};--s3:${s.sky[3]};--h-far:${s.far};--h-tree:${s.tree};--h-city:${s.city};--band-ink:${lightInk ? '#f5f3f0' : '#1c1917'}`;
 
-/** Whether the words over the sky at `phase` are light, on a light page. */
 export const lightInkAt = (phase: Phase) => LIGHT_INK.has(phase);
 
-/** The sky's colours at `phase` as CSS variables: on a light page, or on a dark one. */
 export const skyVars = (phase: Phase, page: 'light' | 'dark' = 'light') =>
   vars(PAGE_SKIES[page][phase], page === 'dark' || LIGHT_INK.has(phase));

@@ -1,19 +1,13 @@
 import SwiftUI
 
-/// Today at a glance, from /me/day: each class with its leave-by, and the
-/// trips home. What's done is dimmed. Anything still to come has an × to
-/// take it off today (a swipe does the same); it goes at once, and its row
-/// says so with Undo for 20 seconds, as on Android and the web app.
 struct DayTimeline: View {
     let day: DayPlan
-    /// Room above it: under the card, or none at the top of its own half when wide.
     var top: CGFloat = 20
     @Environment(AppModel.self) private var app
 
     var body: some View {
         let removed = app.removed
         if !day.items.isEmpty || removed != nil {
-            // Above the entry that followed it, else where it was.
             let noteAt: Int? = removed.map { n in
                 n.before.flatMap { b in day.items.firstIndex { $0.key == b } } ?? min(n.at, day.items.count)
             }
@@ -51,12 +45,10 @@ struct DayTimeline: View {
     }
 }
 
-/// What a removed entry is called in its row: the trip home, or the class without its venue.
 func shortName(_ item: DayPlan.Item) -> String {
     item.kind == "home" ? L("The trip home") : (item.label.components(separatedBy: " @ ").first ?? item.label)
 }
 
-/// One entry of the day: its time, what it is, and how you get there (or that it's off).
 private struct DayRow<End: View>: View {
     let item: DayPlan.Item
     @ViewBuilder var end: End
@@ -87,7 +79,6 @@ private struct DayRow<End: View>: View {
         .frame(minHeight: 48)
     }
 
-    /// The server's line; worded here only for an older server.
     private var subline: String? {
         if item.status == "done" { return nil }
         if let line = item.line { return line }
@@ -107,9 +98,6 @@ private struct DayRow<End: View>: View {
     }
 }
 
-/// Where an entry was, just taken off: "GEA1000 removed from today · Undo",
-/// or why it couldn't be (the entry is back, just below). Said aloud as it
-/// appears, and gone after 20 seconds.
 private struct RemovedRow: View {
     let note: AppModel.Removed
     @Environment(AppModel.self) private var app
@@ -135,8 +123,6 @@ private struct RemovedRow: View {
         .frame(minHeight: 48)
         .announced(text)
         .task(id: note.item.key) {
-            // Only once the time is up: the row is rebuilt as Today reloads,
-            // which cancels this, and that mustn't take Undo away with it.
             guard (try? await Task.sleep(for: .seconds(20))) != nil else { return }
             app.dismissRemoved(note.item.key)
         }
@@ -144,10 +130,6 @@ private struct RemovedRow: View {
     }
 }
 
-/// Swipe either way to take it off today, a shortcut for the ×. The row
-/// lifts onto a card as it moves; behind it a bin, grey until it's far
-/// enough to let go, then red. A quick flick goes too, short of that: what
-/// counts is where the row is heading when it's let go.
 private struct SwipeAway<Content: View>: View {
     let onRemove: () -> Void
     @ViewBuilder var content: Content
@@ -185,16 +167,12 @@ private struct SwipeAway<Content: View>: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20)
                     .onChanged { v in
-                        // Sideways only, so the page still scrolls.
                         guard abs(v.translation.width) > abs(v.translation.height) else { return }
                         dx = v.translation.width
                     }
                     .onEnded { v in
                         guard dx != 0 else { return }
                         let speed = v.velocity.width
-                        // It carries on at the finger's speed, out or back. A
-                        // flick counts only while it's still sideways: a drag
-                        // that turned into a scroll removes nothing short of the bin.
                         let heading = dx + Fling.project(speed)
                         let sideways =
                             abs(v.velocity.width) > abs(v.velocity.height) && abs(v.translation.width) > abs(v.translation.height)
@@ -203,8 +181,6 @@ private struct SwipeAway<Content: View>: View {
                             withAnimation(still ? nil : Fling.spring(speed: speed, from: dx, to: out)) {
                                 dx = out
                             } completion: {
-                                // The row leaves the list at once (one that comes back is a new
-                                // row), so it stays out here rather than flashing back as it goes.
                                 onRemove()
                             }
                         } else {

@@ -1,17 +1,10 @@
 import Foundation
 
-/// The answer's shapes, read leniently: only what a screen can't do without
-/// is required, and one field this version can't read is left out (nil, or
-/// gone from its list), never the whole answer with it. Every line is worded
-/// on the server (card.ts); the app shows it as it comes and only counts the
-/// clock down.
-
 struct Place: Decodable, Hashable, Sendable {
     let key: String
     let label: String
 }
 
-/// `/api/me/next`.
 struct NextAnswer: Decodable, Sendable {
     struct Stop: Decodable, Sendable {
         let code: String
@@ -21,7 +14,6 @@ struct NextAnswer: Decodable, Sendable {
         let to: String?
         let label: String
         let why: String?
-        /// A `class` that is a one-off trip or a favourite at its usual time: planned like one, not worded as one.
         let place: Bool?
     }
     struct Timing: Decodable, Sendable {
@@ -38,7 +30,6 @@ struct NextAnswer: Decodable, Sendable {
         let board: String?
         let arrive: String?
         let note: String?
-        /// Where to get off, when it's across the road from the destination; else where the bus gets you.
         let off: String?
         let toStop: String?
     }
@@ -56,7 +47,6 @@ struct NextAnswer: Decodable, Sendable {
     let mode: String
     let dest: Dest?
     let places: [Place]
-    /// When the bus leaves. Count down from this; `label` is only true when fetched.
     let departsAt: String?
     let arrived: Bool
     let refreshAt: String?
@@ -64,9 +54,7 @@ struct NextAnswer: Decodable, Sendable {
     let arrivals: [ArrivalLite]
     let leave: Leave?
     let card: Card?
-    /// The user's walking speed (m/s, from their pace), for walk times worked out here.
     let walkSpeedMs: Double?
-    /// The response as it came, sent with an "Is this wrong?" report. Never in the JSON.
     var raw: Data? = nil
 
     enum CodingKeys: String, CodingKey {
@@ -95,7 +83,6 @@ struct NextAnswer: Decodable, Sendable {
         walkSpeedMs = (try? c.decodeIfPresent(Double.self, forKey: .walkSpeedMs)).flatMap { $0 }
     }
 
-    /// An answer from its JSON, keeping the JSON for "Is this wrong?".
     static func decode(_ data: Data) throws -> NextAnswer {
         var a = try JSONDecoder().decode(NextAnswer.self, from: data)
         a.raw = data
@@ -110,46 +97,35 @@ struct NextAnswer: Decodable, Sendable {
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
 
     var isClassPlan: Bool { card?.kind == "class" }
-    /// "starts 10:00" for a class; "arrive by 19:00" for a one-off trip or a usual time, which isn't one.
     func startsAt(_ c: Date) -> String { dest?.place == true ? L("arrive by %@", campusTime(c)) : L("starts %@", campusTime(c)) }
-    /// No classes today (or none left): nothing to catch.
     var isFree: Bool { mode == "free" }
     var phase: String { card?.phase ?? "idle" }
-    /// A trip under way.
     var tripUnderWay: Bool { ["heading", "waiting", "riding", "missed"].contains(phase) }
     var leaveLate: Bool { card?.late ?? false }
     var qualityText: String? { card?.quality }
     var leaveNote: String? { leave?.note }
 
-    /// What the countdown counts to: the leave-by, or at the stop (phase
-    /// `waiting`, where the headline names the bus) the bus's own time.
     var countdownAt: Date? {
         if phase == "waiting", let board = leave?.board.flatMap(parseISODate) { return board }
         return leaveAt
     }
 
-    /// "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks.
-    /// At the stop it's the bus to wait for ("D2 at 09:41"), as the server says it.
     func leaveHeadline(now: Date) -> String? {
         guard let at = leaveAt else { return nil }
         if phase == "waiting" { return card?.leaveBy }
         return now >= at ? L("Leave now") : card?.leaveBy
     }
 
-    /// Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP".
     func leaveText(now: Date) -> String? {
         guard let head = leaveHeadline(now: now) else { return nil }
         return card?.leaveVia.map { "\(head) · \($0)" } ?? head
     }
 
-    /// "Crowding: low", unless the detail already says it.
     var crowdText: String? {
         guard let c = card?.crowd else { return nil }
         return detail.localizedCaseInsensitiveContains(c) ? nil : c
     }
 
-    /// The headline: the server's ("R2 · 09:06"), or for an older server one
-    /// made from the label and the departure time, a guess with a "~".
     var title: String {
         if let t = card?.title { return t }
         guard let at = departure, quality != "unknown", quality != "ended" else { return label }
@@ -157,13 +133,10 @@ struct NextAnswer: Decodable, Sendable {
         return "\(svc) · \(quality == "live" ? campusTime(at) : L("~%@", campusTime(at)))"
     }
 
-    /// Past the card's staleAt: its times may be gone.
     func isOld(at now: Date) -> Bool { staleAt.map { now >= $0 } ?? false }
 }
 
-/// `card` in /me/next (apps/api's card.ts). Lines are shown verbatim.
 struct Card: Decodable, Sendable {
-    /// class, trip, nearby, rest, arrived, setup or free; "trip" for one this version doesn't know.
     let kind: String
     let staleAt: String?
     let crowd: String?
@@ -177,37 +150,26 @@ struct Card: Decodable, Sendable {
     let goNow: String?
     let note: String?
     let estimate: String?
-    /// idle, due, heading, waiting, riding, missed, arrived.
     let phase: String
-    /// "On your way", above the answer. Nil when idle.
     let phaseText: String?
-    /// 12 characters: a glance (the lock screen, the Live Activity's compact view).
     let glance: String?
-    /// One line: a notification, a small widget.
     let line: String?
     let actions: [CardAction]
     let warning: String?
     let nextChangeAt: String?
-    /// False when reminders are off for this class.
     let remind: Bool
     let suggestion: Suggestion?
     let notice: String?
     let upcoming: Upcoming?
     let title: String?
     let heading: String?
-    /// When the leave reminder goes; nil: no reminder for this trip.
     let remindAt: String?
     let journey: Journey?
     let ride: Ride?
-    /// The planned bus has left and nothing says whether you're on it. Never "Leave now".
     let gone: Bool
-    /// Where to walk to now, for walking directions.
     let walkTo: WalkTo?
-    /// "Earlier bus" and "Later bus" on a trip by bus you haven't set off on; nil otherwise.
     let step: Step?
-    /// The headline bus is a shuttle with NUS's live time: "Is this wrong?" says a bus that never came or was off is NUS's.
     let fromNus: Bool
-    /// The "Is this wrong?" reasons that fit this card, in the sheet's order; nil from a server that doesn't say (all of them).
     let reasons: [String]?
 
     static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
@@ -257,13 +219,10 @@ struct Card: Decodable, Sendable {
     }
 }
 
-/// The buses either side of the one on the card, to step to: `trip` and a
-/// target (or nil for the best bus) go back to /me/step. The labels are the server's.
 struct Step: Decodable, Sendable {
     let trip: String
     let earlier: StepTarget?
     let later: StepTarget?
-    /// The bus shown is one stepped to, not the best one: "Best bus" shows.
     let moved: Bool
     let earlierLabel: String
     let laterLabel: String
@@ -283,8 +242,6 @@ struct Step: Decodable, Sendable {
     }
 }
 
-/// A bus to step to, as the card offered it. `fields` is every one the
-/// server sent, so it goes back to /me/step as it came.
 struct StepTarget: Decodable, Hashable, Sendable {
     let svc: String
     let stop: String
@@ -313,14 +270,12 @@ struct StepTarget: Decodable, Hashable, Sendable {
     }
 }
 
-/// A button on the card: `id` is the signal to send, `trip` which trip it's about.
 struct CardAction: Decodable, Hashable, Sendable {
     let id: String
     let label: String
     let trip: String
 }
 
-/// Something terminus learned and offers to change; `id` goes back to /me/choice.
 struct Suggestion: Decodable, Hashable, Sendable {
     let id: String
     let text: String
@@ -328,7 +283,6 @@ struct Suggestion: Decodable, Hashable, Sendable {
     let dismiss: String
 }
 
-/// The next class, on a free day, after your day and at home.
 struct Upcoming: Decodable, Sendable {
     let when: String
     let title: String
@@ -345,13 +299,11 @@ struct Upcoming: Decodable, Sendable {
     }
 }
 
-/// A stop to walk to, and where it is.
 struct WalkTo: Decodable, Sendable {
     let name: String
     let lat: Double
     let lon: Double
 
-    /// Walking directions there in Apple Maps.
     var mapsURL: URL? {
         var u = URLComponents(string: "https://maps.apple.com/")!
         u.queryItems = [
@@ -362,9 +314,6 @@ struct WalkTo: Decodable, Sendable {
     }
 }
 
-/// On the bus: its stops from boarding to getting off, and when each end is.
-/// Where the bus is comes from the clock, the stops taken as evenly spaced
-/// between the two times, as the phone and the web show it.
 struct Ride: Decodable, Sendable {
     struct Stop: Decodable, Hashable, Sendable {
         let code: String?
@@ -376,7 +325,6 @@ struct Ride: Decodable, Sendable {
         let text: String
     }
     let svc: String
-    /// The service's colour; nil from a server that doesn't send it.
     let color: String?
     let stops: [Stop]
     let board: String
@@ -401,16 +349,12 @@ struct Ride: Decodable, Sendable {
     var boardAt: Date { parseISODate(board) ?? .distantPast }
     var arriveAt: Date { parseISODate(arrive) ?? .distantPast }
 
-    /// 0 to 1 along the ride at `now` (the server's clock).
     func progress(at now: Date) -> Double {
         min(1, max(0, now.timeIntervalSince(boardAt) / max(1, arriveAt.timeIntervalSince(boardAt))))
     }
 
-    /// How many stops have been passed at `now`; the last is where you get off.
     func passed(at now: Date) -> Int { Int(progress(at: now) * Double(stops.count - 1)) }
 
-    /// "Next: Opp NUSS · 3 stops to go", the same in the app, the widget and
-    /// the Live Activity. Nearing the stop to change at, the second bus too.
     func nextText(at now: Date, withChange: Bool = true) -> String {
         let p = passed(at: now)
         let left = max(0, stops.count - 1 - p)
@@ -428,10 +372,6 @@ struct Ride: Decodable, Sendable {
     }
 }
 
-/// `card.journey`: the trip as steps (walk to the stop, take the bus, get
-/// there), worded on the server; on foot the whole way, the walk alone, with
-/// no `bus`. The app draws it in the card style chosen in Settings ›
-/// Appearance; only the countdowns tick here.
 struct Journey: Decodable, Sendable {
     struct Bus: Decodable, Sendable {
         let svc: String
@@ -449,7 +389,6 @@ struct Journey: Decodable, Sendable {
             paid = c.bool(.paid) ?? false
         }
     }
-    /// A change of bus on the way: `bus` is the first, this the second.
     struct Change: Decodable, Sendable {
         let from: String
         let stop: String
@@ -465,12 +404,9 @@ struct Journey: Decodable, Sendable {
         let rideText: String?
     }
 
-    /// When to set off ("4:01 PM"); nil when it's now.
     let leave: String?
-    /// The walk to the stop ("3 min"); nil at the stop. On foot, the whole walk there.
     let walk: String?
     let bus: Bus?
-    /// When the bus leaves, to count down to; nil on foot.
     let boardAt: String?
     let ride: String?
     let off: String?
@@ -484,7 +420,6 @@ struct Journey: Decodable, Sendable {
     let backup: Bus?
     let why: String?
     let change: Change?
-    // The server's words.
     let title: String?
     let placeText: String?
     let byText: String?
@@ -507,7 +442,6 @@ struct Journey: Decodable, Sendable {
         let c = try d.container(keyedBy: CodingKeys.self)
         let busPresent = (try? c.decodeNil(forKey: .bus)) == false && c.contains(.bus)
         bus = try? c.decodeIfPresent(Bus.self, forKey: .bus)
-        // A bus that can't be read isn't a walk: no journey rather than the wrong one.
         if busPresent && bus == nil { throw DecodingError.dataCorruptedError(forKey: .bus, in: c, debugDescription: "unreadable bus") }
         boardAt = bus == nil ? nil : c.string(.boardAt)
         if bus != nil && boardAt.flatMap(parseISODate) == nil {
@@ -544,11 +478,9 @@ struct Journey: Decodable, Sendable {
 
     var boardDate: Date? { boardAt.flatMap(parseISODate) }
 
-    /// Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown".
     var place: String { placeText ?? to.components(separatedBy: " @ ").first ?? to }
 }
 
-/// `/api/me/day`: today's classes and the trips home, and where each stands.
 struct DayPlan: Decodable, Sendable {
     struct Item: Decodable, Identifiable, Sendable {
         struct Leave: Decodable, Sendable {
@@ -570,9 +502,7 @@ struct DayPlan: Decodable, Sendable {
         let key: String
         let label: String
         let serverTitle: String?
-        /// "Leave by ~09:36 · R2 from PGP", "Not going"; nil when done.
         let line: String?
-        /// done | now | next | later | skipped
         let status: String
         let fromName: String?
         let startsAt: String
@@ -612,7 +542,6 @@ struct DayPlan: Decodable, Sendable {
     }
     var items: [Item]
     let note: String?
-    /// The SGT day it's for (YYYY-MM-DD): a plan kept for offline is only used that day.
     let date: String?
 
     enum CodingKeys: String, CodingKey { case items, note, date }
@@ -625,19 +554,16 @@ struct DayPlan: Decodable, Sendable {
     }
 }
 
-/// One element of a list or map that may not decode: nil instead of failing the whole.
 struct Lossy<T: Decodable>: Decodable {
     let value: T?
     init(from d: Decoder) throws { value = try? T(from: d) }
 }
 
 extension KeyedDecodingContainer {
-    /// A list with the elements this version can't read left out; nil when it's missing or isn't a list.
     func lenientList<T: Decodable>(_ type: T.Type, forKey key: Key) -> [T]? {
         (try? decodeIfPresent([Lossy<T>].self, forKey: key))?.compactMap(\.value)
     }
 
-    /// A whole number that may come as 95.5: rounded, or nil when it's missing or not a number.
     func lenientInt(forKey key: Key) -> Int? {
         (try? decodeIfPresent(Double.self, forKey: key))?.flatMap { $0.isFinite ? Int($0.rounded()) : nil }
     }

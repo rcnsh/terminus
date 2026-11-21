@@ -1,8 +1,5 @@
 import XCTest
 
-/// The watch app against the dev stub, as the iPhone's UI tests run:
-/// TERMINUS_STUB in the runner's environment (TEST_RUNNER_TERMINUS_STUB on
-/// xcodebuild's command line), signed in with a stub session's token.
 final class WatchUITests: XCTestCase {
     private let stub = ProcessInfo.processInfo.environment["TERMINUS_STUB"] ?? "http://localhost:8787"
 
@@ -44,7 +41,6 @@ final class WatchUITests: XCTestCase {
         add(a)
     }
 
-    /// Not signed in: where to set it up, and nothing else.
     func testUnpairedSaysWhereToSetUp() {
         let app = app(signedIn: false)
         app.launch()
@@ -53,12 +49,9 @@ final class WatchUITests: XCTestCase {
         shot("setup", app)
     }
 
-    /// Signed in: the trip to the stub's class, then Nearby from the list, then signing out back to setup.
     func testNowNearbyAndSignOut() {
         let app = app(signedIn: true)
         app.launch()
-        // "To GEA1000 @ UTown" heads the card whether it says when to leave or, with the
-        // simulator's location at the stop, which bus to catch.
         let trip = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'GEA1000'")).firstMatch
         XCTAssertTrue(trip.waitForExistence(timeout: 30), "the trip to the class")
         shot("now", app)
@@ -74,7 +67,6 @@ final class WatchUITests: XCTestCase {
 
         app.buttons["targets"].firstMatch.tap()
         XCTAssertTrue(app.buttons["target.Next"].waitForExistence(timeout: 10))
-        // At the foot of the list, under the favourites: a list draws its rows as they scroll in.
         let signOut = app.buttons["signOut"]
         for _ in 0..<6 where !(signOut.exists && signOut.isHittable) { app.swipeUp() }
         XCTAssertTrue(signOut.waitForExistence(timeout: 5))

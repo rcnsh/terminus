@@ -1,13 +1,3 @@
-/**
- * Bus-proxy client (inetapps.nus.edu.sg/univus/api/bus-proxy) and defensive
- * response normalisation.
- *
- * This file is the only code that reads the raw FMS shape. It is
- * undocumented and has changed before, so the reading here is deliberately
- * tolerant and everything downstream assumes clean types. When the feed
- * shifts, only this file needs editing.
- */
-
 import type { Arrival, Crowd, Env, StopArrivals } from '../types.ts';
 import { MAX_ETA_S, TTL } from '../config.ts';
 import { UpstreamUnreachable, timedFetch } from '../http.ts';
@@ -32,8 +22,6 @@ import {
 import type { Session } from './auth.ts';
 import graphJson from '../../data/stops.json' with { type: 'json' };
 
-/** Envelope keys the FMS wraps results in. It nests one level deeper than you
- *  expect on some endpoints, so unwrapping is a loop, not a single lookup. */
 const WRAPPER_KEYS = [
   'ShuttleServiceResult',
   'BusStopsResult',
@@ -61,14 +49,6 @@ export function unwrap(node: unknown): unknown {
 
 const isRow = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
 
-/**
- * The result array, whatever depth the envelope buried it at, or null when
- * there is none. Under one of [keys] any array is the list, an empty one
- * included. Under a name it doesn't know, only an array of rows is: the
- * shuttle reply carries `hints`, a list of strings, beside its `shuttles`,
- * and taking that for the board when `shuttles` is renamed or gone would
- * read every service as "no bus".
- */
 function findList(node: unknown, keys: string[]): unknown[] | null {
   const root = unwrap(node);
   if (Array.isArray(root)) return root;
@@ -85,26 +65,17 @@ function findList(node: unknown, keys: string[]): unknown[] | null {
   return null;
 }
 
-/** Find the result array, whatever depth the envelope buried it at; [] if none. */
 export function pickList(node: unknown, keys: string[]): unknown[] {
   return findList(node, keys) ?? [];
 }
 
-/** Where the feed's rows are, by the names the arrivals and bus lists have had. */
 const ARRIVAL_LIST_KEYS = ['timings', 'shuttles', 'Shuttles', 'ShuttleService', 'services', 'arrivals'];
 const BUS_LIST_KEYS = ['activebus', 'activeBus', 'ActiveBus', 'buses'];
 const BUS_PLATE_KEYS = ['vehplate', 'veh_plate', 'vehiclePlate', 'plate'];
 
 const NO_BUS = new Set(['-', '--', '', 'n.a.', 'na', 'n/a', 'nil', 'null', 'undefined', '?']);
-/** "Lv", "left", "dep...": the bus has gone (lower-cased). */
 const departed = (low: string): boolean => low.startsWith('lv') || low.startsWith('left') || low.startsWith('dep');
 
-/**
- * Minutes-as-string -> seconds.
- *
- * "-" is null, NOT 0. Number(null) is 0 and Number("") is 0, which is the bug
- * that makes you sprint for a bus that does not exist. "Arr" is a real 0.
- */
 export function parseEtaS(v: unknown): number | null {
   if (v == null) return null;
   if (typeof v === 'number') {
@@ -115,8 +86,6 @@ export function parseEtaS(v: unknown): number | null {
   if (NO_BUS.has(low)) return null;
   if (low.startsWith('arr')) return 0;
   if (departed(low)) return null;
-  // A minus or a clock time isn't minutes to go: stripping the rest would
-  // read "-3" as 3 min and "12:30" as 1230 min.
   if (/[-:]/.test(s)) return null;
   const cleaned = s.replace(/[^0-9.]/g, '');
   if (!cleaned || cleaned === '.') return null;
@@ -125,14 +94,8 @@ export function parseEtaS(v: unknown): number | null {
   return capped(Math.round(n * 60));
 }
 
-/** A time to go past MAX_ETA_S isn't a bus: null, as unreadable. */
 const capped = (s: number): number | null => (Number.isFinite(s) && s <= MAX_ETA_S ? s : null);
 
-/**
- * A value that is ALREADY in seconds (ConnectX eta_s): a number, or a string
- * of digits. Anything else is null, never 0: Number(' '), Number(false) and
- * Number([]) are all 0, which would read as a bus arriving now.
- */
 export function parseSeconds(v: unknown): number | null {
   let n: number;
   if (typeof v === 'number') n = v;
@@ -141,21 +104,12 @@ export function parseSeconds(v: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? capped(Math.round(n)) : null;
 }
 
-/**
- * Whether a raw time is the feed saying "no bus" ("-", blank, "Lv", ...),
- * which parseEtaS() reads as null on purpose, as opposed to a time it
- * couldn't read at all.
- */
 function saysNoBus(v: unknown): boolean {
   if (typeof v !== 'string') return false;
   const low = v.trim().toLowerCase();
   return NO_BUS.has(low) || departed(low);
 }
 
-/**
- * Crowd level from a word, a colour or a percentage. At peak it is the real
- * question: not when the bus arrives, but whether you will get on it.
- */
 export function parseCrowd(v: unknown): Crowd | null {
   if (v == null || v === '') return null;
   if (typeof v === 'number' && Number.isFinite(v)) {
@@ -170,13 +124,7 @@ export function parseCrowd(v: unknown): Crowd | null {
   return null;
 }
 
-/**
- * Crowding as the feed actually reports it: a headcount against a seat count,
- * not a low/medium/high string. Number(null) is 0, so the capacity guard has
- * to be explicit or an absent field reads as an empty bus.
- */
 export function crowdFromLoad(capacity: unknown, ridership: unknown): Crowd | null {
-  // A blank count is no count, not an empty bus (Number('') is 0 too).
   if (capacity == null || ridership == null || (typeof ridership === 'string' && !ridership.trim())) return null;
   const cap = Number(capacity);
   const rid = Number(ridership);
@@ -197,36 +145,20 @@ function field(o: Record<string, unknown>, ...keys: string[]): unknown {
 
 const KNOWN_SERVICES: ReadonlySet<string> = new Set(Object.keys((graphJson as { routes: Record<string, unknown> }).routes));
 
-/** Each known service by its name without spaces, in capitals. */
 const SERVICE_NAMES = new Map([...KNOWN_SERVICES].map((s) => [s.replace(/\s+/g, '').toUpperCase(), s]));
 
-/**
- * A row's service name, as the graph spells it: "d2" and "D 2" are D2,
- * which everything downstream compares with ===. A name it doesn't know
- * passes as it is (a new route before the weekly scrape). Only a string or
- * a number is a name.
- */
 function serviceOf(v: unknown): string {
   if (typeof v !== 'string' && typeof v !== 'number') return '';
   const s = String(v).trim();
   return SERVICE_NAMES.get(s.replace(/\s+/g, '').toUpperCase()) ?? s;
 }
 
-/** Where a row keeps its service and its time, by the names the feed has used. */
 const ROW_NAME = ['name', 'route', 'serviceName', 'ShuttleName', 'svc'];
 const ROW_TIME = ['arrivalTime', 'eta', 'arrival'];
 const ROW_NEXT_TIME = ['nextArrivalTime', 'nextEta'];
 const ETA_TIME = ['eta', 'arrivalTime', 'ETA', 'time'];
 const ETA_LISTS = ['_etas', 'nextArrivals'];
 
-/**
- * Raw ShuttleService payload -> clean Arrival[].
- *
- * Note what is NOT used: `arrivalTime_ts`. It looks like an absolute arrival
- * time and would be strictly better than relative minutes across a cache TTL,
- * but real captures carry timestamps minutes in the PAST alongside a positive
- * `arrivalTime`. Trusting it produces negative ETAs. Relative minutes only.
- */
 export function normalize(raw: unknown): Arrival[] {
   const list = pickList(raw, ARRIVAL_LIST_KEYS);
   const out: Arrival[] = [];
@@ -237,9 +169,6 @@ export function normalize(raw: unknown): Arrival[] {
     const svc = serviceOf(field(item, ...ROW_NAME));
     if (!svc) continue;
 
-    // Which pass through this stop the row belongs to. See types.ts. At a
-    // terminus the feed names the run that ends here with an `-E` suffix;
-    // that is read here, so nothing downstream knows how the feed spells it.
     const berth = plateOf(field(item, 'busStopCode', 'busstopcode'));
     const ends = berth?.toUpperCase().endsWith('-E') ? { ends: true as const } : {};
 
@@ -248,16 +177,11 @@ export function normalize(raw: unknown): Arrival[] {
       for (const e of etas) {
         if (!e || typeof e !== 'object') continue;
         const row = e as Record<string, unknown>;
-        // Raw ConnectX gives both `eta` (whole minutes) and `eta_s` (seconds).
-        // Prefer the seconds field: parseEtaS(minutes) rounds 24055 -> 24060.
         const etaS = parseSeconds(row.eta_s) ?? parseEtaS(field(row, ...ETA_TIME));
         out.push({
           svc,
           etaS,
-          crowd:
-            crowdFromLoad(row.capacity, row.ridership) ??
-            // `px` is ConnectX's per-arrival passenger field.
-            parseCrowd(field(row, 'px', 'passengers', 'crowd', 'load', 'occupancy')),
+          crowd: crowdFromLoad(row.capacity, row.ridership) ?? parseCrowd(field(row, 'px', 'passengers', 'crowd', 'load', 'occupancy')),
           plate: plateOf(field(row, 'plate', 'vehiclePlate', 'veh_plate', 'vehicle')),
           berth,
           ...ends,
@@ -289,7 +213,6 @@ export function normalize(raw: unknown): Arrival[] {
     }
   }
 
-  // Same service+eta reported twice by two shapes in one payload.
   const seen = new Set<string>();
   return out.filter((a) => {
     const k = `${a.svc}|${a.etaS}|${a.plate ?? ''}|${a.berth ?? ''}`;
@@ -302,13 +225,6 @@ export function normalize(raw: unknown): Arrival[] {
 const objects = (list: unknown[]) => list.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object');
 const hasKey = (o: Record<string, unknown>, ...keys: string[]) => keys.some((k) => o[k] !== undefined);
 
-/**
- * How one row's times read, by the values normalize() reads: `read` when
- * one is a time or the feed's "no bus" ("-", or an empty list of
- * arrivals), `garbled` when one is there but isn't either (a clock time,
- * a changed unit, a word), `missing` when there's nothing to read (the
- * fields renamed, or null).
- */
 function rowTimes(item: Record<string, unknown>): { read: boolean; garbled: boolean } {
   let read = false;
   let garbled = false;
@@ -322,25 +238,20 @@ function rowTimes(item: Record<string, unknown>): { read: boolean; garbled: bool
   const etas = objects(listed);
   if (etas.length) {
     for (const e of etas) {
-      // As normalize() reads them: the seconds when they read, else the minutes.
       if (parseSeconds(e.eta_s) != null) read = true;
       else if (field(e, ...ETA_TIME) != null) see(field(e, ...ETA_TIME), parseEtaS);
       else see(e.eta_s, parseSeconds);
     }
     return { read, garbled };
   }
-  // A list of something else isn't arrivals; an empty one is the feed's "no bus".
   if (listed.length) garbled = true;
   else if (list != null) read = true;
   see(field(item, ...ROW_TIME), parseEtaS);
-  // The next bus can be garbled too, but on its own it doesn't make the row
-  // read: with the first time gone, the second would pass for the soonest.
   const next = field(item, ...ROW_NEXT_TIME);
   if (next != null && parseEtaS(next) == null && !saysNoBus(next)) garbled = true;
   return { read, garbled };
 }
 
-/** Each named row's service and how its times read. */
 function rowsRead(raw: unknown): { svc: string; read: boolean; garbled: boolean }[] {
   return objects(pickList(raw, ARRIVAL_LIST_KEYS))
     .map((r) => ({ svc: serviceOf(field(r, ...ROW_NAME)), row: r }))
@@ -348,25 +259,6 @@ function rowsRead(raw: unknown): { svc: string; read: boolean; garbled: boolean 
     .map((t) => ({ svc: t.svc, ...rowTimes(t.row) }));
 }
 
-/**
- * Why an arrivals payload that has rows can't be read as a board at all, or
- * null.
- *
- * hasList() catches a reply with no list at all. This catches the subtler
- * changes: the list is still there but its rows aren't what normalize()
- * reads, or their values aren't. Taken as it is, such a board says "no bus"
- * for every service, so its card turns into headway guesses and the
- * monitor's probe sees a healthy feed and never says anything. Thrown
- * instead, it reads as the feed being down: stale or "No live data" on the
- * card, the monitor's email, the feed-down notice.
- *
- * Checked row by row, by value: a row reads when it has a time or the
- * feed's "no bus" ("-" passes; a time renamed, null, or in a format it
- * can't read doesn't). Not one row reading is a changed feed. Some rows
- * not reading is arrivalsUnread(): those services alone have no data, and
- * the rest of the board stands, so one odd value doesn't take a whole stop
- * (or, at the probe's stop, every card) down.
- */
 export function arrivalsProblem(
   raw: unknown,
   arrivals: Arrival[] = normalize(raw),
@@ -377,8 +269,6 @@ export function arrivalsProblem(
   if (!arrivals.length) return 'no row names a service';
   if (!arrivals.some((a) => known.has(a.svc)))
     return `no service it names is known (${[...new Set(arrivals.map((a) => a.svc))].slice(0, 4).join(', ')})`;
-  // Not checked: how far away the times are, up to MAX_ETA_S. After midnight
-  // every real arrival is the next morning's, hours away (fixtures/connectx-*.json).
   const times = rowsRead(raw);
   if (times.some((t) => t.read && !t.garbled)) return null;
   const garbled = times.filter((t) => t.garbled).map((t) => t.svc);
@@ -386,13 +276,6 @@ export function arrivalsProblem(
   return 'no row has an arrival time';
 }
 
-/**
- * The services on a board that arrivalsProblem() passed whose own rows
- * don't read: a time it can't read, or none at all. Read as "no bus", one
- * would hand the headline to another service while the one really next is
- * missing, so they're no data instead (StopArrivals.unread). A row whose
- * first time is gone counts too: its next bus would pass for the soonest.
- */
 export function arrivalsUnread(raw: unknown): string[] {
   return [
     ...new Set(
@@ -403,26 +286,14 @@ export function arrivalsUnread(raw: unknown): string[] {
   ];
 }
 
-/** A bus the feed lists with no fix yet: 0, 0. A real bus without a place.
- *  Null and blank aren't 0, though Number() says they are. */
 const zero = (v: unknown) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number(v) === 0;
 const noFixYet = (r: Record<string, unknown>) => zero(field(r, 'lat', 'latitude')) && zero(field(r, 'lng', 'lon', 'longitude'));
 
-/**
- * Why a bus list with rows can't be read, or null: no row has a plate, or
- * none a position, or there are both and not one bus could be read from
- * them (positions null, swapped or in another format; plates blank). Read
- * as it is, that list is "No D2 buses running right now" on the map, and a
- * round with no bus for the timelapse recorder, which stops for the day
- * after a few. A list whose every bus has no fix yet (0, 0) is real.
- */
 export function busesProblem(raw: unknown, buses: RawBus[] = normalizeBuses(raw)): string | null {
   const rows = objects(pickList(raw, BUS_LIST_KEYS));
   if (!rows.length) return null;
   if (!rows.some((r) => hasKey(r, ...BUS_PLATE_KEYS))) return 'no row has a plate';
   if (!rows.some((r) => hasKey(r, 'lat', 'latitude') && hasKey(r, 'lng', 'lon', 'longitude'))) return 'no row has a position';
-  // Every row, not some: one bus without a fix yet among rows it can't read
-  // would otherwise pass the whole list off as "no buses".
   if (!buses.length && !rows.every(noFixYet)) return 'no bus has a plate and a position it can read';
   return null;
 }
@@ -431,7 +302,6 @@ export function fmsConfigured(env: Env): boolean {
   return Boolean(env.NEXTBUS_PROXY_BASE && env.NEXTBUS_PROXY_API_KEY);
 }
 
-/** POST {NEXTBUS_PROXY_BASE}/{endpoint}, e.g. .../bus-proxy/shuttle-service. */
 export function proxyUrl(env: Env, endpoint: string): string {
   return `${(env.NEXTBUS_PROXY_BASE ?? '').replace(/\/+$/, '')}/${endpoint.replace(/^\//, '')}`;
 }
@@ -442,8 +312,6 @@ interface ProxyBody {
   data?: unknown;
 }
 
-/** The proxy wraps results as {code, msg, data}; anything but "00000" failed.
- *  Like the auth host, it reports failure at HTTP 200. */
 export function proxyOk(body: unknown): body is ProxyBody {
   return typeof body === 'object' && body !== null && (body as ProxyBody).code === '00000';
 }
@@ -454,8 +322,6 @@ async function proxyCall(env: Env, session: Session, endpoint: string, params: R
     headers: proxyHeaders(env, session.token),
     body: JSON.stringify({ ...(await proxyEnvelope(env, session)), ...params }),
   });
-  // Refusals come at HTTP 200 with a code; any other status is the host
-  // itself saying no (busy, down), which no token can fix, so it isn't retried.
   if (!res.ok) throw new UpstreamHttpError(endpoint, res.status);
   const text = await res.text();
   try {
@@ -465,29 +331,11 @@ async function proxyCall(env: Env, session: Session, endpoint: string, params: R
   }
 }
 
-/**
- * After a refused call: the session to try once more with, or null for no
- * retry. Only a refusal a token might fix gets one, and only with a token
- * other than the refused one (renewSession), so a code that keeps coming
- * back costs one call per key per failMemoS, not a mint and two calls.
- */
 async function retryable(env: Env, nowMs: number, session: Session, body: unknown, onMint?: () => void): Promise<Session | null> {
   if (proxyOk(body) || NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) return null;
   return renewSession(env, nowMs, session, onMint);
 }
 
-/**
- * One call to the bus proxy, accepted. A rejection gets at most one retry
- * with a fresher token (retryable), unless its code says a token cannot
- * help; a second rejection THROWS. [onCall] is told of each request this
- * call makes to NUS, its token mints included (the first, on a cold token,
- * and a re-mint), so the timelapse recorder counts what a poll cost.
- *
- * `sentAtMs` is when the call that answered went out, on nowMs's clock.
- * After a mint, a refusal and a re-mint that is up to 15 s after nowMs.
- * The arrivals' times count from their reply's own TimeStamp, which is
- * older (fetchArrivals, stampLagS).
- */
 async function acceptedCall(
   env: Env,
   endpoint: string,
@@ -522,26 +370,12 @@ async function acceptedCall(
   return { body, sentAtMs };
 }
 
-/** A reply's TimeStamp further behind the call than this is a clock that's off, not an old reply. */
 export const MAX_STAMP_LAG_S = 90;
 
-/**
- * How many seconds the reply's own `TimeStamp` is behind `sentAtMs`: 0 when
- * it has none, can't be read, is ahead (NUS's clock a little fast), or is
- * more than MAX_STAMP_LAG_S behind.
- *
- * NUS works a stop's arrivals out every 35 to 40 s and serves that same
- * reply, TimeStamp and `eta_s` unchanged, until the next: "in 3 min"
- * counts from the TimeStamp, not from when we asked. Measured with
- * scripts/probes/probe_arrivals.py (22 Oct 2026): a reply was a median of 20 s
- * old when it came, up to 55 s. Read from the call, every bus came that
- * much later than NUS said.
- */
 export function stampLagS(data: unknown, sentAtMs: number): number {
   const root = unwrap(data);
   const raw = root && typeof root === 'object' ? (root as Record<string, unknown>).TimeStamp : undefined;
   if (typeof raw !== 'string') return 0;
-  // ISO with a zone (2026-10-22T09:58:41+08:00), or without one, which is Singapore time.
   const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?$/.exec(raw.trim());
   if (!m) return 0;
   const at = Date.parse(`${m[1]}T${m[2]}${m[3] ?? '+08:00'}`);
@@ -550,17 +384,9 @@ export function stampLagS(data: unknown, sentAtMs: number): number {
   return lagS > 0 && lagS <= MAX_STAMP_LAG_S ? lagS : 0;
 }
 
-/**
- * One stop's arrivals via the bus proxy (acceptedCall). A refusal throws, so
- * the stop is reported unavailable and the answer degrades to an honest
- * `unknown` rather than passing an empty result off as "the feed says no bus".
- */
 export async function fetchArrivals(env: Env, code: string, nowMs: number = Date.now()): Promise<StopArrivals> {
   const { body, sentAtMs } = await acceptedCall(env, 'shuttle-service', { busstopname: code }, nowMs);
-  // "00000" with no list anywhere is not "no bus": the payload changed shape,
-  // and reading it as an empty board would print confident headway guesses.
   if (!hasList(body.data, ARRIVAL_LIST_KEYS)) throw new Error('shuttle-service answered in an unknown shape (no arrivals list)');
-  // Times as if counted from sentAtMs, as everything downstream reads them.
   const lagS = stampLagS(body.data, sentAtMs);
   const arrivals = normalize(body.data).map((a) => (lagS && a.etaS !== null ? { ...a, etaS: Math.max(0, a.etaS - lagS) } : a));
   const problem = arrivalsProblem(body.data, arrivals);
@@ -571,12 +397,6 @@ export async function fetchArrivals(env: Env, code: string, nowMs: number = Date
   return { code, arrivals: arrivals.filter((a) => !unread.includes(a.svc)), fetchedAt: sentAtMs, stale: false, available: true, unread };
 }
 
-/**
- * Whether NUS accepts a version string: a token mint plus one shuttle-service
- * call with it, since a refusal (10009) could come from either. false means
- * refused as out of date; any other failure throws, because it says nothing
- * about the version.
- */
 export async function tryVersion(env: Env, version: string, stop: string, nowMs: number = Date.now()): Promise<boolean> {
   let session;
   try {
@@ -592,25 +412,10 @@ export async function tryVersion(env: Env, version: string, stop: string, nowMs:
   throw new UpstreamRejected(code, `shuttle-service rejected a candidate version: code=${code}`, JSON.stringify(body));
 }
 
-/** Whether a payload carries its list at all, even an empty one, by
- *  pickList's rules: under a name it doesn't know, only a list of rows. */
 export function hasList(data: unknown, keys: string[] = ARRIVAL_LIST_KEYS): boolean {
   return findList(data, keys) !== null;
 }
 
-/**
- * One stop's arrivals, fetched on demand through the edge cache (edgecache.ts).
- *
- * Keyed on the STOP CODE, not the request URL. The apps and widgets send
- * the phone's location, whose coordinates jitter from one call to the next,
- * so a cache keyed on the raw URL would rarely hit. Keying on the resolved
- * stop is what makes "one upstream call per stop per 15 seconds however
- * often the clients refresh" true, and it shares the entry between /api/next
- * and /api/trip. A refused version or key (NO_REMINT_CODES) trips the feed's
- * breaker, which stops every stop for breakerS: a fresh token can't fix it.
- * [onFetched] has the board when this call itself fetched it from NUS (not
- * a cache hit, nor one another data centre fetched), for logBoard.
- */
 export async function getArrivals(
   env: Env,
   ctx: ExecutionContext,
@@ -628,9 +433,7 @@ export async function getArrivals(
         const sa = await fetchArrivals(env, code, nowMs);
         try {
           onFetched?.(sa);
-        } catch {
-          // Noting the board must never turn NUS's answer into a failure.
-        }
+        } catch {}
         return sa;
       }),
     freshMs: TTL.arrivalsMs,
@@ -644,60 +447,31 @@ export async function getArrivals(
   });
 }
 
-/**
- * Whether a failure says NUS will refuse every call for a while, whichever
- * stop it's for: a refused version or key, the host itself answering 429
- * (slow down) or 5xx (down), or no answer at all (a timeout, a failed
- * connection), the mint's host included. A host that hangs is down too, and
- * costs more: left to each key's failMemoS, every stop and service would
- * hold a connection open for the whole timeout, again and again.
- */
 export function opensBreaker(err: unknown): boolean {
-  // A version refused after the switch away from it says nothing of the new one.
   if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code) && !err.outdated;
   if (err instanceof UpstreamUnreachable) return true;
   return err instanceof UpstreamHttpError && (err.status === 429 || err.status >= 500);
 }
 
-/** Whether a failure quiets its stop or service for failMemoS: all but a
- *  refusal of a version already switched away from, as with the breaker,
- *  and the gate having nothing to share yet (feedgate.ts), which says
- *  nothing of the next call. */
 const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated) && !(err instanceof GateBusy);
 
-/** Why a NUS call failed, in a line short enough for a log or an Analytics Engine blob, credentials blanked. */
 export function failureReason(err: unknown): string {
   const msg = err instanceof Error ? (err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message) : String(err);
-  return (
-    redactDetail(msg)
-      // A body cut short can leave a JWT without its last part (redactDetail covers a quoted value with no closing quote).
-      .replace(/eyJ[\w.-]{8,}/g, '[redacted]')
-      .slice(0, 160)
-  );
+  return redactDetail(msg)
+    .replace(/eyJ[\w.-]{8,}/g, '[redacted]')
+    .slice(0, 160);
 }
 
-/** A failure already noted in this isolate, by what, key and reason: when. */
 const noted = new Map<string, number>();
 const NOTE_AGAIN_MS = 10 * 60_000;
 
-/** For tests: forget what this isolate noted. */
 export function resetFailureNotes(): void {
   noted.clear();
 }
 
-/**
- * Keeps why a call for a stop's arrivals or a service's buses failed: in
- * the Worker's logs, and as an Analytics Engine 'error' row (route
- * `feed arrivals` or `feed buses`, with the reason), which the
- * dashboard counts with the other errors. A failure that doesn't open the
- * breaker leaves no other trace: the stop only reads as unavailable. Not
- * the ones that say nothing of the feed (notOutdated) or made no call
- * (MintQuiet), and the same one at most once per NOTE_AGAIN_MS.
- */
 export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, err: unknown, nowMs: number = Date.now()): void {
   if (!notOutdated(err) || err instanceof MintQuiet) return;
   const reason = failureReason(err);
-  // The same failure again (the timelapse recorder polls every 30 s) says nothing new.
   const seen = `${what} ${key} ${reason.replace(/\d+/g, '#').slice(0, 60)}`;
   const last = noted.get(seen);
   if (last !== undefined && nowMs - last < NOTE_AGAIN_MS && nowMs >= last) return;
@@ -707,41 +481,27 @@ export function noteFailure(env: Env, what: 'arrivals' | 'buses', key: string, e
   writeRow(env, 'error', { route: `feed ${what}`, reason });
 }
 
-/**
- * The cron's token step: a new guest token before the kept one runs out
- * (renewAhead), unless the breaker says NUS is refusing us. True when it
- * minted.
- */
 export async function renewToken(env: Env, nowMs: number): Promise<boolean> {
   if (!fmsConfigured(env) || (await breakerOpen())) return false;
-  // A request's mint failed here a moment ago: none was tried, and the next run tries again.
   return renewAhead(env, nowMs).catch((err) => {
     if (err instanceof MintQuiet) return false;
     throw err;
   });
 }
 
-/** The shuttle feed's breaker: such a failure stops every call for breakerS.
- *  Made at each call: its key depends on the site (cacheBase). */
 const breaker = () => ({ key: `${cacheBase()}/breaker`, opens: opensBreaker, maxAgeS: TTL.breakerS });
 
-/** Whether the feed's breaker is open here: NUS refused us a moment ago, and
- *  nothing should ask it again until it closes. */
 export async function breakerOpen(): Promise<boolean> {
   return flagged(breaker().key);
 }
 
-/** One upstream fetch per stop per isolate, however many requests want it. */
 const inflight = new Map<string, Promise<StopArrivals>>();
 
-/** One bus as the feed reports it, before it is placed on its route. */
 export interface RawBus {
   plate: string;
   lat: number;
   lon: number;
-  /** Degrees clockwise from north; null when the feed leaves it out. */
   heading: number | null;
-  /** km/h, as reported; 0 when standing. */
   speed: number;
   crowd: Crowd | null;
 }
@@ -753,18 +513,12 @@ export interface ActiveBuses {
   stale: boolean;
 }
 
-/**
- * active-bus's reply, tolerantly: {ActiveBusCount, TimeStamp, activebus: [
- * {vehplate, lat, lng, speed, direction, loadInfo: {occupancy, crowdLevel,
- * capacity, ridership}}]}. A bus without a position on Earth is dropped.
- */
 export function normalizeBuses(data: unknown): RawBus[] {
   const out: RawBus[] = [];
   for (const raw of pickList(data, BUS_LIST_KEYS)) {
     if (!raw || typeof raw !== 'object') continue;
     const item = raw as Record<string, unknown>;
     const plate = plateOf(field(item, ...BUS_PLATE_KEYS));
-    // Missing or blank is missing, not 0 (Number(null) and Number('') are 0).
     const num = (v: unknown) => (v == null || v === '' ? NaN : Number(v));
     const lat = num(field(item, 'lat', 'latitude'));
     const lon = num(field(item, 'lng', 'lon', 'longitude'));
@@ -785,29 +539,15 @@ export function normalizeBuses(data: unknown): RawBus[] {
   return out;
 }
 
-/** One service's buses, with one retry on a rejection, as fetchArrivals.
- *  [onCall] is told of each request to NUS (acceptedCall). */
 export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Date.now(), onCall?: () => void): Promise<ActiveBuses> {
   const { body, sentAtMs } = await acceptedCall(env, 'active-bus', { route_code: svc }, nowMs, onCall);
-  // No list at all is a changed payload, not "no buses running".
   if (!hasList(body.data, BUS_LIST_KEYS)) throw new Error('active-bus answered in an unknown shape (no bus list)');
-  // Rows it can't read would show as "No D2 buses running right now".
   const buses = normalizeBuses(body.data);
   const problem = busesProblem(body.data, buses);
   if (problem) throw new Error(`active-bus answered in an unknown shape (${problem})`);
   return { svc, buses, fetchedAt: sentAtMs, stale: false };
 }
 
-/**
- * One service's buses through the edge cache: one upstream call per service
- * per TTL.busesMs however many people watch it. The same quiet-under-failure
- * rules as getArrivals: a failed service waits failMemoS, the feed's
- * breaker (a refused version or key, a 429 or 5xx, no answer at all) stops
- * every service for breakerS, and a stale answer beats none. [onUpstream]
- * is called for each request this call itself makes to NUS (not a cache
- * hit, not a fetch or a mint another request started): the call, any token
- * it mints, and a retry. So the timelapse recorder can count its real load.
- */
 export async function getBuses(
   env: Env,
   ctx: ExecutionContext,
@@ -815,8 +555,6 @@ export async function getBuses(
   nowMs: number = Date.now(),
   onUpstream?: () => void,
 ): Promise<ActiveBuses> {
-  // No stale race: the map polls every few seconds and would rather wait
-  // for the fresh positions than see a stale jump.
   return cachedFetch<ActiveBuses>({
     ctx,
     nowMs,

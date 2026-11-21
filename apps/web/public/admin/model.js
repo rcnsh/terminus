@@ -1,15 +1,7 @@
-// The dashboard's Arrival model section: the arrival-time model run in
-// shadow (src/ops/etashadow.ts), which answers no one. Each day is answered
-// by a model built only from the 28 days before it, every way the model
-// can answer, against when the bus came. docs/eta-model.md says what the
-// numbers must show before it answers anyone: the blend beating the feed's
-// MAE and p90 at every horizon, on most days.
-
 import { html, useState } from '/assets/ui.js';
 import { Chart, Legend } from '/admin/charts.js';
 import { Card, Empty, S, Segmented, Table, Tile, Tiles, dayLong, dayShort, fmt, pct } from '/admin/parts.js';
 
-/** Every way of answering, in the model's order, with what each is. */
 export const METHODS = [
   ['feed', 'Feed', 'The feed’s time, as users see it now.'],
   ['corrected', 'Corrected feed', 'The feed’s time plus its usual error for that service and horizon.'],
@@ -20,7 +12,6 @@ export const METHODS = [
   ['blend', 'Blend', 'The corrected feed and gated history, weighted per horizon, then checked: what would ship.'],
 ];
 const LABEL = Object.fromEntries(METHODS.map(([k, l]) => [k, l]));
-/** The chart's lines: five colours, so raw history (far off beyond 2 minutes) and the buses ahead are in the tables only. */
 const CHARTED = ['feed', 'corrected', 'checked', 'gated', 'blend'];
 const METRICS = [
   ['mae', 'Mean error'],
@@ -28,11 +19,6 @@ const METRICS = [
   ['bias', 'Signed'],
   ['miss', 'Over 5 min off'],
 ];
-/**
- * Why the feed was over 5 minutes off, in etamodel.ts causeOf's order: each
- * put down to the first that fits. A bus unseen for 20 minutes has no
- * history to answer with, so its questions aren't scored and it has no row.
- */
 const CAUSES = [
   [
     'wentBy',
@@ -49,7 +35,6 @@ const CAUSES = [
   ['held', 'Held', 'Far overdue on its current stretch.'],
   ['other', 'Other', 'None of these.'],
 ];
-/** Days scored before the numbers are worth reading (docs/eta-model.md). */
 const READ_FROM = 7;
 
 const secs = (s) => (s == null ? '—' : `${Math.round(s)} s`);
@@ -57,7 +42,6 @@ const signed = (s) => (s == null ? '—' : s === 0 ? '0 s' : `${s > 0 ? '+' : '�
 const show = (metric) => (metric === 'bias' ? signed : metric === 'miss' ? (x) => pct(x, 1) : secs);
 const axis = (metric) => (metric === 'miss' ? (x) => pct(x, 1) : (x) => `${x} s`);
 
-/** [method]'s [metric] over [days], weighted by how many questions each scored: [mean, questions]. */
 function pooled(days, method, metric, h = null) {
   let sum = 0;
   let n = 0;
@@ -70,7 +54,6 @@ function pooled(days, method, metric, h = null) {
   return [n ? sum / n : null, n];
 }
 
-/** Of the days both were scored at horizon [h], how many the blend erred less than the feed by [metric]. */
 function wins(days, h, metric) {
   let won = 0;
   let of = 0;
@@ -83,7 +66,6 @@ function wins(days, h, metric) {
   return [won, of];
 }
 
-/** The feed's misses by cause over [days] (those that keep them): per cause, questions and every method's summed error; and the feed's whole error on those days. */
 function missesOver(days) {
   const kept = days.filter((d) => d.misses);
   const out = Object.fromEntries(CAUSES.map(([k]) => [k, { n: 0, late: 0, err: {} }]));
@@ -100,7 +82,6 @@ function missesOver(days) {
   return { days: kept.length, causes: out, feedErr };
 }
 
-/** What a horizon's record says so far, in a word. */
 function verdict(mae, p90, scored) {
   if (scored < READ_FROM) return ['wait', 'Too early'];
   const most = (x) => x[1] && x[0] / x[1] > 0.5;
@@ -119,7 +100,6 @@ export function Model({ s }) {
   const scored = days.filter((d) => d.coverage > 0 && d.overall?.blend?.n);
   const latest = days.at(-1);
   const historyDays = latest?.built?.days ?? 0;
-  // On, but with nothing to learn from: not a healthy green.
   const starved = m.on && !s.collect?.eta;
   const status = html`
     <${Card}>
@@ -428,7 +408,6 @@ export function Model({ s }) {
 
 const diff = (d) => (d.overall?.blend?.mae != null && d.overall?.feed?.mae != null ? d.overall.blend.mae - d.overall.feed.mae : null);
 
-/** One day, every way, overall and at each horizon: the [metric] and how many were scored. */
 function DayTable({ day, metric }) {
   const rows = [{ label: 'All', stats: day.overall }, ...(day.horizons ?? []).map((x) => ({ label: x.label, stats: x.stats }))];
   const fmtv = show(metric);

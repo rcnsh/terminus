@@ -1,9 +1,5 @@
 name: probe arrivals feed
 
-# Run by hand (Actions > probe arrivals feed > Run workflow) while buses run:
-# measures how often the feed's arrival times change, to see what the 15 s
-# arrivals cache hides. A temporary, bounded test (probe_arrivals.py has the
-# limits); the result is the run's summary.
 on:
   workflow_dispatch:
     inputs:
@@ -35,14 +31,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Its own guest token: no NEXTBUS_DEVICE_ID, so it mints with a fresh
-      # random device id and a refusal here can't touch the Worker's.
       - name: Probe
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
           NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
-          # Opens one route on terminus: the version the Worker sends NUS, kept
-          # current with uNivUS releases. The secret above is then the fallback.
           TERMINUS_SCRAPE_TOKEN: ${{ secrets.TERMINUS_SCRAPE_TOKEN }}
           NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
@@ -53,9 +45,6 @@ jobs:
           EVERY: ${{ inputs.every }}
           TRACE: ${{ inputs.trace }}
         working-directory: apps/api/scripts/probes
-        # STOPS unquoted on purpose: one argument per stop. Each must be a
-        # plain stop code, so the input can't pass an option (or a glob);
-        # after `--` too, and probe_arrivals.py checks again.
         run: |
           set -f
           for s in $STOPS; do
@@ -68,6 +57,5 @@ jobs:
           python3 probe_arrivals.py --minutes "$MINUTES" --every "$EVERY" "$@" -- $STOPS > report.md || status=$?
           if [ "$TRACE" = true ] && [ -f trace.jsonl ]; then echo "--- trace ---"; cat trace.jsonl; echo "--- end trace ---"; fi
           cat report.md >> "$GITHUB_STEP_SUMMARY"
-          # Also as one annotation, readable through the API without the logs.
           python3 -c 'import sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::notice title=probe::" + t)' < report.md
           exit "$status"
