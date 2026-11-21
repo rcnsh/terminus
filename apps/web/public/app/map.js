@@ -39,7 +39,7 @@ const BUSES_TIMEOUT_MS = 10_000;
 const AT_STOP_SIDE_PX = 22;
 const AT_STOP_STEP_PX = 26;
 const NEAR_CAMPUS_M = 3_000;
-const BOUNDS = [
+export const BOUNDS = [
   [103.755, 1.28],
   [103.83, 1.332],
 ];
