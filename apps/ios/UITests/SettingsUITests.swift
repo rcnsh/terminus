@@ -220,8 +220,7 @@ final class SettingsUITests: XCTestCase {
         shot("settings-feedback-typed", app)
         app.buttons["settings.feedbackSend"].tap()
         let thanks = app.staticTexts["Thanks. Your feedback was sent."]
-        let refused = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Platform'")).firstMatch
-        XCTAssertTrue(thanks.waitForExistence(timeout: 8) || refused.exists)
+        XCTAssertTrue(thanks.waitForExistence(timeout: 8))
         shot("settings-feedback-sent", app)
     }
 
