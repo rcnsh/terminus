@@ -628,17 +628,7 @@ struct BusCard: View {
     static let shownAfterNext = 4
 
     static func stop(for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
-        bus.at != nil
-            ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
-            : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
-    }
-
-    static func stop(code: String?, name: String?, for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
-        if let code, let s = campus.stop(code) { return s }
-        guard let name else { return nil }
-        let codes = campus.stops.filter { $0.name == name && $0.services.contains(svc) }.map(\.code)
-        guard !codes.isEmpty else { return nil }
-        return campus.nearest(codes, lat: bus.lat, lon: bus.lon).flatMap(campus.stop)
+        (bus.at != nil ? bus.atCode : bus.nextStopCode).flatMap(campus.stop)
     }
 
     private var now: MapModel.Sheet.Bus { MapModel.Sheet.Bus(id: bus.id, stops: open, all: all) }
@@ -742,16 +732,10 @@ struct BusCard: View {
         }
     }
 
-    private var stops: [String] {
-        if !bus.upcoming.isEmpty { return bus.upcoming }
-        return bus.nextStop.map { [$0] } ?? []
-    }
+    private var stops: [String] { bus.upcoming }
 
     private var stopCodes: [String?] {
-        if !bus.upcoming.isEmpty {
-            return bus.upcoming.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil }
-        }
-        return bus.nextStop == nil ? [] : [bus.nextStopCode]
+        bus.upcoming.indices.map { bus.upcomingCodes.indices.contains($0) ? bus.upcomingCodes[$0] : nil }
     }
 
     enum Kind { case passed, between, here, next, ahead }
@@ -787,7 +771,7 @@ struct BusCard: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 let above: Color? = i == 0 ? nil : (row.kind == .between || row.kind == .here ? grey : tint)
                 let below: Color? = i == rows.count - 1 && more == 0 ? nil : (row.kind == .passed ? grey : tint)
-                if row.kind != .between, let campus, let s = Self.stop(code: row.code, name: row.name, for: bus, svc: svc, in: campus) {
+                if row.kind != .between, let campus, let s = row.code.flatMap(campus.stop) {
                     Button {
                         show(s, now)
                     } label: {

@@ -210,18 +210,7 @@ final class AppModel {
     func menuTitle(at now: Date) -> String? {
         if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
         guard let plan, error == nil || !isOld(plan, at: now) else { return nil }
-        if let card = plan.card { return card.glance.flatMap { $0.isEmpty ? nil : $0 } }
-        guard plan.quality != "ended", !plan.isFree else { return nil }
-        guard plan.hasLiveTime, let at = plan.departure else {
-            let short = plan.label.replacingOccurrences(of: " · ", with: " ").replacingOccurrences(of: " min", with: "m")
-            return short.count > 16 ? String(short.prefix(15)) + "…" : short
-        }
-        let left = at.timeIntervalSince(now)
-        if left < -30 { return nil }
-        let mins = L("%@ min", "\(Int((left / 60).rounded()))")
-        let guess = plan.quality == "scheduled" || plan.quality == "stale"
-        if left < 45 { return "\(plan.service) \(guess ? L("~%@", L("%@ min", "1")) : L("now"))" }
-        return "\(plan.service) \(guess ? L("~%@", mins) : mins)"
+        return plan.card?.glance.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func isOld(_ a: NextAnswer?, at now: Date) -> Bool {

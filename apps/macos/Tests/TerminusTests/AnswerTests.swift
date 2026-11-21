@@ -155,25 +155,6 @@ func everyGoldenAnswerDecodes(name: String) throws {
     #expect(isNewer("2.1.0", than: ""))
 }
 
-@Test func todaySaysTheBusYoureOnOrWhenToLeave() throws {
-    let json = """
-        {"date":"2026-10-01","items":[
-          {"kind":"class","key":"a","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","toName":"UTown","startsAt":"2026-10-01T02:00:00Z","onBus":{"svc":"D2","off":"UTown","arrive":"2026-10-01T01:50:00Z"}},
-          {"kind":"class","key":"b","label":"CS2030 @ COM1","status":"later","fromName":"UTown","toName":"COM 3","startsAt":"2026-10-01T05:00:00Z","leave":{"at":"2026-10-01T04:40:00Z","estimated":true,"svc":"D2","stop":"UTown"},"timing":{"status":"late","text":"~3 min late"}},
-          {"kind":"class","key":"c","label":"MA1100 @ LT21","status":"skipped","toName":"LT21","startsAt":"2026-10-01T07:00:00Z"},
-          {"kind":"home","key":"h","label":"Home","status":"later","fromName":"COM 3","toName":"PGP","startsAt":"2026-10-01T09:00:00Z"}
-        ],"note":null}
-        """
-    let day = try JSONDecoder().decode(DayPlan.self, from: Data(json.utf8))
-    #expect(day.items[0].sub?.hasPrefix("On the D2 · off at UTown · arrive ") == true)
-    let later = try #require(day.items[1].sub)
-    #expect(later.hasPrefix("Leave by ~"))
-    #expect(later.hasSuffix(" · D2 from UTown · ~3 min late"))
-    #expect(day.items[2].sub == "Not going")
-    #expect(day.items[3].title == "Home, from COM 3")
-    #expect(day.items[3].sub == nil)
-}
-
 @Test func theServersErrorsAreShownAsSentences() {
     #expect(sentence("not a valid NUSMods share link") == "Not a valid NUSMods share link.")
     #expect(
@@ -227,10 +208,7 @@ private func nearbyFixture() throws -> [NearbyStop] {
         NearbyBoard.spoken(older) == "Bus D2, via KR\u{a0}MRT, 4 minutes, live, then 14 minutes, then about 26 minutes")
 }
 
-@Test func nearbyFallsBackToTheEndOfTheLine() {
-    let r = BoardRow(svc: "D2", etaS: 240, quality: "live", towards: ["TCOMS", "UTown"])
-    #expect(NearbyBoard.dest(r) == ("to UTown", nil, ""))
-    #expect(NearbyBoard.dest(BoardRow(svc: "K", etaS: nil, quality: "live", toText: "Ends here")) == ("Ends here", nil, ""))
+@Test func aDestinationWithoutItsPlaceIsAllMuted() {
     #expect(NearbyBoard.dest(BoardRow(svc: "K", etaS: nil, quality: "live", dest: "Ends here", destPlace: "PGP")) == ("Ends here", nil, ""))
 }
 
@@ -252,8 +230,6 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(
         NearbyBoard.cell(NearbyBus(etaS: 20, quality: "live", eta: "now"), first: true) == .init(figure: "now"))
     #expect(NearbyBoard.cell(NearbyBus(etaS: 660, quality: "live", eta: "11 min"), first: false).whole == "11")
-    #expect(
-        NearbyBoard.cell(NearbyBus(etaS: 270, quality: "live"), first: true) == .init(figure: "5", trail: " min"))
 }
 
 @Test func nearbysFootSaysWhatATildeMeans() throws {
@@ -267,7 +243,8 @@ private func nearbyFixture() throws -> [NearbyStop] {
         try JSONDecoder().decode(
             [NearbyStop].self,
             from: Data(
-                #"[{"stop":{"code":"A","name":"A"},"walkS":60,"board":[{"svc":"D1","etaS":20,"eta":"now","quality":"\#(q)"}]}]"#.utf8))
+                #"[{"stop":{"code":"A","name":"A"},"walkS":60,"board":[{"svc":"D1","etaS":20,"eta":"\#(q == "live" ? "now" : "~1 min")","quality":"\#(q)"}]}]"#
+                    .utf8))
     }
     #expect(NearbyBoard.foot(try now("scheduled")) == ["~ is a guess from the timetable, not a live time."])
     #expect(NearbyBoard.foot(try now("live")) == [])
@@ -348,29 +325,7 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(NearbyLayout.longestWord(r) == NearbyLayout.width("Hougang", NearbyLayout.place()))
 }
 
-@MainActor @Test func aGuessInTheMenuBarIsNeverNow() throws {
-    for (quality, title) in [("scheduled", "D2 ~1 min"), ("live", "D2 now")] {
-        let json =
-            #"{"label":"D2 · now","detail":"","stop":{"code":"PGP","name":"PGP"},"departsAt":"\#(ISO8601DateFormatter().string(from: Date().addingTimeInterval(20)))","quality":"\#(quality)","mode":"trip","alt":null,"asOf":"2026-09-29T01:00:00Z","dest":null}"#
-        let m = AppModel(snapshot: true)
-        m.answers = [.plan: try JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))]
-        #expect(m.menuTitle(at: Date()) == title)
-    }
-}
-
-@Test func aRowsTimeRoundsToTheNearestMinute() {
-    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 270, quality: "live")) == "5 min")
-    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 269, quality: "live")) == "4 min")
-    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 50, quality: "live")) == "1 min")
-    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 44, quality: "live")) == "now")
-    #expect(NearbyBoard.eta(BoardRow(svc: "D2", etaS: 270, quality: "scheduled")) == "~5 min")
-}
-
 @Test func aTimetableGuessInNearbyIsNeverShownAsLive() throws {
-    #expect(NearbyBoard.eta(etaS: 360, quality: "live") == "6 min")
-    #expect(NearbyBoard.eta(etaS: 360, quality: "scheduled") == "~6 min")
-    #expect(NearbyBoard.eta(etaS: 20, quality: "live") == "now")
-    #expect(NearbyBoard.eta(etaS: nil, quality: "ended") == "ended")
     let said = { (b: NearbyBus, first: Bool) in NearbyBoard.said(b, first: first) }
     #expect(said(NearbyBus(etaS: 60, quality: "live", eta: "1 min"), true) == "1 minute, live")
     #expect(said(NearbyBus(etaS: 60, quality: "live", eta: "1 min"), false) == "1 minute")
@@ -379,16 +334,12 @@ private func nearbyFixture() throws -> [NearbyStop] {
     #expect(said(NearbyBus(etaS: 30, quality: "live", eta: "now"), true) == "Arriving")
     #expect(said(NearbyBus(etaS: 30, quality: "scheduled", eta: "~1 min"), true) == "about 1 minute, estimated")
     #expect(said(NearbyBus(etaS: nil, quality: "ended"), true) == nil)
-    #expect(NearbyBoard.eta(etaS: 30, quality: "scheduled") == "~1 min")
-    #expect(NearbyBoard.eta(etaS: 30, quality: "stale") == "~1 min")
-    #expect(NearbyBoard.eta(etaS: 300, quality: "stale") == "~5 min")
-    #expect(NearbyBoard.words(NearbyBus(etaS: 30, quality: "scheduled", eta: "now")) == "~1 min")
     #expect(
-        NearbyBoard.cell(NearbyBus(etaS: 30, quality: "scheduled", eta: "now"), first: true)
+        NearbyBoard.cell(NearbyBus(etaS: 30, quality: "scheduled", eta: "~1 min"), first: true)
             == .init(mark: "~", figure: "1", trail: " min"))
     let row = BoardRow(
         svc: "D2", etaS: 240, quality: "live",
-        later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live")], towards: ["UTown"])
+        later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live")], dest: "to UTown")
     #expect(
         NearbyBoard.spoken(row)
             == "Bus D2, to UTown, 4 minutes, live, then about 15 minutes, then 25 minutes")
@@ -636,9 +587,9 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("../../fixtures/answers").standardized
     let day = try JSONDecoder().decode(DayPlan.self, from: Data(contentsOf: dir.appendingPathComponent("day.json")))
-    #expect(day.items[0].sub == "Leave by ~09:36 · R2 from PGP")
+    #expect(day.items[0].line == "Leave by ~09:36 · R2 from PGP")
     #expect(day.items[1].title == "Home, from UTown")
-    #expect(day.items[1].sub == nil)
+    #expect(day.items[1].line == nil)
 }
 
 @Test func theSearchFollowsTheSharedCases() throws {
@@ -669,12 +620,10 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
 
 @Test func aResidencesWalkIsTheServers() throws {
     let json =
-        #"{"stops": [], "residences": [{"code": "PGPR", "name": "PGP Residences", "stops": ["PGP"], "walkM": 300, "walkMin": 6}, {"code": "OLD", "name": "Old", "stops": ["COM3"], "walkM": 420}]}"#
+        #"{"stops": [], "residences": [{"code": "PGPR", "name": "PGP Residences", "stops": ["PGP"], "walkM": 300, "walkMin": 6}]}"#
     let c = try JSONDecoder().decode(Campus.self, from: Data(json.utf8))
     let pgp = try #require(c.residences.first { $0.code == "PGPR" })
     #expect(SetupModel.homeWalk(pgp, within: 0...30) == 6, "not 300 m at 1.3 m/s (4 min)")
-    let old = try #require(c.residences.first { $0.code == "OLD" })
-    #expect(SetupModel.homeWalk(old, within: 0...30) == 5, "an older server: worked out here")
     #expect(SetupModel.homeWalk(pgp, within: 0...3) == 3, "held to the account's limit")
 }
 
@@ -712,16 +661,6 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     let board = try #require(a.leave?.board.flatMap(parseISODate))
     #expect(a.countdownAt == board)
     #expect(board > a.leaveAt!)
-}
-
-@Test func aOneOffTripSaysArriveByNotStarts() throws {
-    let once = try golden("once-from-home")
-    #expect(once.isClassPlan)
-    #expect(once.dest?.place == true)
-    #expect(once.startsAt(try #require(once.classAt)).hasPrefix("arrive by "))
-    let lesson = try golden("class-bus")
-    #expect(lesson.dest?.place == nil)
-    #expect(lesson.startsAt(try #require(lesson.classAt)).hasPrefix("starts "))
 }
 
 @Test func theReportSheetKnowsWhenTimesAreNUSs() throws {

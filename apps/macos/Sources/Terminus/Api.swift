@@ -274,17 +274,14 @@ struct NextAnswer: Decodable {
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
-    var service: String { label.components(separatedBy: " · ").first ?? label }
     var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
     var countdownAt: Date? {
         if card?.phase == "waiting", let board = leave?.board.flatMap(parseISODate) { return board }
         return leaveAt
     }
-    var classAt: Date? { timing?.classAt.flatMap(parseISODate) }
     var staleAt: Date? { card?.staleAt.flatMap(parseISODate) }
 
     var isClassPlan: Bool { card?.kind == "class" }
-    func startsAt(_ c: Date) -> String { dest?.place == true ? L("arrive by %@", campusTime(c)) : L("starts %@", campusTime(c)) }
     var isFree: Bool { mode == "free" }
     var tripUnderWay: Bool { ["heading", "waiting", "riding", "missed"].contains(card?.phase ?? "idle") }
     var nextChange: Date? { card?.nextChangeAt.flatMap(parseISODate) }
@@ -432,8 +429,6 @@ struct BoardRow: Decodable, Hashable {
     var paid: Bool? = nil
     var later: [Later]? = nil
     var eta: String? = nil
-    var towards: [String]? = nil
-    var toText: String? = nil
     var dest: String? = nil
     var destPlace: String? = nil
 
@@ -554,8 +549,7 @@ struct Campus: Decodable {
         let code: String
         let name: String
         let stops: [String]
-        let walkM: Double?
-        var walkMin: Int?
+        let walkMin: Int
         var common: Bool?
     }
     let stops: [Stop]
@@ -656,58 +650,20 @@ struct DayPlan: Decodable {
             let svc: String?
             let stop: String?
         }
-        struct Timing: Decodable {
-            let status: String?
-            let text: String?
-        }
-        struct OnBus: Decodable {
-            let svc: String
-            let off: String?
-            let arrive: String?
-        }
         let kind: String
         let key: String
         let label: String
-        let serverTitle: String?
+        let title: String
         let line: String?
         let status: String
         let fromName: String?
         let startsAt: String
         let endsAt: String?
         let leave: Leave?
-        let timing: Timing?
-        let onBus: OnBus?
         let removable: Bool?
         var id: String { key }
-
-        enum CodingKeys: String, CodingKey {
-            case kind, key, label, line, status, fromName, startsAt, endsAt, leave, timing, onBus, removable
-            case serverTitle = "title"
-        }
-
-        var sub: String? {
-            if let line { return line }
-            if serverTitle != nil || status == "done" { return nil }
-            if status == "skipped" { return L("Not going") }
-            if let b = onBus {
-                return
-                    ([
-                        L("On the %@", b.svc), b.off.map { L("off at %@", $0) },
-                        b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) },
-                    ] as [String?]).compactMap { $0 }.joined(separator: " · ")
-            }
-            guard let l = leave, let at = parseISODate(l.at) else { return nil }
-            let how = l.svc.map { L("%@ from %@", $0, l.stop ?? fromName ?? "") } ?? L("walk")
-            return
-                ([
-                    L("Leave by %@", l.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)), how,
-                    timing?.status == "late" ? timing?.text : nil,
-                ] as [String?]).compactMap { $0 }.joined(separator: " · ")
-        }
-        var title: String {
-            serverTitle ?? (kind == "home" ? (fromName.map { L("Home, from %@", $0) } ?? L("Home after your last class")) : label)
-        }
     }
+
     var items: [Item]
     let note: String?
     let date: String?
