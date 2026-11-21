@@ -44,7 +44,7 @@ private func keep(_ dir: URL, _ s: Server, at t: TimeInterval = now) async throw
 
 private func kept(_ dir: URL, checked: TimeInterval, etag: String = "\"v1\"") throws {
     try map("old map").write(to: dir.appendingPathComponent("campus.pmtiles"))
-    try JSONSerialization.data(withJSONObject: ["etag": etag, "checked": checked]).write(
+    try JSONSerialization.data(withJSONObject: ["file": "campus.pmtiles", "etag": etag, "checked": checked]).write(
         to: dir.appendingPathComponent("campus.pmtiles.json"))
 }
 
@@ -64,6 +64,16 @@ private func meta(_ dir: URL) -> [String: Any] {
     #expect(read(dir) == "new map")
     #expect(meta(dir)["etag"] as? String == "\"v2\"")
     #expect(meta(dir)["checked"] as? Double == now)
+}
+
+@Test func aMapKeptWithoutItsNameIsDownloadedAgain() async throws {
+    let dir = try scratch()
+    try map("old map").write(to: dir.appendingPathComponent("campus.pmtiles"))
+    try JSONSerialization.data(withJSONObject: ["etag": "\"v1\"", "checked": now - day]).write(
+        to: dir.appendingPathComponent("campus.pmtiles.json"))
+    #expect(MapFiles.currentTiles(in: dir) == nil)
+    #expect(try await keep(dir, Server(200, map("new map"))))
+    #expect(read(dir) == "new map")
 }
 
 @Test func aMapCheckedThisWeekIsNotAskedAbout() async throws {

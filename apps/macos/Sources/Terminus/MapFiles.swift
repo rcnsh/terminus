@@ -81,7 +81,7 @@ enum MapFiles {
     static var current: URL? { currentTiles(in: dir) }
 
     static func currentTiles(in dir: URL) -> URL? {
-        let name = readMeta(in: dir)?["file"] as? String ?? tiles
+        guard let name = readMeta(in: dir)?["file"] as? String else { return nil }
         let file = dir.appendingPathComponent(name)
         return FileManager.default.fileExists(atPath: file.path) ? file : nil
     }

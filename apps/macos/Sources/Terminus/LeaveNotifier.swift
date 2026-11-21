@@ -11,7 +11,6 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     private static let soonID = "leave-soon"
     private static let nowID = "leave-now"
-    private static let askID = "ask"
 
     private var center: UNUserNotificationCenter { UNUserNotificationCenter.current() }
     private let defaults = UserDefaults.standard
@@ -47,7 +46,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     func turnOff() {
         enabled = false
         center.removePendingNotificationRequests(withIdentifiers: [Self.soonID, Self.nowID])
-        center.removeDeliveredNotifications(withIdentifiers: [Self.soonID, Self.nowID, Self.askID])
+        center.removeDeliveredNotifications(withIdentifiers: [Self.soonID, Self.nowID])
     }
 
     func update(_ plan: NextAnswer?, now: Date = ServerClock.now) {
@@ -59,10 +58,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         case .heading:
             center.removePendingNotificationRequests(withIdentifiers: [Self.soonID, Self.nowID])
             center.removeDeliveredNotifications(withIdentifiers: [Self.soonID])
-        case .over:
-            clearLeave()
-            center.removeDeliveredNotifications(withIdentifiers: [Self.askID])
-        case .clear:
+        case .over, .clear:
             clearLeave()
         case .schedule(let clearFirst, let trip, let soon, let leaveAt):
             if clearFirst { clearLeave() }
