@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum WidgetMode: Hashable, Sendable {
     case timetable
@@ -89,11 +90,14 @@ enum WidgetMode: Hashable, Sendable {
     static func fitting(_ labels: [String], width: CGFloat) -> Int {
         var used: CGFloat = 0
         for (i, l) in labels.enumerated() {
-            let text = l.unicodeScalars.reduce(CGFloat(0)) { $0 + ($1.value >= 0x2E80 ? 13 : 7.2) }
-            used += (i > 0 ? 6 : 0) + 24 + text
+            used += (i > 0 ? 6 : 0) + 24 + chipText(l)
             if used > width { return i }
         }
         return labels.count
+    }
+
+    static func chipText(_ label: String) -> CGFloat {
+        (label as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 13, weight: .semibold)]).width.rounded(.up)
     }
 }
 
