@@ -1085,7 +1085,7 @@ function StopStrip({ b, all, onStop }) {
               r.kind === 'bus'
                 ? html`<div class="bus-row">${rail}${name}</div>`
                 : html`
-                  <button type="button" class="bus-row" onClick=${() => onStop(r.code, r.name)}>
+                  <button type="button" class="bus-row" onClick=${() => onStop(r.code)}>
                     ${rail}${name}<span class="sr-only">. ${t('Show this stop')}</span><${Icon} paths=${CHEVRON_END} class="go" />
                   </button>
                 `
@@ -1099,7 +1099,7 @@ function StopStrip({ b, all, onStop }) {
 }
 
 function stopsAhead(b) {
-  const ahead = b.upcoming ?? (b.nextStop ? [b.nextStop] : []);
+  const ahead = b.upcoming;
   return b.at && ahead[0]?.code === b.at.code ? ahead.slice(1) : ahead;
 }
 
@@ -1127,9 +1127,8 @@ function BusSheet({ id, box, stops = false, all: allAtFirst = false }) {
   const sub = b.towards ? where : null;
   const stop = stopOfBus(campus, b);
   const go = (code) => showStop(code, { bus: id, stops: open, all });
-  const onStop = (code, name) => {
-    const s = (code && campus?.stops.find((x) => x.code === code)) || stopOfBus(campus, b, name);
-    if (s) go(s.code);
+  const onStop = (code) => {
+    if (campus?.stops.some((x) => x.code === code)) go(code);
   };
   const facts = html`
     <div class="bus-info">

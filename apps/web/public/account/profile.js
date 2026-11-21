@@ -222,8 +222,6 @@ export function residenceFor(homeStops) {
   return residencesByName().find((r) => [...r.stops].sort().join() === key) ?? null;
 }
 
-export const residenceWalkMin = (r) => r.walkMin ?? Math.max(1, Math.round(r.walkM / 1.3 / 60));
-
 export const limit = (key, fallback) => profile.get()?.limits?.[key] ?? fallback;
 
 export const pinMax = () => limit('pinnedStops', 8);

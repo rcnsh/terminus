@@ -1,5 +1,5 @@
 import { Fill, MARK, announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clock, hour12, sentences, serverNow, t } from './dom.js';
+import { api, hour12, sentences, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle, spokenJourney, startsAt } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
@@ -273,19 +273,9 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   if (a.card?.kind === 'class' && !old) {
     return html`<div class="widget"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${steps}${actions}${row}</div>`;
   }
-  const heading =
-    a.card?.heading !== undefined
-      ? a.card.heading
-      : a.dest?.why === 'class'
-        ? t('Next class · {0}', a.dest.label)
-        : a.dest?.why === 'gap-home'
-          ? t('Long gap · {0}', a.dest.label)
-          : a.dest?.label;
-  const where = a.mode === 'nearby' ? t('Nearby') : (heading ?? t('Next bus'));
+  const where = a.mode === 'nearby' ? t('Nearby') : (a.card?.heading ?? t('Next bus'));
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
-  const big =
-    a.card?.title ??
-    (timed ? `${a.label.split(' · ')[0]} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label);
+  const big = a.card?.title;
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
   return html`

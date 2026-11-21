@@ -794,23 +794,20 @@ function Where() {
   `;
 }
 
-const itemTitle = (it) =>
-  it.title ?? (it.kind === 'home' ? (it.fromName ? t('Home, from {0}', it.fromName) : t('Home after your last class')) : it.label);
-
 function OfflineCard({ item, step }) {
   if (step === 'home') {
     return html`
       <div class="widget offline-plan">
         <div class="where">${clock(item.startsAt)}</div>
-        <h2 class="big">${itemTitle(item)}</h2>
-        <${Say} text=${`${clock(item.startsAt)} ${itemTitle(item)}`} />
+        <h2 class="big">${item.title}</h2>
+        <${Say} text=${`${clock(item.startsAt)} ${item.title}`} />
       </div>
     `;
   }
   const l = item.leave;
   const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
   const line = step === 'leaveBy' && item.line ? item.line : null;
-  const where = `${itemTitle(item)} · ${t('starts {0}', clock(item.startsAt))}`;
+  const where = `${item.title} · ${t('starts {0}', clock(item.startsAt))}`;
   const big = line ?? (step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now'));
   return html`
     <div class="widget offline-plan">
@@ -1101,28 +1098,7 @@ function Today() {
               </li>
             `;
           }
-          const title = itemTitle(it);
-          let sub = null;
-          if (it.line !== undefined) sub = it.line;
-          else if (it.status === 'skipped') sub = t('Not going');
-          else if (it.onBus)
-            sub = [
-              t('On the {0}', it.onBus.svc),
-              it.onBus.off ? t('off at {0}', it.onBus.off) : null,
-              it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null,
-            ]
-              .filter(Boolean)
-              .join(' · ');
-          else if (it.status !== 'done' && it.leave?.at) {
-            const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');
-            sub = [
-              t('Leave by {0}', it.leave.estimated ? t('~{0}', clock(it.leave.at)) : clock(it.leave.at)),
-              how,
-              it.timing?.status === 'late' ? it.timing.text : null,
-            ]
-              .filter(Boolean)
-              .join(' · ');
-          }
+          const { title, line: sub } = it;
           return html`
             <li class=${`today-item ${it.status}`} key=${it.key}>
               <span class="at">${clock(it.startsAt)}</span>

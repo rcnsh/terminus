@@ -207,7 +207,16 @@ test('the open pinned card shows the times its page has', async () => {
         'KTR',
         {
           stop: { code: 'KTR', name: 'KTR' },
-          board: [{ svc: 'A1', etaS: 120, quality: 'live', later: [{ etaS: 720, quality: 'live' }] }],
+          board: [
+            {
+              svc: 'A1',
+              towards: ['LT13'],
+              etaS: 120,
+              eta: '2 min',
+              quality: 'live',
+              later: [{ etaS: 720, quality: 'live', eta: '12 min' }],
+            },
+          ],
           available: true,
           at: now,
           got: now,
@@ -421,7 +430,13 @@ test('a pinned stop closing beside the home keeps the live times its page had, w
     new Map([
       [
         'KTR',
-        { stop: { code: 'KTR', name: 'KTR' }, board: [{ svc: 'A1', etaS: 120, quality: 'live' }], available: true, at: now, got: now },
+        {
+          stop: { code: 'KTR', name: 'KTR' },
+          board: [{ svc: 'A1', towards: ['LT13'], etaS: 120, eta: '2 min', quality: 'live' }],
+          available: true,
+          at: now,
+          got: now,
+        },
       ],
     ]),
   );

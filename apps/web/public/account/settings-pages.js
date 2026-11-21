@@ -24,7 +24,6 @@ import {
   ResidenceOptions,
   residenceFor,
   limit,
-  residenceWalkMin,
   residencesByName,
   saveNow,
   stopName,
@@ -221,7 +220,7 @@ export function Trips() {
               if (!r) return setOffCampus(true);
               edit((x) => {
                 x.home = { stops: [...r.stops] };
-                x.homeWalkMin = residenceWalkMin(r);
+                x.homeWalkMin = r.walkMin;
               });
             }}
           >
