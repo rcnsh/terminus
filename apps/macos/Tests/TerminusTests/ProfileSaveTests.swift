@@ -3,15 +3,9 @@ import Testing
 
 @testable import Terminus
 
-/// Saving a change to the profile (`Api.changeProfile`): only the change, on
-/// the profile as the server has it, so another device's save isn't undone.
-
-/// The server's profile and its version, as /api/me/profile keeps them:
-/// a save with an If-Match that isn't the current version gets 412.
 private final class Server {
     var profile: [String: Any]
     var version = 1
-    /// Saved by another device just before each of the next saves arrives.
     var elsewhere: [([String: Any]) -> [String: Any]] = []
     var ifMatches: [String?] = []
 
@@ -48,7 +42,6 @@ private final class Server {
 
 @Test func anotherDevicesSaveMeanwhileStaysAndTheChangeIsMadeAgain() async throws {
     let server = Server(["walkPace": "normal", "places": [] as [Any]])
-    // A favourite added on the phone between this Mac's read and its save.
     server.elsewhere = [
         { p in
             var p = p
@@ -57,7 +50,6 @@ private final class Server {
         }
     ]
     let saved = try await server.change { $0["walkPace"] = "slow" }
-    // The first save was refused (412); the second was made on the phone's profile.
     #expect(server.ifMatches == ["\"1\"", "\"2\""])
     #expect(saved["walkPace"] as? String == "slow")
     #expect((saved["places"] as? [[String: Any]])?.first?["key"] as? String == "com3")
@@ -77,7 +69,6 @@ private final class Server {
     let gym = ["day": 3, "arriveByMin": 480, "to": "UTOWN", "label": "Gym"] as [String: Any]
     let cs = ["day": 2, "arriveByMin": 600, "to": "COM3", "label": "CS2030"] as [String: Any]
     #expect(SetupModel.find(c, in: [gym, cs]) == 1)
-    // The class before it was removed on the phone: it's now first, not the one at its old place.
     #expect(SetupModel.find(c, in: [cs]) == 0)
     #expect(SetupModel.find(c, in: [gym, gym]) == nil)
 }

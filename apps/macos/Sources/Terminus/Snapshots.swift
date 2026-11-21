@@ -1,12 +1,9 @@
 #if DEBUG
     import SwiftUI
 
-    /// `TERMINUS_SNAPSHOT=/tmp/dir swift run` renders the popover with sample data
-    /// to PNGs and exits. For checking layout without clicking the menu bar.
     @MainActor
     enum Snapshots {
         static func render(to dir: String) {
-            // With milliseconds, so the snapshot covers parseISODate's second form.
             let departs = ISO8601DateFormatter().string(from: Date().addingTimeInterval(240)).replacingOccurrences(of: "Z", with: ".000Z")
             let iso = { (s: Double) in ISO8601DateFormatter().string(from: Date().addingTimeInterval(s)) }
             let leaves = iso(1080)
@@ -14,7 +11,6 @@
             let arrives = iso(1980)
             let classAt = iso(2160)
             let reach = iso(840)
-            // The card is worded on the server; here, the same words by hand.
             let t = { (s: Double) in campusTime(Date().addingTimeInterval(s)) }
             let json = """
                 {"label":"D2 · 4 min","detail":"PGP · 3 min walk · UTown ~12 min · or A1 9 min","alt":"A1 · 9 min","stop":{"code":"PGP","name":"PGP"},
@@ -44,7 +40,6 @@
                 m.nearby = nearby
                 m.showNearby = nearbyTab
                 m.updated = Date()
-                // A place gone to from the search: its own tab, with an ×.
                 m.added = [AppModel.AddedPlace(code: "COM3", label: "COM3")]
                 return m
             }
@@ -64,7 +59,6 @@
                 (
                     "report-nus",
                     {
-                        // "Is this wrong?" with a reason about the bus itself: the note that its times are NUS's.
                         let m = model(nearbyTab: false)
                         m.reporting = true
                         m.reportReason = "never-came"
@@ -75,7 +69,6 @@
                 (
                     "loading",
                     {
-                        // Before the first answer: the card's skeleton.
                         let m = model(nearbyTab: false)
                         m.answers = [:]
                         m.updated = nil
@@ -112,7 +105,6 @@
                             ],"note":null}
                             """
                         m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
-                        // Just taken off today: the Undo bar.
                         m.removed = try! JSONDecoder().decode(
                             DayPlan.Item.self,
                             from: Data(
@@ -155,9 +147,6 @@
             renderNearby(to: dir, answer: answer)
         }
 
-        /// Nearby's board in each state it has: a "~" After, a timetable guess a
-        /// minute away ("~1 min"), a loop's "via", "to KR Bus Ter", a "–", and
-        /// public buses' "$" and long places. At 11:55 in Singapore, in English and in Chinese.
         static func renderNearby(to dir: String, answer: NextAnswer) {
             defer { Lang.snapshotTable = nil }
             let strings = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -181,21 +170,17 @@
                         .environment(\.fixedNow, now)
                         .background(bg)
                         .environment(\.colorScheme, scheme)
-                    // In a window, so the rows' measured width reaches the layout before it's drawn.
                     writeHosted(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
                 }
             }
         }
 
-        /// Two stops' boards at `now`, worded as the server words them in English
-        /// or Chinese, with the clock times (`at`) the server also sends, which Nearby doesn't show.
         static func nearbySample(at now: Date, zh: Bool) -> [NearbyStop] {
             let iso = { (s: Double) in ISO8601DateFormatter().string(from: now.addingTimeInterval(s)) }
             let mins = { (s: Int, guess: Bool) in
                 let m = zh ? "\((s + 30) / 60) 分钟" : "\((s + 30) / 60) min"
                 return guess ? (zh ? "约 " : "~") + m : m
             }
-            // One bus: its time in seconds and whether it's a timetable guess.
             let bus = { (s: Int, guess: Bool) in
                 #""etaS":\#(s),"eta":"\#(mins(s, guess))","at":"\#(iso(Double(s)))","quality":"\#(guess ? "scheduled" : "live")""#
             }
@@ -217,20 +202,16 @@
             return try! JSONDecoder().decode([NearbyStop].self, from: Data(json.utf8))
         }
 
-        /// The API's golden answers (fixtures/answers), at the
-        /// moment they were answered: the journey's steps and the ride's line.
         static func renderGoldens(to dir: String) {
             let answers = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("../../fixtures/answers").standardized
-            // Three of the ride's six stops behind it: the bus halfway along.
             let cases: [(String, String, String)] = [
                 ("golden-scheduled", "scheduled.json", "2026-08-27T01:00:00Z"),
                 ("golden-place", "place.json", "2026-08-27T01:00:00Z"),
                 ("golden-riding", "riding.json", "2026-08-27T01:47:00Z"),
                 ("golden-riding-zh", "zh/riding.json", "2026-08-27T01:47:00Z"),
                 ("golden-class", "class-bus.json", "2026-08-27T01:00:00Z"),
-                // Stepped to the last bus: Best bus, and Later bus greyed.
                 ("golden-class-moved", "class-bus.json", "2026-08-27T01:00:00Z"),
             ]
             for (name, file, at) in cases {
@@ -240,7 +221,6 @@
                     }),
                     let now = parseISODate(at)
                 else { continue }
-                // The riding golden goes stale before its ride: drawn mid-ride, it's kept fresh.
                 if var card = o["card"] as? [String: Any], card["ride"] is [String: Any] {
                     card["staleAt"] = "2026-08-27T01:55:00Z"
                     o["card"] = card
@@ -264,7 +244,6 @@
                     let view = Popover(model: m, startShown: true).environment(\.fixedNow, now).background(bg).environment(
                         \.colorScheme, scheme)
                     let file = "\(name)-\(scheme == .dark ? "dark" : "light")"
-                    // The class card's buttons (Earlier bus, Not going) as AppKit draws them.
                     if name.hasPrefix("golden-class") {
                         writeHosted(view, scale: 2, to: dir, as: file)
                     } else {
@@ -274,7 +253,6 @@
             }
         }
 
-        /// The map's status chips (the map itself is MapLibre's, which ImageRenderer can't draw).
         static func renderMapStatus(to dir: String) {
             let statuses: [MapModel.BusStatus] = [.running(3), .stale, .unavailable, .offline]
             let view = VStack(alignment: .leading, spacing: 8) {
@@ -289,7 +267,6 @@
             }
         }
 
-        /// A clicked bus's card, shut and opened, between stops and at one.
         static func renderBusCards(to dir: String) {
             let ahead = ["LT 13", "AS 5", "BIZ 2", "PGP", "Kent Ridge MRT", "LT 27", "S 17", "UHC", "UTown"]
             var moving = LiveBus(id: "a", lat: 1.29, lon: 103.77, moving: true, crowd: "low", nextStop: "LT 13", plate: "PD539C")
@@ -300,7 +277,6 @@
                 id: "b", lat: 1.29, lon: 103.77, moving: false, crowd: "high", nextStop: "BIZ 2", plate: "PD726D", at: "COM 3")
             stopped.upcoming = ["BIZ 2", "PGP"]
             stopped.towards = "Kent Ridge MRT"
-            // Every stop named on the cards, so each row opens its stop (and shows its chevron).
             let names = Set(ahead + ["CLB", "COM 3"])
             let campus = CampusMap(
                 stops: names.sorted().map { MapStop(code: $0, name: $0, lat: 1.29, lon: 103.77, services: ["A1", "D1"]) }, routes: [:],
@@ -321,7 +297,6 @@
                     writeHosted(view, scale: 2, to: dir, as: "map-bus-\(name)-\(scheme == .dark ? "dark" : "light")")
                 }
             }
-            // Every stop ahead in a short window: the stops scroll, "Show …" stays in view.
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
                 let stop = MapStop(code: "X", name: "LT 13", lat: 1.29, lon: 103.77, services: ["D1"])
                 let view = BusCard(bus: moving, svc: "D1", hex: "#C93BA4", stop: stop, campus: campus, close: {}, open: true, all: true)
@@ -333,7 +308,6 @@
             }
         }
 
-        /// A clicked stop's card: with times, waiting for them, and with none due.
         static func renderStopCards(to dir: String) {
             let stop = MapStop(
                 code: "YIH", name: "YIH", lat: 1.2988, lon: 103.7745, services: ["A1", "D1", "D2"], longName: "Yusof Ishak House")
@@ -344,7 +318,6 @@
                 BoardRow(svc: "A1", etaS: 60, quality: "live", eta: "1 min"), BoardRow(svc: "D1", etaS: 360, quality: "live", eta: "6 min"),
                 BoardRow(svc: "D2", etaS: 840, quality: "scheduled", eta: "~14 min"),
             ]
-            // "picked": D1's line picked on the map, so its row is washed in its colour.
             let cases: [(String, StopBoard?, String?)] = [
                 ("times", StopBoard(available: true, rows: rows), nil), ("picked", StopBoard(available: true, rows: rows), "D1"),
                 ("none", StopBoard(available: true, rows: []), nil),
@@ -364,7 +337,6 @@
             }
         }
 
-        /// The setup steps, the devices list and Settings' panes, from sample data.
         static func renderSetup(to dir: String) {
             let campusJSON = """
                 {"stops":[{"code":"PGP","name":"Prince George's Park","lat":1.2917,"lon":103.7803},{"code":"COM3","name":"COM 3","lat":1.2948,"lon":103.7747},{"code":"UTOWN","name":"University Town","lat":1.3036,"lon":103.7747}],
@@ -397,8 +369,6 @@
             views.append(
                 ("devices", AnyView(DevicesView(setup: SetupModel(profile: profile, campus: campus, devices: devices, pairCode: "K7QX4M"))))
             )
-            // Settings' panes, as the window shows them beside its sidebar;
-            // About with a few requests in its developer menu.
             RequestLog.clear()
             for (i, (path, status)) in [("/api/campus", 200), ("/api/me", 200), ("/api/me/next", nil), ("/api/me/next", 304)].enumerated() {
                 RequestLog.record(
@@ -423,10 +393,7 @@
             }
         }
 
-        /// For the landing page: a weekday morning, a class with a leave-by time,
-        /// at 3x, light and dark from identical data so the halves line up.
         static func renderShowcase(to dir: String) {
-            // Tuesday 29 Sep 2026, 09:24 in Singapore.
             let now = ISO8601DateFormatter().date(from: "2026-09-29T01:24:00Z")!
             let iso = { (s: Double) in ISO8601DateFormatter().string(from: now.addingTimeInterval(s)) }
             let json = """
@@ -445,7 +412,6 @@
             m.answers = [.plan: answer]
             m.places = answer.places ?? []
             m.updated = now
-            // The popover's own surface, in the brand's warm neutrals.
             for (scheme, bg) in [
                 (ColorScheme.light, Color(red: 0.965, green: 0.961, blue: 0.953)), (.dark, Color(red: 0.137, green: 0.129, blue: 0.122)),
             ] {
@@ -457,10 +423,6 @@
             }
         }
 
-        /// `view` as `dir/name.png` drawn in a window, as AppKit draws it: the
-        /// buttons and scroll views `ImageRenderer` leaves as placeholders. The
-        /// window isn't key, so an accent button is drawn grey, as in a window
-        /// behind others.
         private static func writeHosted(_ view: some View, scale: CGFloat, to dir: String, as name: String) {
             let host = NSHostingView(rootView: view)
             var size = host.fittingSize
@@ -468,8 +430,6 @@
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = host
             host.layoutSubtreeIfNeeded()
-            // What a view measures on its first layout (Nearby's columns) lands
-            // in the next: let it, then size the window again.
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
             size = host.fittingSize
             host.frame = NSRect(origin: .zero, size: size)
@@ -486,7 +446,6 @@
             try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
         }
 
-        /// `view` as `dir/name.png`; nothing if it can't be drawn.
         private static func write(_ view: some View, scale: CGFloat, to dir: String, as name: String) {
             let r = ImageRenderer(content: view)
             r.scale = scale

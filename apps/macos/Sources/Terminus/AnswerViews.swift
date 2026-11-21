@@ -1,18 +1,10 @@
 import SwiftUI
 
-// MARK: - Content
-
 struct AnswerDetail: View {
     let answer: NextAnswer?
     var busy = false
-    /// Why the last refresh failed: with no answer, that in place of the skeleton,
-    /// no spinner, so the card says what the header says rather than that it's still checking.
     var failed: String? = nil
-    /// Today's entry just taken off, whose row has Undo: the card doesn't offer it as well.
     var undoShownFor: String? = nil
-    /// Past the card's staleAt (AppModel.isOld): its times may be gone, so
-    /// they're left out until the refresh lands, as on the phone and the
-    /// web; the header says "Updating times…" meanwhile.
     var old = false
     var onAction: (CardAction) -> Void = { _ in }
     var onChoice: (Suggestion, Bool) -> Void = { _, _ in }
@@ -27,15 +19,11 @@ struct AnswerDetail: View {
                 }
                 if let ride = a.card?.ride { RideLine(ride: ride, color: a.card?.journey?.bus?.color) }
                 if a.isFree {
-                    // Nothing to catch: no bus to mistake for advice.
                     NextClass(answer: a)
                     Row(icon: "location", text: L("Buses near you are under Nearby.")).foregroundStyle(.secondary)
                 } else if old {
-                    // Nothing timed: an old "by 4:01 PM" would pass for current.
                     EmptyView()
                 } else if a.isClassPlan {
-                    // The bus to catch (it names the stop), then when it gets you there.
-                    // One colour for "go" (the countdown in the header); red only when it's late.
                     if let c = a.catchHow {
                         Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(
                             a.leaveLate ? Color.bad : Color.primary)
@@ -47,7 +35,6 @@ struct AnswerDetail: View {
                     if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
                     if let g = a.goNowLine { Row(icon: "bus", text: g).foregroundStyle(.secondary) }
                 } else if a.card?.upcoming != nil {
-                    // After your day, or at home: what's next.
                     NextClass(answer: a)
                 } else if let j = a.card?.journey {
                     JourneyRows(journey: j)
@@ -55,12 +42,9 @@ struct AnswerDetail: View {
                     Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                     if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
                 }
-                // Under the bus it's about, as on the web: the bus before or after it.
                 if !old, !a.isFree, let step = a.card?.step {
                     StepButtons(step: step, onStep: onStep).disabled(busy).padding(.top, 2)
                 }
-                // On a ride, the detail already says when you get there, with
-                // its "~" on an estimate; the timing pill would say it again.
                 let timing = a.card?.ride == nil ? a.timing?.text : nil
                 if !old, !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
@@ -70,7 +54,6 @@ struct AnswerDetail: View {
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
-                // The server's buttons (plans only: Not going, Not on campus today, undo), the first one prominent.
                 if let actions = a.card?.actions?.filter({ !($0.id == "reset" && $0.trip == undoShownFor && undoShownFor != nil) }),
                     !actions.isEmpty
                 {
@@ -105,7 +88,6 @@ struct AnswerDetail: View {
             } else if let failed {
                 Text(failed).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                // The card's rows in bars while the answer is on its way: an icon and a line each.
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(0..<3, id: \.self) { i in
                         HStack(spacing: 8) {
@@ -118,15 +100,10 @@ struct AnswerDetail: View {
                 .skeletonSpoken()
             }
         }
-        // Fill the area's fixed height (120 with the card's padding), so a
-        // short answer centres in the card instead of leaving a gap under it.
         .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
         .card()
     }
 
-    /// The card's buttons, one to a group, except "Not going" and "Not on
-    /// campus today": the same no, for this class and for the whole day, so
-    /// with both they share one menu where the first of them was (as on Android).
     nonisolated static func grouped(_ actions: [CardAction]) -> [[CardAction]] {
         let isSkip = { (a: CardAction) in a.id == "skipped" || a.id == "away" }
         let skips = actions.filter(isSkip)
@@ -138,9 +115,6 @@ struct AnswerDetail: View {
         return groups
     }
 
-    /// "‹ Earlier bus", "Best bus" (once moved off it), "Later bus ›", the
-    /// same width each. One with no bus that way is greyed, not hidden, so
-    /// the other keeps its side.
     struct StepButtons: View {
         let step: NextAnswer.Step
         let onStep: (NextAnswer.Step, StepTarget?, StepDirection?) -> Void
@@ -150,7 +124,6 @@ struct AnswerDetail: View {
                 Button {
                     onStep(step, step.earlier, .earlier)
                 } label: {
-                    // One Text, chevron and all, so its baseline is Best bus's.
                     Text("\(Image(systemName: "chevron.left")) \(step.earlierLabel)")
                         .frame(maxWidth: .infinity)
                 }
@@ -178,7 +151,6 @@ struct AnswerDetail: View {
         }
     }
 
-    /// "Not going ▾": each choice says underneath how much it skips.
     private struct SkipMenu: View {
         let skips: [CardAction]
         let onAction: (CardAction) -> Void
@@ -203,9 +175,6 @@ struct AnswerDetail: View {
         }
     }
 
-    /// The next class on a block of its own (`card.upcoming`): when in the
-    /// accent, what, then where, as the web and Android show it. Why today has
-    /// none on a break goes above it. One line, worked out here for an older server.
     private struct NextClass: View {
         let answer: NextAnswer
 
@@ -222,7 +191,6 @@ struct AnswerDetail: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                // The bar as tall as the words, not the card.
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
@@ -231,7 +199,6 @@ struct AnswerDetail: View {
             }
         }
 
-        /// An icon a few points from its words, the way Row sets them.
         private struct Tight: LabelStyle {
             func makeBody(configuration: Configuration) -> some View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -242,10 +209,6 @@ struct AnswerDetail: View {
         }
     }
 
-    /// The journey's title, then a row a step: the walk (and by when), the
-    /// ride, the walk at the end, getting there, and the bus to fall back on.
-    /// A trip that changes buses has the first ride, the change and the
-    /// second ride in place of the one. Every word is the server's.
     struct JourneyRows: View {
         let journey: NextAnswer.Journey
 
@@ -268,10 +231,6 @@ struct AnswerDetail: View {
         }
     }
 
-    /// The ride as a line of its stops, the passed ones filled, with the bus
-    /// where the clock puts it (stops evenly spaced between the board and
-    /// arrival times, as the phone and the web take them). Boarding stop on
-    /// the left, the one to get off at on the right, the next one under the bus.
     struct RideLine: View {
         let ride: NextAnswer.Ride
         var color: String?
@@ -297,8 +256,6 @@ struct AnswerDetail: View {
                             }
                             Image(systemName: "bus.fill")
                                 .font(.system(size: 10, weight: .bold))
-                                // With no service colour, or one that can't be read, the disc
-                                // is the brand's (Color.brand), in this appearance: ink for that.
                                 .foregroundStyle(
                                     inkOn(rgb: color.flatMap(hexRGB) ?? (scheme == .dark ? Color.brandRGB.dark : Color.brandRGB.light))
                                 )
@@ -318,7 +275,6 @@ struct AnswerDetail: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    // A trip that changes: the second bus, where this one drops you.
                     if let change = ride.change { Text(change.text).font(.caption).foregroundStyle(.secondary) }
                 }
                 .accessibilityElement(children: .ignore)
@@ -328,8 +284,6 @@ struct AnswerDetail: View {
             }
         }
 
-        /// "Next stop: COM 3. 2 more stops, getting off at UTown.": where the
-        /// bus is and how far is left, not every stop's name.
         nonisolated static func spoken(_ stops: [String], passed: Int) -> String {
             let last = stops.count - 1
             guard last > 0 else { return stops.first ?? "" }
@@ -346,7 +300,6 @@ struct AnswerDetail: View {
         let text: String
         var body: some View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                // The words say it all; the icon is only for the eye.
                 Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14).accessibilityHidden(true)
                 Text(text).font(.callout).fixedSize(horizontal: false, vertical: true)
             }
@@ -369,12 +322,8 @@ struct Pill: View {
     }
 }
 
-/// Nearby: the stops around you, each with a row per service read like a
-/// stop's board, as on the web: where it's going and its next three buses,
-/// in minutes. The next bus is the large one. Under the stops, what a "~" means.
 struct NearbyList: View {
     let stops: [NearbyStop]?
-    /// The width of a stop's rows, for [NearbyLayout]: nil until it's laid out.
     @State private var rowWidth: CGFloat? = nil
 
     var body: some View {
@@ -414,7 +363,6 @@ struct NearbyList: View {
                     .padding(.horizontal, 4)
                 }
             } else {
-                // Two stops' shape while they're on their way: the name, then three rows of bars.
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(0..<2, id: \.self) { k in
                         VStack(alignment: .leading, spacing: 2) {
@@ -446,25 +394,12 @@ struct NearbyList: View {
     }
 }
 
-/// Nearby's type and its columns, measured in the fonts it's drawn in: every
-/// badge as wide as the widest, each time column as wide as its widest time
-/// (or heading) on every stop, so the figures line up down the list and none
-/// spills into the next column. Each destination must fit in its two lines
-/// beside the times, its place kept whole where that fits and broken between
-/// words where it doesn't; where one won't, for the whole screen at once:
-/// the gaps between the times close up, then the times shrink (to
-/// `minScale` at most). Only when that isn't enough does every row put its
-/// times on a line of their own, at full size (`stacks`): all of them, as
-/// the columns are shared.
 struct NearbyLayout {
     var badge: CGFloat
     var columns: [CGFloat]
     var scale: CGFloat = 1
-    /// Between two time columns.
     var gap = Self.columnGap
-    /// Even shrunk, the times leave no room: every row has them on a second line.
     var stacks = false
-    /// The width of a row; nil until it's laid out.
     var rowWidth: CGFloat? = nil
 
     static let badgePadding: CGFloat = 6
@@ -474,15 +409,12 @@ struct NearbyLayout {
     static let minScale: CGFloat = 0.85
     static let headingTracking: CGFloat = 0.6
 
-    /// The figures, in the board's rounded face: the next bus larger and bold.
     static func figures(pick: Bool, scale: CGFloat = 1) -> NSFont {
         let size = (pick ? 19 : 14) * scale
         let plain = NSFont.monospacedDigitSystemFont(ofSize: size, weight: pick ? .bold : .semibold)
         return plain.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: size) } ?? plain
     }
-    /// "min", "分钟": small, beside the figures.
     static func unit(scale: CGFloat = 1) -> NSFont { .systemFont(ofSize: 10 * scale, weight: .medium) }
-    /// A service's name on its badge, in the board's face.
     static func badgeFont() -> NSFont {
         let plain = NSFont.systemFont(ofSize: 13, weight: .bold)
         return plain.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: 13) } ?? plain
@@ -490,10 +422,8 @@ struct NearbyLayout {
     static func heading() -> NSFont { .systemFont(ofSize: 9.5, weight: .semibold) }
     static func words() -> NSFont { .systemFont(ofSize: 13) }
     static func place() -> NSFont { .systemFont(ofSize: 13, weight: .semibold) }
-    /// No badge narrower than a two-letter line's ("D2").
     static var badgeMin: CGFloat { width("D2", badgeFont()) + 2 * badgePadding }
 
-    /// The layout for `stops`' boards, in rows `rowWidth` wide (nil: not laid out yet, so at full size).
     init(_ stops: [NearbyStop], rowWidth: CGFloat?) {
         let rows = stops.filter(\.available).flatMap(\.board)
         badge = max(Self.badgeMin, rows.map { Self.width($0.pillID, Self.badgeFont()) + 2 * Self.badgePadding }.max() ?? 0)
@@ -522,25 +452,21 @@ struct NearbyLayout {
             self.columns = columns(scale)
             if fit(destWidth(stacked: false)) { return }
         }
-        // As small as they go and a destination still won't fit its two lines: cut, it would lose its place.
         self.columns = full
         scale = 1
         gap = Self.columnGap
         stacks = true
     }
 
-    /// The room for a row's destination: beside its times, or the row's whole width past the badge when stacked.
     func destWidth(stacked: Bool) -> CGFloat {
         guard let rowWidth else { return .infinity }
         return rowWidth - badge - Self.destGap - (stacked ? 0 : columns.reduce(0, +) + 3 * gap)
     }
 
-    /// Whether `r`'s destination fits in its two lines of `width`, breaking only between words.
     static func fits(_ r: BoardRow, width: CGFloat) -> Bool {
         longestWord(r) <= width && lines(r, width: width) <= 2
     }
 
-    /// The widest word of `r`'s destination: narrower than that, a word itself breaks.
     static func longestWord(_ r: BoardRow) -> CGFloat {
         let d = NearbyBoard.dest(r)
         let words = (d.lead + d.trail).split(whereSeparator: \.isWhitespace).map { width(String($0), Self.words()) }
@@ -548,7 +474,6 @@ struct NearbyLayout {
         return (words + place).max() ?? 0
     }
 
-    /// How many lines `r`'s destination takes in `width`, as it's drawn: its place kept whole where that fits.
     static func lines(_ r: BoardRow, width: CGFloat) -> Int {
         let d = NearbyBoard.dest(r)
         let s = NSMutableAttributedString(string: d.lead, attributes: [.font: words()])
@@ -560,7 +485,6 @@ struct NearbyLayout {
         return Int((h / NSLayoutManager().defaultLineHeight(for: place())).rounded())
     }
 
-    /// A cell's width as drawn, a point over for rounding.
     static func width(_ c: NearbyBoard.Cell, pick: Bool, scale: CGFloat = 1) -> CGFloat {
         let big = figures(pick: pick, scale: scale)
         let small = unit(scale: scale)
@@ -576,7 +500,6 @@ struct NearbyLayout {
     }
 }
 
-/// One of a row's three buses: the row's own, or one of the two in `later`.
 struct NearbyBus: Hashable {
     let etaS: Int?
     let quality: String
@@ -590,22 +513,17 @@ struct NearbyBus: Hashable {
     init(_ r: BoardRow) { self.init(etaS: r.etaS, quality: r.quality, eta: r.eta) }
     init(_ l: BoardRow.Later) { self.init(etaS: l.etaS, quality: l.quality, eta: l.eta) }
 
-    /// A timetable guess or an old live time: marked "~".
     var approx: Bool { quality == "scheduled" || quality == "stale" }
 }
 
 extension BoardRow {
-    /// One row per service; a public bus is its own even under a shuttle's name.
     var pillID: String { paid == true ? "\(svc) $" : svc }
-    /// Next, Then and After: this bus and the two after it, nil where there's none.
     var buses: [NearbyBus?] {
         let l = later ?? []
         return [NearbyBus(self), l.first.map(NearbyBus.init), l.count > 1 ? NearbyBus(l[1]) : nil]
     }
 }
 
-/// A stop's rows in Nearby: the service in its colour, where it's going, and
-/// its next three buses under a small heading, in [NearbyLayout]'s columns.
 struct NearbyBoard: View {
     let rows: [BoardRow]
     let layout: NearbyLayout
@@ -626,8 +544,6 @@ struct NearbyBoard: View {
             }
             .padding(.bottom, 2)
             .accessibilityHidden(true)
-            // By service, not by the whole row: a new time is the same row
-            // counting down (.numericText), not a new one replacing it.
             ForEach(Array(zip(Self.pillIDs(rows), rows).enumerated()), id: \.element.0) { n, pair in
                 if n > 0 { Rectangle().fill(.primary.opacity(0.08)).frame(height: 1) }
                 row(pair.1)
@@ -663,12 +579,10 @@ struct NearbyBoard: View {
                 .frame(minHeight: 44)
             }
         }
-        // The whole row, its second line too, is one element.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.spoken(r))
     }
 
-    /// Next, Then and After, on one baseline, so a large figure sits level with the small ones.
     private func times(_ r: BoardRow) -> some View {
         let buses = r.buses
         let pick = Self.pick(buses)
@@ -682,8 +596,6 @@ struct NearbyBoard: View {
         }
     }
 
-    /// In the service's colour, as on the buses and the map, every badge the
-    /// same width. A public bus carries a $ so the fare is never a surprise.
     private func badge(_ r: BoardRow) -> some View {
         let fill = r.color.flatMap(Color.init(hex:))
         return Text(r.pillID)
@@ -696,9 +608,6 @@ struct NearbyBoard: View {
                     fill.map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary.opacity(0.1))))
     }
 
-    /// The place in ink, the words around it ("to", "via") muted. A place
-    /// that fits on a line of `width` is kept whole, so it moves to the next
-    /// line rather than breaking ("to / Buona Vista Int").
     static func destination(_ r: BoardRow, width: CGFloat) -> Text {
         let d = dest(r)
         guard let place = d.place.map({ keptWhole($0, width: width) }) else { return Text(d.lead).foregroundColor(.secondary) }
@@ -706,16 +615,11 @@ struct NearbyBoard: View {
             + Text(d.trail).foregroundColor(.secondary)
     }
 
-    /// `place` with non-breaking spaces when it fits on a line of `width`
-    /// whole, so it moves to the next line rather than breaking; with
-    /// ordinary ones otherwise (the server's too), so it breaks rather than being cut.
     nonisolated static func keptWhole(_ place: String, width: CGFloat) -> String {
         NearbyLayout.width(place, NearbyLayout.place()) <= width
             ? place.replacingOccurrences(of: " ", with: "\u{00a0}") : place.replacingOccurrences(of: "\u{00a0}", with: " ")
     }
 
-    /// One bus's time, as `cell` words it: the figures in the board's font and
-    /// the words small; the next bus large and in ink.
     private func time(_ c: Cell, pick: Bool) -> some View {
         let s = layout.scale
         let big = Font(NearbyLayout.figures(pick: pick, scale: s))
@@ -724,8 +628,6 @@ struct NearbyBoard: View {
             .foregroundStyle(pick ? .primary : .secondary).lineLimit(1).contentTransition(.numericText())
     }
 
-    /// A time as Nearby sets it: `mark` ("~") and `figure` ("4", "6:02")
-    /// large, `trail` (" min") small after it.
     struct Cell: Equatable {
         var mark = ""
         var figure: String
@@ -733,34 +635,24 @@ struct NearbyBoard: View {
         var whole: String { mark + figure + trail }
     }
 
-    /// The bus set large: Next, when it has a time; nil when it hasn't.
     nonisolated static func pick(_ buses: [NearbyBus?]) -> Int? {
         buses.first??.etaS != nil ? 0 : nil
     }
 
-    /// One cell of Next, Then or After. Only Next (`first`) carries a unit
-    /// ("4 min"); Then and After are figures ("16", "~28"). An estimate is
-    /// "~" in both languages: in a column of figures "约" reads as part of
-    /// the next. A dash with no bus.
     nonisolated static func cell(_ bus: NearbyBus?, first: Bool) -> Cell {
         guard let b = bus, b.etaS != nil else { return Cell(figure: "–") }
         let mark = b.approx ? "~" : ""
         let words = words(b)
-        // "now": no figure to set large; shown as it is.
         guard let n = words.range(of: #"\d+"#, options: .regularExpression) else { return Cell(figure: words) }
         return Cell(mark: mark, figure: String(words[n]), trail: first ? String(words[n.upperBound...]) : "")
     }
 
-    /// Where a row's bus is going, as the server words it ("to PGP Foyer",
-    /// "via UTown"), split round the place in it; an older server's end of
-    /// the line, all muted, otherwise.
     nonisolated static func dest(_ r: BoardRow) -> (lead: String, place: String?, trail: String) {
         guard let d = r.dest else { return (to(r), nil, "") }
         guard let p = r.destPlace, !p.isEmpty, let i = d.range(of: p) else { return (d, nil, "") }
         return (String(d[..<i.lowerBound]), p, String(d[i.upperBound...]))
     }
 
-    /// Under the stops: what a "~" means, only when one is showing.
     nonisolated static func foot(_ stops: [NearbyStop]) -> [String] {
         let cells = stops.filter(\.available).flatMap(\.board).flatMap { r in
             let b = r.buses
@@ -769,9 +661,6 @@ struct NearbyBoard: View {
         return cells.contains { $0.mark == "~" } ? [L("~ is a guess from the timetable, not a live time.")] : []
     }
 
-    /// Each row's id: its service, and a repeat numbered (a two-way public
-    /// bus, 151/1 and 151/2, is two rows named 151 at one stop), so ids are
-    /// unique yet stay put from one refresh to the next.
     nonisolated static func pillIDs(_ rows: [BoardRow]) -> [String] {
         var seen: [String: Int] = [:]
         return rows.map { r in
@@ -781,12 +670,8 @@ struct NearbyBoard: View {
         }
     }
 
-    /// The server's "4 min"; worked out here for an older server.
     nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
 
-    /// "4 min", "~6 min" for an estimate, "now", or "ended", as the server words it
-    /// ("4m" would be read as metres); worked out here for an older server.
-    /// A guess is never "now": under a minute it's "~1 min".
     nonisolated static func eta(etaS: Int?, quality: String) -> String {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
         if s < 45 { return quality == "scheduled" || quality == "stale" ? L("~%@", L("%@ min", "1")) : L("now") }
@@ -794,25 +679,17 @@ struct NearbyBoard: View {
         return quality == "scheduled" || quality == "stale" ? L("~%@", m) : m
     }
 
-    /// A bus's minutes as words: the server's ("4 min", "约 6 分钟"), or
-    /// worked out here. A guess is never "now", whoever worded it: "~1 min".
     nonisolated static func words(_ b: NearbyBus) -> String {
         let w = b.eta ?? eta(etaS: b.etaS, quality: b.quality)
         guard b.approx, w.range(of: #"\d"#, options: .regularExpression) == nil else { return w }
         return L("~%@", L("%@ min", "1"))
     }
 
-    /// A wait in words, from its seconds: "1 minute", "6 minutes", as the iPhone and Android say it.
     nonisolated static func saidMinutes(_ seconds: Int) -> String {
         let m = (seconds + 30) / 60
         return m == 1 ? L("1 minute") : L("%@ minutes", "\(m)")
     }
 
-    /// One bus as VoiceOver says it, worded as Android and the iPhone word it:
-    /// in minutes "13 minutes", "about 25 minutes" for a guess, "Arriving" for
-    /// a live bus under 45 s, and the first bus (`first`) with how sure it is
-    /// ("1 minute, live", "about 6 minutes, estimated"). A guess is never
-    /// under a minute away. Nil with no bus.
     nonisolated static func said(_ b: NearbyBus, first: Bool) -> String? {
         guard let s = b.etaS else { return nil }
         if s < 45 && b.quality == "live" { return L("Arriving") }
@@ -820,21 +697,15 @@ struct NearbyBoard: View {
         return switch b.quality {
         case "scheduled": first ? L("about %@, estimated", m) : L("about %@", m)
         case "live": first ? L("%@, live", m) : m
-        // Any other quality is no live time either: never said as one.
         default: L("about %@", m)
         }
     }
 
-    /// Where a row's bus is going, "to Kent Ridge MRT", or that this is the
-    /// end of its line: an older server's, which sends no `dest`.
     nonisolated static func to(_ r: BoardRow) -> String {
         if let end = r.towards?.last { return L("to %@", end) }
         return r.toText ?? L("Ends here")
     }
 
-    /// "Bus D2, via PGP, 2 minutes, live, then 14 minutes, then about 26
-    /// minutes", as Android reads a row: the line, where it's going, then each
-    /// bus in order. Chinese punctuation in Chinese.
     nonisolated static func spoken(_ r: BoardRow) -> String {
         let d = dest(r)
         var parts = [r.paid == true ? L("Public bus %@, fare applies", r.svc) : L("Bus %@", r.svc), d.lead + (d.place ?? "") + d.trail]
@@ -846,16 +717,11 @@ struct NearbyBoard: View {
     }
 }
 
-/// Today, from /api/me/day: each class with when to leave (or the bus you're
-/// on), and the trips home. What's done is dimmed, a skipped class struck through.
 struct TodayList: View {
     let day: DayPlan
     var removed: DayPlan.Item? = nil
-    /// Where `removed` was: above the entry that followed it (nil at the end),
-    /// or at `removedAt` should that one go too. Its row stays there, so nothing moves.
     var removedAt = 0
     var removedBefore: String? = nil
-    /// An entry the server wouldn't take off, back in its place, and why.
     var failed: (key: String, message: String)? = nil
     var onRemove: (DayPlan.Item) -> Void = { _ in }
     var onUndo: () -> Void = {}
@@ -882,7 +748,6 @@ struct TodayList: View {
     }
 }
 
-/// Where an entry was just taken off: "GEA1000 removed from today", with Undo for a few seconds.
 private struct RemovedRow: View {
     let item: DayPlan.Item
     let onUndo: () -> Void
@@ -901,9 +766,7 @@ private struct RemovedRow: View {
     }
 }
 
-/// One of today's entries; anything still to come has an × on hover to take it off today.
 private struct TodayRow: View {
-    /// Its status in words: what the dimming, the strike and the bold say.
     private var status: String {
         switch item.status {
         case "done": L("Over")
@@ -931,8 +794,6 @@ private struct TodayRow: View {
             }
             Spacer(minLength: 0)
             if item.removable == true {
-                // Shown on hover, and when the keyboard reaches it. VoiceOver
-                // has the row's action instead, so it isn't offered twice.
                 Button {
                     onRemove(item)
                 } label: {
@@ -949,9 +810,7 @@ private struct TodayRow: View {
         .opacity(past ? (contrast == .increased ? 0.7 : 0.5) : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        // One element per row; the hover-only × is its "Remove from today" action.
         .accessibilityElement(children: .combine)
-        // Dimmed or struck through on screen: said in words.
         .accessibilityValue(status)
         .accessibilityActions {
             if item.removable == true { Button(L("Remove from today")) { onRemove(item) } }

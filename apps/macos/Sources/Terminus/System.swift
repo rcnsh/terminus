@@ -2,42 +2,20 @@ import CoreLocation
 import Foundation
 import Security
 
-/// The device token, in a file only this user can read:
-/// ~/Library/Application Support/terminus/device-token (0600, folder 0700).
-///
-/// Not the keychain: a keychain item is tied to the app's code signature, and
-/// macOS asks for the password again whenever that changes. A file has the
-/// same protection as an SSH key. The token only reads your bus answers, and
-/// Settings on the web can revoke it.
-///
-/// Versions 1.3.8 to 2.0.0-beta.4 kept it in the keychain. It's moved to the
-/// file once, the first time the file isn't there (that read may be the last
-/// keychain prompt), and the keychain item is then deleted.
 enum TokenStore {
-    /// Tests use their own keychain name; the app never changes it.
     nonisolated(unsafe) static var service = "sh.rcn.terminus" { didSet { keychainDone = false } }
     private static let account = "device-token"
 
     private enum Lookup {
         case found(String)
         case missing
-        /// The file or the keychain couldn't be read (a permissions or disk
-        /// error, the keychain locked or its prompt denied): the token may
-        /// well be there, so this is not "signed out".
         case failed
     }
 
-    /// Tests point this at a temporary folder; the app never sets it.
     nonisolated(unsafe) static var folder: URL? { didSet { keychainDone = false } }
 
-    /// The keychain has been looked in once (its token moved, or none there):
-    /// with no file, it isn't asked again on every refresh and map poll.
     nonisolated(unsafe) private static var keychainDone = false
 
-    /// The beta, and the dev stub (the developer menu, or TERMINUS_API_BASE),
-    /// keep their own token, so neither signs this Mac out of the real one,
-    /// and the real one is never sent to the stub. The site's addresses are
-    /// one server, with one token.
     private static var folderName: String {
         let site = Servers.choices.filter { !Servers.isLocal($0) }
         return !site.contains(Api.base) ? "terminus-dev" : Api.isBeta ? "terminus-beta" : "terminus"
@@ -57,15 +35,12 @@ enum TokenStore {
         } catch  where !isMissing(error) {
             return .failed
         } catch {}
-        // The keychain item belongs to the real API's sign-in: a dev build leaves it alone.
         guard folderName == "terminus", !keychainDone else { return .missing }
         let r = migrateKeychain()
         if case .failed = r {} else { keychainDone = true }
         return r
     }
 
-    /// No such file: signed out. Anything else (no permission, a disk error)
-    /// says nothing about whether there's a token.
     static func isMissing(_ error: Error) -> Bool {
         let e = error as NSError
         if e.domain == NSCocoaErrorDomain, e.code == NSFileReadNoSuchFileError { return true }
@@ -93,8 +68,6 @@ enum TokenStore {
         return writeFile(token)
     }
 
-    /// Written to a private temporary file, then moved over the old one, so
-    /// the token is never readable by others and never half-written.
     private static func writeFile(_ token: String) -> Bool {
         let fm = FileManager.default
         let dir = fileURL.deletingLastPathComponent()
@@ -113,8 +86,6 @@ enum TokenStore {
             return false
         }
     }
-
-    /* ---------- moving out of the keychain, once ---------- */
 
     private static var keychainQuery: [String: Any] {
         [
@@ -135,7 +106,6 @@ enum TokenStore {
             guard let data = out as? Data, let s = String(data: data, encoding: .utf8) else { return .missing }
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !t.isEmpty else { return .missing }
-            // The keychain item goes only once the file has the token.
             if writeFile(t) { deleteKeychainItem() }
             return .found(t)
         case errSecItemNotFound:
@@ -150,18 +120,11 @@ enum TokenStore {
     }
 }
 
-/// How far out a fix may be, in metres, as Android and the web send it (`acc`):
-/// its accuracy plus how far someone could have walked since it was taken
-/// (1.3 m/s). A ten-minute-old fix is 780 m out, so the server goes by the
-/// timetable rather than plan from where you were. Nil for a fix CoreLocation
-/// marks invalid (a negative accuracy).
 func fixUncertaintyM(accuracy: Double, ageS: Double) -> Double? {
     guard accuracy >= 0 else { return nil }
     return accuracy + max(ageS, 0) * 1.3
 }
 
-/// One-shot location fixes. Every failure is nil: without a location the API
-/// follows the timetable, which is a fine answer.
 @MainActor
 final class Locator: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
@@ -185,9 +148,6 @@ final class Locator: NSObject, CLLocationManagerDelegate {
 
     func ask() { manager.requestWhenInUseAuthorization() }
 
-    /// A fix no older than `maxAge`, or a fresh one (up to ~5 s). With the
-    /// popover closed a ten-minute-old fix is fine: asking CoreLocation every
-    /// two minutes all day costs battery and blinks the location arrow.
     func current(maxAge: TimeInterval = 120) async -> CLLocation? {
         guard authorized else { return nil }
         if let last, -last.timestamp.timeIntervalSinceNow < maxAge { return last }
@@ -199,7 +159,6 @@ final class Locator: NSObject, CLLocationManagerDelegate {
             manager.requestLocation()
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(5))
-                // Only time out the request this timer was started for.
                 if self.generation == gen { self.finish(nil) }
             }
         }

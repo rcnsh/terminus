@@ -3,10 +3,6 @@ import Testing
 
 @testable import Terminus
 
-/// Setup and Settings after signing in from a guest (or signing out): the
-/// window stays open with its SetupModel, so what it shows and would save
-/// must be the account signed in now, not the one before.
-
 @MainActor private final class Sessions {
     var now = 1
 }
@@ -20,7 +16,6 @@ import Testing
     let sessions = Sessions()
     let setup = try model(sessions)
     #expect(!setup.stale)
-    // Signed in with an email from the guest: the guest's setup is still on screen.
     sessions.now = 2
     #expect(setup.stale)
     setup.setPace("fast")
@@ -35,7 +30,6 @@ import Testing
     #expect(setup.profile == nil)
     #expect(setup.devices == nil && setup.me == nil && setup.choices == nil)
     #expect(!setup.stale)
-    // Nothing to edit until the new account's setup has loaded.
     setup.setPace("fast")
     #expect(setup.profile == nil)
 }

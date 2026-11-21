@@ -1,18 +1,6 @@
 #!/bin/sh
-# Builds terminus.app from the Swift package.
-#   ./build.sh                    -> build/terminus.app
-#   ./build.sh install            -> also copy to /Applications and open it
-#   CHANNEL=beta ./build.sh       -> build/terminus beta.app: sh.rcn.terminus.beta,
-#                                    for beta.terminus.run, updating from its appcast
-#
-# Signed with SIGN_IDENTITY (and SIGN_KEYCHAIN, optionally, the keychain
-# holding it); without it, with the terminus Developer ID certificate if it's
-# in your keychain, else ad-hoc. Releases are signed with that certificate and
-# notarised by scripts/release/package-mac.sh, so every version has the same code
-# identity (the team's) and macOS keeps its permissions across updates.
 set -eu
 cd "$(dirname "$0")"
-# Exactly the versions in Package.resolved: a newer Sparkle never slips in unreviewed.
 swift build -c release --arch arm64 --force-resolved-versions
 OUT="$(swift build -c release --arch arm64 --force-resolved-versions --show-bin-path)"
 CHANNEL=${CHANNEL:-stable}
@@ -26,53 +14,34 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks"
 cp "$OUT/Terminus" "$APP/Contents/MacOS/Terminus"
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Terminus"
-# Sparkle, for updates. Its XPC services are only for sandboxed apps.
-# SwiftPM checks the download's checksum; Sparkle's own signature, checked
-# before it's re-signed below, shows nothing in it changed since.
 codesign --verify --strict --deep "$OUT/Sparkle.framework"
 ditto "$OUT/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
-# MapLibre, for the map (Vendor/, from scripts/vendor/vendor-maplibre-mac.sh). It's
-# built for Intel too; this app is arm64 only, so that half is left out.
 ditto "$OUT/MapLibre.framework" "$APP/Contents/Frameworks/MapLibre.framework"
 ML="$APP/Contents/Frameworks/MapLibre.framework/Versions/A/MapLibre"
 lipo "$ML" -thin arm64 -output "$ML.arm64" && mv "$ML.arm64" "$ML"
 cp Support/Info.plist "$APP/Contents/Info.plist"
 if [ "$CHANNEL" = beta ]; then
-  # Its own app to macOS (permissions, login item, notifications), its own
-  # site and its own updates. The Sparkle key is the same.
   PB() { /usr/libexec/PlistBuddy -c "$1" "$APP/Contents/Info.plist"; }
   PB "Set :CFBundleIdentifier $ID"
   PB "Set :CFBundleName $NAME"
   PB "Set :CFBundleDisplayName $NAME"
-  # Updates and requests go to the address people see (Servers in Api.swift).
   PB "Set :SUFeedURL https://beta.terminus.run/download/appcast.xml"
   PB "Add :TerminusSite string https://beta.terminus.run"
   PB "Add :TerminusAPI string https://beta.terminus.run"
-  # Its own version line, from scripts/release/release-beta.sh. Sparkle compares the build.
   if [ -n "${BETA_VERSION:-}" ]; then PB "Set :CFBundleShortVersionString $BETA_VERSION"; fi
   if [ -n "${BETA_BUILD:-}" ]; then PB "Set :CFBundleVersion $BETA_BUILD"; fi
 fi
 mkdir -p "$APP/Contents/Resources"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
-# Chinese: macOS shows it when the app or the Mac is set to it.
 cp -R Support/zh-Hans.lproj "$APP/Contents/Resources/"
-# Developer ID Application: Jacob Wiltshire (BUKSCHP3SV), by its SHA-1.
-TERMINUS_CERT=B0692598973AE875C270263F0403FE4495EEF562
-if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q "$TERMINUS_CERT"; then
-  SIGN_IDENTITY=$TERMINUS_CERT
+DEVELOPER_ID_APPLICATION_SHA1=B0692598973AE875C270263F0403FE4495EEF562
+if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q "$DEVELOPER_ID_APPLICATION_SHA1"; then
+  SIGN_IDENTITY=$DEVELOPER_ID_APPLICATION_SHA1
 fi
-# The hardened runtime: no injected libraries, no unsigned executable
-# memory, no debugger attaching, and only frameworks signed by the same team.
-# The app alone gets one exception, location (Support/Terminus.entitlements).
-# A release (PUBLISH=true, from scripts/release/package-mac.sh) is also timestamped
-# by Apple's server, which notarisation requires, and which keeps the
-# signature valid after the certificate expires. Local builds skip it so
-# they work offline; an ad-hoc signature can't have one.
 TS=--timestamp=none
 if [ "${PUBLISH:-}" = true ] && [ -n "${SIGN_IDENTITY:-}" ]; then TS=--timestamp; fi
 sign() { codesign --force --options runtime "$TS" --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$@"; }
-# Inside out: Sparkle's helpers, the frameworks, then the app.
 FW="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 sign "$FW/Autoupdate"
 sign "$FW/Updater.app"
@@ -80,8 +49,6 @@ sign "$APP/Contents/Frameworks/Sparkle.framework"
 sign "$APP/Contents/Frameworks/MapLibre.framework"
 ENT=Support/Terminus.entitlements
 if [ -z "${SIGN_IDENTITY:-}" ]; then
-  # Ad-hoc signatures carry no Team ID, so library validation would refuse
-  # our own frameworks: a local build gets the exception, a release never.
   ENT=$(mktemp -t terminus-ent).plist
   cp Support/Terminus.entitlements "$ENT"
   /usr/libexec/PlistBuddy -c "Add :com.apple.security.cs.disable-library-validation bool true" "$ENT"
@@ -89,7 +56,6 @@ fi
 sign --identifier "$ID" --entitlements "$ENT" "$APP"
 echo "built $APP"
 if [ "${1:-}" = install ]; then
-  # Both channels' executables are named Terminus: quit only this one.
   pkill -f "/Applications/$NAME.app/" 2>/dev/null || true
   rm -rf "/Applications/$NAME.app"
   cp -R "$APP" "/Applications/$NAME.app"

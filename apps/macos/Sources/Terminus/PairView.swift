@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - Pairing
-
 struct Pair: View {
     @Bindable var model: AppModel
     @State private var code = ""
@@ -22,7 +20,6 @@ struct Pair: View {
             }
             .card()
 
-            // Signed out by the server, not by hand: why, whichever way back in is chosen.
             if let r = model.signedOutReason {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).accessibilityHidden(true)
@@ -43,7 +40,6 @@ struct Pair: View {
         }
     }
 
-    /// Sign in with the email: approved from any device, the phone's mail app included.
     private var emailCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: L("Sign in"))
@@ -70,7 +66,6 @@ struct Pair: View {
                 .buttonStyle(.link)
                 .font(.callout)
             Divider().padding(.vertical, 2)
-            // As on the phone and the web: start straight away, add an email later.
             Button {
                 model.startWithoutEmail()
             } label: {
@@ -112,7 +107,6 @@ struct Pair: View {
                 Text(e).font(.callout).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e)
             }
             Divider().padding(.vertical, 2)
-            // The email's link, on a phone or anywhere else: choose this number there.
             Text(L("Reading it on another device?")).font(.callout.weight(.semibold))
             HStack(spacing: 10) {
                 Text(L("Open the link in the email, then choose"))
@@ -173,47 +167,30 @@ struct Pair: View {
     }
 }
 
-/// Something@somewhere.tld, spaces around it aside: enough to offer to send a code.
 func looksLikeEmail(_ s: String) -> Bool {
     s.trimmingCharacters(in: .whitespaces).range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil
 }
 
-// MARK: - Code boxes
-
-/// What the code boxes hold after the field changed from `old` to `new`, as
-/// Android's `codeEdit`: capitals, letters and digits only, at most six,
-/// filling the boxes from the left.
-///
-/// A paste (more than one character arriving at once) may bring words with
-/// it, or land after what was already typed: "Your code is 7KQ2XM", or
-/// "AB7KQ2XM". Then the code is the last six-character word that could be one
-/// (so not "WITHIN"), else its last six letters and digits ("7KQ 2XM" too).
 func codeEdit(old: String, new: String) -> String {
     let up = new.uppercased()
     let isCode = { (c: Character) in ("A"..."Z").contains(c) || ("0"..."9").contains(c) }
     let chars = String(up.filter(isCode))
     if chars.count - old.count <= 1 { return String(chars.prefix(CodeField.length)) }
-    // No 0/O or 1/I/L to misread (accounts.ts PAIR_ALPHABET).
     let alphabet = Set("23456789ABCDEFGHJKMNPQRSTVWXYZ")
     let words = up.split(whereSeparator: { !isCode($0) })
     if let w = words.last(where: { $0.count == CodeField.length && $0.allSatisfy(alphabet.contains) }) { return String(w) }
     return String(chars.suffix(CodeField.length))
 }
 
-/// A six-character code (the email's, or a pairing code) in six boxes, as on
-/// the phone and the web. One hidden field takes the typing and pastes, so a
-/// whole line from the email lands right; the sixth character sends it.
 struct CodeField: View {
     nonisolated static let length = 6
 
     @Binding var code: String
     let label: String
-    /// Any change: the place to clear an error about the last code.
     var onEdit: () -> Void = {}
     let onComplete: (String) -> Void
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Sent already: a stray key on full boxes doesn't send it again.
     @State private var sent: String?
 
     var body: some View {
@@ -234,9 +211,7 @@ struct CodeField: View {
                     onEdit()
                     if clean.count < Self.length {
                         sent = nil
-                    }
-                    // The sixth character, typed or pasted, sends it.
-                    else if sent != clean {
+                    } else if sent != clean {
                         sent = clean
                         onComplete(clean)
                     }
@@ -250,7 +225,6 @@ struct CodeField: View {
             HStack(spacing: 6) {
                 ForEach(0..<Self.length, id: \.self) { i in
                     box(i)
-                    // Read in two halves, "7KQ 2XM", as the email sets it.
                     if i == Self.length / 2 - 1 { Spacer().frame(width: 6) }
                 }
             }

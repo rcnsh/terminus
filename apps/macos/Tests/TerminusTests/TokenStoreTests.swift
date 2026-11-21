@@ -4,8 +4,6 @@ import Testing
 
 @testable import Terminus
 
-/// The device token, in a temporary folder and under a keychain name of its
-/// own, never the app's. One at a time: they share TokenStore's settings.
 @Suite(.serialized) struct TokenStoreTests {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("terminus-test-\(UUID().uuidString)")
 
@@ -42,7 +40,6 @@ import Testing
         #expect(TokenStore.read() == nil)
     }
 
-    /// A file that's there but can't be read isn't "signed out": only a missing one is.
     @Test func anUnreadableFileIsNotSignedOut() throws {
         defer {
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: TokenStore.fileURL.path)
@@ -57,7 +54,6 @@ import Testing
         do { _ = try String(contentsOf: missing, encoding: .utf8) } catch { #expect(TokenStore.isMissing(error)) }
     }
 
-    /// Kept in the keychain by 1.3.8 to 2.0.0-beta.4: moved to the file once, and the keychain item goes.
     @Test func aKeychainTokenMovesToTheFileOnce() throws {
         defer { cleanUp() }
         let item: [String: Any] = [

@@ -3606,6 +3606,78 @@ clock: ADR 0000-iphone-reads-answers-leniently.md):
   context stays until replaced and is read again at each start. A code that
   comes while another is being redeemed waits its turn: the server has
   already replaced the one in flight with it.
+The Mac app, beyond what the other clients share (why it lives in the menu
+bar and refreshes as it does: [ADR 0000-mac-menu-bar-app](adr/0000-mac-menu-bar-app.md);
+how it reads answers: [ADR 0000-mac-reads-answers-leniently](adr/0000-mac-reads-answers-leniently.md)):
+
+- **Waiting on the server** (`Quiet`, `Outdated` in `Api.swift`). A 429's
+  `Retry-After` gates every request of its kind: sign-in and pairing
+  (`/api/auth/…`, `/api/pair`, `/api/me/pair-code`) wait apart from
+  everything else, as the server limits them apart, so a mistyped code
+  doesn't stop the menu bar. A 503's `Retry-After` gates nothing; only the
+  polling loops (the refresh, the map's) wait it out. Either is honoured
+  for 1 s to 5 minutes. A 426 stops every request the server would refuse
+  (`Outdated.gated`, KEYED in index.ts: not signing in or out, downloads,
+  `DELETE /api/me` or `DELETE /api/me/push`) for 30 minutes, then one asks
+  again in case `config:minClient` was lowered.
+- **Saving the profile** (`Api.changeProfile`, `SetupModel.edit`): the Mac
+  sends `If-Match` as the website does, makes only its own change again on
+  a 412 (three tries), shows changes at once and saves 0.4 s after the last
+  click, one save at a time, putting them back if the save fails. An import
+  replaces the profile, so edits are refused while one runs and waiting
+  saves go first.
+- **Signing in by email**: the request is polled every 3 s for its 15
+  minutes; a code typed meanwhile ends it. While an anonymous Mac adds an
+  email, a 401 isn't taken as signed out, as the merge can remove the
+  anonymous account just before the new token is handed over (#159). The device name sent is the Mac's model (`macModelName`: the
+  device tree's product name, else the family from `hw.model`, at most 40
+  characters), never the name its owner gave it.
+- **The map's files** (`MapFiles`, `CampusStore`). `/api/campus` is kept per
+  language (`campus-en.json`, `campus-zh.json`), used at once whatever its
+  age, and asked about with its ETag once over an hour old (its
+  `max-age`), one check at a time; every reader shares one parse, and a
+  changed copy reaches each in place. The street map is downloaded whole,
+  checked weekly by ETag, and kept only if it starts a PMTiles v3 header
+  and is over 64 KB (a Wi-Fi sign-in page answers 200 too), excluded from
+  backups. Each download gets a name of its own (`campus-<id>.pmtiles`,
+  named in `campus.pmtiles.json`), because MapLibre keeps a file's header
+  and directories once read; the old file goes once a style reading the
+  new one has loaded, and a file MapLibre can't read is dropped only if it
+  fails that check again. Styles are kept per theme and language, only
+  once they parse as a style, and shown under a new file name each time,
+  since MapLibre doesn't reload a URL it shows. The folder sits beside the
+  token's, so the beta and a local build keep their own.
+- **The map window** (`MapModel`, `PanLimit`, `Slides` in `MapData.swift`,
+  as the phone's `MapData.kt`) polls only while it's on screen: buses every
+  5 s, the open stop every 15 s, your dot every 20 s (never asking for
+  permission), each doubling on failure up to a minute. MapLibre Native
+  limits only the camera's centre, so `PanLimit` keeps the centre half a
+  window inside the map file's extent (`MAP_BOUNDS`) and zooms out only
+  until the window is full of map; `keepOnMap` brings the camera back after
+  a zoom out by an edge, guarded so the move it starts can't restart itself.
+  Buses slide along their line at 100 m/s, 1 to 4 s, on
+  `CLOCK_MONOTONIC_RAW` (it counts sleep, so an answer from before one is
+  stale); they jump after 15 s without an answer, past 1.5 km, when behind,
+  or with Reduce Motion. A bus at a stop sits 22 points to the left of its
+  dot, the kerb side.
+- **Crash reports** (`CrashReports.swift`). `NSApplicationCrashOnExceptions`
+  is set, or AppKit would log an exception on the main thread and carry on
+  half-broken. An uncaught exception is written to disk as the app dies;
+  its first own frame is marked so MetricKit's later SIGABRT report of the
+  same crash is dropped. MetricKit hands over the iPhone app's crashes too
+  (they share a bundle id), so a stack naming `dyld_sim` or `UIKitCore` is
+  ignored. A report is dropped on any answer (2xx or 4xx) and kept for the
+  next launch on a 5xx or none.
+- **Leave reminders** (`LeaveNotifier`): the heads-up goes once per trip
+  per Singapore day (a weekly class has the same key every week), and a
+  leave-by that moves later doesn't bring it back. Each is due on the
+  server's clock. When the refreshes stop, pending reminders keep their
+  words and add when they were last checked.
+- **Debug and test hooks**: `TERMINUS_OPEN=setup|settings|map|popover`
+  opens that window at launch (for a menu bar item hidden behind the
+  notch); `TERMINUS_SNAPSHOT=<dir>` renders every screen to PNGs, swapping
+  the native controls `ImageRenderer` can't draw for look-alikes, and
+  drawing the buttons in a window where they must look real.
 
 ### Live buses on the map
 
