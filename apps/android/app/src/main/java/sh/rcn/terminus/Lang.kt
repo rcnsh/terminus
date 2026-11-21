@@ -3,6 +3,7 @@ package sh.rcn.terminus
 import android.app.LocaleManager
 import android.content.Context
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.os.Build
 import android.os.LocaleList
 import androidx.annotation.StringRes
@@ -66,25 +67,23 @@ object Lang {
         return base.createConfigurationContext(config)
     }
 
-    fun current(ctx: Context): String = if (wrap(ctx).resources.configuration.locales[0].language == "zh") ZH else EN
+    fun current(ctx: Context): String = if (isZh(wrap(ctx).resources)) ZH else EN
+
+    fun isZh(res: Resources): Boolean = res.configuration.locales[0].language == "zh"
 
     fun header(ctx: Context): String = if (current(ctx) == ZH) "zh-Hans" else "en"
 }
 
-@android.annotation.SuppressLint("StaticFieldLeak")
 object L {
     @Volatile private var lookup: ((Int, Array<out Any>) -> String)? = null
-    @Volatile private var app: Context? = null
+    @Volatile private var res: Resources? = null
 
-    fun init(ctx: Context) {
-        app = ctx.applicationContext
-        reset(ctx)
-    }
+    fun init(ctx: Context) = reset(ctx)
 
     fun reset(ctx: Context) {
-        val base = app ?: ctx.applicationContext
-        val res = Lang.wrap(base)
-        lookup = { id, args -> res.getString(id, *args) }
+        val r = Lang.wrap(ctx.applicationContext).resources
+        res = r
+        lookup = { id, args -> r.getString(id, *args) }
     }
 
     fun use(f: (Int, Array<out Any>) -> String) {
@@ -93,8 +92,8 @@ object L {
 
     fun s(@StringRes id: Int, vararg args: Any): String = (lookup ?: error("L.init was not called")).invoke(id, args)
 
-    fun header(): String = app?.let { Lang.header(it) } ?: "en"
+    fun header(): String = if (zh) "zh-Hans" else "en"
 
     val zh: Boolean
-        get() = app?.let { Lang.current(it) == Lang.ZH } ?: false
+        get() = res?.let { Lang.isZh(it) } ?: false
 }
