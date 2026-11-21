@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, extname, join } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { classify } from './loc.mjs';
 
@@ -57,7 +57,7 @@ export const SYNTAX = {
   },
   css: { line: [], block: true, quotes: `'"` },
   sql: { line: ['--'], block: true, quotes: `'` },
-  sh: { hash: true, quotes: `'"`, wordStart: true, directive: /^\s*shellcheck\s/ },
+  sh: { hash: true, quotes: `'"`, wordStart: true, heredoc: true, directive: /^\s*shellcheck\s/ },
   py: { hash: true, quotes: `'"`, triple: true, directive: /^\s*(noqa|type:|-\*-|pragma)/ },
   yaml: { hash: true, quotes: `'"`, wordStart: true, directive: /^\s*(yaml-language-server|v?\d+(\.\d+)*\s*$)/ },
   html: { html: true },
@@ -171,17 +171,51 @@ export const findComments = (text, syntax) => {
   };
 
   if (syntax.html) {
+    const blocks = [];
+    for (const m of text.matchAll(/<(script|style)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)) {
+      const inner = m.index + m[0].indexOf('>') + 1;
+      blocks.push([inner, inner + m[2].length]);
+      const sub = m[1].toLowerCase() === 'style' ? SYNTAX.css : SYNTAX.js;
+      for (const c of findComments(m[2], sub)) comments.push({ start: c.start + inner, end: c.end + inner });
+    }
+    const inBlock = (at) => blocks.some(([s, e]) => at >= s && at < e);
     for (let at = text.indexOf('<!--'); at !== -1; at = text.indexOf('<!--', at)) {
       const close = text.indexOf('-->', at + 4);
       const end = close === -1 ? n : close + 3;
-      addComment(at, end, text.slice(at + 4, close === -1 ? n : close));
+      if (!inBlock(at)) addComment(at, end, text.slice(at + 4, close === -1 ? n : close));
       at = end;
     }
-    return comments;
+    return comments.sort((a, b) => a.start - b.start);
   }
+
+  let heredocs = [];
 
   while (i < n) {
     const c = text[i];
+
+    if (syntax.heredoc && text.startsWith('<<', i) && text[i + 2] !== '<') {
+      const m = /^<<(-?)[ \t]*(['"]?)([A-Za-z_][\w.-]*)\2/.exec(text.slice(i, i + 200));
+      if (m) {
+        heredocs.push({ word: m[3], dash: m[1] === '-' });
+        i += m[0].length;
+        continue;
+      }
+    }
+
+    if (c === '\n' && heredocs.length) {
+      let j = i + 1;
+      for (const { word, dash } of heredocs) {
+        while (j < n) {
+          const end = toLineEnd(j);
+          const line = text.slice(j, end);
+          j = end + 1;
+          if ((dash ? line.replace(/^\t+/, '') : line) === word) break;
+        }
+      }
+      heredocs = [];
+      i = j;
+      continue;
+    }
 
     if (syntax.hash && c === '#') {
       const prev = i === 0 ? '\n' : text[i - 1];
@@ -288,28 +322,37 @@ export const commentLines = (text, syntax) => {
 
 export const strip = (text, syntax) => {
   const masked = text.split('');
-  for (const { start, end } of findComments(text, syntax)) for (let k = start; k < end; k++) if (masked[k] !== '\n') masked[k] = '\0';
+  for (const { start, end } of findComments(text, syntax)) {
+    for (let k = start; k < end; k++) if (masked[k] !== '\n') masked[k] = '\0';
+    const joins = start > 0 && end < text.length && /\S/.test(text[start - 1]) && /\S/.test(text[end]);
+    if (joins) masked[start] = ' ';
+  }
   const before = text.split('\n');
   const kept = [];
+  let dropped = false;
   masked
     .join('')
     .split('\n')
     .forEach((line, k) => {
       const hadComment = line.includes('\0');
       const clean = hadComment ? line.replaceAll('\0', '').replace(/[ \t]+$/, '') : line;
-      if (hadComment && clean.trim() === '' && before[k].trim() !== '') return;
+      if (hadComment && clean.trim() === '' && before[k].trim() !== '') {
+        dropped = true;
+        return;
+      }
+      if (dropped && clean.trim() === '' && (kept.length === 0 || kept[kept.length - 1].trim() === '')) return;
+      dropped = false;
       kept.push(clean);
     });
-  return kept
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/^\n+/, '');
+  return kept.join('\n');
 };
+
+const exempt = (path) => EXEMPT.some((re) => re.test(path));
 
 export const trackedFiles = () =>
   execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
     .split('\0')
-    .filter((path) => path && classify(path) && syntaxFor(path) && !EXEMPT.some((re) => re.test(path)) && existsSync(join(root, path)));
+    .filter((path) => path && classify(path) && syntaxFor(path) && !exempt(path) && existsSync(join(root, path)));
 
 export const tally = (files = trackedFiles()) => {
   const counts = {};
@@ -335,6 +378,19 @@ export const lowered = (counts, baseline) => {
   for (const path of Object.keys(baseline).sort()) {
     const count = counts[path]?.lines.length ?? 0;
     if (count > 0) next[path] = Math.min(count, baseline[path]);
+  }
+  return next;
+};
+
+export const moved = (counts, baseline) => {
+  const next = { ...baseline };
+  const gone = Object.keys(baseline).filter((path) => !existsSync(join(root, path)));
+  for (const [path, { lines }] of Object.entries(counts)) {
+    if (path in next || !gone.length) continue;
+    const from = gone.find((g) => basename(g) === basename(path)) ?? gone.reduce((a, b) => (next[b] > next[a] ? b : a));
+    next[path] = Math.min(lines.length, next[from]);
+    delete next[from];
+    gone.splice(gone.indexOf(from), 1);
   }
   return next;
 };
@@ -365,10 +421,10 @@ const report = (counts) => {
 
 const main = (args) => {
   if (args[0] === '--strip') {
-    for (const path of args.slice(1)) {
-      const syntax = syntaxFor(path);
-      if (!syntax) continue;
-      const abs = join(root, path);
+    for (const arg of args.slice(1)) {
+      const abs = resolve(process.cwd(), arg);
+      const syntax = syntaxFor(abs);
+      if (!syntax || exempt(relative(root, abs))) continue;
       writeFileSync(abs, strip(readFileSync(abs, 'utf8'), syntax));
     }
     return 0;
@@ -384,7 +440,7 @@ const main = (args) => {
     );
     return 0;
   }
-  const baseline = readBaseline();
+  const baseline = args.includes('--update') ? moved(counts, readBaseline()) : readBaseline();
   if (args.includes('--check') || args.includes('--update')) {
     const over = ratchet(counts, baseline);
     for (const { path, count, allowed, lines } of over) {
@@ -394,14 +450,16 @@ const main = (args) => {
     }
     if (over.length) {
       console.error('\nComments are banned (docs/adr/0018-no-comments.md). Delete them, or move a decision into an ADR.');
+      if (over.some(({ path }) => !(path in baseline)))
+        console.error('A renamed file keeps its old allowance: node scripts/comments.mjs --update.');
       return 1;
     }
     if (args.includes('--update')) writeBaseline(lowered(counts, baseline));
     else {
-      const stale = Object.keys(lowered(counts, baseline)).filter((path) => lowered(counts, baseline)[path] !== baseline[path]);
-      const gone = Object.keys(baseline).filter((path) => !(path in lowered(counts, baseline)));
-      if (stale.length || gone.length) {
-        console.error(`${stale.length + gone.length} files have fewer comments than the baseline: run node scripts/comments.mjs --update`);
+      const low = lowered(counts, baseline);
+      const behind = Object.keys(baseline).filter((path) => low[path] !== baseline[path]);
+      if (behind.length) {
+        console.error(`${behind.length} files have fewer comments than the baseline: run node scripts/comments.mjs --update`);
         return 1;
       }
     }

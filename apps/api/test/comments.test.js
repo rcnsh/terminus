@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SYNTAX, commentLines, lowered, ratchet, strip, tally } from '../../../scripts/comments.mjs';
+import { SYNTAX, commentLines, lowered, moved, ratchet, strip, tally } from '../../../scripts/comments.mjs';
 
 const lines = (text, kind) => commentLines(text, SYNTAX[kind]).lines;
 
@@ -31,6 +31,47 @@ test('shell, Python and YAML: hashes that start a word, shebangs and pinned vers
   assert.deepEqual(lines(sh, 'sh'), [2]);
   assert.deepEqual(lines('- uses: actions/checkout@abc # v7.0.1\n# why', 'yaml'), [2]);
   assert.deepEqual(lines("x = '#'  # real\ns = '''\n# in a string\n'''", 'py'), [1]);
+});
+
+test('HTML: comments in its style and script count, markup inside a script does not', () => {
+  const html = [
+    '<!-- a -->',
+    '<style>',
+    '  /* css */ p { }',
+    '</style>',
+    '<script type="module">',
+    "  const s = '<!-- no -->'; // js",
+    '</script>',
+  ].join('\n');
+  assert.deepEqual(lines(html, 'html'), [1, 3, 6]);
+});
+
+test('shell: a heredoc is text, not comments, until its delimiter', () => {
+  const sh = [
+    'cat > lock <<EOF',
+    '# written to the file',
+    'EOF',
+    '# real',
+    "cat <<-'END'",
+    '\t# also text',
+    '\tEND',
+    'echo $((1<<2)) # real',
+  ].join('\n');
+  assert.deepEqual(lines(sh, 'sh'), [4, 8]);
+});
+
+test('strip leaves blank lines inside strings and keeps tokens apart', () => {
+  assert.equal(strip('const s = `a\n\n\n\nb`;\n', SYNTAX.js), 'const s = `a\n\n\n\nb`;\n');
+  assert.equal(strip('x = a+/**/+b;\nreturn/**/x;\n', SYNTAX.js), 'x = a+ +b;\nreturn x;\n');
+  assert.equal(strip('a();\n\n// gone\n\nb();\n', SYNTAX.js), 'a();\n\nb();\n');
+});
+
+test('a renamed file carries its allowance from the path that went', () => {
+  const counts = { 'apps/api/src/renamed-config.ts': { lines: [1, 2, 3] } };
+  assert.deepEqual(moved(counts, { 'apps/api/src/gone-config.ts': 5, 'apps/api/src/http.ts': 1 }), {
+    'apps/api/src/renamed-config.ts': 3,
+    'apps/api/src/http.ts': 1,
+  });
 });
 
 test('strip removes comments and the lines they stood on, and leaves code alone', () => {
