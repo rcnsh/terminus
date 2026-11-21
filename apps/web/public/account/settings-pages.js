@@ -500,7 +500,7 @@ export function weeksText(weeks) {
     if (last && w <= last[1] + 1) last[1] = Math.max(last[1], w);
     else runs.push([w, w]);
   }
-  const zh = globalThis.window?.i18n?.lang === 'zh';
+  const zh = window.i18n?.lang === 'zh';
   return t('wk {0}', runs.map(([a, b]) => (a === b ? String(a) : `${a}–${b}`)).join(zh ? '，' : ', '));
 }
 

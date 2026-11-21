@@ -76,12 +76,10 @@ function onPop(e) {
   }
   if (onEntry && !sheet.get()?.from) dropEntry();
 }
-if (typeof window !== 'undefined') {
-  window.addEventListener('popstate', onPop);
-  if (history.state?.[BACK_MARK]) {
-    onEntry = true;
-    dropEntry();
-  }
+window.addEventListener('popstate', onPop);
+if (history.state?.[BACK_MARK]) {
+  onEntry = true;
+  dropEntry();
 }
 
 function openSheet(what) {
