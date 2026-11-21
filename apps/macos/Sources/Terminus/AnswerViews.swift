@@ -648,7 +648,7 @@ struct NearbyBoard: View {
     }
 
     nonisolated static func dest(_ r: BoardRow) -> (lead: String, place: String?, trail: String) {
-        guard let d = r.dest else { return (to(r), nil, "") }
+        let d = r.dest ?? ""
         guard let p = r.destPlace, !p.isEmpty, let i = d.range(of: p) else { return (d, nil, "") }
         return (String(d[..<i.lowerBound]), p, String(d[i.upperBound...]))
     }
@@ -670,20 +670,9 @@ struct NearbyBoard: View {
         }
     }
 
-    nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
+    nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? "–" }
 
-    nonisolated static func eta(etaS: Int?, quality: String) -> String {
-        guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
-        if s < 45 { return quality == "scheduled" || quality == "stale" ? L("~%@", L("%@ min", "1")) : L("now") }
-        let m = L("%@ min", "\((s + 30) / 60)")
-        return quality == "scheduled" || quality == "stale" ? L("~%@", m) : m
-    }
-
-    nonisolated static func words(_ b: NearbyBus) -> String {
-        let w = b.eta ?? eta(etaS: b.etaS, quality: b.quality)
-        guard b.approx, w.range(of: #"\d"#, options: .regularExpression) == nil else { return w }
-        return L("~%@", L("%@ min", "1"))
-    }
+    nonisolated static func words(_ b: NearbyBus) -> String { b.eta ?? "–" }
 
     nonisolated static func saidMinutes(_ seconds: Int) -> String {
         let m = (seconds + 30) / 60
@@ -699,11 +688,6 @@ struct NearbyBoard: View {
         case "live": first ? L("%@, live", m) : m
         default: L("about %@", m)
         }
-    }
-
-    nonisolated static func to(_ r: BoardRow) -> String {
-        if let end = r.towards?.last { return L("to %@", end) }
-        return r.toText ?? L("Ends here")
     }
 
     nonisolated static func spoken(_ r: BoardRow) -> String {
@@ -790,7 +774,7 @@ private struct TodayRow: View {
                 .frame(width: 58, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(.callout).strikethrough(item.status == "skipped")
-                if let sub = item.sub { Text(sub).font(.caption).foregroundStyle(.secondary) }
+                if let line = item.line { Text(line).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 0)
             if item.removable == true {

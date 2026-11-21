@@ -99,7 +99,7 @@ import Testing
 @Test func todayKeepsTheEntriesItCanRead() throws {
     let json = """
         {"date": "2026-10-08", "items": [
-          {"kind": "class", "key": "CS2030", "label": "CS2030", "status": "next", "startsAt": "2026-10-08T02:00:00Z"},
+          {"kind": "class", "key": "CS2030", "label": "CS2030", "title": "CS2030", "status": "next", "startsAt": "2026-10-08T02:00:00Z"},
           {"kind": "class", "key": "broken"}
         ]}
         """

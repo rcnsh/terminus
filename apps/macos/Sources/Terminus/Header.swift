@@ -107,9 +107,7 @@ struct Header: View {
 
     private func big(_ a: NextAnswer?) -> String {
         guard let a else { return L("Checking…") }
-        if let title = a.card?.title { return title }
-        guard a.hasLiveTime, let at = a.departure else { return a.label }
-        return "\(a.service) · \(a.quality == "scheduled" ? L("~%@", campusTime(at)) : campusTime(at))"
+        return a.card?.title ?? a.label
     }
 
     nonisolated static func countdown(to at: Date, now: Date, minutes: Bool = false) -> String {
@@ -142,17 +140,7 @@ struct Header: View {
         if let p = a.card?.phaseText, let d = a.dest { return "\(p) · \(d.label)" }
         if let h = a.card?.heading { return h }
         if a.mode == "nearby" { return L("Nearby") }
-        if a.card != nil { return L("Next bus") }
-        guard let d = a.dest else { return L("Next bus") }
-        if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(a.startsAt(c))" }
-        let why =
-            switch d.why {
-            case "class": L("Next class")
-            case "gap-home": L("Long gap · home")
-            case "home": L("Heading home")
-            default: L("Going to")
-            }
-        return "\(why) · \(d.label)"
+        return L("Next bus")
     }
 
     private func status(_ a: NextAnswer?) -> String? {

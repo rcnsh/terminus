@@ -161,8 +161,7 @@ final class SetupModel {
     }
 
     nonisolated static func homeWalk(_ r: Campus.Residence, within range: ClosedRange<Int>) -> Int {
-        let walk = r.walkMin ?? max(1, Int(((r.walkM ?? 0) / 1.3 / 60).rounded()))
-        return min(range.upperBound, max(range.lowerBound, walk))
+        min(range.upperBound, max(range.lowerBound, r.walkMin))
     }
 
     var places: [(key: String, label: String, to: String)] {

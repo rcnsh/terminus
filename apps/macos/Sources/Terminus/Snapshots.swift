@@ -99,16 +99,16 @@
                         let m = model(nearbyTab: false)
                         let dayJSON = """
                             {"date":"2026-10-01","items":[
-                              {"kind":"class","key":"a","label":"MA1100 @ LT21","status":"done","fromName":"PGP","startsAt":"\(iso(-7200))"},
-                              {"kind":"class","key":"b","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},"removable":true},
-                              {"kind":"home","key":"h","label":"Home","status":"later","fromName":"UTown","startsAt":"\(iso(12600))","removable":true}
+                              {"kind":"class","key":"a","label":"MA1100 @ LT21","title":"MA1100 @ LT21","status":"done","fromName":"PGP","startsAt":"\(iso(-7200))"},
+                              {"kind":"class","key":"b","label":"GEA1000 @ UTown","title":"GEA1000 @ UTown","line":"Leave by ~\(campusTime(parseISODate(leaves)!)) · D2 from PGP","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},"removable":true},
+                              {"kind":"home","key":"h","label":"Home","title":"Home, from UTown","status":"later","fromName":"UTown","startsAt":"\(iso(12600))","removable":true}
                             ],"note":null}
                             """
                         m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
                         m.removed = try! JSONDecoder().decode(
                             DayPlan.Item.self,
                             from: Data(
-                                #"{"kind":"class","key":"c","label":"CS2030 @ COM1","status":"later","startsAt":"2026-10-01T05:00:00Z","removable":true}"#
+                                #"{"kind":"class","key":"c","label":"CS2030 @ COM1","title":"CS2030 @ COM1","status":"later","startsAt":"2026-10-01T05:00:00Z","removable":true}"#
                                     .utf8))
                         return m
                     }()
@@ -119,8 +119,8 @@
                         let m = model(nearbyTab: false)
                         let dayJSON = """
                             {"date":"2026-10-01","items":[
-                              {"kind":"class","key":"b","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},"removable":true},
-                              {"kind":"home","key":"h","label":"Home","status":"later","fromName":"UTown","startsAt":"\(iso(12600))","removable":true}
+                              {"kind":"class","key":"b","label":"GEA1000 @ UTown","title":"GEA1000 @ UTown","line":"Leave by ~\(campusTime(parseISODate(leaves)!)) · D2 from PGP","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},"removable":true},
+                              {"kind":"home","key":"h","label":"Home","title":"Home, from UTown","status":"later","fromName":"UTown","startsAt":"\(iso(12600))","removable":true}
                             ],"note":null}
                             """
                         m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
@@ -340,7 +340,7 @@
         static func renderSetup(to dir: String) {
             let campusJSON = """
                 {"stops":[{"code":"PGP","name":"Prince George's Park","lat":1.2917,"lon":103.7803},{"code":"COM3","name":"COM 3","lat":1.2948,"lon":103.7747},{"code":"UTOWN","name":"University Town","lat":1.3036,"lon":103.7747}],
-                 "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkM":300,"common":true},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkM":420}]}
+                 "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkMin":4,"common":true},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkMin":5}]}
                 """
             let campus = try! JSONDecoder().decode(Campus.self, from: Data(campusJSON.utf8))
             let profile: [String: Any] = [
