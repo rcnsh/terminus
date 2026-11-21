@@ -35,19 +35,13 @@ from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "shapes.json"
-# The Overpass project's own instance only: what it answers is committed to
-# main unreviewed, so no third-party mirror gets a say in it.
 OVERPASS = "https://overpass-api.de/api/interpreter"
-# The roads in BBOX are a few MB of JSON; a reply this big is not them.
 MAX_BYTES = 100_000_000
-# South, west, north, east: every stop (Botanic Gardens included) plus a margin.
 BBOX = (1.282, 103.760, 1.330, 103.826)
 DRIVABLE = "motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|busway|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link|road"
 SNAP_M = 60
-SNAP_COST = 3.0  # each metre a stop sits off the road counts this much
+OFF_ROAD_COST_PER_M = 3.0
 SIMPLIFY_M = 2.0
-# A leg this much longer than the straight line, and this many metres longer,
-# is a wrong turn in the map data, not a route: refuse to write it.
 ODD_RATIO, ODD_EXTRA_M = 2.5, 400
 
 
@@ -103,7 +97,6 @@ def build(osm):
         ow = tags.get("oneway")
         forward_only = ow in ("yes", "true", "1") or tags.get("junction") in ("roundabout", "circular")
         backward_only = ow == "-1"
-        # A car park aisle is a road, but no bus cuts through one.
         penalty = 3.0 if tags.get("service") in ("parking_aisle", "drive-through") else 1.0
         ids = [i for i in el["nodes"] if i in nodes]
         for a, b in zip(ids, ids[1:]):
@@ -189,8 +182,7 @@ def main():
         if not all(cands):
             problems.append(f"{svc}: a stop has no road near it")
             continue
-        # Viterbi over the stops: the road node per stop that makes the route shortest.
-        best = [{i: (d * SNAP_COST, None) for i, d in cands[0]}]
+        best = [{i: (d * OFF_ROAD_COST_PER_M, None) for i, d in cands[0]}]
         for k in range(1, len(seq)):
             layer = {}
             for j, dj in cands[k]:
@@ -200,7 +192,7 @@ def main():
                         cache[i] = dijkstra(adj, i)
                     dd = cache[i][0].get(j)
                     if dd is not None:
-                        options.append((ci + dd + dj * SNAP_COST, i))
+                        options.append((ci + dd + dj * OFF_ROAD_COST_PER_M, i))
                 if options:
                     layer[j] = min(options)
             if not layer:
@@ -221,7 +213,6 @@ def main():
                 straight = haversine(stops[seq[k]], stops[seq[k + 1]])
                 if road > ODD_RATIO * straight and road - straight > ODD_EXTRA_M:
                     problems.append(f"{svc}: {seq[k]} to {seq[k + 1]} is {round(road)} m by road, {round(straight)} m straight")
-                # Each leg simplified on its own, so every stop stays a vertex.
                 leg = simplify(leg, SIMPLIFY_M)
                 line.extend(leg if not line else leg[1:])
                 at.append(at[-1] + sum(haversine(x, y) for x, y in zip(leg, leg[1:])))
@@ -242,8 +233,6 @@ def main():
         "source": "OpenStreetMap roads (c) OpenStreetMap contributors, ODbL, via scripts/data/route_shapes.py",
         "routes": routes,
     }
-    # Only write when something other than the timestamp changed, so the
-    # weekly workflow doesn't commit a timestamp-only "refresh".
     if OUT.exists():
         try:
             previous = json.loads(OUT.read_text())

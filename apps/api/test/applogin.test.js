@@ -57,12 +57,10 @@ async function anon(env, name = 'Pixel 8') {
   return (await res.json()).token;
 }
 
-/** The anonymous account's id (there is at most one in these tests). */
 function anonId(db) {
   return db._db.prepare('SELECT id FROM users WHERE email IS NULL').get()?.id;
 }
 
-/** Gives a user some trip state today, as a "Not going" would. */
 async function seedTrip(env, userId) {
   const now = Date.now();
   const res = await env.TRIPS.get(userId).fetch('https://trip/update', {
@@ -76,26 +74,21 @@ async function seedTrip(env, userId) {
   assert.equal(res.status, 200);
 }
 
-/** Whether a user still has trip state today (signals or a pending alarm). */
 async function hasTrip(env, userId) {
   const day = await (await env.TRIPS.get(userId).fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
-  // A cleared object keeps only its "gone" mark (and that mark's alarm) until midnight.
   const kept = [...(env.TRIPS.instances.get(userId)?.storage._map.keys() ?? [])].filter((k) => k !== 'gone' && k !== 'deleteAt');
   return day !== null || kept.length > 0;
 }
 
-/** The approval link's secret from the latest email. */
 function lastLink(email) {
   const m = /\/auth\/approve\?r=([A-Za-z0-9_-]+)/.exec(email.sent.at(-1)?.text ?? '');
   return m ? m[1] : null;
 }
 
-/** The code from the latest email. */
 function lastCode(email) {
   return /code is ([2-9A-Z]{6})/.exec(email.sent.at(-1)?.text ?? '')?.[1] ?? null;
 }
 
-/** Starts a sign-in, approves it with the right number, and polls once. */
 async function signInApp(env, email, { token, address = ME, name = 'Pixel 8' } = {}) {
   const started = await call(env, '/api/auth/app/start', { method: 'POST', token, body: { email: address, name } });
   assert.equal(started.status, 201);
@@ -143,7 +136,6 @@ test('an anonymous account cannot make API keys, but its app can delete it', asy
 
 const WATCH = { 'x-terminus-client': 'ios-watch/3.11.0' };
 
-/** A pairing code from the phone redeemed by a watch; returns the watch's token. */
 async function pairWatch(env, phone) {
   const made = await call(env, '/api/me/pair-code', { method: 'POST', token: phone });
   assert.equal(made.status, 200);
@@ -166,7 +158,6 @@ test('an anonymous account pairs another device: same account, no email to send'
   assert.deepEqual((await (await call(env, '/api/me/profile', { token: watch })).json()).home, HOME.home);
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
 
-  // The phone sees the watch in its devices, as a watch; its platform stays ios for older apps.
   const { devices } = await (await call(env, '/api/me/devices', { token: phone })).json();
   assert.deepEqual(
     devices.map((d) => [d.name, d.platform, d.watch, d.current]),
@@ -174,6 +165,7 @@ test('an anonymous account pairs another device: same account, no email to send'
       ['Pixel 8', 'android', false, true],
       ['Apple Watch', 'ios', true, false],
     ],
+    'the phone sees the watch as a watch; its platform stays ios for older apps',
   );
   const client = db._db.prepare("SELECT client FROM sessions WHERE name = 'Apple Watch'").get().client;
   assert.equal(client, 'ios-watch/3.11.0');
@@ -184,8 +176,11 @@ test('a watch is a watch in the devices list by the app it runs, whatever it is 
   const phone = await anon(env);
   const made = await call(env, '/api/me/pair-code', { method: 'POST', token: phone });
   const { code } = await made.json();
-  // Named as an iPhone would be, and without a platform in the body: the header alone says watch.
-  assert.equal((await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone' }, headers: WATCH })).status, 200);
+  assert.equal(
+    (await call(env, '/api/pair', { method: 'POST', body: { code, name: 'iPhone' }, headers: WATCH })).status,
+    200,
+    'named as an iPhone, no platform in the body: the header alone says watch',
+  );
   const { devices } = await (await call(env, '/api/me/devices', { token: phone })).json();
   assert.deepEqual(
     devices.map((d) => [d.platform, d.watch]),
@@ -278,8 +273,7 @@ test("a watch paired to an anonymous account can't delete it, pair or remove dev
   assert.deepEqual(await zh.json(), { error: '只有创建这个账户的设备才能这样做' });
   assert.equal((await call(env, '/api/me', { token: phone })).status, 200, 'the phone is still signed in');
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
-  // The watch can still sign itself out.
-  assert.equal((await call(env, '/api/auth/logout', { method: 'POST', token: watch })).status, 200);
+  assert.equal((await call(env, '/api/auth/logout', { method: 'POST', token: watch })).status, 200, 'the watch can still sign itself out');
   assert.equal((await call(env, '/api/me', { token: watch })).status, 401);
   assert.equal((await call(env, '/api/me', { method: 'DELETE', token: phone })).status, 200, 'the phone deletes the account');
 });
@@ -314,8 +308,7 @@ test('adding an email from the phone signs its paired watch out too; the phone c
   const watch = await pairWatch(env, phone);
   const r = await signInApp(env, email, { token: phone });
   assert.equal(r.outcome, 'added-email');
-  // The anonymous account's sessions all go with its token (addEmailTo).
-  assert.equal((await call(env, '/api/me', { token: watch })).status, 401);
+  assert.equal((await call(env, '/api/me', { token: watch })).status, 401, "the anonymous account's sessions all go with its token");
   const again = await pairWatch(env, r.token);
   assert.equal((await (await call(env, '/api/me', { token: again })).json()).email, ME);
   const added = email.sent.at(-1);
@@ -353,22 +346,24 @@ test('app sign-in: the email carries a link, never the number; the page asks for
 
   const page = await (await call(env, `/auth/approve?r=${lastLink(email)}`)).text();
   assert.match(page, /Sign in to terminus on MacBook Air\?/);
-  // A box to type into, never numbers to pick from: picking would let a
-  // stranger in one time in three.
-  assert.match(page, /<input class="number" id="n" name="n" inputmode="numeric"/);
-  assert.doesNotMatch(page, /name="n" value="\d+"/);
-  // What a person reads: not the inline CSS (its 50% and 86%), nor when it
-  // was requested (the frozen clock's 27 Aug), which would match one random
-  // number in thirty and fail with nothing shown.
+  assert.match(page, /<input class="number" id="n" name="n" inputmode="numeric"/, 'a box to type the number into');
+  assert.doesNotMatch(page, /name="n" value="\d+"/, 'never numbers to pick from, which let a stranger in one time in three');
   const read = page
     .replace(/<(style|script)\b[^>]*>[\s\S]*?<\/\1>/g, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/Requested [^.]*\./, ' ');
-  assert.match(read, /Sign in to terminus on MacBook Air\?/, 'the words are still checked');
+  assert.match(
+    read,
+    /Sign in to terminus on MacBook Air\?/,
+    'the words a person reads, without the CSS or the requested date, are still checked',
+  );
   assert.doesNotMatch(read, new RegExp(`\\b${s.match}\\b`), 'the page never shows the number');
-  // Opening the page twice (a mail scanner, then the user) changes nothing.
   assert.equal((await call(env, `/auth/approve?r=${lastLink(email)}`)).status, 200);
-  assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'pending');
+  assert.equal(
+    (await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status,
+    'pending',
+    'opening the page twice (a mail scanner, then the user) changes nothing',
+  );
 });
 
 test('app sign-in: the code is the only number the keyboard could offer from the email', async () => {
@@ -406,13 +401,10 @@ test('app sign-in: "this wasn\'t me" cancels it and stops app sign-ins to the ad
   const s = await (await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
   assert.equal((await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: 'none' } })).status, 200);
   assert.equal((await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json()).status, 'denied');
-  // A stranger can't keep asking until someone confused types a lucky number,
-  // whichever form of the address they use.
   const sent = email.sent.length;
   for (const addr of [ME, ME.replace('@', '+x@')]) {
     const again = await call(env, '/api/auth/app/start', { method: 'POST', body: { email: addr, name: 'Pixel' } });
-    // Not a 429, which the apps take as "wait" and would hold back pairing with.
-    assert.equal(again.status, 403);
+    assert.equal(again.status, 403, `${addr}: refused, and not a 429, which the apps take as "wait" and would hold back pairing with`);
     assert.equal(again.headers.get('retry-after'), null);
     assert.match((await again.json()).error, /turned down recently/);
   }
@@ -474,8 +466,7 @@ test('adding an email to an anonymous account keeps everything; the old token is
   const u = db._db.prepare('SELECT email, email_added FROM users').get();
   assert.equal(u.email, ME);
   assert.ok(u.email_added > 0);
-  // No "device added" email: it's the same device.
-  assert.equal(email.sent.length, 1);
+  assert.equal(email.sent.length, 1, 'no "device added" email: it is the same device');
 });
 
 test('signing in to an existing account from a fresh install drops the empty anonymous account', async () => {
@@ -485,8 +476,8 @@ test('signing in to an existing account from a fresh install drops the empty ano
   const old = await anon(env);
   const id = anonId(db);
   await seedTrip(env, id);
-  // Wait out the cooldown the web sign-in started.
-  await env.KV.delete([...env.KV._map.keys()].find((k) => k.startsWith('mail:')));
+  const webSignInCooldown = [...env.KV._map.keys()].find((k) => k.startsWith('mail:'));
+  await env.KV.delete(webSignInCooldown);
   db.exec('UPDATE magic_links SET created = 0');
   const r = await signInApp(env, email, { token: old });
   assert.equal(r.outcome, 'signed-in');
@@ -601,9 +592,8 @@ test('an app older than config:minClient is told to update; everyone else is ser
   assert.equal((await call(strict, '/api/me/profile', as('android-beta/2.6.0-beta.3'))).status, 426);
   assert.equal((await call(strict, '/api/me/profile', as('android/2.6.0'))).status, 200);
   assert.equal((await call(strict, '/api/me/profile', as('android-play/2.7.1'))).status, 200);
-  // No header (the web app, API users), or a platform with no minimum.
-  assert.equal((await call(strict, '/api/me/profile', as(null))).status, 200);
-  assert.equal((await call(strict, '/api/me/profile', as('mac/1.0.0'))).status, 200);
+  assert.equal((await call(strict, '/api/me/profile', as(null))).status, 200, 'no header: the web app and API users');
+  assert.equal((await call(strict, '/api/me/profile', as('mac/1.0.0'))).status, 200, 'a platform with no minimum');
   assert.equal((await call(strict, '/api/me/push', { ...as('android/2.5.9'), method: 'DELETE' })).status, 200);
   assert.equal((await call(strict, '/api/auth/logout', { ...as('android/2.5.9'), method: 'POST' })).status, 200);
   const other = await anon(env);
@@ -763,10 +753,8 @@ test('an inbox over its hourly budget does not spend the global email ceiling', 
   assert.equal(spent, 0);
 });
 
-test('a web sign-in inside the cooldown of an app sign-in to the address sends no second email', async () => {
+test('a web sign-in inside the cooldown of an app sign-in sends no second email, though KV has not yet seen the cooldown', async () => {
   const { env, email } = setup();
-  // KV is eventually consistent: another data centre may not see the inbox's
-  // cooldown key yet, so the D1 check must hold for both kinds of sign-in.
   const get = env.KV.get.bind(env.KV);
   env.KV.get = async (k, type) => (String(k).startsWith('mail:') ? null : get(k, type));
   assert.equal((await call(env, '/api/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 201);
@@ -785,7 +773,6 @@ test('merging a device setup into the account is all or nothing', async () => {
   const old = await anon(env);
   await call(env, '/api/me/profile', { method: 'PUT', token: old, body: HOME });
   const id = anonId(db);
-  // D1 drops the batch: the account's setup stays as it was, and the device's account too.
   const failing = {
     ...db,
     batch: async () => {
@@ -793,17 +780,14 @@ test('merging a device setup into the account is all or nothing', async () => {
     },
   };
   await assert.rejects(mergeAnonymous(failing, user.id, old, 'device', now));
-  assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['COM3']);
-  assert.equal(anonId(db), id);
-  // Then it goes through whole.
-  assert.deepEqual(await mergeAnonymous(db, user.id, old, 'device', now), { removed: id });
+  assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['COM3'], "D1 dropping the batch leaves the account's setup as it was");
+  assert.equal(anonId(db), id, "and the device's account too");
+  assert.deepEqual(await mergeAnonymous(db, user.id, old, 'device', now), { removed: id }, 'then it goes through whole');
   assert.deepEqual((await loadProfileJson(db, user.id)).home.stops, ['PGP']);
   assert.equal(anonId(db), undefined);
 });
 
-test('app sign-in: a repeat in the cooldown does not spend the global email ceiling', async () => {
-  // Otherwise three addresses repeating one email address could use up
-  // everyone's sign-in emails without a single email being sent.
+test('app sign-in: a repeat in the cooldown does not spend the global email ceiling, which repeats could use up for everyone', async () => {
   const { env } = setup();
   let spent = 0;
   env.RL_MAIL = { limit: async () => (spent++, { success: true }) };
@@ -826,7 +810,6 @@ test('app sign-in: requests for one address all at once send one email', async (
   assert.equal(email.sent.length, 1);
 });
 
-/** Runs `before` just ahead of the next D1 batch, then lets batches through as usual. */
 function beforeNextBatch(db, before) {
   const batch = db.batch.bind(db);
   db.batch = async (stmts) => {
@@ -841,7 +824,6 @@ test('app sign-in: a web sign-in taking the email mid-poll spends nothing; the n
   const old = await anon(env);
   const s = await (await call(env, '/api/auth/app/start', { method: 'POST', token: old, body: { email: ME, name: 'Pixel 8' } })).json();
   await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } });
-  // Between the poll's reads and its writes, the email gets an account of its own.
   beforeNextBatch(db, () => db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('web-user', '${ME}', 1, 1)`));
   const first = await (await call(env, '/api/auth/app/poll', { method: 'POST', body: s })).json();
   assert.deepEqual(first, { status: 'pending' });

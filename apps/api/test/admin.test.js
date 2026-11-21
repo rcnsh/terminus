@@ -17,7 +17,6 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
   assert.ok(asked[9].sql.includes(`quantileExactWeighted(0.95)(${COL.next.tookMs}, _sample_interval)`), "/api/me/next's times");
   assert.match(asked[9].sql, /blob1 = 'next'/);
   assert.match(asked[3].sql, /blob1 = 'timelapse'/, "the recorder's polls, by what they cost NUS");
-  // The dashboard lines these up with Singapore days (parts.js lastDays), and compares two full weeks besides today.
   for (const i of [0, 3]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) AS day/);
   assert.match(asked[0].sql, /INTERVAL '15' DAY/);
   assert.match(asked[4].sql, /blob1 = 'active'/, 'the daily active counts');
@@ -29,7 +28,6 @@ test('the dashboard asks Analytics Engine with the token, and says so when it fa
     new RegExp(`${COL.apikey.keyId} AS keyId[\\s\\S]*blob1 = 'apikey'[\\s\\S]*GROUP BY keyId, day, outcome`),
     'the requests made with each API key, by day',
   );
-  // Both cover today and the 7 Singapore days before it.
   for (const i of [10, 11]) assert.match(asked[i].sql, /formatDateTime\(timestamp, '%Y-%m-%d', 'Asia\/Singapore'\) >= '\d{4}-\d\d-\d\d'/);
   assert.match(
     asked[11].sql,
@@ -81,12 +79,10 @@ test('dismissed crashes are left out before the dashboard takes its 25', async (
     fatal: 0,
     last: '2026-10-20 10:00:00',
   }));
-  // Analytics Engine as it would answer: the commonest crashes, up to the query's LIMIT.
   const fetchImpl = async (_url, init) => {
     const crashes = init.body.includes(`${COL.apperror.type} AS type`);
     return new Response(JSON.stringify({ data: crashes ? rows.slice(0, Number(/LIMIT (\d+)/.exec(init.body)[1])) : [] }));
   };
-  // The ten commonest, dismissed after their last report.
   const dismissed = Object.fromEntries(rows.slice(0, 10).map((r) => [r.fingerprint, Date.parse('2026-10-21T00:00:00Z')]));
   const env = { KV: makeKV({ 'config:crashes:dismissed': dismissed }), ANALYTICS_TOKEN: 'ae-token', CF_ACCOUNT_ID: 'acct' };
   const s = await adminStats(env, Date.now(), fetchImpl);

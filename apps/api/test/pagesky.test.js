@@ -1,8 +1,3 @@
-/**
- * The sky on the /docs page's bar (pagesky.ts) is the web app's sky: the
- * same hours as daylight.js and the same colours as app.css, in both themes,
- * so it looks like the apps at that hour.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,7 +7,6 @@ import { PAGE_SKIES, phaseAt, sgtMinute } from '../src/site/pagesky.ts';
 
 const css = fs.readFileSync(new URL('../../web/public/app/app.css', import.meta.url), 'utf8');
 
-/** The custom properties set by the rule whose selector is exactly `sel` (at the start of a line, maybe indented). */
 function vars(sel) {
   const m = css.match(new RegExp(`\\n\\s*${sel.replace(/[.[\]()"=:]/g, '\\$&')} \\{([^}]*)\\}`));
   assert.ok(m, `no rule for ${sel}`);
@@ -21,8 +15,7 @@ function vars(sel) {
 
 test("the page's sky keeps the web app's hours", () => {
   for (let min = 0; min < 1440; min++) assert.equal(phaseAt(min), webPhaseAt(min), `minute ${min}`);
-  // Singapore is UTC+8: 00:30 UTC is 08:30 there.
-  assert.equal(sgtMinute(Date.UTC(2026, 9, 7, 0, 30)), 8 * 60 + 30);
+  assert.equal(sgtMinute(Date.UTC(2026, 9, 7, 0, 30)), 8 * 60 + 30, '00:30 UTC is 08:30 in Singapore');
   assert.equal(sgtMinute(Date.UTC(2026, 9, 7, 17, 0)), 60);
 });
 

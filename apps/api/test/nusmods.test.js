@@ -7,7 +7,6 @@ const SHARE = 'https://nusmods.com/timetable/sem-1/share?EC1101E=TUT:W11,LEC:2&M
 test('parseShareUrl expands short lesson codes and skips view state', () => {
   const s = parseShareUrl(SHARE);
   assert.equal(s.semester, 1);
-  // hidden= is not a module.
   assert.deepEqual(s.selections.map((x) => `${x.module}/${x.lessonType}/${x.classNo}`).sort(), [
     'EC1101E/Lecture/2',
     'EC1101E/Tutorial/W11',
@@ -34,14 +33,12 @@ test('acadYear rolls at August (sem 1 starts then)', () => {
 });
 
 test('venueToStop resolves full code then building prefix', () => {
-  // LT27 is itself a stop; a room in it must still resolve.
   assert.equal(venueToStop('LT27')?.stop, 'LT27');
   assert.equal(venueToStop('LT27-01-01')?.stop, 'LT27', 'falls back to the building');
   assert.equal(venueToStop('COM3')?.stop, 'COM3');
   assert.equal(venueToStop('definitely-not-a-venue'), null);
 });
 
-// Stubbed NUSMods API: no network, per the project's no-credentials rule.
 function stubFetch(modules) {
   return async (u) => {
     const m = /modules\/([^.]+)\.json/.exec(String(u));
@@ -59,7 +56,6 @@ const MODULES = {
         timetable: [
           { lessonType: 'Lecture', classNo: '2', day: 'Tuesday', startTime: '1600', endTime: '1800', venue: 'LT27' },
           { lessonType: 'Tutorial', classNo: 'W11', day: 'Wednesday', startTime: '1300', endTime: '1400', venue: 'COM3-0120' },
-          // a class the user did NOT select -- must be ignored
           { lessonType: 'Lecture', classNo: '1', day: 'Monday', startTime: '0900', endTime: '1100', venue: 'LT27' },
         ],
       },
@@ -80,9 +76,7 @@ test('resolveTrips turns selections into destination trips, ignoring unselected 
   const { trips, unresolved } = await resolveTrips(share, Date.UTC(2026, 7, 28), stubFetch(MODULES));
   assert.equal(unresolved.length, 0);
 
-  // 3 selections -> 3 trips (LEC:2, TUT:W11, MA1100 LEC:1). The unselected
-  // EC1101E LEC:1 on Monday must not appear.
-  assert.equal(trips.length, 3);
+  assert.equal(trips.length, 3, 'one trip per selected lesson, none for the unselected one');
   assert.ok(!trips.some((t) => t.day === 1 && t.arriveByMin === 540), 'unselected 09:00 Mon class leaked in');
 
   const tue = trips.find((t) => t.day === 2);
@@ -144,7 +138,6 @@ test('a network failure is reported per module, never thrown', async () => {
 });
 
 test('venueAt: the room itself from the room map, else its building, else nothing', () => {
-  // LT11 is 96 m from its stop (Ventus), too far for "at the stop" alone.
   const lt11 = venueAt('LT11');
   assert.ok(lt11 && Math.abs(lt11.lat - 1.29546) < 1e-5 && Math.abs(lt11.lon - 103.7714) < 1e-5);
   assert.deepEqual(venueAt('lt11 '), lt11, 'case and spaces do not matter');
@@ -152,7 +145,6 @@ test('venueAt: the room itself from the room map, else its building, else nothin
   const building = venueAt('AS1');
   assert.ok(room && building);
   assert.notDeepEqual(room, building, "a room has its own point, not its building's mean");
-  // COM3-01-19 is in the room map with no point of its own: its building's.
   assert.deepEqual(venueAt('COM3-01-19'), venueAt('COM3'));
   assert.ok(venueAt('COM3'));
   assert.equal(venueAt('NOT-A-PLACE'), null);

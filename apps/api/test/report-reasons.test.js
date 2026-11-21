@@ -1,8 +1,3 @@
-/**
- * Which "Is this wrong?" reasons a card offers (card.ts reasonsOf), on the
- * real answers in fixtures/answers: a reason only about something the card
- * has, a bus to come or be late, a stop, a walk.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

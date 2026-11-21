@@ -1,8 +1,3 @@
-/**
- * The feed gate (feedgate.ts): rule 2's limits across every data centre, not
- * only within one. Each "data centre" here is a fresh edge cache
- * (installGlobals) sharing one FEED_GATE namespace, as they share the real one.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -18,7 +13,6 @@ const D1_BUS = { vehplate: 'PD1001A', lat: 1.2966, lng: 103.7764, speed: 20, dir
 
 const gated = () => ({ ...makeEnv(), FEED_GATE: makeDurableObjects(FeedGate) });
 
-/** A call in a data centre of its own: an empty edge cache, the same gate. */
 async function elsewhere(env, fetchImpl, nowMs, call) {
   installGlobals(fetchImpl, nowMs);
   const ctx = makeCtx();
@@ -37,11 +31,10 @@ test('a stop asked for in many data centres at once reaches NUS once a window', 
     assert.equal(sa.arrivals[0]?.svc, 'D2', `data centre ${dc} gets the answer`);
   }
   assert.equal(f.counts.shuttle, 1);
-  // The next window, one more call, wherever it's asked.
   const next = FROZEN_NOW + TTL.arrivalsMs;
   await elsewhere(env, f, next, (ctx) => getArrivals(env, ctx, 'COM3', next));
   await elsewhere(env, f, next + 1_000, (ctx) => getArrivals(env, ctx, 'COM3', next + 1_000));
-  assert.equal(f.counts.shuttle, 2);
+  assert.equal(f.counts.shuttle, 2, 'the next window, one more call, wherever it is asked');
 });
 
 test('without the gate each data centre asks NUS itself (what the gate is for)', async () => {
@@ -124,9 +117,6 @@ test('an answer from a call that outlived its window does not replace a newer on
 });
 
 test('a claim that reaches the gate after its caller gave up on it holds nothing', async () => {
-  // The caller waits GATE_ASK_MS for the gate and then fetches by itself. A
-  // claim landing after that would mark a call pending that nobody is making,
-  // and every other data centre would wait on it for the rest of the window.
   const { GATE_WAIT_MS } = await import('../src/feeds/feedgate.ts');
   const ns = makeDurableObjects(FeedGate);
   const claim = (body) =>
@@ -136,7 +126,6 @@ test('a claim that reaches the gate after its caller gave up on it holds nothing
       .then((r) => r.json());
   assert.deepEqual(await claim({ freshMs: 15_000, askedAt: Date.now() - GATE_WAIT_MS - 5_000 }), { value: null });
   assert.equal((await claim({ freshMs: 15_000, askedAt: Date.now() })).go, true, 'the next caller may fetch');
-  // And the caller says when it asked.
   const env = gated();
   const real = env.FEED_GATE.get;
   let sent = null;
@@ -167,7 +156,6 @@ test('a gate with nothing to share yet neither quiets the stop nor trips the bre
   const failing = makeFetch({ fail: true });
   await elsewhere(env, failing, FROZEN_NOW, (ctx) => getArrivals(env, ctx, 'COM3', FROZEN_NOW).catch(() => null));
   const before = failing.counts.shuttle;
-  // Another data centre, inside the failed window: no call, an error, and no memo left behind.
   const cache = installGlobals(failing, FROZEN_NOW + 1_000);
   const ctx = makeCtx();
   await assert.rejects(getArrivals(env, ctx, 'COM3', FROZEN_NOW + 1_000));
@@ -178,9 +166,6 @@ test('a gate with nothing to share yet neither quiets the stop nor trips the bre
 });
 
 test('a waiter answered by /put lets go of its own timer', async () => {
-  // Each waiter arms a timer for GATE_WAIT_MS in case the call never puts.
-  // Once the answer arrives the timer has nothing left to do, and an object
-  // busy in a window would otherwise keep one alive per caller it answered.
   const ns = makeDurableObjects(FeedGate);
   const gate = (path, body) =>
     ns

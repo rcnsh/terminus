@@ -69,3 +69,14 @@ refused for its version or key (`auth:renewRefused`): at most two a day
 (`auth:renewed`). Each push
 user's Trip object (`src/push/tripdo.ts`) wakes at most every 30 s to
 recompute the card, asking for its stops through the cache.
+
+## The probes, by hand only
+
+The probes enforce their limits in code. `probe_buses.py` polls at most 6
+services (`MAX_SERVICES`), none faster than every 5 s (`MIN_EVERY_S`, the
+map's `TTL.busesMs`), for at most 10 minutes; after an error it backs off
+10, 20, 40 s (at most 60) before a fresh token, and stops after 5 errors.
+`probe_arrivals.py` polls at most 4 stops (`MAX_STOPS`) every 5 s for at
+most 15 minutes, ends on any refusal, 429, 5xx or timeout, and sends a fresh
+random device id, never the Worker's, as each uNivUS install has its own.
+Both take their feed client from `scrape_stops.py`.

@@ -1,20 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { COL } from '../src/analytics-rows.ts';
 
-/**
- * Test doubles for the Workers runtime. The suite must run with NO
- * credentials and no network, so everything the Worker touches is faked here.
- */
-
-/**
- * caches.default. Each match() returns a NEW Response whose body is
- * single-use -- exactly like the real one, so code that reads a cached
- * response twice still throws here. That is the point.
- */
 export function makeCache() {
   const store = new Map();
-  // An HTTP cache never sees a URL's #fragment (no request carries one), so
-  // neither does this one: two keys that differ only after # are one entry.
   const keyOf = (req) => (typeof req === 'string' ? req : req.url).split('#')[0];
   return {
     _store: store,
@@ -30,7 +18,6 @@ export function makeCache() {
     },
     async put(req, res) {
       const key = keyOf(req);
-      // Bytes, not text: the map's pieces are binary.
       const body = await res.arrayBuffer();
       const cc = res.headers.get('cache-control') || '';
       const m = /max-age=(\d+)/.exec(cc);
@@ -43,7 +30,6 @@ export function makeCache() {
     async delete(req) {
       return store.delete(keyOf(req));
     },
-    /** Put a value in directly, bypassing the Worker. */
     seed(url, value, maxAgeS = 300) {
       store.set(url, {
         body: JSON.stringify(value),
@@ -54,11 +40,6 @@ export function makeCache() {
   };
 }
 
-/**
- * The real ExecutionContext keeps the Worker alive until waitUntil promises
- * settle. A stub that drops them makes tests race their own cache writes, so
- * this one collects them and settle() awaits them.
- */
 export function makeCtx() {
   const pending = [];
   return {
@@ -98,10 +79,8 @@ export function makeKV(seed = {}) {
 }
 
 export function makeEnv(kv = makeKV(), ae = undefined) {
-  // Structurally valid, entirely fake. No captured values anywhere.
   return {
     KV: kv,
-    // Absent by default: logging must be a no-op without the binding.
     AE: ae,
     NEXTBUS_AUTH_BASE: 'https://auth.example.test',
     NEXTBUS_PROXY_BASE: 'https://proxy.example.test/univus/api/bus-proxy',
@@ -113,23 +92,17 @@ export function makeEnv(kv = makeKV(), ae = undefined) {
   };
 }
 
-/** The bus proxy's shuttle-service reply: {code, msg, data}, with the old
- *  ShuttleServiceResult contents now sitting under `data`. */
 export function shuttlePayload(shuttles) {
   return {
     code: '00000',
     msg: '',
-    // Made as the call is: no lag, unless a test says otherwise.
     data: { TimeStamp: new Date(Date.now()).toISOString(), name: 'STUB', shuttles, hints: [] },
     ts: '20260928204939',
   };
 }
 
-// Global, so every mint in a test run is distinct even with Date.now frozen.
 let tokenSerial = 0;
 
-/** A structurally real PUBLIC-domain JWT that expires an hour from now. The
- *  serial makes each mint distinct, so a forced refresh is observable. */
 function fakeJwt(serial = 0) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
@@ -140,7 +113,6 @@ function fakeJwt(serial = 0) {
   ].join('.');
 }
 
-/** An Analytics Engine data point by its fields' names (ROWS in analytics-rows.ts), with blob1 as `kind`. */
 export function named(p) {
   const at = (c) => (c.startsWith('blob') ? p.blobs[Number(c.slice(4)) - 1] : p.doubles[Number(c.slice(6)) - 1]);
   return Object.fromEntries(Object.entries(COL[p.blobs[0]] ?? { kind: 'blob1' }).map(([f, c]) => [f, at(c)]));
@@ -156,19 +128,12 @@ export function makeAnalytics() {
     rows(kind) {
       return events.filter((e) => e.blobs[0] === kind);
     },
-    /** The [kind] rows by field name. */
     named(kind) {
       return events.filter((e) => e.blobs[0] === kind).map(named);
     },
   };
 }
 
-/**
- * Fake upstream: the auth host plus the bus proxy. `reject` makes the next N
- * proxy calls answer with a non-"00000" code (at HTTP 200, like the real one)
- * so the forced-refresh retry can be exercised. Every proxy request is kept in
- * `requests` so tests can assert on headers and body.
- */
 export function makeFetch({
   byStop = {},
   buses = {},
@@ -194,16 +159,12 @@ export function makeFetch({
     if (url.includes('get-access-token')) {
       counts.auth++;
       mints.push(JSON.parse(init.body ?? '{}'));
-      // The auth host itself failing: a gateway's 5xx, a 429.
       if (mintStatus !== 200) return new Response('unavailable', { status: mintStatus });
-      // A mint refused the way NUS refuses one: HTTP 200, a code, no token.
       if (mintReject) return Response.json({ code: mintReject, msg: 'We have a new release of uNivUS', data: null });
       tokenSerial++;
       return Response.json({
         msg: '',
         code: '00000',
-        // No expires_in: the lifetime lives in the JWT exp, so this must be a
-        // real three-part token or nothing downstream works.
         data: { username: 'User', token: fakeJwt(tokenSerial), userid: 'STUB-USER-ID', domain: 'PUBLIC' },
         ts: '20260827234622',
       });
@@ -211,13 +172,9 @@ export function makeFetch({
 
     if (url.includes('bus-proxy')) {
       counts.shuttle++;
-      // As workerd throws it: a plain Error, not Node's TypeError.
       if (fail) throw new Error('Network connection lost.');
-      // Never answers; only an abort signal ends it.
       if (hang) {
         return new Promise((_, rej) => {
-          // AbortSignal.timeout's timer doesn't hold the event loop open on
-          // Node 22, so the test would end before the abort: this one does.
           const keep = setTimeout(() => {}, 30_000);
           init.signal?.addEventListener('abort', () => {
             clearTimeout(keep);
@@ -265,7 +222,6 @@ export function makeFetch({
     if (fcm && url.startsWith('https://fcm.googleapis.com/v1/projects/')) {
       const msg = JSON.parse(init.body).message;
       if (fcm.dead?.has(msg.token)) return Response.json({ error: { status: 'NOT_FOUND' } }, { status: 404 });
-      // `fcm.expire = n`: the next n sends find the access token stale.
       if (fcm.expire > 0) {
         fcm.expire--;
         return Response.json({ error: { status: 'UNAUTHENTICATED' } }, { status: 401 });
@@ -282,11 +238,6 @@ export function makeFetch({
   return fn;
 }
 
-/**
- * DataMall's BusArrival reply for one stop: `services` as [{ServiceNo, buses:
- * [{etaS, monitored, load, dest}]}], up to three buses each, laid out as the
- * feed lays them (NextBus, NextBus2, NextBus3; an empty slot has blank fields).
- */
 export function ltaPayload(code, services) {
   const slot = (b) =>
     b
@@ -327,14 +278,7 @@ export function ltaPayload(code, services) {
   };
 }
 
-/**
- * An R2 bucket over `read(key)` (bytes or null), as the real one behaves for
- * what the Worker uses: get with a range and a condition (as Headers or as
- * objects), head, and ETags that change with the content. `gets` counts the
- * reads that returned a body, which is what costs.
- */
 export function makeBucket(readFrom) {
-  // What put() wrote, in front of [readFrom]: the timelapse days.
   const written = new Map();
   const metadata = new Map();
   const read = async (key) => written.get(key) ?? (await readFrom(key));
@@ -411,15 +355,8 @@ export function makeBucket(readFrom) {
   return bucket;
 }
 
-/**
- * Thursday 2026-08-27, 09:00 SGT. Inside every service's operating window.
- *
- * The Worker reads Date.now() internally, so without freezing it the smoke
- * tests quietly become time-of-day dependent.
- */
 export const FROZEN_NOW = Date.UTC(2026, 7, 27, 1, 0, 0);
 
-/** Installs caches/fetch globals. Call per test to get a clean cache. */
 export function installGlobals(fetchImpl, nowMs = FROZEN_NOW) {
   const cache = makeCache();
   globalThis.caches = { default: cache, open: async () => cache };
@@ -428,18 +365,12 @@ export function installGlobals(fetchImpl, nowMs = FROZEN_NOW) {
   return cache;
 }
 
-/**
- * A Durable Object namespace that runs the real class in-process, one
- * instance per name, on in-memory storage with a settable alarm. `alarms`
- * lists each instance's pending alarm; fireAlarms() runs them.
- */
 export function makeDurableObjects(Class, env = {}) {
   const pending = [];
   const instances = new Map();
   const alarms = new Map();
   const storageFor = (name) => {
     const m = new Map();
-    // SQLite-backed objects' storage.sql, on node:sqlite: exec() with a cursor's toArray() and one().
     let db = null;
     const sql = {
       exec(query, ...bindings) {
@@ -467,14 +398,11 @@ export function makeDurableObjects(Class, env = {}) {
       async delete(k) {
         return m.delete(k);
       },
-      // As at the Worker's compatibility date: deleteAll leaves the alarm
-      // (from 2026-02-24 it takes it too), so it needs its own deleteAlarm.
       async deleteAll() {
         m.clear();
         db?.close();
         db = null;
       },
-      // All or nothing, as the platform's: a savepoint, rolled back on a throw.
       transactionSync(fn) {
         sql.exec('SAVEPOINT tx');
         try {
@@ -500,7 +428,6 @@ export function makeDurableObjects(Class, env = {}) {
   };
   const instance = (name) => {
     if (!instances.has(name)) {
-      // blockConcurrencyWhile as the platform does it: one at a time.
       let queue = Promise.resolve();
       const blockConcurrencyWhile = (fn) => {
         const run = queue.then(fn);
@@ -524,9 +451,7 @@ export function makeDurableObjects(Class, env = {}) {
     get: (id) => ({
       fetch: (input, init) => instance(id).fetch(input instanceof Request ? input : new Request(input, init)),
     }),
-    /** Runs only the alarms that are due by `nowMs` (the dev stub's clock). */
     async fireDue(nowMs) {
-      // A copy: an alarm can set a new one while this runs.
       for (const [name, at] of Array.from(alarms.entries())) {
         if (at > nowMs) continue;
         alarms.delete(name);

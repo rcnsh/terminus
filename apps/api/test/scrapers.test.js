@@ -3,14 +3,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// The Python scrapers and check_scraped.py, run by python3 against made-up
-// data and a server on 127.0.0.1: no network, no keys. Skipped where there
-// is no python3.
-
 const SCRIPTS = fileURLToPath(new URL('../scripts/data/', import.meta.url));
 const python = spawnSync('python3', ['--version']).status === 0;
 
-/** Runs [code] in python3 with the scripts importable; returns what it prints as JSON. */
 function py(code) {
   const res = spawnSync('python3', ['-I', '-c', `import sys, json\nsys.path.insert(0, ${JSON.stringify(SCRIPTS)})\n${code}`], {
     encoding: 'utf8',
@@ -21,9 +16,6 @@ function py(code) {
   return JSON.parse(res.stdout);
 }
 
-/** A server on 127.0.0.1 that redirects /start to /landed, answers /big
- *  with more bytes than allowed and /page with a full page, recording what
- *  reached it; [body] runs while it's up, with `base` its address. */
 const SERVER = `
 import http.server, threading
 hits = []
@@ -181,7 +173,6 @@ print(json.dumps({"url": route_shapes.OVERPASS, "mirrors": hasattr(route_shapes,
   assert.deepEqual(out, { url: 'https://overpass-api.de/api/interpreter', mirrors: false });
 });
 
-// A calendar of its own, so these don't move when calendar.json refreshes.
 const CAL = {
   semesters: [
     { acadYear: '2026/2027', semester: 1, start: '2026-08-10' },
@@ -203,11 +194,6 @@ const CAL = {
   ],
 };
 
-/**
- * check_scraped.py's checks on the committed stop graph and public buses,
- * and CAL, with [edit] applied: the problems found. `r` and `pr` are a
- * shuttle and a public route of three stops or more, whichever they are.
- */
 function checked(edit) {
   return py(`import check_scraped as c, copy, datetime as dt, pathlib
 data = pathlib.Path(c.ROOT) / c.DATA
@@ -232,7 +218,6 @@ test('check_scraped.py passes the committed data', { skip: !python }, () => {
 });
 
 test('check_scraped.py fails a stop moved more than 100 m, but not 50 m', { skip: !python }, () => {
-  // 0.001 degrees of latitude is about 110 m.
   assert.match(checked('g["stops"][0]["lat"] += 0.001').join('\n'), /^stops moved more than 100 m: \S+ \(111 m\)$/m);
   assert.deepEqual(checked('g["stops"][0]["lat"] += 0.0005'), []);
   assert.match(checked('p["stops"][0]["lon"] -= 0.002').join('\n'), /public stops moved more than 100 m/);
@@ -284,7 +269,6 @@ test('check_scraped.py fails a semester moved, or many holidays to come gone', {
     checked('cal["semesters"][1]["start"] = "2027-01-18"').join('\n'),
     /semester 2026\/2027 2 moved from 2027-01-11 to 2027-01-18/,
   );
-  // Past ones roll off; one to come may go.
   assert.deepEqual(
     checked('cal["holidays"] = [h for h in cal["holidays"] if h["date"] not in ("2026-08-09", "2026-08-10", "2026-11-09")]'),
     [],

@@ -1,9 +1,3 @@
-/**
- * Helpers in me.ts.
- *
- * A saved profile can stop validating whole: a weekly scrape drops a stop
- * someone uses. getProfile then salvages what still holds.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { salvageProfile } from '../src/accounts/profiles.ts';
@@ -68,7 +62,6 @@ test('hours that make no sense fall back to the defaults', () => {
 
 test('a request body past the limit is refused while it is read', async () => {
   const { readCapped } = await import('../src/accounts/me.ts');
-  // Chunked: no content-length to refuse it up front.
   const big = new ReadableStream({
     start(c) {
       for (let i = 0; i < 10; i++) c.enqueue(new TextEncoder().encode('x'.repeat(1000)));

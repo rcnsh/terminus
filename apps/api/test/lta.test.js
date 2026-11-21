@@ -1,8 +1,3 @@
-/**
- * The LTA DataMall client (src/feeds/lta.ts): reading the feed, telling a two-way
- * service's directions apart, and the same quiet-under-failure caching as
- * the shuttle feed. The fixtures are real replies captured 2026-10-06.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,15 +17,17 @@ import { TTL } from '../src/config.ts';
 import pub from '../data/public.json' with { type: 'json' };
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
-// The captures were taken at 17:28 SGT on 2026-10-06.
 const CAPTURED = Date.parse('2026-10-06T09:28:50Z');
 const env = () => ({ ...makeEnv(), LTA_ACCOUNT_KEY: 'test-account-key' });
 
 test('a real reply at YIH (16171) becomes arrivals for 151 and 95, each on its route', () => {
   const rows = normalizePublic(fixture('lta-BusArrival-16171.json'), 'YIH', GRAPH_PUBLIC, CAPTURED);
   assert.equal(rows.length, 6);
-  // 151 towards Kent Ridge Terminal calls at YIH: direction 1.
-  assert.deepEqual([...new Set(rows.map((a) => a.svc))].sort(), ['151/1', '95']);
+  assert.deepEqual(
+    [...new Set(rows.map((a) => a.svc))].sort(),
+    ['151/1', '95'],
+    '151 towards Kent Ridge Terminal calls at YIH: direction 1',
+  );
   for (const a of rows) {
     assert.ok(a.etaS > 0 && a.etaS < 60 * 60, `eta ${a.etaS}`);
     assert.equal(a.plate, null);
@@ -38,11 +35,11 @@ test('a real reply at YIH (16171) becomes arrivals for 151 and 95, each on its r
     assert.equal(a.scheduled, undefined, 'every bus in this capture was on the road');
   }
   assert.equal(rows[0].crowd, 'low');
-  // The feed lists the three buses of a service soonest first; so do we.
   const of151 = rows.filter((a) => a.svc === '151/1').map((a) => a.etaS);
   assert.deepEqual(
     of151,
     [...of151].sort((a, b) => a - b),
+    'soonest first, as the feed lists them',
   );
 });
 
@@ -52,28 +49,25 @@ test('a timetabled bus (Monitored 0) is marked scheduled, never passed off as li
   const sched = rows.filter((a) => a.scheduled);
   assert.equal(live.length, 1);
   assert.equal(sched.length, 4);
-  // 95B: an evening short-working with the 95's stops, its own route in the graph.
-  assert.ok(rows.some((a) => a.svc === '95B'));
+  assert.ok(
+    rows.some((a) => a.svc === '95B'),
+    "95B, an evening short-working with the 95's stops, is its own route",
+  );
 });
 
 test('a two-way service is told apart by the stop it is at, else by where the bus is going', () => {
-  // The 151 calls at the Museum only towards the terminal, at IT only away from it.
-  assert.equal(routeFor(GRAPH_PUBLIC, 'MUSEUM', '151', null), '151/1');
-  assert.equal(routeFor(GRAPH_PUBLIC, 'IT', '151', null), '151/2');
-  // At Kent Ridge Terminal's public stop both directions call: the
-  // destination tells. The codes are as scrape_lta.py found them.
+  assert.equal(routeFor(GRAPH_PUBLIC, 'MUSEUM', '151', null), '151/1', 'the 151 calls at the Museum only towards the terminal');
+  assert.equal(routeFor(GRAPH_PUBLIC, 'IT', '151', null), '151/2', 'and at IT only away from it');
   const both = pub.routes['151/1'].filter((c) => pub.routes['151/2'].includes(c));
   assert.equal(both.length, 1, `the 151's two directions share ${both.join(', ') || 'no stop'}`);
   const [there, back] = [pub.public['151/1'].dest, pub.public['151/2'].dest];
   assert.notEqual(there, back);
   assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', there), '151/1');
   assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', back), '151/2');
-  assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', null), null);
-  // A loop is one route, named after itself.
-  assert.equal(routeFor(GRAPH_PUBLIC, 'CLB', '95', '16009'), '95');
-  // A service the graph doesn't know, or one that doesn't call here, is nobody's.
-  assert.equal(routeFor(GRAPH_PUBLIC, 'CLB', '999', null), null);
-  assert.equal(routeFor(GRAPH_PUBLIC, 'PGP', '95', '16009'), null);
+  assert.equal(routeFor(GRAPH_PUBLIC, both[0], '151', null), null, 'where both directions call, only the destination tells');
+  assert.equal(routeFor(GRAPH_PUBLIC, 'CLB', '95', '16009'), '95', 'a loop is one route, named after itself');
+  assert.equal(routeFor(GRAPH_PUBLIC, 'CLB', '999', null), null, "a service the graph doesn't know is nobody's");
+  assert.equal(routeFor(GRAPH_PUBLIC, 'PGP', '95', '16009'), null, "nor one that doesn't call here");
 });
 
 test('load bands become crowd levels; anything else is unknown', () => {
@@ -114,16 +108,24 @@ test('empty slots and unknown services are skipped; a reply with no Services lis
   );
   const problem = (raw, stop = 'CLB') => publicProblem(raw, stop, GRAPH_PUBLIC, FROZEN_NOW);
   assert.equal(problem(raw), null);
-  // Services listed, none with a bus: a real "no bus" at night.
-  assert.equal(problem(ltaPayload('16181', [{ ServiceNo: '95', buses: [] }])), null);
+  assert.equal(
+    problem(ltaPayload('16181', [{ ServiceNo: '95', buses: [] }])),
+    null,
+    'services listed, none with a bus: a real "no bus" at night',
+  );
   assert.equal(problem({ odata: 'x' }), 'no Services list');
-  // Only a service the graph doesn't know (it adds new ones weekly), or only
-  // a bus already gone: real replies, not a changed feed.
-  assert.equal(problem(ltaPayload('16181', [{ ServiceNo: '999', buses: [{ etaS: 60, dest: '00000' }] }])), null);
-  assert.equal(problem(ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: -120, dest: '16009' }] }])), null);
+  assert.equal(
+    problem(ltaPayload('16181', [{ ServiceNo: '999', buses: [{ etaS: 60, dest: '00000' }] }])),
+    null,
+    'only a service the graph does not know yet: a real reply',
+  );
+  assert.equal(
+    problem(ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: -120, dest: '16009' }] }])),
+    null,
+    'only a bus already gone: a real reply',
+  );
 });
 
-/** [raw] with every bus's [field] renamed to [to], or set to [value] when [to] is null. */
 function withBus(raw, field, to, value) {
   for (const s of raw.Services) {
     for (const slot of ['NextBus', 'NextBus2', 'NextBus3']) {
@@ -150,27 +152,32 @@ test('a bus is live only when Monitored is 1; anything else is the timetable', (
   for (const live of [1, '1', ' 1', true]) assert.equal(read(live).scheduled, undefined, JSON.stringify(live));
   for (const timetable of [0, '0', false, 'false', null, undefined, '', 2, -1, 'N', {}])
     assert.equal(read(timetable).scheduled, true, JSON.stringify(timetable));
-  // Renamed, it's missing: the timetable, never live.
   const renamed = withBus(ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: 300, dest: '16009' }] }]), 'Monitored', 'IsMonitored');
-  assert.equal(normalizePublic(renamed, 'CLB', GRAPH_PUBLIC, FROZEN_NOW)[0].scheduled, true);
+  assert.equal(
+    normalizePublic(renamed, 'CLB', GRAPH_PUBLIC, FROZEN_NOW)[0].scheduled,
+    true,
+    'Monitored renamed is missing: the timetable, never live',
+  );
 });
 
 test('a time without its zone, or more than a week away, is not a bus, and says the feed changed', () => {
   const one = () => ltaPayload('16181', [{ ServiceNo: '95', buses: [{ etaS: 300, dest: '16009' }] }]);
   const at = (iso) => withBus(one(), 'EstimatedArrival', null, iso);
-  // DataMall's own form, and the same moment in another zone, read alike.
   const local = new Date(FROZEN_NOW + 8 * 3_600_000 + 300_000).toISOString().replace(/\.\d+Z$/, '');
   for (const iso of [`${local}+08:00`, new Date(FROZEN_NOW + 300_000).toISOString()]) {
     assert.deepEqual(
       normalizePublic(at(iso), 'CLB', GRAPH_PUBLIC, FROZEN_NOW).map((a) => a.etaS),
       [300],
-      iso,
+      `${iso}: DataMall's own form and the same moment in another zone read alike`,
     );
   }
-  // No zone: read as UTC on a Worker, it would be 8 h late and still live.
   for (const iso of [local, local.replace('T', ' '), new Date(FROZEN_NOW + 30 * 86_400_000).toISOString(), 'soon']) {
     const raw = at(iso);
-    assert.deepEqual(normalizePublic(raw, 'CLB', GRAPH_PUBLIC, FROZEN_NOW), [], iso);
+    assert.deepEqual(
+      normalizePublic(raw, 'CLB', GRAPH_PUBLIC, FROZEN_NOW),
+      [],
+      `${iso}: no zone, read as UTC on a Worker, would be 8 h late`,
+    );
     assert.match(publicProblem(raw, 'CLB', GRAPH_PUBLIC, FROZEN_NOW), /an arrival time it cannot read \(95\)/, iso);
   }
 });
@@ -187,17 +194,18 @@ test('a reply whose fields moved is a problem, not "no bus"', () => {
   flat.Services[0].NextBus = '2026-08-27T09:05:00+08:00';
   assert.match(problem(flat), /an arrival time it cannot read/);
   assert.match(problem({ Services: [null] }), /a service it cannot read/);
-  // At Kent Ridge Terminal both directions of the 151 call: without its
-  // destination a bus can't be put on either, and would vanish unnoticed.
   const both = () =>
     ltaPayload('16009', [
       { ServiceNo: '95', buses: [{ etaS: 120, dest: '16009' }] },
       { ServiceNo: '151', buses: [{ etaS: 240, dest: '64009' }] },
     ]);
   assert.equal(problem(both(), '16009'), null);
-  assert.match(problem(withBus(both(), 'DestinationCode', 'Destination'), '16009'), /a bus with no destination \(151\)/);
-  // The loop never needs one, so on its own it's fine without.
-  assert.equal(problem(withBus(one(), 'DestinationCode', 'Destination')), null);
+  assert.match(
+    problem(withBus(both(), 'DestinationCode', 'Destination'), '16009'),
+    /a bus with no destination \(151\)/,
+    'at Kent Ridge Terminal a 151 with no destination fits neither direction',
+  );
+  assert.equal(problem(withBus(one(), 'DestinationCode', 'Destination')), null, 'the loop never needs a destination');
 });
 
 test('fetchPublicArrivals sends the account key, and a 401 is a refusal, not "no bus"', async () => {
@@ -215,8 +223,11 @@ test('fetchPublicArrivals sends the account key, and a 401 is a refusal, not "no
 
   installGlobals(makeFetch({ publicStatus: 401 }));
   await assert.rejects(fetchPublicArrivals(env(), GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW), LtaRefused);
-  // Without the key there is nothing to ask with.
-  await assert.rejects(fetchPublicArrivals(makeEnv(), GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW), /not configured/);
+  await assert.rejects(
+    fetchPublicArrivals(makeEnv(), GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW),
+    /not configured/,
+    'without the key there is nothing to ask with',
+  );
 });
 
 test('fetchPublicArrivals: a 200 that is not JSON (a maintenance page) names DataMall, not a bare SyntaxError', async () => {
@@ -241,18 +252,16 @@ test('getPublicArrivals: one call per stop per 15 s, stale served when the feed 
   assert.equal(a.available, true);
   assert.equal(b.stale, false);
 
-  // The feed goes away: the stale answer is served, marked stale.
   const down = makeFetch({ publicFail: true });
   globalThis.fetch = down;
   const c = await getPublicArrivals(e, ctx, GRAPH_PUBLIC, 'CLB', '16181', FROZEN_NOW + TTL.arrivalsMs + 1_000);
   await ctx.settle();
-  assert.equal(c.stale, true);
+  assert.equal(c.stale, true, 'the feed gone: the stale answer is served, marked stale');
   assert.deepEqual(
     c.arrivals.map((x) => x.svc),
     ['95'],
   );
 
-  // A refused key trips the breaker: another stop isn't even asked.
   installGlobals(makeFetch({ publicStatus: 401 }), FROZEN_NOW);
   const ctx2 = makeCtx();
   await assert.rejects(getPublicArrivals(e, ctx2, GRAPH_PUBLIC, 'IT', '16189', FROZEN_NOW));
@@ -260,7 +269,7 @@ test('getPublicArrivals: one call per stop per 15 s, stale served when the feed 
   const refused = makeFetch({ publicStatus: 401 });
   globalThis.fetch = refused;
   await assert.rejects(getPublicArrivals(e, ctx2, GRAPH_PUBLIC, 'YIH', '16171', FROZEN_NOW + 1_000), /recently failed/);
-  assert.equal(refused.counts.public, 0, 'nothing is asked of a feed that refused the key');
+  assert.equal(refused.counts.public, 0, 'a refused key trips the breaker: another stop is not even asked');
 });
 
 test('getPublicArrivals: DataMall answering 5xx quiets every stop, as a NUS 5xx does', async () => {

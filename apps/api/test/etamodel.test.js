@@ -1,8 +1,3 @@
-/**
- * The arrival-time model (etamodel.ts): arrivals read off the map's placed
- * buses, segment times, the bus's position carried forward, the blend with
- * the feed, and fitting and scoring it as the backtest does.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -45,8 +40,7 @@ import {
   whyOf,
 } from '../src/ops/etamodel.ts';
 
-// Wednesday 21 October 2026, 08:00 Singapore time.
-const T0 = Date.UTC(2026, 9, 21, 0, 0);
+const T0 = Date.parse('2026-10-21T08:00+08:00');
 const S = 1000;
 const LOOP = ringOf(['A', 'B', 'C', 'D', 'A'], true);
 const LINE = ringOf(['P', 'Q', 'R'], false);
@@ -64,18 +58,19 @@ test('a bus heading for a stop and then at it, or past it, reached it between th
   const passings = passingsFromReadings([
     reading(T0, 'PA1', { at: 'A', next: 'B' }),
     reading(T0 + 20 * S, 'PA1', { last: 'A', next: 'B' }),
-    // Heading for B, then at B: reached it between, taken as the middle.
     reading(T0 + 40 * S, 'PA1', { at: 'B', next: 'C' }),
-    // Still at B: not again.
     reading(T0 + 60 * S, 'PA1', { at: 'B', next: 'C' }),
     reading(T0 + 80 * S, 'PA1', { last: 'B', next: 'C' }),
-    // Past C without being seen at it: reached it all the same.
     reading(T0 + 100 * S, 'PA1', { last: 'C', next: 'D' }),
   ]);
-  assert.deepEqual(passings, [
-    { svc: 'L', plate: 'PA1', stop: 'B', t: T0 + 30 * S, seen: T0 + 40 * S },
-    { svc: 'L', plate: 'PA1', stop: 'C', t: T0 + 90 * S, seen: T0 + 100 * S },
-  ]);
+  assert.deepEqual(
+    passings,
+    [
+      { svc: 'L', plate: 'PA1', stop: 'B', t: T0 + 30 * S, seen: T0 + 40 * S },
+      { svc: 'L', plate: 'PA1', stop: 'C', t: T0 + 90 * S, seen: T0 + 100 * S },
+    ],
+    'B once, at the middle of heading for it and at it; C though never seen at it',
+  );
 });
 
 test('no arrival from a first sighting, a gap in the readings, or another bus', () => {
@@ -90,14 +85,11 @@ test('no arrival from a first sighting, a gap in the readings, or another bus', 
     [],
     'one bus heading there and another bus there',
   );
-  // Out of order in the file, in order by time.
   const later = passingsFromReadings([reading(T0 + 20 * S, 'PA1', { at: 'B', next: 'C' }), reading(T0, 'PA1', { last: 'A', next: 'B' })]);
-  assert.equal(later.length, 1);
+  assert.equal(later.length, 1, 'out of order in the file, in order by time');
 });
 
 test('replaying the real feed every 20 s finds the same arrivals as every 5 s, to within the polling', async () => {
-  // test/fixtures/bus-trace.jsonl (15 minutes of A1, A2, D1, D2), placed
-  // as /api/buses places them on every update, read as the recorder would.
   const graph = (await import('./fixtures/bus-trace-routes.json', { with: { type: 'json' } })).default;
   const rows = readFileSync(new URL('./fixtures/bus-trace.jsonl', import.meta.url), 'utf8')
     .trim()
@@ -126,7 +118,6 @@ test('replaying the real feed every 20 s finds the same arrivals as every 5 s, t
     }
   }
   const fine = passingsFromReadings(every5);
-  // The recorder's 20 s: every fourth of each service's polls.
   const times = new Map();
   for (const r of every5) times.set(r.svc, [...new Set([...(times.get(r.svc) ?? []), r.t])]);
   const kept = new Set([...times].flatMap(([svc, ts]) => ts.filter((_, i) => i % 4 === 0).map((t) => `${svc}|${t}`)));
@@ -137,21 +128,16 @@ test('replaying the real feed every 20 s finds the same arrivals as every 5 s, t
   for (const c of coarse) {
     const f = fine.find((x) => x.plate === c.plate && x.stop === c.stop && Math.abs(x.t - c.t) <= 30_000);
     assert.ok(f, `${c.svc} ${c.plate} at ${c.stop} (${c.t}) is one of the 5 s arrivals`);
-    // Within half the gap between the two readings either side (20 s, or
-    // 40 s when a bus is missing from one poll), and half a 5 s poll.
     assert.ok(Math.abs(f.t - c.t) <= c.seen - c.t + 2_700, `${c.plate} at ${c.stop}: ${Math.abs(f.t - c.t)} ms out`);
   }
-  // Each bus's arrivals follow its route, a stop at a time.
   const routes = Object.fromEntries(Object.keys(graph.shapes).map((svc) => [svc, ringOf(graph.routes[svc], graph.loops?.[svc] ?? true)]));
   const segments = segmentsOf(fine, routes);
   assert.ok(segments.length >= 15);
-  // Except out of a loop's first stop, where a bus lays over (D1 at COM3: 765 s).
   const driving = segments.filter((g) => g.from !== routes[g.svc].seq[0]);
   assert.ok(
     driving.every((g) => g.s >= 5 && g.s <= 8 * 60),
     'stop to stop in seconds to minutes',
   );
-  // The gate: history won't sum a D1 at COM3 through its layover, but will one on its way.
   const table = buildTable(segments);
   const atCom3 = fine.find((p) => p.svc === 'D1' && p.stop === 'COM3');
   assert.ok(atCom3, 'a D1 reaches COM3 in the trace');
@@ -167,7 +153,6 @@ test('replaying the real feed every 20 s finds the same arrivals as every 5 s, t
   assert.equal(historicalEtaS(table, routes.D1, 'D1', on, ahead, on.t, 0, { gate: true }), driven, 'gated or not, the same');
 });
 
-/** A passing: [plate] reached [stop] at T0 + [s] seconds. */
 const at = (stop, s, plate = 'PA1', svc = 'L') => ({ svc, plate, stop, t: T0 + s * S });
 
 test('segments are consecutive arrivals at adjacent stops, round a loop too', () => {
@@ -177,9 +162,8 @@ test('segments are consecutive arrivals at adjacent stops, round a loop too', ()
     ['AB60', 'BC90', 'CD50', 'DA100'],
     'A to C skips B: not a segment',
   );
-  // A one-way route doesn't wrap, and an hour's gap is a bus laid up.
-  assert.deepEqual(segmentsOf([at('R', 0, 'PB1', 'O'), at('P', 60, 'PB1', 'O')], ROUTES), []);
-  assert.deepEqual(segmentsOf([at('A', 0), at('B', 3600)], ROUTES), []);
+  assert.deepEqual(segmentsOf([at('R', 0, 'PB1', 'O'), at('P', 60, 'PB1', 'O')], ROUTES), [], "a one-way route doesn't wrap");
+  assert.deepEqual(segmentsOf([at('A', 0), at('B', 3600)], ROUTES), [], "an hour's gap is a bus laid up");
 });
 
 test('a segment takes its slot median, pulled towards its overall median the fewer it has', () => {
@@ -194,16 +178,13 @@ test('a segment takes its slot median, pulled towards its overall median the few
   assert.equal(slotOf(Date.UTC(2026, 9, 24, 2)), 'we|10', 'Saturday');
   assert.deepEqual(table.all['L|A|B'], [8, 120, 60, 120], 'count, median, 10th and 90th percentile');
   assert.deepEqual(table.slot['L|A|B|wd|8'], [3, 62, 60, 64]);
-  // (3 × 62 + 4 × 120) / 7
-  assert.equal(Math.round(segmentS(table, 'L', 'A', 'B', weekday8)), 95);
+  assert.equal(Math.round(segmentS(table, 'L', 'A', 'B', weekday8)), Math.round((3 * 62 + 4 * 120) / 7));
   assert.equal(segmentS(table, 'L', 'A', 'B', weekday8 + 3 * 3600 * S), 120, 'an hour with none: the overall median');
   assert.equal(segmentS(table, 'L', 'B', 'C', weekday8), null, 'a pair never driven');
-  // (3 × 60 + 4 × 60) / 7, and (3 × 64 + 4 × 120) / 7
-  assert.equal(segmentS(table, 'L', 'A', 'B', weekday8, 'quick'), 60);
-  assert.equal(Math.round(segmentS(table, 'L', 'A', 'B', weekday8, 'slow')), 96);
+  assert.equal(segmentS(table, 'L', 'A', 'B', weekday8, 'quick'), (3 * 60 + 4 * 60) / 7);
+  assert.equal(Math.round(segmentS(table, 'L', 'A', 'B', weekday8, 'slow')), Math.round((3 * 64 + 4 * 120) / 7));
 });
 
-/** A table with the same time for each segment, in every slot. */
 const flat = (times) => buildTable(Object.entries(times).map(([pair, s]) => ({ svc: 'L', from: pair[0], to: pair[1], t: T0, s })));
 const TABLE = flat({ AB: 60, BC: 90, CD: 50, DA: 100 });
 
@@ -227,8 +208,7 @@ test("the gate: history only for a bus on its way, not through a loop's first st
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', { ...bus, stop: 'A' }, 'C', T0, 0, gate), null, 'at A, the first stop: waiting there');
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', { ...bus, stop: 'D' }, 'B', T0, 0, gate), null, 'D to B goes through A');
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', { ...bus, stop: 'D' }, 'A', T0, 0, gate), 100, 'D to A ends there: arriving is driving');
-  // B to C takes 90 s: held past max(2 × 90, 90 + 120) = 210 s.
-  assert.equal(heldAfterS(90), 210);
+  assert.equal(heldAfterS(90), Math.max(2 * 90, 90 + 120), 'B to C takes 90 s');
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'C', T0 + 200 * S, 0, gate), 10, 'overdue, not yet held');
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'C', T0 + 211 * S, 0, gate), null, 'held');
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'C', T0 + 211 * S), 10, 'without the gate, still 10 s away');
@@ -253,7 +233,6 @@ test('the buses just ahead: segments driven in the last half hour, only once kno
     { svc: 'L', from: 'B', to: 'C', t: T0 - 50 * 60 * S, s: 300, known: T0 - 45 * 60 * S },
     { svc: 'L', from: 'B', to: 'C', t: T0 - 10 * 60 * S, s: 120, known: T0 - 8 * 60 * S },
     { svc: 'L', from: 'B', to: 'C', t: T0 - 6 * 60 * S, s: 140, known: T0 - 4 * 60 * S },
-    // Driven before T0 but not known until after it.
     { svc: 'L', from: 'B', to: 'C', t: T0 - 2 * 60 * S, s: 900, known: T0 + 10 * S },
   ];
   const index = recentIndex(segs);
@@ -265,13 +244,15 @@ test('the buses just ahead: segments driven in the last half hour, only once kno
   const recent = (o) => ({ gate: true, recent: { index, at: T0, windowMs: window, minN: 2, prior: 0, ...o } });
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent()), 180, 'B to C 130 s, as just driven, then C to D 50 s');
   assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent({ minN: 3 })), 140, 'too few: the median');
-  // (2 × 130 + 2 × 90) / 4 = 110
-  assert.equal(historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent({ prior: 2 })), 160, 'shrunk towards the median');
+  assert.equal(
+    historicalEtaS(TABLE, LOOP, 'L', bus, 'D', T0, 0, recent({ prior: 2 })),
+    (2 * 130 + 2 * 90) / 4 + 50,
+    'shrunk towards the median',
+  );
 });
 
 test("the model's cases never use a segment driven after the question", () => {
   const rec = morning({ minutes: 40 });
-  // A bus that crawls B to C long after every question: it mustn't change any earlier answer.
   const crawl = [at('B', 3000, 'PZ'), at('C', 3600, 'PZ')];
   const model = fitModel({ L: LOOP }, [morning({ minutes: 60 })]);
   const before = casesOf(model, { L: LOOP }, rec).filter((c) => c.t < T0 + 3000 * S);
@@ -331,8 +312,7 @@ test('the blend: the feed corrected by its usual error, weighted with history pe
   assert.equal(horizonOf(120), 0);
   assert.equal(horizonOf(121), 1);
   assert.equal(horizonOf(5000), 3, 'past the last: the last');
-  // (10 × 60 + 10 × 30) / 20: a service's own bias pulled towards everyone's.
-  assert.equal(biasS(model, 'L', 200), 45);
+  assert.equal(biasS(model, 'L', 200), (10 * 60 + 10 * 30) / 20, "a service's own bias pulled towards everyone's");
   assert.equal(biasS(model, 'X', 200), 30);
   assert.equal(biasS(model, 'L', 700), 0, 'no bias known at that horizon');
   assert.deepEqual(predictS(model, 'L', 200, 300), { feed: 200, corrected: 245, history: 300, blend: 273 });
@@ -343,24 +323,24 @@ test('the blend: the feed corrected by its usual error, weighted with history pe
 });
 
 test("the check: a time far outside what history says the bus could do gives way to history's", () => {
-  // B to C takes 60 to 120 s (90 s the median); C to D 50 s, D to A 100 s, A to B 60 s. Each driven 5 times or more (CHECK.minN).
   const five = (segments) => segments.flatMap((g) => Array(5).fill(g));
   const table = buildTable([
     ...[60, 90, 90, 90, 120].map((s) => ({ svc: 'L', from: 'B', to: 'C', t: T0, s })),
     ...five(Object.entries({ CD: 50, DA: 100, AB: 60 }).map(([pair, s]) => ({ svc: 'L', from: pair[0], to: pair[1], t: T0, s }))),
   ]);
   const q = (s, o = {}) => ({ t: T0, svc: 'L', stop: 'C', etaS: s, plate: 'PA1', ...o });
-  // From D, 30 s in: at its quickest 70 + 60 + 60 = 190 s to C, through A.
   const fromD = [{ plate: 'PA1', stop: 'D', t: T0 - 30 * S }];
-  assert.equal(checkS(table, LOOP, fromD, q(200), 200), 200, 'about right: the feed');
+  assert.equal(checkS(table, LOOP, fromD, q(200), 200), 200, 'about right (from D 30 s in, 70 + 60 + 60 s at its quickest): the feed');
   assert.equal(checkS(table, LOOP, fromD, q(0), 0), 0, 'under 4 minutes sooner than its quickest: the feed');
-  // On its way from B to D, at its slowest 120 + 50 = 170 s.
   const fromB = [{ plate: 'PA1', stop: 'B', t: T0 }];
-  assert.equal(checkS(table, LOOP, fromB, q(420, { stop: 'D' }), 420), 140, 'over 4 minutes later than its slowest: the median');
+  assert.equal(
+    checkS(table, LOOP, fromB, q(420, { stop: 'D' }), 420),
+    140,
+    'over 4 minutes later than its slowest, 120 + 50 s: the median',
+  );
   assert.equal(checkS(table, LOOP, fromB, q(400, { stop: 'D' }), 400), 400);
   assert.equal(checkS(table, LOOP, fromD, q(900), 900), 900, 'through A, the first stop, it may wait: no slowest');
 
-  // The bus left C 70 s ago, so it has a lap to come round: at the quickest 130 + 300 + 60 + 90 = 580 s.
   const lapSegments = Object.entries({ CD: 200, DA: 300, AB: 60, BC: 90 }).map(([pair, s]) => ({
     svc: 'L',
     from: pair[0],
@@ -376,12 +356,6 @@ test("the check: a time far outside what history says the bus could do gives way
   assert.equal(checkS(buildTable(lapSegments), LOOP, left, q(30), 30), 30, 'each driven once: too little to rule anything out');
 });
 
-/**
- * A morning on route L: [buses] buses a lap apart in time, each driving
- * the segments of TABLE exactly, with the feed asked at every stop each
- * minute and always [feedErrS] too soon. Not asked within a minute of a
- * bus reaching the stop, when which bus is meant is a guess.
- */
 function morning({ minutes, buses = 3, feedErrS = 0, noise = () => 0 }) {
   const lap = [
     ['A', 0],
@@ -423,7 +397,6 @@ test('fitted on a morning where the feed says a minute too soon, the model learn
 });
 
 test('with a noisy feed and buses that keep to time, the blend leans on history', () => {
-  // The feed off by up to two minutes either way; the buses exactly to time.
   const noise = (m, stop) => ((m * 37 + stop.charCodeAt(0) * 11) % 240) - 120;
   const model = fitModel({ L: LOOP }, [morning({ minutes: 90, noise })]);
   assert.ok(
@@ -450,7 +423,6 @@ test("a stuck time: the feed giving the same bus's time at a stop, read after re
   assert.equal(steadyS(index, reads[4]), 0, 'counting down');
   assert.equal(steadyS(index, reads[5]), 0, '650 s since the read before: nothing known between');
   assert.equal(steadyS(index, reads[6]), 100);
-  // Another bus, and this one at another stop, said 180 too at 100 s: not this bus's time here.
   const other = readIndex([read(0, 180), read(100, 180, { plate: 'PA2' }), read(100, 180, { stop: 'D' }), read(350, 180)]);
   assert.equal(steadyS(other, read(350, 180)), 0, '350 s since its own last read');
   assert.equal(steadyS(readIndex([read(0, 180), read(300, 180)]), read(300, 180)), 300, '5 minutes apart still counts');
@@ -508,7 +480,6 @@ test('why: a far-off answer put down to the first cause that fits', () => {
 });
 
 test("the feed's misses by cause: how many, and every method's error on them", () => {
-  // PA1 from A to B, then unseen at C and seen at D: asked about C, it's matched with the next lap.
   const passings = [at('A', -60), at('B', 0), at('D', 140), at('A', 240), at('B', 300), at('C', 390)];
   const queries = [
     { t: T0 + 10 * S, svc: 'L', stop: 'C', etaS: 60, plate: 'PA1' },
@@ -531,7 +502,6 @@ test("the feed's misses by cause: how many, and every method's error on them", (
   assert.equal(scored.overall.feed.miss, 0.5);
 });
 
-/** A scored question: the bus came at [actualS]; the feed said [feedS], the blend [blendS]. */
 const asked = (day, actualS, feedS, blendS) => ({
   day,
   svc: 'L',
@@ -560,30 +530,27 @@ test('the paired test: a method as good as the feed is unclear, one better every
   assert.equal(same.n, 200);
   assert.equal(same.days, 10);
 
-  // The feed 60 s off (the bus later), the blend 20 s off, on every day.
   const better = pairedTest(
     days(10, 20, (d, i) => asked(d, 240 + (i % 3), 180, 220)),
     dayOfAsked,
     'blend',
   );
-  assert.equal(better.verdict, 'better');
+  assert.equal(better.verdict, 'better', 'the feed 60 s off, the blend 20 s, every day');
   assert.ok(better.mae.hi < 0 && Math.abs(better.mae.diff + 40) < 1, JSON.stringify(better.mae));
   assert.deepEqual(better.early, { diff: 0, lo: 0, hi: 0 });
 });
 
 test('the paired test: a method that cuts MAE by saying times too late, so buses come early, is worse', () => {
-  // The feed exact; the blend says 90 s later than the bus comes on a third of questions.
   const t = pairedTest(
     days(10, 30, (d, i) => asked(d, 300, 300, i % 3 ? 300 : 390)),
     dayOfAsked,
     'blend',
   );
   assert.ok(t.early.lo > 0, JSON.stringify(t.early));
-  assert.equal(t.verdict, 'worse');
+  assert.equal(t.verdict, 'worse', 'the blend 90 s late on a third of questions, the feed exact');
 });
 
 test('the paired test: a gain on one day of ten is not a gain', () => {
-  // Nine days the same; one day the blend fixes a big feed error.
   const t = pairedTest(
     days(10, 20, (d, i) => (d === 'd3' ? asked(d, 900, 300, 880) : asked(d, 200 + i, 190, 190))),
     dayOfAsked,
@@ -591,13 +558,12 @@ test('the paired test: a gain on one day of ten is not a gain', () => {
   );
   assert.ok(t.mae.diff < 0, 'on average it gains');
   assert.ok(t.mae.hi >= 0, `but not shown to: ${JSON.stringify(t.mae)}`);
-  assert.equal(t.verdict, 'unclear');
+  assert.equal(t.verdict, 'unclear', 'nine days the same, one big fix');
 });
 
 test('the paired test: under a week of days there is no interval to trust, so no verdict', () => {
-  // One day: resampling it draws the same day every time, a zero-width interval.
   const one = pairedTest([asked('d0', 100, 90, 91), asked('d0', 100, 100, 100)], dayOfAsked, 'blend');
-  assert.equal(one.verdict, 'too few days');
+  assert.equal(one.verdict, 'too few days', 'resampling one day draws it every time: a zero-width interval');
   assert.deepEqual(one.mae, { diff: -0.5, lo: null, hi: null });
   const six = pairedTest(
     days(6, 20, (d, i) => asked(d, 240 + (i % 3), 180, 220)),
@@ -621,24 +587,19 @@ test('the paired test is the same every run, and leaves out questions without bo
 
 test("the correction: the feed's median error, unless adding it would have more buses come early", () => {
   const err = (errS) => ({ svc: 'D2', feedS: 200, errS });
-  // The bus 40 to 80 s later than said, never earlier: the median, 60 s, makes nobody early.
-  assert.equal(biasOf(Array.from({ length: 41 }, (_, i) => err(40 + i)))['D2|1'][1], 60);
-  // Most buses 200 s later than said, a fifth on time. Adding the median
-  // would say 200 s for a bus that comes at once; adding 60 s is the most
-  // that leaves nobody early by more than the feed's rounding.
+  assert.equal(biasOf(Array.from({ length: 41 }, (_, i) => err(40 + i)))['D2|1'][1], 60, '40 to 80 s late, never early: the median');
   const mixed = [...Array.from({ length: 80 }, () => err(200)), ...Array.from({ length: 20 }, () => err(0))];
-  assert.equal(biasOf(mixed)['D2|1'][1], 60);
-  // The feed too late for most buses: a correction towards sooner, as long as no more come early.
-  assert.equal(biasOf(Array.from({ length: 21 }, (_, i) => err(-100 + i)))['D2|1'][1], -90);
-  // The ceiling exactly, between the steps a search would try: two buses
-  // already early, the rest 200 s and 400 s late; 260 s leaves the 200 s
-  // ones on time by the minute, so no more early than with none.
+  assert.equal(biasOf(mixed)['D2|1'][1], 60, 'a fifth on time: 60 s is the most that leaves nobody early beyond the rounding');
+  assert.equal(
+    biasOf(Array.from({ length: 21 }, (_, i) => err(-100 + i)))['D2|1'][1],
+    -90,
+    'the feed too late: a correction towards sooner',
+  );
   const sparse = [err(-100), err(-100), err(200), ...Array.from({ length: 97 }, () => err(400))];
-  assert.equal(biasOf(sparse)['D2|1'][1], 260);
+  assert.equal(biasOf(sparse)['D2|1'][1], 260, 'the ceiling between search steps: no more early than with none');
 });
 
 test('the weights: the least error among the blends that leave no more buses early than the corrected feed', () => {
-  // History is closer on average, but says 120 s too late on a quarter of cases (those buses come early by it).
   const cases = Array.from({ length: 20 }, (_, i) => ({ svc: 'D2', feedS: 200, actualS: 260, hist: { gated: i % 4 ? 260 : 380 } }));
   const grid = weightGrid({ bias: {} }, cases);
   assert.deepEqual(grid.n, [0, 20, 0, 0]);
@@ -648,8 +609,7 @@ test('the weights: the least error among the blends that leave no more buses ear
   assert.ok(grid.sums[1][10] < grid.sums[1][0], 'though history errs less in all');
   const w = weightsFrom([grid])[1];
   assert.ok(w > 0 && w < 1, `some weight on history, short of making buses early: ${w}`);
-  // The share early at that weight stays the feed's: 120 s too late times w, under a minute.
-  assert.ok(120 * w <= 60);
+  assert.ok(120 * w <= 60, 'history 120 s too late times w stays under a minute');
 });
 
 test('the weights: where every blend leaves more buses early than the feed, the one that leaves fewest', () => {
@@ -663,7 +623,6 @@ test('the weights: where every blend leaves more buses early than the feed, the 
 });
 
 test("the weights are held to the feed's own early buses, not the corrected feed's", () => {
-  // A correction that came out too late for these days: corrected, every bus is early by it.
   const cases = Array.from({ length: 20 }, () => ({ svc: 'D2', feedS: 200, actualS: 200, hist: { gated: 200 } }));
   const grid = weightGrid({ bias: { '*|1': [100, 90] } }, cases);
   assert.equal(grid.early[1][0], 20, 'the corrected feed: all early');

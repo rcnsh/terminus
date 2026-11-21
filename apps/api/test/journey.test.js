@@ -1,5 +1,3 @@
-// The card's journey: the trip as steps, which the app's card styles draw.
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cardFor } from '../src/answer/card.ts';
@@ -20,13 +18,10 @@ test('a class journey takes the leave-by bus, with its walk, ride, arrival and s
   assert.equal(j.walk, '5 min');
   assert.equal(j.ride, '10 min');
   assert.equal(j.to, 'GEA1000 @ UTown');
-  // The class's name is too long for the end of a line: the stop is short.
-  assert.equal(j.toStop, 'UTown');
+  assert.equal(j.toStop, 'UTown', "the class's name is too long for the end of a line: the stop is short");
   assert.equal(j.slack, '9 min early');
-  // The leave-by bus is a headway guess, so not live.
-  assert.equal(j.live, false);
-  // The backup for a class is the headline bus, to go now on.
-  assert.equal(j.backup.board, '09:06');
+  assert.equal(j.live, false, 'the leave-by bus is a headway guess, so not live');
+  assert.equal(j.backup.board, '09:06', 'the backup for a class is the headline bus, to go now on');
 });
 
 test('a trip journey takes the headline bus, and the other bus is the backup', async () => {
@@ -52,7 +47,6 @@ test('on foot to a class, the journey is the walk alone: when to leave, how long
   assert.equal(j.bus, null);
   assert.equal(j.boardAt, null);
   assert.equal(j.ride, null);
-  // The leave-by and its arrival at the room, as the class card says them.
   assert.equal(j.leave, '09:53');
   assert.equal(j.walk, '3 min');
   assert.equal(j.arrive, '09:57');
@@ -72,7 +66,6 @@ test('on foot with no class, the journey leaves now and arrives after the whole 
   assert.equal(j.arrive, '09:12');
   assert.equal(j.slack, null);
   assert.equal(j.why, 'D2 would be 16 min');
-  // 12-hour, as the account asks.
   assert.match(cardFor(answer, true).journey.arrive, /^9:12\sAM$/);
 });
 
@@ -99,7 +92,6 @@ test('the journey gets off where the bus stops across the road', async () => {
 });
 
 test("the journey ends at the stop the bus calls at, not the place's first stop", async () => {
-  // The Deck has more than one stop; this R2 calls at Opp NUSS.
   const j = cardFor(await load('landmark')).journey;
   assert.equal(j.off, null);
   assert.equal(j.toStop, 'Opp NUSS');
@@ -110,13 +102,15 @@ test('a trip kept as a plan keeps its journey on every device', async () => {
   const { leaveOf } = await import('../src/answer/trip.ts');
   const answer = await load('class-bus');
   const fresh = cardFor(answer).journey;
-  // Another device reads the plan the first one kept (next.ts), not its own leave-by.
   const kept = cardFor({ ...answer, leave: leaveOf(planOfLeave(answer.leave, false, 'UTOWN')) }).journey;
-  assert.deepEqual(kept, fresh);
-  // Shown in place of the answer's own (next.ts), its times are an earlier reading: not live.
+  assert.deepEqual(kept, fresh, 'another device reads the plan the first one kept, not its own leave-by');
   const place = await load('place');
   assert.equal(cardFor(place).journey.live, true);
-  assert.equal(cardFor({ ...place, leave: { ...leaveOf(planOfLeave(place.leave, false, 'KR-MRT')), stale: true } }).journey.live, false);
+  assert.equal(
+    cardFor({ ...place, leave: { ...leaveOf(planOfLeave(place.leave, false, 'KR-MRT')), stale: true } }).journey.live,
+    false,
+    'a kept plan shows an earlier reading: not live',
+  );
 });
 
 test('a plan kept before it carried walk and ride times still has a journey', async () => {
@@ -149,7 +143,6 @@ test('a kept plan that changes buses never gives the change stop as where you ge
     stopCode: 'PGP',
     alightCode: 'KR-MRT',
   };
-  // The second bus's off stop unknown: no off stop at all, rather than KR MRT.
   const l = leaveOf({
     ...first,
     change: { svc: 'D2', stop: 'Opp KR MRT', board: '2026-10-07T01:10:00Z', arrive: '2026-10-07T01:20:00Z', stopCode: 'KR-MRT-OPP' },
@@ -158,7 +151,6 @@ test('a kept plan that changes buses never gives the change stop as where you ge
   assert.equal(l.toStop, undefined);
   assert.equal(l.offCode, undefined);
   assert.equal(l.change.fromCode, 'KR-MRT');
-  // Known: the second bus's.
   const k = leaveOf({
     ...first,
     change: {

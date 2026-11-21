@@ -1,8 +1,3 @@
-/**
- * The trip engine: trip signals kept in a Durable Object per user,
- * the phase on the card, /api/me/day, and the planner fixes that go with them.
- * On the frozen clock (Thursday 2026-08-27, 09:00 SGT) and a fake feed.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -31,7 +26,6 @@ import { clockAt } from '../src/clock.ts';
 import { onRide, onRideQuery, rideLength } from './_ride.mjs';
 import { withoutMeasuredHeadways } from './_headways.mjs';
 
-// How a headway guess is used, not how long it is: one guess for every shuttle.
 withoutMeasuredHeadways();
 
 const BASE = 'https://bus.example.test';
@@ -48,11 +42,9 @@ const PROFILE = { home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 
 const FIRST = `${THU}:600:UTOWN`;
 const SECOND = `${THU}:720:COM3`;
 
-/** An account with two devices (a phone and a Mac), and the TRIPS namespace. */
 async function setup(profile = PROFILE, { trips = true, feed = FEED } = {}) {
   const fetchImpl = makeFetch({ byStop: feed });
   installGlobals(fetchImpl);
-  /** Moves the frozen clock; the fake feed's times are relative to it. */
   const clock = (ms) => installGlobals(fetchImpl, ms);
   const TRIPS = makeDurableObjects(Trip);
   const env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS } : {}) };
@@ -133,11 +125,10 @@ test('"On the R2" on the phone puts the Mac on the bus too', async () => {
   assert.equal(onPhone.label, `On the ${before.leave.svc}`);
   assert.match(onPhone.card.line, /^On the R2 · off at UTown /, 'the stop, not the class');
   assert.match(onPhone.detail, /^Off at UTown · /);
-  // The stops ridden, for a progress bar: from where the bus was boarded to where you get off.
   const ride = onPhone.card.ride;
   assert.equal(ride.svc, 'R2');
-  assert.equal(ride.stops[0].code, before.leave.stopCode);
-  assert.equal(ride.stops.at(-1).code, 'UTOWN');
+  assert.equal(ride.stops[0].code, before.leave.stopCode, 'the stops ridden, from where the bus was boarded');
+  assert.equal(ride.stops.at(-1).code, 'UTOWN', 'to where you get off');
   assert.ok(ride.stops.length >= 2 && ride.stops.every((x) => x.name));
   assert.ok(Date.parse(ride.board) < Date.parse(ride.arrive));
   assert.deepEqual(onPhone.card.actions, [], 'nothing asks what happened next');
@@ -181,7 +172,7 @@ test('"I\'m there" before the class: you\'re there until it starts, then the pla
   const after = await (await signal(phone, { kind: 'arrived' })).json();
   assert.equal(after.label, "You're there");
   assert.equal(after.dest.label, 'GEA1000 @ UTown');
-  clock(FROZEN_NOW + 65 * 60_000); // 10:05, in it
+  clock(FROZEN_NOW + 65 * 60_000);
   assert.equal((await next(phone)).dest.label, 'CS2030 @ COM1');
 });
 
@@ -195,25 +186,21 @@ test('a location at the class counts as arrived; the location itself is not kept
   assert.doesNotMatch(stored, /103\.77|1\.294/, 'no coordinates in the trip state');
 });
 
-// Inside LT11, on the NUSMods room map: 88 m from its stop (Ventus), further than "at the stop" reaches.
-const IN_LT11 = 'lat=1.29546&lon=103.7714';
+const IN_LT11_88M_FROM_VENTUS = 'lat=1.29546&lon=103.7714';
 
-test('sitting in the lecture theatre counts as there, though its stop is 90 m away', async () => {
+test('sitting in the lecture theatre counts as there, though its stop is 90 m away, further than at the stop reaches', async () => {
   const profile = { home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'LT13-OPP', 'EC1101E @ LT11'), venue: 'LT11' }] };
   const { phone, next, clock } = await setup(profile);
-  clock(FROZEN_NOW + 50 * 60_000); // 09:50, ten minutes before it starts
-  // A fix the phone says is 600 m out is no location: planned from home, not from the wrong stop.
-  const rough = await next(phone, `?${IN_LT11}&acc=600`);
-  assert.notEqual(rough.arrived, true);
+  clock(FROZEN_NOW + 50 * 60_000);
+  const rough = await next(phone, `?${IN_LT11_88M_FROM_VENTUS}&acc=600`);
+  assert.notEqual(rough.arrived, true, 'a fix 600 m out is no location');
   assert.notEqual(rough.card.phase, 'arrived');
-  const there = await next(phone, `?${IN_LT11}`);
+  const there = await next(phone, `?${IN_LT11_88M_FROM_VENTUS}`);
   assert.equal(there.arrived, true);
   assert.equal(there.card.phase, 'arrived');
   assert.equal(there.dest.label, 'EC1101E @ LT11');
-  // Seen there once, every device says so, located or not.
-  assert.equal((await next(phone)).card.phase, 'arrived');
-  // The same place asked for by code.
-  assert.equal((await next(phone, `?to=LT11&${IN_LT11}`)).arrived, true);
+  assert.equal((await next(phone)).card.phase, 'arrived', 'seen there once, every device says so');
+  assert.equal((await next(phone, `?to=LT11&${IN_LT11_88M_FROM_VENTUS}`)).arrived, true, 'the same place asked for by code');
 });
 
 test('/api/me/signal: needs the Durable Object, a known kind, and a trip', async () => {
@@ -237,10 +224,9 @@ test("the day's signals are deleted at the end of the day, and yesterday's never
   await signal(phone, { kind: 'skipped', trip: FIRST });
   const [alarm] = [...TRIPS.alarms.values()];
   assert.equal(alarm, endOfDayMs(FROZEN_NOW));
-  // A signal stored for yesterday (an alarm that hasn't run yet) is ignored.
   const inst = [...TRIPS.instances.values()][0];
   await inst.storage.put('day', { date: '2026-08-26', trips: { [FIRST]: { kind: 'skipped', at: 0 } } });
-  assert.equal((await next(phone)).dest.label, 'GEA1000 @ UTown');
+  assert.equal((await next(phone)).dest.label, 'GEA1000 @ UTown', 'a signal stored for yesterday is ignored');
   clock(endOfDayMs(FROZEN_NOW));
   await TRIPS.fireAlarms();
   assert.equal(inst.storage._map.size, 0);
@@ -265,13 +251,11 @@ test('/api/me/day: each class with where you set off, the leave-by, and the trip
   assert.equal(gap.startsAt, '2026-08-27T03:00:00Z', 'home after the first class ends');
   assert.equal(second.from, 'PGP', 'back from home after a long gap');
   assert.ok(second.leave?.at, 'a leave-by hours ahead too');
-  // By bus, hours ahead is an estimate; on foot it's exact.
-  assert.equal(second.leave.estimated, second.leave.svc !== null);
+  assert.equal(second.leave.estimated, second.leave.svc !== null, 'by bus hours ahead is an estimate; on foot it is exact');
 
-  // On the bus: the bus and where to get off, not a leave-by that has passed.
   await signal(phone, { kind: 'boarded', trip: FIRST });
   day = await (await call('/api/me/day', { token: phone })).json();
-  assert.equal(day.items[0].leave, undefined);
+  assert.equal(day.items[0].leave, undefined, 'on the bus, no leave-by that has passed');
   assert.equal(day.items[0].onBus.svc, first.leave.svc);
   assert.ok(day.items[0].onBus.off, 'where to get off');
   assert.equal(day.items[2].onBus, undefined, 'only the trip you are on');
@@ -285,12 +269,10 @@ test('/api/me/day: each class with where you set off, the leave-by, and the trip
   );
 });
 
-test('/api/me/day: says the language it is written in, which the account chooses over the device', async () => {
-  // An app that has just switched to English asks in it before its save
-  // reaches the account: the day comes back in Chinese, and says so.
+test('/api/me/day: says the language it is written in, which the account chooses over the device, even before an app’s switch is saved', async () => {
   const { phone, call } = await setup({ ...PROFILE, lang: 'zh' });
   const zh = await call('/api/me/day', { token: phone, headers: { 'accept-language': 'en' } });
-  assert.equal(zh.headers.get('content-language'), 'zh-Hans');
+  assert.equal(zh.headers.get('content-language'), 'zh-Hans', 'asked in English, the account says Chinese');
   assert.match((await zh.json()).items.find((i) => i.kind === 'home').title, /回家/);
 
   const { phone: other, call: ask } = await setup();
@@ -302,17 +284,18 @@ test('/api/me/day: says the language it is written in, which the account chooses
 
 test('/api/me/day: the next class planned from where the device is, as the card plans it', async () => {
   const { phone, call, next } = await setup();
-  // Near Kent Ridge MRT, not at home: a different stop and walk from the home stop's.
-  const here = '?lat=1.2950&lon=103.7846';
-  // Today first, as an app asks both at once: before the card has saved its plan.
-  const located = await (await call(`/api/me/day${here}`, { token: phone })).json();
+  const nearKrMrt = '?lat=1.2950&lon=103.7846';
+  const located = await (await call(`/api/me/day${nearKrMrt}`, { token: phone })).json();
   const unlocated = await (await call('/api/me/day', { token: phone })).json();
-  const card = await next(phone, here);
+  const card = await next(phone, nearKrMrt);
   assert.equal(card.leave.stop, located.items[0].leave.stop);
   assert.equal(card.leave.at, located.items[0].leave.at, 'Today says the leave-by the card does');
   assert.notEqual(unlocated.items[0].leave.stop, located.items[0].leave.stop, 'without a location, from the home stop');
-  // Only the next class: a later one is from wherever you'll be before it.
-  assert.deepEqual(located.items.at(-2).leave, unlocated.items.at(-2).leave);
+  assert.deepEqual(
+    located.items.at(-2).leave,
+    unlocated.items.at(-2).leave,
+    'only the next class: a later one is from wherever you will be',
+  );
 });
 
 test('/api/me/day: anything not done yet can be taken off today, the trip home too, and put back', async () => {
@@ -326,35 +309,31 @@ test('/api/me/day: anything not done yet can be taken off today, the trip home t
   const gap = items.find((i) => i.key.startsWith('gap-home:'));
   const home = items.find((i) => i.key.startsWith('home:'));
 
-  // The gap's trip home off: you stay, and the next class goes from where you are.
   await t.signal(t.phone, { kind: 'skipped', trip: gap.key });
   items = await list();
   assert.deepEqual(
     items.map((i) => i.kind),
     ['class', 'class', 'home'],
   );
-  assert.equal(items[1].from, 'UTOWN', 'from the first class, not home');
+  assert.equal(items[1].from, 'UTOWN', 'the gap’s trip home off: from the first class, not home');
   assert.deepEqual(outcomesToday(t.env), [], 'a trip home is not an outcome');
-  t.clock(FROZEN_NOW + 90 * 60_000); // 10:30, in the gap
+  t.clock(FROZEN_NOW + 90 * 60_000);
   assert.equal((await t.next(t.phone)).dest.label, 'CS2030 @ COM1', 'the next class, not home');
 
-  // The last trip home off: nothing after the last class.
   await t.signal(t.phone, { kind: 'skipped', trip: home.key });
   assert.deepEqual(
     (await list()).map((i) => i.kind),
     ['class', 'class'],
   );
-  t.clock(FROZEN_NOW + 5 * 60 * 60_000); // 14:00, after the last class
-  assert.notEqual((await t.next(t.phone)).dest?.label, 'Home');
+  t.clock(FROZEN_NOW + 5 * 60 * 60_000);
+  assert.notEqual((await t.next(t.phone)).dest?.label, 'Home', 'the last trip home off: nothing after the last class');
 
-  // Undo puts it back.
   await t.signal(t.phone, { kind: 'reset', trip: home.key });
-  assert.equal((await list()).at(-1).kind, 'home');
+  assert.equal((await list()).at(-1).kind, 'home', 'undo puts it back');
 });
 
 test('/api/me/day: a one-off trip later today can be taken off before it is the next trip, and put back', async () => {
   const t = await setup();
-  // 18:00, after both classes: the card is about the first class, not this.
   assert.equal(
     (await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'UTOWN', atMin: 1080, label: 'Dinner' } })).status,
     200,
@@ -362,7 +341,7 @@ test('/api/me/day: a one-off trip later today can be taken off before it is the 
   const list = async () => (await (await t.call('/api/me/day', { token: t.phone })).json()).items;
   const once = (await list()).find((i) => i.label === 'Dinner');
   assert.equal(once.removable, true);
-  assert.notEqual((await t.next(t.phone)).dest.label, 'Dinner');
+  assert.notEqual((await t.next(t.phone)).dest.label, 'Dinner', 'at 18:00 after both classes, the card is about the first class');
 
   assert.equal((await t.signal(t.phone, { kind: 'skipped', trip: once.key })).status, 200);
   assert.equal(
@@ -393,8 +372,7 @@ test('/api/me/day on a free day says what is next', async () => {
   assert.equal(day.note, 'Next: CS2030 @ COM1, tomorrow 10:00');
 });
 
-test('on the bus only where a location shows it: on its road, further on than a walk since it left', () => {
-  // The A2 from PGP Foyer to Opp HSSML, as on a real trip: 894 m of road.
+test('on the bus only where a location shows it: on its road, further on than a walk since it left (the A2, PGP Foyer to Opp HSSML)', () => {
   const board = FROZEN_NOW;
   const a2 = {
     svc: 'A2',
@@ -420,25 +398,26 @@ test('on the bus only where a location shows it: on its road, further on than a 
 });
 
 test('a service with published hours ends at its window close, across midnight too', () => {
-  // The real K: 07:04 to 23:04 on weekdays, but only until 19:04 on Saturdays.
   assert.deepEqual(
     [GRAPH.serviceHours.K.weekday, GRAPH.serviceHours.K.saturday],
     [
       ['07:04', '23:04'],
       ['07:04', '19:04'],
     ],
+    'the real K: later on weekdays than on Saturdays',
   );
-  // Thursday 22:30 SGT.
-  const at2230 = Date.UTC(2026, 7, 27, 14, 30);
-  assert.equal(serviceEndsAt(GRAPH, 'K', at2230), Date.UTC(2026, 7, 27, 15, 4));
+  const thu2230 = Date.UTC(2026, 7, 27, 14, 30);
+  assert.equal(serviceEndsAt(GRAPH, 'K', thu2230), Date.UTC(2026, 7, 27, 15, 4));
   assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 27, 15, 30)), null, 'not running');
-  // Saturday 18:30, and 19:30 when it has stopped.
   assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 29, 10, 30)), Date.UTC(2026, 7, 29, 11, 4));
   assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 29, 11, 30)), null, 'Saturday: ended at 19:04');
-  // No real service runs past midnight; one that did ends tomorrow.
   const late = { ...GRAPH, serviceHours: { D2: { weekday: ['19:00', '01:00'] } } };
-  assert.equal(serviceEndsAt(late, 'D2', at2230), Date.UTC(2026, 7, 27, 17, 0), '01:00 tomorrow');
-  assert.equal(serviceEndsAt(late, 'X', at2230), null, 'hours unknown');
+  assert.equal(
+    serviceEndsAt(late, 'D2', thu2230),
+    Date.UTC(2026, 7, 27, 17, 0),
+    'no real service runs past midnight; one that did ends at 01:00 tomorrow',
+  );
+  assert.equal(serviceEndsAt(late, 'X', thu2230), null, 'hours unknown');
 });
 
 test('with every class today skipped, the day is free and "next" is not a skipped class', async () => {
@@ -447,39 +426,33 @@ test('with every class today skipped, the day is free and "next" is not a skippe
   const a = await (await signal(phone, { kind: 'skipped', trip: SECOND })).json();
   assert.equal(a.mode, 'free');
   assert.equal(a.label, 'No more classes today');
-  // The same classes next week, not today's skipped ones.
-  assert.doesNotMatch(a.detail, /today/);
+  assert.doesNotMatch(a.detail, /today/, 'the same classes next week, not today’s skipped ones');
   assert.match(a.detail, /Thu 3 Sep/);
   assert.equal(a.card.actions.at(-1).id, 'reset', 'the last skip can still be undone');
 });
-
-/* The question at departure, and what silence means. */
 
 test('nothing is asked about the bus, before or after it leaves, and with no location the card says only that it has left', async () => {
   const { phone, mac, next, signal, clock } = await setup();
   const first = await next(phone);
   const leaveAt = Date.parse(first.leave.at);
 
-  // Due: the plan is remembered from here on.
   clock(leaveAt - 60_000);
   const due = await next(phone);
-  assert.equal(due.card.phase, 'due');
+  assert.equal(due.card.phase, 'due', 'due: the plan is remembered from here on');
   const board = Date.parse(due.leave.board);
   const svc = due.leave.svc;
 
-  // Just after it left: nothing asked, on any device.
   clock(board + 30_000);
   const left = await next(mac);
   assert.equal(
     left.card.actions.some((x) => ['boarded', 'missed', 'arrived'].includes(x.id)),
     false,
+    'just after it left: nothing asked, on any device',
   );
 
-  // A few minutes on, nobody having said and no location: not taken to be on
-  // it, nor to have missed it. The next way there, true either way.
   clock(board + 4 * 60_000);
   const unknown = await next(mac);
-  assert.equal(unknown.card.phase, 'heading');
+  assert.equal(unknown.card.phase, 'heading', 'no one said and no location: neither on it nor missed, the next way there');
   assert.match(unknown.card.line, new RegExp(`^The ${clockAt(board, false)} has left · next `));
   assert.equal(unknown.card.ride, null);
   assert.equal(
@@ -487,9 +460,8 @@ test('nothing is asked about the bus, before or after it leaves, and with no loc
     false,
     'still nothing asked',
   );
-  // An older app's "On it" still works, about the bus that left.
   const answered = await (await signal(phone, { kind: 'boarded', trip: FIRST })).json();
-  assert.equal(answered.label, `On the ${svc}`);
+  assert.equal(answered.label, `On the ${svc}`, 'an older app’s On it still works, about the bus that left');
   assert.ok(Date.parse(answered.card.ride.board) === board);
 });
 
@@ -502,9 +474,6 @@ test('polls between the leave time and the departure keep the trip about the bus
   const board = Date.parse(due.leave.board);
   const svc = due.leave.svc;
 
-  // Past the leave time the phones and the widget keep polling, with and
-  // without a location. None of that changes which bus the trip is for, and
-  // every one of them still says that bus.
   clock(leaveAt + 60_000);
   const later = await next(phone);
   assert.equal(later.leave.board, due.leave.board, 'still the bus you were told to catch');
@@ -514,34 +483,33 @@ test('polls between the leave time and the departure keep the trip about the bus
   clock(board - 10_000);
   await next(phone);
 
-  // A few minutes after it left, the phone seen on its road: on that bus,
-  // on the Mac too.
   clock(board + 4 * 60_000);
   await next(phone, onRideQuery(svc, due.leave.stopCode, 'UTOWN', rideLength(svc, due.leave.stopCode, 'UTOWN') - 300));
   const assumed = await next(mac);
-  assert.equal(assumed.label, `On the ${svc}`);
+  assert.equal(assumed.label, `On the ${svc}`, 'the phone seen on its road: on that bus, on the Mac too');
   assert.equal(Date.parse(assumed.card.ride.board), board);
 });
 
 test('the widget, planning without a location, says the bus the phone planned from where you are', async () => {
-  // A board at the stop the plan boards at too: a live time there, as the real feed has.
   const { phone, next, clock } = await setup(PROFILE, { feed: { ...FEED, 'UHC-OPP': FEED.PGP } });
-  const AT_STOP = '?lat=1.2966&lon=103.7764'; // a short walk from that stop
-  const first = await next(phone, AT_STOP);
+  const NEAR_UHC_OPP = '?lat=1.2966&lon=103.7764';
+  const first = await next(phone, NEAR_UHC_OPP);
   clock(Date.parse(first.leave.at) - 60_000);
-  const due = await next(phone, AT_STOP);
+  const due = await next(phone, NEAR_UHC_OPP);
   const board = Date.parse(due.leave.board);
   const svc = due.leave.svc;
-  // The widget has no location: it says the phone's bus, not one of its own.
   const blind = await next(phone);
   assert.equal(blind.leave.board, due.leave.board, "the phone's bus");
   assert.equal(blind.leave.svc, svc);
   assert.equal(blind.card.catch, due.card.catch);
 
-  // Once it has left, the widget still goes by the phone's bus: that one has gone.
   clock(board + 4 * 60_000);
   const gone = await next(phone);
-  assert.match(gone.card.line, new RegExp(`^The ${clockAt(board, false)} has left · next `));
+  assert.match(
+    gone.card.line,
+    new RegExp(`^The ${clockAt(board, false)} has left · next `),
+    'once it left, the widget still goes by the phone’s bus',
+  );
 });
 
 test('on the bus only when a location sees it: on its road, further on than a walk', async () => {
@@ -564,9 +532,8 @@ test('on the bus only when a location sees it: on its road, further on than a wa
   assert.equal(seen.card.phase, 'riding');
   assert.equal(seen.label, `On the ${svc}`);
   assert.match(seen.card.line, new RegExp(`^On the ${svc}`));
-  // Noted on the plan: the Mac, with no location, follows.
   const onMac = await next(mac);
-  assert.equal(onMac.card.phase, 'riding');
+  assert.equal(onMac.card.phase, 'riding', 'noted on the plan: the Mac, with no location, follows');
   assert.equal(Date.parse(onMac.card.ride.board), board);
   assert.deepEqual(outcomesToday(env), [], 'seen, not said: no outcome');
 });
@@ -583,8 +550,7 @@ test('still at the stop a few minutes after the bus left: missed, without being 
   assert.ok(still.leave, 'with the next way there');
 });
 
-test('"On it" reads the arrival from the feed: the same plate at your stop', async () => {
-  // Only the R2 runs, and the bus at PGP (plate PX1) reaches UTown in 9 minutes.
+test('"On it" reads the arrival from the feed: the same plate (PX1) at PGP and, 9 minutes later, UTown', async () => {
   const feed = {};
   for (const code of Object.keys(FEED))
     feed[code] = [{ name: 'R2', arrivalTime: '15', nextArrivalTime: '25', passengers: 'low', arrivalTime_veh_plate: 'PZ9' }];
@@ -626,10 +592,7 @@ test('"On it" without a plate in the feed keeps the estimate, marked as one', as
   assert.match(riding.detail, /arrive ~/);
 });
 
-test('once the arrival has passed, the card never says you arrive in the past', async () => {
-  // Caught the bus after the one you tapped "On it" for: its arrival comes
-  // and goes, and nothing says you're there. The feed's next bus of the
-  // service at your stop is the guess.
+test('once the arrival has passed, the card never says you arrive in the past: the next bus of the service is the guess', async () => {
   const { phone, next, signal, clock } = await setup();
   const riding = await (await signal(phone, { kind: 'boarded', trip: FIRST })).json();
   const arrive = Date.parse(riding.arriveAt);
@@ -642,9 +605,8 @@ test('once the arrival has passed, the card never says you arrive in the past', 
   assert.match(later.detail, /arrive ~/);
   assert.doesNotMatch(later.detail, new RegExp(clockAt(arrive)));
   assert.ok(later.timing && Date.parse(later.timing.reachAt) > arrive, 'the timing follows the new estimate');
-  // Ten minutes on, with still nothing from the phone: there.
   clock(arrive + RIDE_GRACE_MS);
-  assert.equal((await next(phone)).card.phase, 'arrived');
+  assert.equal((await next(phone)).card.phase, 'arrived', 'RIDE_GRACE_MS on with nothing from the phone: there');
 });
 
 test('once the arrival has passed and no bus is due, the card says only where to get off', async () => {
@@ -664,7 +626,6 @@ test('once the arrival has passed and no bus is due, the card says only where to
 });
 
 test('a trip home taken to be riding wakes the Trip object when its bus arrives, with no later bus due', async () => {
-  // The way home from UTown is the D2; once its arrival passes, no D2 is due at PGP to guess with.
   const feed = { UTOWN: [{ name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low' }] };
   feed.PGP = [{ name: 'R2', arrivalTime: '2', nextArrivalTime: '12', passengers: 'low' }];
   const profile = { home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] };
@@ -677,7 +638,6 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   const dayOf = async () => (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
   const plan = (await dayOf()).plans?.[key];
   assert.equal(plan?.svc, 'D2');
-  // Seen on the bus by a location: taken to be riding, with no signal.
   const seen = { ...plan, seen: true };
   await trip.fetch('https://trip/update', {
     method: 'POST',
@@ -692,11 +652,9 @@ test('a trip home taken to be riding wakes the Trip object when its bus arrives,
   assert.equal(card.key, key);
   assert.equal(card.answer.card.phase, 'riding');
   assert.equal(card.answer.arriveAt, undefined, 'no later bus to guess with');
-  // The ride counts as over RIDE_GRACE_MS after the arrival it passed: the wake is then, so the trip's end is pushed.
-  assert.equal(card.wakeAt, arrive + RIDE_GRACE_MS);
+  assert.equal(card.wakeAt, arrive + RIDE_GRACE_MS, 'the ride is over RIDE_GRACE_MS after the arrival it passed');
 });
 
-/** The card the Trip object works out when it wakes (no location), and when it would wake next. */
 async function wakeCard(env, TRIPS) {
   const trip = TRIPS.get([...TRIPS.instances.keys()][0]);
   const day = await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
@@ -713,8 +671,7 @@ test('heading for the bus, the Trip object next wakes when the bus is taken to h
   assert.ok(Date.now() < board);
   const card = await wakeCard(env, TRIPS);
   assert.equal(card.answer.card.phase, 'heading');
-  // Nothing changes as the bus leaves; ASSUME_MS later the card says it has gone.
-  assert.equal(card.wakeAt, board + ASSUME_MS);
+  assert.equal(card.wakeAt, board + ASSUME_MS, 'ASSUME_MS after the bus leaves the card says it has gone');
 });
 
 test('after "Missed it", the Trip object next wakes when the class\'s trip is over, not at each later bus', async () => {
@@ -724,9 +681,7 @@ test('after "Missed it", the Trip object next wakes when the class\'s trip is ov
   assert.equal(missed.card.phase, 'missed');
   const card = await wakeCard(env, TRIPS);
   assert.equal(card.answer.card.phase, 'missed');
-  // The next bus's leave-by changes nothing: missed stays missed. GEA1000
-  // starts at 10:00, and the trip moves on to the next one LATE_GRACE_MIN later.
-  assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'));
+  assert.equal(card.wakeAt, Date.parse('2026-08-27T10:15:00+08:00'), 'LATE_GRACE_MIN after the 10:00 start, the trip moves on');
 });
 
 test('there early for a class, the Trip object still wakes when the plan moves on, for the trip after it', async () => {
@@ -736,8 +691,7 @@ test('there early for a class, the Trip object still wakes when the plan moves o
   const there = await wakeCard(env, TRIPS);
   assert.equal(there.key, FIRST);
   assert.equal(there.answer.card.phase, 'arrived');
-  // Nothing about the trip itself changes again; the timetable's next moment is GEA1000 starting.
-  assert.equal(there.wakeAt, Date.parse('2026-08-27T10:00:00+08:00'));
+  assert.equal(there.wakeAt, Date.parse('2026-08-27T10:00:00+08:00'), 'when GEA1000 starts');
   clock(there.wakeAt);
   assert.equal((await wakeCard(env, TRIPS)).key, SECOND);
 });
@@ -756,11 +710,8 @@ test('at the stop well before the leave-by, the card says when it turns to waiti
   assert.equal(card.wakeAt, Date.parse(card.answer.leave.at) - DUE_MS, 'without a location: when it is due');
 });
 
-/* What terminus learns from the answers (outcomes.ts). */
-
 const DAY = 86_400_000;
 const userOf = (env) => env.DB._db.prepare('SELECT id FROM users WHERE email IS NOT NULL').get().id;
-/** A past outcome, `daysAgo` days before the frozen clock. */
 function seed(env, key, daysAgo, outcome) {
   const at = FROZEN_NOW - daysAgo * DAY;
   env.DB._db
@@ -861,10 +812,9 @@ test('"Not going" three weeks running offers to stop reminders; accepting turns 
   const after = await next(phone);
   assert.equal(after.card.remind, false);
   assert.equal(after.dest.label, 'GEA1000 @ UTown', 'the class is still planned');
-  // The next class still reminds.
   const second = await (await signal(phone, { kind: 'skipped', trip: FIRST })).json();
   assert.equal(second.dest.label, 'CS2030 @ COM1');
-  assert.equal(second.card.remind, true);
+  assert.equal(second.card.remind, true, 'the next class still reminds');
 });
 
 test('a suggestion turned down is not offered again, and never during a trip', async () => {
@@ -891,11 +841,10 @@ test('migration 0012 rounds the trip history already kept to the start of its da
   const { readFileSync } = await import('node:fs');
   const db = makeD1();
   db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', NULL, 0, 0)`);
-  // 23:59:59 and 00:00:01 in Singapore, either side of midnight.
-  const late = Date.parse('2026-10-01T15:59:59Z');
-  const early = Date.parse('2026-10-01T16:00:01Z');
+  const sgt235959 = Date.parse('2026-10-01T15:59:59Z');
+  const sgt000001 = Date.parse('2026-10-01T16:00:01Z');
   db.exec(
-    `INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES ('u', 'a', '2026-10-01', 'missed', ${late}), ('u', 'b', '2026-10-02', 'missed', ${early})`,
+    `INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES ('u', 'a', '2026-10-01', 'missed', ${sgt235959}), ('u', 'b', '2026-10-02', 'missed', ${sgt000001})`,
   );
   db.exec(readFileSync(new URL('../migrations/0012_trip_outcome_days.sql', import.meta.url), 'utf8'));
   const rows = db._db.prepare('SELECT trip_key, day, at FROM trip_outcomes ORDER BY trip_key').all();
@@ -938,8 +887,10 @@ test("a deleted account's trip state goes at once, and a request still under way
     obj.fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const date = sgtDate(FROZEN_NOW);
   const deleteAt = endOfDayMs(FROZEN_NOW);
-  // What a /api/me/next that read the account just before it went would still send.
-  assert.ok((await post('update', { date, items: [{ key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW } }], deleteAt })).ok);
+  assert.ok(
+    (await post('update', { date, items: [{ key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW } }], deleteAt })).ok,
+    'what a /api/me/next that read the account just before it went would still send',
+  );
   assert.ok((await post('update', { date, plans: { [FIRST]: { svc: 'D2', stop: 'PGP', board: null, arrive: null } }, deleteAt })).ok);
   assert.ok((await post('update', { date, watch: { userId, at: FROZEN_NOW + 60_000 }, deleteAt })).ok);
   assert.equal(await (await obj.fetch(`https://trip/day?date=${date}`)).json(), null);
@@ -981,7 +932,6 @@ test("the cron's deletion of an idle anonymous account takes its trip state too"
 });
 
 const stopAt = (code) => indexGraph(GRAPH).byCode.get(code);
-/** Due, then at the boarding stop just before the bus, as the phone's /api/me/next sends it. */
 async function waitingAtStop(t) {
   const first = await t.next(t.phone);
   t.clock(Date.parse(first.leave.at) - 60_000);
@@ -1005,38 +955,35 @@ test('a location from an older app records nothing: it is answered like /me/next
   const res = await t.signal(t.phone, { kind: 'location', lat: s.lat, lon: s.lon, speed: 0, acc: 10 });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).card.phase, 'waiting', 'from where it said');
-  // Moving fast along the road, as a bus: still nothing recorded.
   t.clock(Date.parse(plan.board) + 30_000);
   await t.signal(t.phone, { kind: 'location', lat: s.lat + 0.001, lon: s.lon, speed: 8, acc: 10 });
-  assert.equal(await tripRec(t), undefined);
+  assert.equal(await tripRec(t), undefined, 'moving fast along the road: still nothing recorded');
 });
 
-test('there for the last class: the way home is shown, but not "Time to get going" until the class ends', async () => {
-  // Home at PGPR: the D2 from UTown gets there without its terminal (COM3), where the run ends.
+test('there for the last class: the way home to PGPR is shown, but not "Time to get going" until the class ends', async () => {
   const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
-  t.clock(FROZEN_NOW + 70 * 60_000); // 10:10, in class
+  t.clock(FROZEN_NOW + 70 * 60_000);
   const inClass = await t.next(t.phone);
   assert.equal(inClass.dest.label, 'Home');
   assert.equal(inClass.card.phase, 'idle');
   assert.equal(inClass.card.phaseText, null);
-  t.clock(FROZEN_NOW + 121 * 60_000); // 11:01, the class is over
+  t.clock(FROZEN_NOW + 121 * 60_000);
   assert.notEqual((await t.next(t.phone)).card.phase, 'idle');
 });
 
 test('after the last class, with no location, the trip home is over once its bus has had time to get you home, and the Trip object wakes then', async () => {
   const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
-  t.clock(FROZEN_NOW + 121 * 60_000); // 11:01, the class is over
+  t.clock(FROZEN_NOW + 121 * 60_000);
   const first = await t.next(t.phone);
   t.clock(Date.parse(first.leave.at) - 60_000);
   const due = await t.next(t.phone);
   assert.equal(due.card.phase, 'due');
-  // Its bus gone, and nothing says whether you're on it.
   t.clock(Date.parse(due.leave.board) + ASSUME_MS + 60_000);
   const gone = await wakeCard(t.env, t.TRIPS);
   assert.equal(gone.key, 'home:660');
-  assert.equal(gone.answer.card.gone, true);
+  assert.equal(gone.answer.card.gone, true, 'its bus gone, and nothing says whether you are on it');
   const trip = t.TRIPS.get([...t.TRIPS.instances.keys()][0]);
   const plan = (await (await trip.fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json()).plans['home:660'];
   const home = Date.parse(plan.arrive) + HOME_GRACE_MS;
@@ -1045,11 +992,10 @@ test('after the last class, with no location, the trip home is over once its bus
   assert.equal((await wakeCard(t.env, t.TRIPS)).key, null, 'home by now');
 });
 
-test('a trip home whose bus has gone: the Trip object wakes when the day rests, if that comes before it would be home', async () => {
-  // The class ends at 18:00, so the day rests at 18:45: before the 18:34 D2 home plus HOME_GRACE_MS.
+test('a trip home whose bus has gone: the Trip object wakes when the day rests (18:45), if that comes before it would be home', async () => {
   const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(1020, 'UTOWN', 'GEA1000 @ UTown')] });
   await t.signal(t.phone, { kind: 'arrived', trip: `${THU}:1020:UTOWN` });
-  t.clock(FROZEN_NOW + 9.5 * 3_600_000); // 18:30
+  t.clock(FROZEN_NOW + 9.5 * 3_600_000);
   const due = await t.next(t.phone);
   assert.equal(due.card.phase, 'due');
   t.clock(Date.parse(due.leave.board) + ASSUME_MS + 60_000);
@@ -1065,21 +1011,18 @@ test('a trip home whose bus has gone: the Trip object wakes when the day rests, 
 test('in the last class, the Trip object wakes as it ends, to say it is time to go home', async () => {
   const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
-  t.clock(FROZEN_NOW + 70 * 60_000); // 10:10, in class
+  t.clock(FROZEN_NOW + 70 * 60_000);
   const card = await wakeCard(t.env, t.TRIPS);
   assert.equal(card.key, 'home:660');
   assert.equal(card.answer.card.phase, 'idle');
   assert.equal(card.wakeAt, FROZEN_NOW + 120 * 60_000, '11:00, when the class ends');
 });
 
-/* More than class trips. */
-
 test('"Not on campus today" skips every trip left today on every device; "Back on campus" brings them back', async () => {
   const t = await setup();
   const first = await t.next(t.phone);
   const away = first.card.actions.find((a) => a.id === 'away');
   assert.equal(away.label, 'Not on campus today');
-  // Both classes are skipped in one call to the Trip object.
   const saves = [];
   const get = t.TRIPS.get.bind(t.TRIPS);
   t.TRIPS.get = (id) => {
@@ -1087,7 +1030,7 @@ test('"Not on campus today" skips every trip left today on every device; "Back o
     return { ...stub, fetch: (url, init) => (String(url).endsWith('/update') && saves.push(url), stub.fetch(url, init)) };
   };
   const off = await (await t.signal(t.phone, { kind: 'away' })).json();
-  assert.equal(saves.length, 1);
+  assert.equal(saves.length, 1, 'both classes skipped in one call to the Trip object');
   assert.equal(off.label, 'Not on campus today');
   assert.equal(off.card.phase, 'idle');
   assert.deepEqual(
@@ -1126,9 +1069,8 @@ test('a favourite with a usual time is a trip on that day, like a class', async 
   assert.equal(a.dest.why, 'class');
   assert.ok(a.leave, 'with a leave-by');
   assert.equal(a.card.actions[0].trip, `${THU}:600:UHALL`);
-  // Another day: nothing.
   t.clock(FROZEN_NOW + DAY);
-  assert.notEqual((await t.next(t.phone)).dest?.label, 'Gym');
+  assert.notEqual((await t.next(t.phone)).dest?.label, 'Gym', 'another day: nothing');
 });
 
 test('a one-off trip today is planned like a class, and past ones are dropped', async () => {
@@ -1146,11 +1088,10 @@ test('a one-off trip today is planned like a class, and past ones are dropped', 
   assert.equal(a.card.actions[0].id, 'skipped');
   const profile = await (await t.call('/api/me/profile', { cookie: t.cookie })).json();
   assert.deepEqual(profile.once, [{ date: sgtDate(FROZEN_NOW), arriveByMin: 840, to: 'COM3', label: 'Project meeting' }]);
-  // Tomorrow it's gone from the plan, and a save drops it.
   t.clock(FROZEN_NOW + DAY);
-  assert.notEqual((await t.next(t.phone)).dest?.label, 'Project meeting');
+  assert.notEqual((await t.next(t.phone)).dest?.label, 'Project meeting', 'tomorrow it is gone from the plan');
   const saved = await (await t.call('/api/me/profile', { method: 'PUT', cookie: t.cookie, body: profile })).json();
-  assert.deepEqual(saved.once, []);
+  assert.deepEqual(saved.once, [], 'and a save drops it');
 });
 
 test('usual times and one-offs are checked like the rest of the profile', async () => {
@@ -1205,8 +1146,6 @@ test('having been at the stop is not an answer: after the bus leaves, the Mac wi
 });
 
 test('a NUSMods class ends half an hour before its timetable end: the day, "till", and the trip home go by that', async () => {
-  // 10:00-12:00 from NUSMods: really out by about 11:30.
-  // Home at PGPR: the D2 from UTown gets there without its terminal (COM3), where the run ends.
   const t = await setup({
     home: { stops: ['PGPR'] },
     trips: [{ day: THU, arriveByMin: 600, endMin: 720, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
@@ -1215,10 +1154,10 @@ test('a NUSMods class ends half an hour before its timetable end: the day, "till
   const cls = day.items.find((i) => i.kind === 'class');
   assert.equal(Date.parse(cls.endsAt), FROZEN_NOW + 150 * 60_000, 'ends 11:30');
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
-  t.clock(FROZEN_NOW + 140 * 60_000); // 11:20
+  t.clock(FROZEN_NOW + 140 * 60_000);
   const inClass = await t.next(t.phone);
   assert.equal(inClass.card.phase, 'idle', 'the way home, but not yet time to go');
-  t.clock(FROZEN_NOW + 151 * 60_000); // 11:31
+  t.clock(FROZEN_NOW + 151 * 60_000);
   assert.notEqual((await t.next(t.phone)).card.phase, 'idle', 'out of class: the trip home is on');
 });
 
@@ -1237,7 +1176,6 @@ test('the card says where to walk to for directions: the stop to catch the bus a
   assert.equal(riding.card.walkTo, null);
 });
 
-/* A class in the middle of the day taken off today. */
 const MIDDAY = {
   home: { stops: ['PGP'] },
   trips: [
@@ -1250,7 +1188,7 @@ const MIDDAY_KEY = `${THU}:720:COM3`;
 
 test('a middle class taken off today leaves one trip home in the gap, not one for each side of it', async () => {
   const t = await setup(MIDDAY);
-  t.clock(FROZEN_NOW + 30 * 60_000); // 09:30
+  t.clock(FROZEN_NOW + 30 * 60_000);
   await t.signal(t.phone, { kind: 'skipped', trip: MIDDAY_KEY });
   const items = (await (await t.call('/api/me/day', { token: t.phone })).json()).items;
   const keys = items.map((i) => i.key);
@@ -1263,25 +1201,23 @@ test('a middle class taken off today leaves one trip home in the gap, not one fo
 
 test('at home in a gap, the next class is one still on today, not one taken off', async () => {
   const t = await setup(MIDDAY);
-  t.clock(FROZEN_NOW + 30 * 60_000); // 09:30, walking through PGP
+  t.clock(FROZEN_NOW + 30 * 60_000);
   await t.signal(t.phone, { kind: 'skipped', trip: MIDDAY_KEY });
-  const home = await t.next(t.phone, '?lat=1.29130&lon=103.78140');
-  assert.notEqual(home.dest?.label, 'HS1502 @ NAK');
-  assert.equal(home.dest?.label, 'GEX1015 @ LT17');
+  const walkingThroughPgp = await t.next(t.phone, '?lat=1.29130&lon=103.78140');
+  assert.notEqual(walkingThroughPgp.dest?.label, 'HS1502 @ NAK');
+  assert.equal(walkingThroughPgp.dest?.label, 'GEX1015 @ LT17');
 });
 
 test('the phone seeing you home ends the trip home for every device, so none still has you on the bus', async () => {
   const t = await setup(MIDDAY);
   await t.signal(t.phone, { kind: 'skipped', trip: MIDDAY_KEY });
-  t.clock(FROZEN_NOW + 40 * 60_000); // 09:40: the gap's trip home, nobody said a thing
+  t.clock(FROZEN_NOW + 40 * 60_000);
   const widget = await t.next(t.mac);
-  assert.equal(widget.dest.label, 'Home');
-  // The phone, in PGP.
-  const phone = await t.next(t.phone, '?lat=1.29130&lon=103.78140');
-  assert.equal(phone.dest.label, 'GEX1015 @ LT17');
-  // A device without a location now agrees.
+  assert.equal(widget.dest.label, 'Home', 'the gap’s trip home, nobody said a thing');
+  const phoneInPgp = await t.next(t.phone, '?lat=1.29130&lon=103.78140');
+  assert.equal(phoneInPgp.dest.label, 'GEX1015 @ LT17');
   const after = await t.next(t.mac);
-  assert.equal(after.dest.label, 'GEX1015 @ LT17');
+  assert.equal(after.dest.label, 'GEX1015 @ LT17', 'a device without a location now agrees');
   assert.notEqual(after.card.phase, 'riding');
   assert.deepEqual(
     outcomesToday(t.env).filter((o) => o.trip.startsWith('gap-home')),
@@ -1289,8 +1225,6 @@ test('the phone seeing you home ends the trip home for every device, so none sti
     'not an outcome',
   );
 });
-
-/* One plan everywhere, and "at the stop" only meaning the plan's stop around its time. */
 
 const atStop = (code) => {
   const s = stopAt(code);
@@ -1304,10 +1238,9 @@ test('at the stop you live by, hours before the trip, you are not "at the stop";
   assert.ok(Date.parse(first.leave.at) - Date.now() > 15 * 60_000, 'the leave-by is a while off');
   assert.equal((await next(phone, here)).card.phase, 'idle', 'standing by your home stop is not waiting for a bus');
 
-  // A few minutes before the bus, with the feed's (six minutes out) about it.
   clock(Date.parse(first.leave.board) - 7 * 60_000);
   const due = await next(phone, here);
-  assert.equal(due.card.phase, 'waiting');
+  assert.equal(due.card.phase, 'waiting', 'a few minutes before the bus, the feed’s time about it');
   assert.equal(due.card.leaveBy, `${due.leave.svc} at ${clockAt(Date.parse(due.leave.board))}`, 'no "Leave by" at the stop');
 });
 
@@ -1321,10 +1254,9 @@ test('riding past another stop after the bus left is the bus, not "at the stop" 
   const stops = rideStops(indexGraph(GRAPH), due.leave.svc, due.leave.stopCode, due.leave.offCode ?? 'UTOWN');
   assert.ok(stops.length >= 3, 'a stop between boarding and getting off');
 
-  // Far enough on that nobody walks there in the time: the bus.
   clock(board + 4 * 60_000);
   const passing = await next(phone, atStop(stops.at(-2)));
-  assert.equal(passing.card.phase, 'riding');
+  assert.equal(passing.card.phase, 'riding', 'far enough on that nobody walks there in the time');
   assert.equal(passing.label, `On the ${due.leave.svc}`);
 });
 
@@ -1332,11 +1264,10 @@ test('a class whose bus was missed is not where the next one is planned from', a
   const { phone, call, next, signal, clock } = await setup();
   await next(phone);
   await signal(phone, { kind: 'missed', trip: FIRST });
-  // After that class, before the next: without a location, from home, not from UTown.
   clock(FROZEN_NOW + (11 * 60 + 15 - 9 * 60) * 60_000);
   const a = await next(phone);
   assert.equal(a.dest.label, 'CS2030 @ COM1');
-  assert.notEqual(a.leave?.stopCode, 'UTOWN');
+  assert.notEqual(a.leave?.stopCode, 'UTOWN', 'after that class, without a location: from home, not UTown');
   const day = await (await call('/api/me/day', { token: phone })).json();
   assert.equal(day.items.find((x) => x.key === SECOND).from, 'PGP');
 });
@@ -1364,12 +1295,11 @@ test('taking the trip home off today offers "Undo: going home"', async () => {
 
 test('seen at the destination, the trip is over for every device, without anyone saying so', async () => {
   const { phone, mac, next, clock } = await setup();
-  clock(FROZEN_NOW + 50 * 60_000); // 09:50, before GEA1000 at 10:00
+  clock(FROZEN_NOW + 50 * 60_000);
   const there = await next(phone, atStop('UTOWN'));
   assert.equal(there.card.phase, 'arrived');
-  // The Mac has no location: it knows anyway, and says so until the class starts.
   const onMac = await next(mac);
-  assert.equal(onMac.card.phase, 'arrived');
+  assert.equal(onMac.card.phase, 'arrived', 'the Mac has no location and knows anyway');
   assert.equal(onMac.label, "You're there");
   assert.match(onMac.detail, /^GEA1000 @ UTown starts /);
   assert.equal(onMac.leave, null, 'no trip home or next class while early for this one');
@@ -1377,7 +1307,7 @@ test('seen at the destination, the trip is over for every device, without anyone
 
 test('arriving early at the class, the phone says "You\'re there" straight away, not "You\'re here" first', async () => {
   const { phone, next, clock } = await setup();
-  clock(FROZEN_NOW + 50 * 60_000); // 09:50, before GEA1000 at 10:00
+  clock(FROZEN_NOW + 50 * 60_000);
   const first = await next(phone, atStop('UTOWN'));
   assert.equal(first.label, "You're there");
   assert.match(first.detail, /^GEA1000 @ UTown starts /);
@@ -1394,17 +1324,15 @@ test("polling at the stop while the bus's time moves a little keeps the plan on 
   clock(Date.parse(first.leave.at) - 60_000);
   const due = await next(phone, here);
   const board = Date.parse(due.leave.board);
-  // The phone sends a fix every 20 s; each answer has the bus a little later.
   for (let i = 1; i <= 6; i++) {
     clock(Date.parse(first.leave.at) - 60_000 + i * 20_000);
     await next(phone, here);
   }
-  // Gone, and the phone is on the road: the plan is still the bus it waited for.
   const stops = rideStops(indexGraph(GRAPH), due.leave.svc, due.leave.stopCode, due.leave.offCode ?? 'UTOWN');
   clock(board + 4 * 60_000);
   const riding = await next(phone, atStop(stops.at(-2)));
   assert.equal(riding.card.phase, 'riding');
-  assert.equal(riding.card.ride.svc, due.leave.svc);
+  assert.equal(riding.card.ride.svc, due.leave.svc, 'polled every 20 s with the bus a little later each time: still the bus it waited for');
   assert.equal(Date.parse(riding.card.ride.board), board);
 });
 
@@ -1413,21 +1341,18 @@ test('at the stop and from the heads-up, the bus you were told stays the plan wh
   const { phone, mac, next, clock } = await setup(PROFILE, { feed });
   const first = await next(phone, atStop('PGP'));
   const here = atStop(first.leave.stopCode);
-  // At the stop ten minutes early, before the heads-up.
   clock(Date.parse(first.leave.at) - 10 * 60_000);
   const told = await next(phone, here);
-  assert.equal(told.card.phase, 'waiting');
-  // A minute later the feed no longer lists that bus at that stop (it often
-  // drops and relists them): a fresh answer would pick the other service.
+  assert.equal(told.card.phase, 'waiting', 'at the stop ten minutes early, before the heads-up');
   for (const code of Object.keys(feed)) feed[code] = feed[code].filter((x) => x.name !== told.leave.svc);
   clock(Date.parse(first.leave.at) - 9 * 60_000);
   const after = await next(phone, here);
-  assert.equal(after.leave.svc, told.leave.svc, 'still the bus you were told');
+  assert.equal(after.leave.svc, told.leave.svc, 'still the bus you were told, though the feed dropped it there');
   assert.equal(after.leave.board, told.leave.board);
   assert.equal((await next(mac)).leave.svc, told.leave.svc, 'and on every device');
 });
 
-test('a plan and a watch sent at once both stick (the Trip object reads the day after the body)', async () => {
+test('a plan and a watch sent at once by two devices both stick (the Trip object reads the day after the body)', async () => {
   installGlobals(makeFetch({}));
   const trips = makeDurableObjects(Trip);
   const s = trips.get('u1');
@@ -1435,7 +1360,6 @@ test('a plan and a watch sent at once both stick (the Trip object reads the day 
   const deleteAt = endOfDayMs(FROZEN_NOW);
   const post = (path, body) =>
     s.fetch(`https://trip${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  // Two updates at once (two devices asking together), neither waiting for the other.
   await Promise.all([
     post('/update', { date, plans: { k: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() } }, deleteAt }),
     post('/update', { date, watch: { userId: 'u1', at: FROZEN_NOW + 60_000 }, deleteAt }),
@@ -1447,28 +1371,24 @@ test('a plan and a watch sent at once both stick (the Trip object reads the day 
 
 test('/api/me/day follows the plan once its bus has left: the same leave-by, then the next way there, or on the bus once seen on it', async () => {
   const { phone, call, next, clock } = await setup();
-  // Planned from where the phone is (PGP), so it's the trip's plan.
   const planned = await next(phone, '?lat=1.291765&lon=103.780419');
   const board = Date.parse(planned.leave.board);
   assert.ok(planned.leave.svc, 'a bus to catch');
 
-  // The bus has just left: still the plan's leave-by, not a new one.
   clock(board + 60_000);
   let day = await (await call('/api/me/day', { token: phone })).json();
-  assert.equal(day.items[0].leave?.board, planned.leave.board);
+  assert.equal(day.items[0].leave?.board, planned.leave.board, 'just after it left: still the plan’s leave-by');
 
-  // A few minutes on, nothing seen: not the bus that left, and not on it.
   clock(board + ASSUME_MS + 60_000);
   assert.equal((await next(phone)).card.phase, 'heading');
   day = await (await call('/api/me/day', { token: phone })).json();
-  assert.equal(day.items[0].onBus, undefined);
+  assert.equal(day.items[0].onBus, undefined, 'a few minutes on, nothing seen: not on it');
   assert.notEqual(day.items[0].leave?.board, planned.leave.board);
 
-  // Seen on its road: the card says you're on that bus; so does Today.
   const { svc, stopCode } = planned.leave;
   assert.equal((await next(phone, onRideQuery(svc, stopCode, 'UTOWN', rideLength(svc, stopCode, 'UTOWN') - 300))).card.phase, 'riding');
   day = await (await call('/api/me/day', { token: phone })).json();
-  assert.equal(day.items[0].onBus?.svc, svc);
+  assert.equal(day.items[0].onBus?.svc, svc, 'seen on its road: Today says that bus too');
   assert.equal(day.items[0].leave, undefined);
 });
 
@@ -1534,10 +1454,9 @@ test('a Trip object that never answers costs the card its trip state, not the ca
   t.mock.timers.tick(TRIP_TIMEOUT_MS);
   assert.equal(await day, null, 'no state, as when the object fails');
   await assert.rejects(save, /timed out/, 'a change says it failed, as it does on an error');
-  // Clearing is tried twice, each try waiting its time.
   await new Promise((r) => setImmediate(r));
   t.mock.timers.tick(TRIP_TIMEOUT_MS);
-  assert.equal(await clear, undefined, 'clearing goes on without it');
+  assert.equal(await clear, undefined, 'clearing, tried twice, goes on without it');
 });
 
 test('a change to the Trip object that changes nothing writes nothing, and the alarm is set only when it moves', async () => {
@@ -1562,15 +1481,13 @@ test('a change to the Trip object that changes nothing writes nothing, and the a
     const real = storage[op].bind(storage);
     storage[op] = (...args) => (writes.push([op, args[0]]), real(...args));
   }
-  // The same again, and a later watch: the wake already pending stands.
   await update({ watch: { userId: 'u1', at: FROZEN_NOW + 600_000 } });
   const day = await update({ watch: { userId: 'u1', at: FROZEN_NOW + 900_000 } });
-  assert.deepEqual(writes, []);
+  assert.deepEqual(writes, [], 'the same again, and a later watch: the pending wake stands');
   assert.equal(day.watch, FROZEN_NOW + 600_000, 'the wake actually pending');
-  // A sooner one moves it.
   await update({ watch: { userId: 'u1', at: FROZEN_NOW + 300_000 } });
   assert.deepEqual(writes.map(([op]) => op).sort(), ['put', 'put', 'setAlarm']);
-  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 300_000);
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 300_000, 'a sooner one moves it');
 });
 
 test("a watch never brings the Trip object's wake within 30 s of its last one", async () => {
@@ -1584,17 +1501,14 @@ test("a watch never brings the Trip object's wake within 30 s of its last one", 
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ...base, watch: { userId: 'u1', at } }),
     });
-  // As a wake at FROZEN_NOW leaves it: the next wake 30 s on.
   await watch(FROZEN_NOW + 30_000);
   const storage = trips.instances.get('u1').storage;
   await storage.put('lastWake', { at: FROZEN_NOW, leaveAt: null });
-  // Another phone refreshes 2 s later, its leave-by sliding 5 s on.
   await watch(FROZEN_NOW + 7_000);
-  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 30_000);
-  // Past the gap, a watch moves it sooner as before.
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 30_000, 'another phone 2 s after a wake, its leave-by 5 s on: held to 30 s');
   await storage.put('lastWake', { at: FROZEN_NOW - 60_000, leaveAt: null });
   await watch(FROZEN_NOW + 7_000);
-  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 7_000);
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 7_000, 'past the gap, a watch moves it sooner');
 });
 
 test('needsWatch: any sooner wake is booked, however little sooner; a later or equal one needs nothing', () => {
@@ -1609,8 +1523,7 @@ test('needsWatch: any sooner wake is booked, however little sooner; a later or e
   assert.equal(needsWatch(null, now + 90_000, now), true);
 });
 
-test('"On it" with no bus in the plan (a walk) means you have set off', async () => {
-  // The class is a short walk from home: the plan is on foot.
+test('"On it" with no bus in the plan (a class a short walk from home) means you have set off', async () => {
   const t = await setup({ home: { stops: ['PGP'] }, manual: [cls(600, 'PGPR', 'Gym @ PGPR')] });
   const a = await t.next(t.phone);
   assert.equal(a.leave?.svc ?? null, null, 'walking, no bus');
@@ -1641,9 +1554,8 @@ test('/api/me/choice refuses what is not a choice, and a trip that is not today'
   assert.equal((await r.json()).error, 'no such trip today');
 });
 
-test('a profile change that keeps losing to another device gives up with 409 after three tries', async () => {
+test('a profile change that keeps losing to another device saving between every read and write gives up with 409 after three tries', async () => {
   const { env, call, phone } = await setup();
-  // Another device saves between every read and write.
   const prepare = env.DB.prepare;
   let tries = 0;
   env.DB.prepare = (sql) => {
@@ -1669,30 +1581,27 @@ test('the Trip object answers 404 to a path it does not know', async () => {
 });
 
 test('home is every home stop: from BIZ 2 the A1 to PGP, not a walk because it skips PGP Foyer', async () => {
-  // The last class ends at 10:00 by BIZ 2; home is PGP Foyer first, PGP second.
   const feed = { BIZ2: [{ name: 'A1', arrivalTime: '3', nextArrivalTime: '9', passengers: 'low' }] };
   const t = await setup({ home: { stops: ['PGPR', 'PGP'] }, manual: [{ ...cls(540, 'BIZ2', 'GEX1015 @ LT17'), endMin: 600 }] }, { feed });
-  t.clock(FROZEN_NOW + 61 * 60_000); // 10:01, the class is over
+  t.clock(FROZEN_NOW + 61 * 60_000);
   const a = await t.next(t.phone);
   assert.equal(a.dest.label, 'Home');
   assert.equal(a.leave?.svc, 'A1', 'the A1 calls at PGP, two stops on');
   assert.equal(a.leave.toCode, 'PGP');
   assert.equal(a.leave.offCode, undefined, 'no crossing');
-  // On it, the ride is followed to PGP, where it stops, not PGP Foyer.
   const on = await (await t.signal(t.phone, { kind: 'boarded' })).json();
   assert.equal(on.card.phase, 'riding');
-  assert.equal(on.card.ride.stops.at(-1).code, 'PGP');
+  assert.equal(on.card.ride.stops.at(-1).code, 'PGP', 'the ride is followed to PGP, where it stops, not PGP Foyer');
 });
 
 test('the spare time before a class is the same once you are on the bus: the walk from the stop it drops you at', async () => {
-  // AS1-0201 is 277 m from CLB, its usual stop, and 183 m from LT13-OPP.
   const room = { ...cls(600, 'CLB', 'GEA1000 @ AS1-0201'), venue: 'AS1-0201' };
   const { phone, next, signal } = await setup({ home: { stops: ['PGP'] }, manual: [room] });
   const before = await next(phone);
   const walk = (a) => (Date.parse(a.timing.reachAt) - Date.parse(a.arriveAt)) / 1000;
   const riding = await (await signal(phone, { kind: 'boarded', trip: FIRST.replace('UTOWN', 'CLB') })).json();
   assert.equal(riding.card.phase, 'riding');
-  assert.equal(before.leave.toCode, 'LT13-OPP', 'the bus gets you off at the nearer stop');
+  assert.equal(before.leave.toCode, 'LT13-OPP', 'the bus gets you off at the nearer stop (183 m, not CLB at 277 m)');
   assert.equal(walk(riding), walk(before));
 });
 
@@ -1700,7 +1609,8 @@ test('a one-off added once home: Today keeps the trip home, done, and plans the 
   const at = (hhmm) => Date.parse(`2026-08-27T${hhmm}:00+08:00`);
   const t = await setup({ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'LT13', 'GEX1015 @ AS3'), endMin: 630 }] });
   t.clock(at('10:40'));
-  await t.next(t.phone, '?lat=1.2915&lon=103.7828'); // inside PGP: home
+  const insidePgp = '?lat=1.2915&lon=103.7828';
+  await t.next(t.phone, insidePgp);
   t.clock(at('11:45'));
   const added = await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', label: 'COM 3', atMin: 720 } });
   assert.equal(added.status, 200);
@@ -1723,16 +1633,16 @@ test("a one-off planned from home while you're already by its stop: the phone's 
     { feed: { PGPR: [{ name: 'D2', arrivalTime: '1', nextArrivalTime: '11' }] } },
   );
   t.clock(at('12:45'));
-  // Sent with no location: planned from home, two hours after the class.
   const added = await (
     await t.call('/api/me/once', { method: 'POST', token: t.phone, body: { to: 'COM3', label: 'COM 3', atMin: 766 } })
   ).json();
-  assert.equal(added.leave.svc, 'D2');
+  assert.equal(added.leave.svc, 'D2', 'sent with no location: planned from home');
   t.clock(at('12:46'));
-  const here = await t.next(t.phone, '?lat=1.29474&lon=103.77395'); // inside the COM3 building
+  const insideCom3 = '?lat=1.29474&lon=103.77395';
+  const here = await t.next(t.phone, insideCom3);
   assert.equal(here.leave.svc, null);
   assert.equal(here.card.walkTo.name, 'COM 3');
-  const day = await (await t.call('/api/me/day?lat=1.29474&lon=103.77395', { token: t.phone })).json();
+  const day = await (await t.call(`/api/me/day${insideCom3}`, { token: t.phone })).json();
   const row = day.items.find((i) => i.key === '4:766:COM3');
   assert.ok(!row.leave?.svc, `no bus from home on Today: ${row.line}`);
 });

@@ -55,46 +55,24 @@ CACHE = REPO / "dev"
 OSM_FILE = CACHE / "osm-nus-paths.json"
 ROOMS_FILE = CACHE / "nusmods-venues.json"
 
-# Kent Ridge, PGP, UTown and Kent Ridge MRT, with a margin.
-BBOX = (1.2830, 103.7630, 1.3120, 103.7900)  # south, west, north, east
+BBOX = (1.2830, 103.7630, 1.3120, 103.7900)
 OVERPASS = "https://overpass-api.de/api/interpreter"
-# The room map NUSMods itself uses: coordinates per room, from their open-source repo.
 NUSMODS = "https://raw.githubusercontent.com/nusmodifications/nusmods/master/website/src/data/venues.json"
 
-# Places people name that are not buildings or rooms, with every stop that
-# serves them (the router takes whichever is quicker). Positions from
-# OpenStreetMap; stops confirmed by a student who uses them.
-# Hand-maintained lists live in data/src, apart from what this script writes.
 LANDMARKS = {k: {**v, "at": tuple(v["at"])} for k, v in json.loads((ROOT / "data/src/landmarks.json").read_text())["landmarks"].items()}
 
-# On-campus residences, as OpenStreetMap outlines (way ids), grouped the way
-# students name them. Used to tell that someone is already home; the stops
-# that serve each are worked out by path distance below.
 RESIDENCES = json.loads((ROOT / "data/src/residences.json").read_text())["residences"]
 RES_FILE = CACHE / "osm-residences.json"
 
-# Stops students use for a building where the map's nearest is wrong, and
-# the stops paired across the road (each brings its opposite stop to the resolver).
 VENUE_STOPS = json.loads((ROOT / "data/src/venue-stops.json").read_text())["venues"]
 OPPOSITES = json.loads((ROOT / "data/opposites.json").read_text())["pairs"]
-# A building is served by a second stop when the walk to it is at most this
-# much longer than to the nearest: about a minute and a quarter, close enough
-# that the bus from either can be the quicker. Two at most (four with the
-# stops across the road), so leaving a class never fans out into many fetches.
 VENUE_EXTRA_M = 100
 MAX_VENUE_STOPS = 2
-# The stops a building's `out` lists: every one this close in a straight
-# line, as the planner looks that far for stops (WALK.maxRadiusM).
 OUT_RADIUS_M = 450
 
 WALKABLE = "footway|path|pedestrian|steps|corridor|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track|crossing"
-# Stairs take longer than their length suggests.
 STEPS_FACTOR = 1.6
-# A stop or building further than this from any path is not on the map.
 SNAP_MAX_M = 120
-# Stops and buildings join the network at every path node this close. Mapped
-# footpaths often stop short of the road or the door: with a single nearest
-# node, a stop 76 m from the library routed as 294 m.
 ENTRY_M = 40
 
 
@@ -113,8 +91,6 @@ def emit(name, text):
         _differs.append(name)
         return
     old, new = json.loads(path.read_text()), json.loads(text)
-    # Keys sorted, so a reordered file still matches; but a `stops` mapping's
-    # order is part of what it says (nearest first, the building's own first).
     if strip(json.dumps(old, sort_keys=True, indent=0)) != strip(json.dumps(new, sort_keys=True, indent=0)) or stop_orders(old) != stop_orders(new):
         _differs.append(name)
 
@@ -143,8 +119,6 @@ def haversine(a, b):
     return 2 * r * math.asin(min(1, math.sqrt(s)))
 
 
-# The footpaths around Kent Ridge are a few MB from Overpass, NUSMods' rooms
-# about one: a reply this big is not what was asked for.
 MAX_BYTES = 100_000_000
 
 
@@ -265,8 +239,6 @@ def main():
     osm = json.loads(OSM_FILE.read_text())
     rooms = json.loads(ROOMS_FILE.read_text())
     stops = json.loads((ROOT / "data/stops.json").read_text())["stops"]
-    # The building -> stop table is an input of its own (data/src), so a run
-    # never reads back what an earlier run wrote.
     venues_doc = json.loads((ROOT / "data/src/venues-base.json").read_text())
     venues = venues_doc["venues"]
 
@@ -301,8 +273,6 @@ def main():
             if m is not None:
                 pairs[f"{a}>{b}"] = round(m)
 
-    # The stop across the road: the resolver adds it to any stop it starts
-    # from or heads for, so a building never needs to list both.
     opp = {s["code"]: s["opposite"] for s in stops if s.get("opposite")}
     for a, b in OPPOSITES:
         opp[a], opp[b] = b, a
@@ -336,7 +306,6 @@ def main():
         near = sorted((w, s) for s in stop_pt if haversine(pt, stop_pt[s]) <= OUT_RADIUS_M and (w := routed(s, pt)) is not None)
         return {s: round(w) for w, s in near}
 
-    # Buildings: routed walk to their stop; a detour ratio sample per stop.
     coords = buildings(rooms)
     ratios = {}
     suspect = []
@@ -345,9 +314,6 @@ def main():
         if code in venues:
             stop = venues[code]["stop"]
         elif not code[:1].isalpha() or len(code) < 3:
-            # Bare room numbers ("1001") are not building codes, and a one- or
-            # two-letter code ("E") would catch other rooms: venueToStop drops
-            # trailing digits, so "E9" would fall back to it.
             continue
         else:
             options = [(routed(s, pt), s) for s in stop_pt]
@@ -360,15 +326,11 @@ def main():
             continue
         straight = haversine(pt, stop_pt[stop])
         old = venues.get(code, {}).get("m")
-        # `old` is the last run's figure. A routed walk more than twice that means NUSMods puts this code
-        # somewhere else (same code, different building), not a real detour.
         if old is not None and old > 40 and m > 2 * old:
             suspect.append(f"{code} {old}->{round(m)}")
             continue
         if straight > 40:
             ratios.setdefault(stop, []).append(m / straight)
-        # Where the building is (its rooms' mean point, 5 dp is about a
-        # metre), so the API can tell you're at it, not only at its stop.
         at = {"lat": round(pt[0], 5), "lon": round(pt[1], 5)}
         if code in venues:
             venues[code].update(m=round(m), **at)
@@ -382,23 +344,16 @@ def main():
         if len(serving) > 1:
             venues[code]["stops"] = serving
         else:
-            # Read back from the last run: a building down to one stop drops the list.
             venues[code].pop("stops", None)
-        # Standing in the building, the walk to a stop by the paths, not the
-        # straight line: a hill or a road with no crossing can be between.
         out = walks_out(code, pt, serving)
         if out:
             venues[code]["out"] = out
 
-    # Rooms uNivUS lists on their own (COM1-0208): served by their building's
-    # stops, walked from the room where NUSMods places it. A room uNivUS puts
-    # at a stop its building doesn't use keeps that stop alone, as it was.
     room_stops = 0
     for code, v in venues.items():
         b = code.split("-")[0]
         if "-" not in code:
             continue
-        # Whatever the last run gave it, unless its building still has stops.
         v.pop("stops", None)
         if b not in venues or (b not in VENUE_STOPS and "stops" not in venues[b]):
             continue
@@ -419,8 +374,6 @@ def main():
 
     if suspect:
         print(f"kept the last run's figures for {len(suspect)} buildings that routed implausibly long: {', '.join(suspect)}")
-    # Buildings the map couldn't route (or that looked wrong) keep the last
-    # run's figure. Per stop, the usual detour for walks from anywhere.
     all_ratios = [r for rs in ratios.values() for r in rs]
     overall = statistics.median(all_ratios) if all_ratios else 1.0
     clamp = lambda r: round(min(2.0, max(1.0, r)), 3)
@@ -432,8 +385,6 @@ def main():
         "detour": detour,
         "stopPairs": pairs,
     }, indent=1, sort_keys=True) + "\n")
-    # Named rooms, for the destination search: each resolves the way an
-    # import does (its building's stop), and walks from the room itself.
     def building_of(room):
         r = room.upper()
         if r in venues:
@@ -453,8 +404,6 @@ def main():
         stop = venues[b]["stop"]
         pt = (loc["y"], loc["x"])
         m = routed(stop, pt)
-        # Same guard as buildings: a room far past its building's walk is
-        # misplaced, so its position is not kept either.
         at = {"lat": round(pt[0], 5), "lon": round(pt[1], 5)}
         if m is None or m > 2 * max(venues[b]["m"], 60):
             m = venues[b]["m"]
@@ -477,7 +426,6 @@ def main():
         for stop in lm["stops"]:
             m = routed(stop, lm["at"])
             walks[stop] = round(m if m is not None else haversine(lm["at"], stop_pt[stop]))
-        # Best first: the app's first choice of stop for it (landmarks.ts).
         walks = dict(sorted(walks.items(), key=lambda kv: kv[1]))
         marks[code] = {"name": lm["name"], "kind": lm["kind"], "aliases": lm["aliases"], "stops": walks}
     emit("landmarks.json", json.dumps({
@@ -487,8 +435,6 @@ def main():
     }, indent=1) + "\n")
     print("landmarks:", {c: m["stops"] for c, m in marks.items()})
 
-    # Residences: outline(s), and the stops that serve each (the nearest by
-    # path, plus any other within 150 m of it, at most two).
     if RES_FILE.exists():
         ways = {e["id"]: e for e in json.loads(RES_FILE.read_text())["elements"] if e["type"] == "way"}
         res = {}
@@ -517,7 +463,6 @@ def main():
     venues_doc["venues"] = dict(sorted(venues.items()))
     venues_doc["generated"] = date.today().isoformat()
     venues_doc["source"] = "uNivUS building->stop assignments; walks routed on OpenStreetMap paths (scripts/data/walk_routes.py); new buildings from the NUSMods room map"
-    # One line: it is data, not something to read.
     emit("venues.json", json.dumps(venues_doc, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(pairs)} stop pairs, {updated} buildings re-routed, {added} added, median detour {overall:.2f}")
     if CHECK:

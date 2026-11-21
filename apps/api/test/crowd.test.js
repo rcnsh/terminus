@@ -8,7 +8,6 @@ import { RIDE, WALK } from '../src/config.ts';
 import { answerFor } from '../src/answer/answer.ts';
 import { makeCtx, makeEnv } from './_stubs.mjs';
 
-// Thursday 27 Aug 2026, 09:00 SGT: a teaching day.
 const THU = Date.UTC(2026, 7, 27, 1, 0);
 const MIN = 60_000;
 
@@ -39,8 +38,7 @@ test('a bus is counted once per stop and half hour, however often it is looked a
   await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')]), THU + 20_000);
   await recordCrowds(db, at('COM3', [sighting('PD2B', 'low'), sighting('PD3C', 'high', 600)]), THU);
   const row = db._db.prepare('SELECT n, packed, daytype FROM crowd_stats').get();
-  // PD3C was ten minutes out: its crowd is not what you'd board into.
-  assert.deepEqual({ ...row }, { n: 2, packed: 1, daytype: 'term' });
+  assert.deepEqual({ ...row }, { n: 2, packed: 1, daytype: 'term' }, "a bus ten minutes out is not the crowd you'd board into");
 });
 
 test('risk says nothing until a slot has enough sightings', async () => {
@@ -93,7 +91,6 @@ test('often packed: leave-by aims one bus earlier and says why; off, it only war
     walkAllS: null,
     nowMs: THU,
   };
-  // Packed only for the 25-minute bus.
   const risk = (svc, stop, ms) => (ms === THU + 25 * MIN ? 0.8 : 0.1);
   const arriveBy = { atMs: THU + 40 * MIN, venueWalkS: 0 };
   const walk = 100_000 + WALK.boardBufferS * 1000;
@@ -118,7 +115,6 @@ test("a class's full-bus risk is read from D1 while the arrivals are, not after"
   const env = { ...makeEnv(), DB: db };
   let crowdFirst = null;
   const collect = async (_env, _ctx, codes) => {
-    // Still collecting: the crowd lookup has gone out already.
     await new Promise((r) => setTimeout(r, 5));
     crowdFirst = asked.some((q) => /FROM crowd_stats/.test(q));
     return new Map(codes.map((c) => [c, { code: c, arrivals: [], fetchedAt: THU, stale: false, available: true }]));

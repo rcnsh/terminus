@@ -793,8 +793,8 @@ change and once the second bus has gone (`changesAt`).
     the platform runs again still wakes.
   - The wake's last writes hold the object like a POST: an `/update` asking
     for a sooner wake, or a `/clear`, that came in meanwhile stands.
-  - At the Worker's compatibility date `deleteAll()` leaves the alarm, so
-    `/clear` and midnight delete it first.
+  - At the Worker's compatibility date `deleteAll()` leaves the alarm (from
+    2026-02-24 it removes it too), so `/clear` and midnight delete it first.
   - Each call to Firebase has a 5 s limit, and each device is sent to on
     its own, so one that fails or hangs doesn't keep the push from the
     rest. A token is dropped only when FCM says it's unregistered (404,
@@ -811,6 +811,11 @@ change and once the second bus has gone (`changesAt`).
 ### APNs: push to the iPhone app
 
 [src/push/apns.ts](../apps/api/src/push/apns.ts), sent by push.ts beside FCM and Web Push.
+`fixtures/live-activity.json` holds the server's Live Activity state
+(`liveActivityState`) for every golden answer the iPhone shows one for
+(`TripPrefs.tripPhases`); `apns.test.js` writes it and the iPhone's tests hold
+`ContentState.of` to it, so the Lock Screen doesn't flip between the app's
+state and the server's. Re-record it with `UPDATE_GOLDEN=1 pnpm test`.
 
 - **Tokens.** The app sends `POST /api/me/push` with `{token}`:
   - `apns:<hex>`: the device token from
@@ -1414,7 +1419,16 @@ map; and Settings. It uses the same routes as the account page, with the session
   Android session keeps its FCM token. So the Trip object's nudges reach both,
   through `push.ts` and `webpush.ts`. Each push is VAPID-signed with
   `VAPID_PRIVATE_KEY` (a P-256 JWK; `scripts/deploy/vapid-key.mjs` makes one) and
-  its payload encrypted with aes128gcm, using WebCrypto only. Only
+  its payload encrypted with aes128gcm, using WebCrypto only. Make the key once,
+  from `apps/api`: `node scripts/deploy/vapid-key.mjs > ../../.private/vapid-private-key.json`,
+  then `pnpm exec cf workers secrets update VAPID_PRIVATE_KEY --worker terminus
+  --type secret_text --text "$(cat ../../.private/vapid-private-key.json)"`.
+  Changing it drops every web app's subscription until each subscribes again.
+  A push service answering 401 or 403 is refusing our VAPID signature (RFC 8292
+  §2, §4.2: another key than the browser subscribed with, or a token its clock
+  reads as expired), so the push counts as failed and the subscription is kept,
+  to be renewed with the current key when the app next opens; only 404 or 410
+  drops it (RFC 8030 §7.3). Only
   subscriptions on browsers' push services are kept (FCM, Mozilla, Apple,
   Windows): the Worker POSTs to the endpoint, so any other host is refused.
 - **Every day, whether or not the app is open.** A Trip object only watches
@@ -1685,7 +1699,10 @@ half-wait in `transfer.ts`) use the usual one. In term the A and D lines run
 about every 7 minutes on a weekday, 10 to 15 in the late evening and 15 to
 30 at weekends; R1 and R2 every 20, K 40, P an hour. Refresh it with
 `scripts/data/measure_headways.mjs` over the recorder's day files from R2
-(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. Every guess
+(`timelapse/YYYY-MM-DD.json.gz`); nothing in it calls NUS. A median is kept
+only from at least `MIN_GAPS` (20) gaps; a gap under 30 s is a bunch and one
+over 2 h a break in service, and neither counts. Hours are kept only under a
+day that has its own median, and the vacation is measured on its own days. Every guess
 comes from [`departures.ts`](../apps/api/src/answer/departures.ts), and each
 estimate counts the headway in force at the bus before it, stepping on
 from the last live bus: the card, the leave-by and Nearby guess the same
@@ -1740,6 +1757,29 @@ from LT21, PGP is 400 m away in a straight line but nobody walks it, so the
 walk home goes by S17 and the bus from S17 wins. The same stops count for the
 bus, in walking the whole way, and on the Nearby tab. Outside every building
 and residence it's the straight line with the stop's detour, as before.
+
+**How `walk_routes.py` measures a walk.** Stops and buildings join the
+OpenStreetMap path network at every path node within `ENTRY_M` (40 m), not
+only the nearest: mapped footpaths often stop short of the road or the door,
+and with one node a stop 76 m from the library routed as 294 m. Anything
+over `SNAP_MAX_M` (120 m) from every path is off the map. Steps count 1.6
+times their length (`STEPS_FACTOR`), and a routed walk is never shorter than
+the straight line. A building's point is its rooms' mean on NUSMods' map, to
+5 decimal places (about a metre); bare room numbers ("1001") and one- or
+two-letter codes are skipped, since `venueToStop` drops trailing digits and
+"E" would catch "E9". A building whose walk comes out over twice the last
+run's (when that was above 40 m) keeps the last figures, because NUSMods
+has put the code somewhere else; a room further than twice its building's
+walk (counting that walk as at least 60 m) takes the building's walk and no
+position. A building has at most `MAX_VENUE_STOPS` (2) stops, four with
+those across the road, so leaving a class never fans out into many feed
+fetches. Each stop's `detour` is the median ratio of routed to straight
+walks to it from at least 3 buildings over 40 m away, else the median over
+all stops, held between 1 and 2. A residence is served by its nearest stop
+by path and any other within 150 m of that, two at most. The
+building-to-stop table it starts from is `data/src/venues-base.json`, so a
+run never reads back what an earlier one wrote; `--check` compares with keys
+sorted, except a `stops` list, whose order (nearest first) means something.
 
 **A room can have more than one stop.** A building between two stops is
 served by both (`stops` in `venues.json`, from `scripts/data/walk_routes.py`): its
@@ -1821,7 +1861,9 @@ stable site.
 
 **Under failure, less load, not more.** A NUS host answering 429 or 5xx,
 not answering at all (a timeout, a failed connection, the body included:
-`timedFetch` reads it under the same timeout), or a refused version or key
+`timedFetch` reads it under the same timeout; workerd throws a plain `Error`
+for a refused connection or failed DNS lookup, not Node's `TypeError`, so any
+thrown error is no answer), or a refused version or key
 (10009, 10000), opens the feed's breaker for `breakerS`, every stop and
 service with it. A host that hangs is treated as down at once: left to each
 key's `failMemoS`, every stop and service would hold a connection for the
@@ -1892,6 +1934,44 @@ over 100 m, a changed stop order on an existing route, any item lost from a
 list under 20, a name with odd characters or a web address, a moved
 semester or more than 3 future holidays gone all fail, and such a change is
 committed by hand.
+
+The scrapers' thresholds, and why:
+- `scrape_lta.py`: a public stop within `SAME_SHELTER_M` (20 m) of a shuttle
+  stop is its shelter (the measured ones are under 12 m apart; the next is
+  24 m away across the stop's name). Public stops within `RADIUS_M` (200 m)
+  are kept: the terminal's on Clementi Road, the NUH stops, those opposite
+  the terminal, but not Pasir Panjang Road or the AYE, 250 m and more away.
+  BusRoutes, DataMall's largest dataset, is about 26,000 rows (53 pages of
+  500, about 200 KB each); `MAX_PAGES` (200) stops a server answering in a
+  loop. A trimmed loop keeps its closing stop so the graph sees a loop; one
+  that doesn't end at its terminal goes back round by the rest of the route.
+  A service with one campus stop is dropped, and so is a stop no kept
+  service calls at. A day whose two times are both `-` (95B, 96A and other
+  weekday-only services at weekends) is written as null, which the Worker
+  reads as "not today"; left out it would mean "hours unknown, assume
+  running", and a guessed bus would show all weekend. A day with only one
+  time missing is unknown and left out.
+- `route_shapes.py` asks only the Overpass project's own instance, since its
+  answer is committed to `main` unreviewed. Car-park aisles and
+  drive-throughs cost 3 times their length, and each metre a stop sits off
+  the road costs 3 (`OFF_ROAD_COST_PER_M`); the road node for each stop is
+  chosen to make the whole route shortest (Viterbi). Each leg is simplified
+  on its own, so every stop stays a vertex. A leg over 2.5 times the straight
+  line and over 400 m longer (`ODD_RATIO`, `ODD_EXTRA_M`) is a wrong turn in
+  the map data, and the script refuses to write it.
+- The scrapers write only when something other than `generated` changed, so
+  the weekly workflow never commits a refresh that only moves the timestamp.
+- `check_scraped.py` allows stops within 1.25–1.35° N and 103.74–103.84° E
+  (Kent Ridge, Bukit Timah and between). A list may shrink by at most 10%
+  (`MAX_DROP`); one under 20 items may lose none, since 10% of eight routes
+  would let one vanish unseen. Re-surveyed stops have moved up to 87 m
+  (UHALL, September 2026), so `MAX_MOVE_M` is 100. Semesters start on a
+  Monday, so a real change moves one by a week or more, and `MAX_SHIFT_DAYS`
+  (3) catches any. A year has about a dozen holidays, so at most 3 future
+  ones may vanish in one scrape; past years roll off each January, so only
+  this year's terms must be there. Names may hold letters (Chinese too),
+  digits, spaces and everyday punctuation (no `<`, `:` or control
+  characters), the same rules as `valid()` in calendarsync.ts.
 
 **Route lines follow the roads.** `scripts/data/route_shapes.py` routes each
 service stop to stop along OpenStreetMap's drivable roads (one-way streets
@@ -2151,6 +2231,19 @@ and nothing else records:
   just due shows as now. A bus of a known service that matches neither
   direction (a short working) is left out, and logged once an hour per
   stop.
+- `bus-stops` rows are `{name, caption, ShortName, latitude, longitude}`:
+  `name` is the code (`COM3`), `caption` the label (`COM 3`), and
+  `ShortName`, already shortened as a widget wants (`Opp KR MRT`), is the
+  display name `scrape_stops.py` keeps.
+- `pickup-point`'s `seq` is not a dense index: a route's last stop comes as
+  32767, an int16 sentinel, so stops are sorted by it and never read as
+  1..N. A code in `KNOWN_ROUTES` with no pickup points is skipped, so an
+  extra code costs one request.
+- The proxy publishes no hours; they're kept by hand in
+  `data/service-hours.json` and merged over the graph at load.
+- `scrape_stops.py` logs only a redirect's status, never its target or the
+  base URL, and sends the version token only over https (or to localhost).
+  `TERMINUS_ORIGIN` points it at another Worker.
 
 ## Data flow, confirmed
 
@@ -2195,7 +2288,8 @@ remember the version they were minted with, so the next call mints a new one.
 Usually nobody has to: on a 10009 the cron check runs
 [`src/feeds/appversion.ts`](../apps/api/src/feeds/appversion.ts), which reads the new version from
 NUS's refusal if it names one, or takes the versionName from uNivUS's page
-on Google Play. Play doesn't show the versionCode, so it guesses the next
+on Google Play (the one just before the SDK levels: a review's version string
+appears earlier in the page). Play doesn't show the versionCode, so it guesses the next
 `CODE_GUESSES` (10) after ours, lowest first: builds that never reach Play use
 codes up (2.59.2 was 140, 2.60.3 was 144). It tries them with NUS (a token and
 one bus call each, three at most per check), writes the one NUS accepts to
@@ -2577,10 +2671,14 @@ track leaves the bus where it was, so `along` never goes back. One up to
 500 m behind (`HOLD_BACK_M`), with nowhere ahead it could be, holds it
 where it was for up to 2 minutes (`HOLD_BACK_MS`), or as long as its track
 lasts at the end of a loop: A1 and A2 leave Kent Ridge Bus Terminal along
-the road they came in by before they join the start of their line.
+the road they came in by before they join the start of their line. An A1
+was seen waiting there over two minutes, and without the hold was drawn
+261 m back.
 
 A track lasts ten minutes from the last time the feed reported the bus,
-moved or not: a bus standing still at a terminus for longer keeps its side.
+moved or not: a bus standing still at a terminus for longer keeps its side
+(the feed was seen repeating one standing bus's exact position every 15 s
+for 20 minutes).
 A bus with no track (just appeared, or nobody watched the service for ten
 minutes) is placed by its heading when moving; standing, by the stop it's
 at, if it's clearly nearer one stop than its opposite stop; otherwise
@@ -2738,7 +2836,15 @@ serves only release files, so the days are reachable only through
 opens these routes and nothing else, so a machine left to render the videos
 unattended (`scripts/dev/render-timelapse.mjs`) never holds the dashboard's
 key. Nothing runs the renderer on a schedule; it is run by hand from a
-checkout.
+checkout. Its selectors and button words are in `render-timelapse-ui.mjs`,
+which `apps/web/test/web-render-timelapse.test.js` checks against the drawn
+page, so a markup change fails the tests rather than the next unattended
+render. It moves the timeline's handles with their keys (an arrow is a
+minute, Shift ten), reading the time from `aria-valuetext`, the end first,
+since each handle stops a minute short of the other; a time before 06:00 is
+the next morning. A handle that stays put for two presses is at its limit (a
+slow redraw only takes longer, up to 15 s a press). `/api/timelapse/days`
+answers 404 without a good token, so a 401, 403 or 404 ends its wait at once.
 
 **Replaying it.** The dashboard's Timelapse section (`/admin/#/timelapse`,
 [`timelapse.js`](../apps/web/public/admin/timelapse/timelapse.js), loaded when
@@ -2748,7 +2854,9 @@ token signs in to the dashboard too, and opens this section alone: the
 API answers it nothing else. Mediabunny starts its workers from blob:
 URLs, so the dashboard's CSP allows blob: workers (`cspFor()` in
 `src/http.ts`); a hash route never reaches the server, so the dashboard's page
-(`/admin/`) has it, and no other. The section's state, its map (drawn into an off-screen
+(`/admin/`) has it, and no other. MapLibre starts its worker from its own file
+when that is on the page's origin (`/vendor/`), so `worker-src 'self'` is
+enough everywhere else. The section's state, its map (drawn into an off-screen
 `#stage` on `body`) and an export in progress live in its module, so
 an export keeps going while another section is open. The API's tests
 read it with the same module. Between two readings a bus moves along its
@@ -2760,7 +2868,10 @@ in the count of buses out throughout (`countBySvc`), so a service with
 one bus out doesn't blink to none at every jump (a one-way route's end).
 Before any of that, a reading the bus is back from within the next two is
 left out (`withoutFarSide`): the recorder placed it on the far side of a
-road its line takes both ways, and D1 and D2 have hundreds of those a day.
+road its line takes both ways, and D1 and D2 have hundreds of those a day
+(the tests replay two D1 buses recorded on 2026-10-27, 10:31 to 10:35: PD804L
+read on the outbound side while driving back, PD539C read at the loop's end
+as it left the terminal).
 A step back of more than 150 m counts as away too, so a bus at a loop's
 terminal read at the line's end instead of its start doesn't slide back
 round. A bus that stays away has gone there, and fades across.
@@ -2887,6 +2998,16 @@ noticed (an alert) rather than read as an empty board. The same goes for
 `normalizeBuses()` with `busesProblem()`, and `normalizePublic()` in
 `lta.ts` with `publicProblem()`.
 
+The test doubles in `test/_stubs.mjs` and `test/_d1.mjs` copy the platform
+where code relies on it: a cached Response body reads once, the cache ignores
+a URL's `#fragment`, `waitUntil` promises are collected (`settle()` waits for
+them), a failed `fetch` throws a plain `Error` as workerd does, a hung fetch
+keeps the event loop open (`AbortSignal.timeout` doesn't on Node 22), a
+Durable Object `transaction` is all or nothing, `blockConcurrencyWhile` runs
+one call at a time, `deleteAll` leaves the alarm, D1 runs each `batch` whole
+and one at a time, and a statement counts changed rows only for UPDATE and
+DELETE … RETURNING. `dev-stub.mjs` runs the Worker on the same doubles.
+
 ## Prior art
 
 - **NextBus NUS** — third-party iOS app, actively maintained, moved to the
@@ -2912,7 +3033,7 @@ seconds inside fixed hours, behind a kill switch. Public buses come from
 LTA DataMall, one call per stop per 15 seconds, plus one stop per health
 check. By hand only, the two probe workflows (`scripts/probes/probe_buses.py`,
 `scripts/probes/probe_arrivals.py`) measure the feed: a few services or stops
-every 5 seconds at most, for 15 minutes at most, with their own guest
+every 5 seconds at most, for 10 (buses) or 15 (arrivals) minutes at most, with their own guest
 token. Use it in line with the
 [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).
 Do not commit captured credentials, do not use NUSNET credentials with it, and

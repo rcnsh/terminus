@@ -1,10 +1,3 @@
-/**
- * Rule 2 in time: how long each limit on the NUS and LTA feeds holds, not
- * only that it holds at one instant. The other tests make their calls back
- * to back, so a breaker that closed after a second, or a cache that went
- * stale after one, passed them; these step the clock across each limit's
- * edge and count what reached upstream on either side of it.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -21,7 +14,6 @@ const D2_IN_4 = [{ name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passenge
 const D1_BUS = { vehplate: 'PD1001A', lat: 1.2966, lng: 103.7764, speed: 20, direction: 90, loadInfo: { capacity: 88, ridership: 10 } };
 const HTML = '<!doctype html><html><body>Scheduled maintenance</body></html>';
 
-/** One request to the Worker at `atMs`, its waitUntil work settled. */
 async function at(atMs, path, { fetchImpl, env = makeEnv() } = {}) {
   Date.now = () => atMs;
   if (fetchImpl) globalThis.fetch = fetchImpl;
@@ -31,8 +23,6 @@ async function at(atMs, path, { fetchImpl, env = makeEnv() } = {}) {
   return res;
 }
 
-/** [base] with the hosts matching [re] answering HTTP 200 and an HTML page,
- *  as a NUS host in maintenance does. Counted in base.counts as usual. */
 function htmlFrom(re, base) {
   const fn = async (input, init) => {
     const url = String(typeof input === 'string' ? input : input.url);
@@ -48,18 +38,15 @@ function htmlFrom(re, base) {
 }
 
 test('no limit on the feeds is below what docs/agents/feeds.md and internals.md promise', () => {
-  // Raising any of these is fine; lowering one sends more to NUS or LTA.
-  assert.ok(TTL.arrivalsMs >= 15_000, `arrivalsMs ${TTL.arrivalsMs}`);
+  assert.ok(TTL.arrivalsMs >= 15_000, `arrivalsMs ${TTL.arrivalsMs}: raising a limit is fine, lowering one sends more to NUS or LTA`);
   assert.ok(TTL.busesMs >= 5_000, `busesMs ${TTL.busesMs}`);
   assert.ok(TTL.failMemoS >= 20, `failMemoS ${TTL.failMemoS}`);
   assert.ok(TTL.breakerS >= 60, `breakerS ${TTL.breakerS}`);
   assert.ok(TTL.remintGapS >= 60, `remintGapS ${TTL.remintGapS}`);
-  // The stale fallback is what an outage is answered from instead of NUS.
-  assert.ok(TTL.staleMaxS >= 300, `staleMaxS ${TTL.staleMaxS}`);
+  assert.ok(TTL.staleMaxS >= 300, `staleMaxS ${TTL.staleMaxS}: what an outage is answered from instead of NUS`);
   assert.ok(TIMELAPSE.pollMs >= 30_000, `TIMELAPSE.pollMs ${TIMELAPSE.pollMs}`);
   assert.ok(MIN_POLL_MS >= 15_000, `MIN_POLL_MS ${MIN_POLL_MS}`);
-  // An answer asks about this many stops at most (candidates.test.js holds candidateStops to it).
-  assert.ok(WALK.maxCandidates <= 3, `maxCandidates ${WALK.maxCandidates}`);
+  assert.ok(WALK.maxCandidates <= 3, `maxCandidates ${WALK.maxCandidates}: the stops one answer asks about at most`);
   assert.ok(TIMELAPSE.maxPollsPerDay <= 17_280, `maxPollsPerDay ${TIMELAPSE.maxPollsPerDay}`);
   assert.deepEqual(TIMELAPSE.hours, { start: '06:30', end: '00:30' });
 });
@@ -99,8 +86,7 @@ test('with the feed down, the last answer is served stale for five minutes, then
     await ctx.settle();
     return out;
   };
-  // Fetched for real, so the cache keeps it as long as the code says.
-  assert.equal((await ask(FROZEN_NOW)).stale, false);
+  assert.equal((await ask(FROZEN_NOW)).stale, false, 'fetched for real, so the cache keeps it as long as the code says');
   globalThis.fetch = makeFetch({ fail: true });
   const old = await ask(FROZEN_NOW + 200_000);
   assert.equal(old.available, true, 'three minutes on, the last answer still serves');
@@ -116,11 +102,9 @@ test('a tripped breaker keeps every stop off the feed for the whole 60 s, and on
   const env = makeEnv();
   await at(FROZEN_NOW, '/api/arrivals?stop=PGP', { fetchImpl: down, env });
   assert.equal(down.counts.shuttle, 1);
-  // NUS is back, but the breaker isn't closed yet. A stop of its own each
-  // time, so no stop's own failure memo is what's holding it.
   const up = makeFetch({ byStop: { COM3: D2_IN_4, UTOWN: D2_IN_4 } });
   const held = await at(FROZEN_NOW + 59_000, '/api/arrivals?stop=COM3', { fetchImpl: up, env });
-  assert.equal((await held.json()).available, false);
+  assert.equal((await held.json()).available, false, 'NUS back, the breaker not closed yet, at a stop with no failure memo of its own');
   assert.equal(up.counts.shuttle, 0, 'nothing asked at 59 s');
   const open = await at(FROZEN_NOW + 61_000, '/api/arrivals?stop=UTOWN', { fetchImpl: up, env });
   assert.equal((await open.json()).available, true);
@@ -150,7 +134,6 @@ test('a fresh isolate uses the token another isolate kept in KV: no mint', async
     expMs: FROZEN_NOW + 3_600_000,
     version: '0.0.0-test',
   };
-  // A new KV binding is a new isolate here: the in-memory memo is per binding.
   const env = makeEnv(makeKV({ 'auth:session': kept }));
   const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
   installGlobals(fetchImpl);
@@ -205,9 +188,8 @@ test('the token mint answering 200 with a web page: no other stop mints for fail
   }
   assert.equal(base.counts.auth, 1, 'one mint, not one per stop');
   assert.equal(base.counts.shuttle, 0);
-  // A stop not asked yet: the others' own memos are still set.
   await at(FROZEN_NOW + (TTL.failMemoS + 1) * 1000, '/api/arrivals?stop=KR-MRT', { fetchImpl, env });
-  assert.equal(base.counts.auth, 2, 'tried again once failMemoS has passed');
+  assert.equal(base.counts.auth, 2, 'tried again once failMemoS has passed, at a stop not asked yet');
 });
 
 test('DataMall answering with a web page: the stop is not asked again within failMemoS', async () => {

@@ -1,9 +1,3 @@
-/**
- * D1 on top of node:sqlite, so the account tests run the real migration SQL
- * with no network. Covers the subset of the D1 API the Worker uses:
- * prepare().bind().first()/all()/run() and batch().
- */
-
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 
@@ -36,12 +30,9 @@ export function makeD1() {
       };
     },
     async run() {
-      // Like D1: a statement that returns rows gives them back, in batch() too.
       const st = db.prepare(sql);
       if (st.columns().length) {
         const results = st.all(...params).map((r) => ({ ...r }));
-        // D1 counts the rows an UPDATE/DELETE ... RETURNING changed; a plain
-        // SELECT changes none (changes() would still hold the last write's count).
         const writes = /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
         const changes = writes ? Number(db.prepare('SELECT changes() AS n').get().n) : 0;
         return { results, success: true, meta: { changes } };
@@ -51,9 +42,6 @@ export function makeD1() {
     },
   });
 
-  // D1 runs each batch whole, one at a time: two in flight at once (a
-  // session's touch left to waitUntil, and the request's own) queue here
-  // rather than nest their transactions.
   let batches = Promise.resolve();
   return {
     _db: db,
@@ -74,12 +62,10 @@ export function makeD1() {
       batches = run.catch(() => {});
       return run;
     },
-    /** Test helper: run SQL directly. */
     exec: (sql) => db.exec(sql),
   };
 }
 
-/** Records sign-in emails instead of sending them. */
 export function makeEmail() {
   const sent = [];
   return {
@@ -88,12 +74,10 @@ export function makeEmail() {
       sent.push(msg);
       return { messageId: `stub-${sent.length}` };
     },
-    /** The token from the most recent sign-in link. */
     lastToken() {
       const m = /\/auth\/verify\?t=([A-Za-z0-9_-]+)/.exec(sent.at(-1)?.text ?? '');
       return m ? m[1] : null;
     },
-    /** The code from the most recent sign-in email. */
     lastCode() {
       const m = /(?:sign-in code is|登录验证码是) ([A-Z0-9]{6})/.exec(sent.at(-1)?.text ?? '');
       return m ? m[1] : null;

@@ -191,6 +191,14 @@ there minutes before it leaves, so its arrival says nothing about it
 (`departs`, in eta.ts, the shadow and the backtest alike). Questions whose bus could have come after the data ends
 aren't asked.
 
+With one day, the first `--split` (0.6) of its time trains and the rest
+tests, and training sees only what was known before the cut: passings seen
+before it, and questions whose bus came, or should have, before it. An
+incident is judged on every question the feed answered that day, not only
+those every method answered, since in an outage history can't answer many.
+Nothing is random: the paired test resamples with a fixed seed, so the same
+files give the same report.
+
 ### On production data
 
 ```bash

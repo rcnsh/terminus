@@ -1,9 +1,3 @@
-/**
- * Edges of the thresholds, where an off-by-one would go unseen: a bus
- * exactly 40 m from a stop, a fix 60 m off its line, a walk exactly two
- * minutes faster, a public loop wrapping to its first campus stop, a lesson
- * on its last date, a place visited at 23:30, and bad distances in the data.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -21,9 +15,8 @@ const D2 = SHAPES.D2;
 const M_LAT = 111_320;
 
 test('a bus exactly 40 m along from a stop is at it; a metre further is between two', () => {
-  // A stop well away from its neighbours, so 40 m either side is still nearest to it.
   const k = D2.at.findIndex((m, i) => i > 0 && i < D2.at.length - 1 && m - D2.at[i - 1] > 200 && D2.at[i + 1] - m > 200);
-  assert.ok(k > 0, 'a stop with room on both sides');
+  assert.ok(k > 0, 'a stop with room on both sides, so 40 m either side is still nearest to it');
   assert.equal(D2.at[k] + 40 - D2.at[k], 40, 'exactly 40 m, no rounding');
   assert.deepEqual(sectionOf(D2, D2.at[k] + 40, false), { at: k, from: k, to: null });
   assert.deepEqual(sectionOf(D2, D2.at[k] - 40, false), { at: k, from: k, to: null });
@@ -31,7 +24,6 @@ test('a bus exactly 40 m along from a stop is at it; a metre further is between 
   assert.deepEqual(sectionOf(D2, D2.at[k] - 41, false), { at: null, from: k - 1, to: k });
 });
 
-/** Metres from a point to the nearest stretch of a [lon, lat] line, on a flat projection. */
 function offLine(line, lat, lon) {
   const k = Math.cos((lat * Math.PI) / 180) * M_LAT;
   let best = Infinity;
@@ -47,7 +39,6 @@ function offLine(line, lat, lon) {
 }
 
 test('a fix 60 m off the line is no bus on it; 40 m off still is', () => {
-  // The midpoint of the D2's longest stretch, pushed sideways off the road.
   let i = 0;
   const len = (j) => Math.hypot(D2.line[j + 1][0] - D2.line[j][0], D2.line[j + 1][1] - D2.line[j][1]);
   for (let j = 1; j + 1 < D2.line.length; j++) if (len(j) > len(i)) i = j;
@@ -56,7 +47,6 @@ test('a fix 60 m off the line is no bus on it; 40 m off still is', () => {
   const [dx, dy] = [(bLon - aLon) * k, bLat - aLat];
   const norm = Math.hypot(dx, dy);
   const sideways = (m) => {
-    // Either side: whichever is clear of the rest of the line.
     for (const s of [1, -1]) {
       const lat = (aLat + bLat) / 2 + (s * (dx / norm) * m) / M_LAT;
       const lon = (aLon + bLon) / 2 + (s * (-dy / norm) * m) / M_LAT / k;
@@ -74,38 +64,39 @@ test('a fix 60 m off the line is no bus on it; 40 m off still is', () => {
 const live = (totalS) => ({ quality: 'live', totalS, boardS: 120, walkS: 60, svc: 'D2', stop: { code: 'KR-MRT', name: 'KR MRT' } });
 
 test('walking exactly beatsBusByS faster than a live bus is mentioned, not recommended', () => {
-  // "Must beat the bus by this much" (config.ts): by more than it, so a tie is the bus.
-  // Minutes on foot counted as they are (preferBus off): the margins alone.
   const bus = 900;
-  assert.equal(walkVerdict(bus - WALK.beatsBusByS, live(bus), 0, 1), 'close');
-  assert.equal(walkVerdict(bus - WALK.beatsBusByS - 1, live(bus), 0, 1), 'win');
-  // Within mentionWithinS of the bus is still worth mentioning; at it, not.
-  assert.equal(walkVerdict(bus + WALK.mentionWithinS - 1, live(bus), 0, 1), 'close');
-  assert.equal(walkVerdict(bus + WALK.mentionWithinS, live(bus), 0, 1), 'lose');
+  assert.equal(walkVerdict(bus - WALK.beatsBusByS, live(bus), 0, 1), 'close', 'a tie is the bus');
+  assert.equal(walkVerdict(bus - WALK.beatsBusByS - 1, live(bus), 0, 1), 'win', 'walking must beat the bus by more than beatsBusByS');
+  assert.equal(
+    walkVerdict(bus + WALK.mentionWithinS - 1, live(bus), 0, 1),
+    'close',
+    'within mentionWithinS of the bus is still worth mentioning',
+  );
+  assert.equal(walkVerdict(bus + WALK.mentionWithinS, live(bus), 0, 1), 'lose', 'at it, not');
 });
 
 test('weighted for the heat: walking must beat the bus once its minutes count sunWeight times', () => {
-  // A 60 s walk to the stop: the bus's own walk is weighted too.
   const bus = 900;
   const edge = Math.floor((bus + (WALK.sunWeight - 1) * 60 - WALK.beatsBusByS) / WALK.sunWeight);
-  assert.equal(walkVerdict(edge, live(bus)), 'close');
+  assert.equal(walkVerdict(edge, live(bus)), 'close', "the bus's own 60 s walk to the stop is weighted too");
   assert.equal(walkVerdict(edge - 1, live(bus)), 'win');
-  // "Mentioned" is still in real minutes: the walk is offered as close.
-  assert.equal(walkVerdict(bus + WALK.mentionWithinS - 1, live(bus)), 'close');
+  assert.equal(walkVerdict(bus + WALK.mentionWithinS - 1, live(bus)), 'close', '"mentioned" is still in real minutes');
 });
 
 test('a public loop whose interchange is off campus: wrapping to its first campus stop rides on', () => {
   const idx = indexGraph(GRAPH_PUBLIC);
-  // The 96's run starts and ends at Clementi, between its last campus stop and its first.
-  assert.notEqual(GRAPH_PUBLIC.public['96'].origin, idx.routes.get('96').seq[0]);
+  assert.notEqual(GRAPH_PUBLIC.public['96'].origin, idx.routes.get('96').seq[0], "the 96's run starts and ends at Clementi, off campus");
   assert.deepEqual(reach(idx, '96', 'RAFFLES', idx.routes.get('96').seq[0]), { hops: 1, through: true });
-  // A shuttle loop ends at its first stop: getting off there is not riding on.
-  assert.deepEqual(reach(indexGraph(GRAPH), 'D2', 'KR-MRT-OPP', 'COM3'), { hops: 3 });
+  assert.deepEqual(
+    reach(indexGraph(GRAPH), 'D2', 'KR-MRT-OPP', 'COM3'),
+    { hops: 3 },
+    'a shuttle loop ends at its first stop: getting off there is not riding on',
+  );
 });
 
 test('a lesson given as a date range runs on its last date, and not the day after', () => {
   const weeks = { start: '2026-08-13', end: '2026-08-27' };
-  const thu = (date) => Date.parse(`${date}T02:00:00Z`); // 10:00 in Singapore
+  const thu = (date) => Date.parse(`${date}T02:00:00Z`);
   assert.equal(importedClassRuns(weeks, null, thu('2026-08-27')), true);
   assert.equal(importedClassRuns(weeks, null, thu('2026-08-13')), true, 'and on its first');
   assert.equal(importedClassRuns({ ...weeks, end: '2026-08-26' }, null, thu('2026-08-27')), false);
