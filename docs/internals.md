@@ -2172,7 +2172,12 @@ entries rather than starting again. `onceEvery(windowMs, maxKeys)` lets a
 log line or note through once per key per window (a failed stop, a
 breaker trip, a DataMall stop with unplaced buses); a clock gone backwards
 counts as a new window. The crowd sightings already sent to D1 (5,000) and the
-transfer routes per graph (500) are `Lru`s too. State tied to one deployment's bindings is kept
+transfer routes per graph (500) are `Lru`s too. A KV read an isolate repeats on every
+request (`config:appVersion`, `config:minClient`, the collector switches,
+the monitor's records, the fetched calendar) goes through `kvMemo(ttlMs,
+read)`: one read per binding per window, shared by the requests that
+arrive while it is under way, dropped if it fails, and cleared at once
+where the isolate writes the key itself. State tied to one deployment's bindings is kept
 per binding (`perScope`, keyed by `env.KV`), so a test's fresh env starts
 clean with no reset hook.
 

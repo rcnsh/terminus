@@ -13,8 +13,8 @@ import {
   calendarSource,
   loadCalendar,
   refreshCalendar,
-  resetCalendar,
 } from '../src/timetable/calendarsync.ts';
+import { useCalendar } from '../src/timetable/calendar.ts';
 
 const OLD = 'univus_android_2.59.2_140';
 const NEW = 'univus_android_2.60.0_141';
@@ -194,7 +194,7 @@ test('the automatic update throwing inside the cron is noted, and the rest of th
 });
 
 test('a calendar in KV that is not JSON: loaded as nothing, and written over by the next fetch', async () => {
-  resetCalendar();
+  useCalendar(null);
   try {
     const kv = makeKV();
     await kv.put(CALENDAR_DATA_KEY, '{"semesters": [trunc');
@@ -211,6 +211,6 @@ test('a calendar in KV that is not JSON: loaded as nothing, and written over by 
     const kept = JSON.parse(await kv.get(CALENDAR_DATA_KEY));
     assert.ok(kept.semesters.length >= 4);
   } finally {
-    resetCalendar();
+    useCalendar(null);
   }
 });

@@ -273,3 +273,19 @@ test('a board fetched from NUS is handed on once per call, and logged bus by bus
   assert.equal(sa.available, true, 'a hook that throws costs the log, never the board');
   assert.equal(sa.arrivals.length >= 2, true);
 });
+
+test('requests arriving together on a cold isolate read the version from KV once, and a clock gone backwards reads it again', async () => {
+  const kv = makeKV();
+  await kv.put('config:appVersion', 'univus_android_2.60.0_141');
+  let reads = 0;
+  const get = kv.get.bind(kv);
+  kv.get = (...a) => {
+    if (a[0] === 'config:appVersion') reads++;
+    return get(...a);
+  };
+  const env = makeEnv(kv);
+  await Promise.all([appVersion(env, FROZEN_NOW), appVersion(env, FROZEN_NOW), appVersion(env, FROZEN_NOW)]);
+  assert.equal(reads, 1);
+  await kv.put('config:appVersion', 'univus_android_2.61.0_142');
+  assert.equal(await appVersion(env, FROZEN_NOW - 1000), 'univus_android_2.61.0_142', 'as every other KV memo does');
+});

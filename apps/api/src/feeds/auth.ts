@@ -1,6 +1,7 @@
 import type { Env } from '../types.ts';
 import { TTL } from '../config.ts';
 import { timedFetch } from '../http.ts';
+import { kvMemo } from '../memo.ts';
 import { cacheBase, flag, flagged } from './edgecache.ts';
 
 const KV_TOKEN = 'auth:session';
@@ -21,17 +22,16 @@ export interface Session {
 }
 
 const memos = new WeakMap<object, Session>();
-const versionMemos = new WeakMap<object, { value: string; atMs: number }>();
 const inflight = new Map<string, Promise<Session>>();
 
-export async function appVersion(env: Env, nowMs: number = Date.now()): Promise<string> {
-  const memo = versionMemos.get(env.KV);
-  if (memo && nowMs - memo.atMs < TTL.versionMemoMs) return memo.value;
+const versionMemo = kvMemo(TTL.versionMemoMs, async (env: Env) => {
   const stored = (await env.KV.get(KV_APP_VERSION).catch(() => null))?.trim();
   if (stored && !VERSION_FORMAT.test(stored)) console.error(`ignoring ${KV_APP_VERSION}: not univus_android_<versionName>_<versionCode>`);
-  const value = chosenVersion(env, stored);
-  versionMemos.set(env.KV, { value, atMs: nowMs });
-  return value;
+  return chosenVersion(env, stored);
+});
+
+export async function appVersion(env: Env, nowMs: number = Date.now()): Promise<string> {
+  return versionMemo.get(env, nowMs);
 }
 
 function chosenVersion(env: Env, stored: string | null | undefined): string {
@@ -130,7 +130,7 @@ export async function deviceId(env: Env): Promise<string> {
 }
 
 export function forgetAppVersion(env: Env): void {
-  versionMemos.delete(env.KV);
+  versionMemo.clear(env);
 }
 
 export function mintWith(env: Env, version: string, nowMs: number = Date.now()): Promise<Session> {
