@@ -194,9 +194,6 @@ final class NowUITests: XCTestCase {
         stubPost("/__stub/freeze")
         let app = launch(sky: "day")
         let later = app.buttons["step.later"]
-        for _ in 0..<4 where !later.waitForExistence(timeout: 16) {
-            app.swipeDown(velocity: .fast)
-        }
         reveal(later, in: app)
         XCTAssertTrue(app.buttons["step.earlier"].exists)
         XCTAssertFalse(app.buttons["step.best"].exists)
