@@ -1,19 +1,3 @@
-// The Stops tab: what's coming at any stop, and where a service's buses are
-// along its line. Loaded the first time the tab is opened (app.js).
-//
-// Its home is the stops you've pinned, one at a time as Nearby's sign
-// (/api/me/stops), picked by name or swiped, then every service with how
-// many of its buses are out (/api/lines). The stops around you are the Nearby
-// tab's job. A service tapped on a board opens its line (/api/line), and a
-// stop on the line opens its board.
-// Where you are in the tab is in the address (#buses, #buses/stop/YIH,
-// #buses/line/D1/YIH), so Back and a reload keep it. In a wide window the
-// home stays on the left and the stop or line opened from it shows beside
-// it (docs/agents/window-sizes.md).
-//
-// Only the times the API gives are shown: `later` is every later bus the
-// feed reported, and a line shows no times at stops other than yours.
-
 import {
   Bar,
   Icon,
@@ -52,46 +36,19 @@ import {
 import { NoPins, PinnedSkeleton, StopSign, anyGuess } from '/app/sign.js';
 import { PULL_FRESH_MS } from '/app/timing.js';
 
-/** The page on screen refreshes this often (the API caches arrivals 15 s). */
 const REFRESH_MS = 15_000;
-/** The lines' counts of buses out are asked for no more often than this: each ask reads every service from NUS. */
 const LINES_MS = 60_000;
-/**
- * Times fetched longer ago than this have missed a refresh at least:
- * counted down here from when they came, and no longer shown as live.
- */
 const OLD_MS = 2 * REFRESH_MS;
-/** "Runs until" shows for a service ending within this long. */
 const ENDS_SOON_MS = 2 * 3600_000;
 
-/** Where in the tab: its home, a stop's board, or a service's line. From the address. */
 export const route = store({ kind: 'home' });
-/**
- * Each stop's board as last fetched, by code: { stop, board, available, at,
- * got, asOf, error }. `at` is when this browser fetched it (Date.now(), for
- * fetching again) and `got` the same on the server's clock, which the times
- * are counted from: the server has counted them down to its own now.
- * `asOf` is when the feed's answer is from (its clock, ms), older than `got`
- * when it served one it had kept; it's only for "Updated 5 s ago".
- */
 export const boards = store(new Map());
-/**
- * Each pinned stop as Nearby shows it, by code: { s, at, got, error }, `s`
- * one stop of /api/me/stops, `at` and `got` as for a board. `gone`: the
- * server doesn't know the stop.
- */
 export const signs = store(new Map());
-/** The pinned stop on screen on the home (its code, or ADD for the last page), kept while the app runs. Null: the first. */
 export const chosen = store(null);
-/** The pager's last page: how to pin another stop. */
 export const ADD = '+';
-/** How many of each service's buses are out: /api/lines's `lines`, null until it has answered. */
 export const outs = store(null);
-/** The stops showing the board across the road, by the page's own stop. */
 export const across = store(new Set());
-/** The line on screen: { key, data, at, got, asOf } or { key, error }. */
 export const line = store(null);
-/** Now on the server's clock (dom.js), every few seconds, for "Updated 5 s ago". */
 const tick = store(serverNow());
 async function getJSON(path) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
@@ -101,69 +58,40 @@ async function getJSON(path) {
 }
 
 const stopOf = (code) => campus.get()?.stops.find((s) => s.code === code) ?? null;
-/** A stop as people say it ("Yusof Ishak House"), not its sign's short name ("YIH"). */
 const longName = (s) => s?.longName ?? s?.name;
 const stopName = (code) => longName(stopOf(code)) ?? code;
 const pins = () => profile.get()?.pinnedStops ?? [];
-/**
- * The pins as the home last drew them. Kept here, not in the home, so a stop
- * unpinned on its own page still finds its place when the home comes back.
- */
 let pinsShown = [];
-/**
- * Where on the home's pager `pick` is (chosen): a pinned stop's place, the
- * last page for ADD, else the first. A stop unpinned since the home drew
- * `was`: the one now in its place, else the one before it.
- */
 export function pageOf(pinned, pick, was = pinsShown) {
   if (pick === ADD) return pinned.length;
   const i = pinned.indexOf(pick);
   if (i >= 0 || pick == null) return Math.max(0, i);
   return Math.min(Math.max(0, was.indexOf(pick)), Math.max(0, pinned.length - 1));
 }
-/**
- * The pinned stops fetched for the page on screen: its stop and the ones
- * either side of it, so a swipe shows times at once.
- */
 export function signWindow(pinned = pins(), pick = chosen.get()) {
   const i = pageOf(pinned, pick);
   return [pinned[i - 1], pinned[i], pinned[i + 1]].filter(Boolean);
 }
-/** Where you are, for the walk to each pinned stop: the API's lat, lon and acc, or null. Set by the tab (app.js), never asking. */
 let locate = async () => null;
-/** The stop across the road from `code`, from its board, else the campus's map. */
 export const oppositeOf = (code) => boards.get().get(code)?.stop?.opposite ?? stopOf(code)?.opposite ?? null;
-/** The stop whose board a page shows: its own, or the one across the road. */
 export const shownCode = (code) => (across.get().has(code) && oppositeOf(code)) || code;
 
-/** When answer `data` is from, on the server's clock: its `asOf`, else now. */
 const asOfMs = (data) => Date.parse(data?.asOf ?? '') || serverNow();
 
 function keep(code, entry) {
   boards.set((m) => new Map(m).set(code, entry));
 }
 
-/**
- * Why times couldn't be fetched. With an answer already on screen (`shown`),
- * that it couldn't be updated: "No times right now" under last known times
- * would contradict them.
- */
 export const failedWords = (shown, online = navigator.onLine) =>
   !online ? t('Live times need a connection.') : shown ? t("Couldn't update. Trying again soon.") : t('No times right now');
 
-/** One stop's board. A failure keeps the board already there, saying it couldn't update. */
-/** The stops whose board is being fetched, so a second ask for one waits on the first rather than asking again. */
 const fetching = new Set();
 
 export async function loadBoard(code) {
-  // The public buses there too, when the account has them on.
   const pub = profile.get()?.publicBuses ? '&public=1' : '';
-  // A call that hung (the phone asleep) can end after a newer one: it
-  // mustn't put back older times, or an error over fresh ones.
   const asked = Date.now();
   const newer = () => boards.get().get(code)?.at > asked;
   try {
-    // stopped=1: the services not running now are listed too, greyed.
     const data = await getJSON(`/api/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
     if (newer()) return;
     keep(code, {
@@ -181,17 +109,14 @@ export async function loadBoard(code) {
   }
 }
 
-/** Pinned stops `codes`, as Nearby shows them. A failure keeps what's there, saying it couldn't update. */
 export async function loadSigns(codes) {
   if (!codes.length) return;
-  // As for a board: a call that hung can end after a newer one.
   const asked = Date.now();
   const newer = (code) => signs.get().get(code)?.at > asked;
   try {
     const fix = await locate().catch(() => null);
     const q = new URLSearchParams({ codes: codes.join(','), ...fix });
     if (hour12()) q.set('h12', '1');
-    // The services not running now too: a stop with none running lists them, with when each starts again.
     q.set('stopped', '1');
     const data = await getJSON(`/api/me/stops?${q}`);
     const got = serverNow();
@@ -218,9 +143,7 @@ export async function loadSigns(codes) {
   }
 }
 
-/** The pinned stops being fetched, so a swipe back and forth doesn't ask for one twice at once. */
 const signsFetching = new Set();
-/** The page on screen and its neighbours, those not fetched in the last REFRESH_MS. */
 function freshenSigns() {
   const want = signsToAsk().filter((code) => !signsFetching.has(code) && !(Date.now() - (signs.get().get(code)?.at ?? 0) < REFRESH_MS));
   if (!want.length) return;
@@ -230,33 +153,25 @@ function freshenSigns() {
   });
 }
 
-/** When /api/lines was last asked (Date.now()), however the tab came and went: never sooner than LINES_MS after. */
 let linesAt = 0;
-/** Counts taken from a service's own page (/api/line's `out`), by service: { at (when it came, on the server's clock), out }. */
 const pageOuts = new Map();
-/** When the list's counts were made (its asOf). */
 let listAt = 0;
-/** How many of each service's buses are out, unless asked within LINES_MS. A failure keeps the counts there. */
 export async function loadOuts() {
   if (Date.now() - linesAt < LINES_MS) return;
   linesAt = Date.now();
   try {
     const data = await getJSON('/api/lines');
     const lines = { ...data.lines };
-    // A page opened since this list was counted knows better: the list shows what that page did.
     listAt = asOfMs(data);
     for (const [svc, p] of pageOuts) if (p.at > listAt) lines[svc] = p.out;
     outs.set(lines);
   } catch {
-    // Counts that can't be brought up to date aren't shown: nothing, as for a feed that didn't answer.
     outs.set(null);
   }
 }
 
 export async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
-  // As for a board: a call that hung can end after a newer one, and mustn't
-  // put back older buses, or an error over fresh ones.
   const asked = Date.now();
   const newer = () => line.get()?.key === key && line.get().at > asked;
   try {
@@ -270,10 +185,6 @@ export async function loadLine(svc, stop) {
     line.set({ ...was, key, error });
   }
 }
-/**
- * The list of lines shows the count a service's page just got, not its own older one: the two never disagree on going back. Dated by
- * when it came, not the page's asOf, which an old stop row can pull back.
- */
 function takeOut(svc, data) {
   if (!data?.out) return;
   const at = serverNow();
@@ -285,16 +196,9 @@ const lineKey = () => {
   return r.kind === 'line' ? `${r.svc}/${r.stop ?? ''}` : null;
 };
 
-/** A timed refresh still on its way: the next one waits for it, rather than piling up on a slow connection. */
 let pending = null;
-/** When the next timed refresh runs (Date.now()), for a pull that brought nothing new to say; 0 while the tab is hidden. */
 let nextTimedAt = 0;
 
-/**
- * What's on screen, fetched again: the pinned stops' boards, the stop's own
- * page, or the line. [back]: the tab shown again, which asks even with a call on its
- * way, as that call may have hung while the phone slept.
- */
 function refresh({ back = false } = {}) {
   if (pending && !back) return;
   const mine = refreshNow()?.finally(() => {
@@ -305,41 +209,25 @@ function refresh({ back = false } = {}) {
 function refreshNow() {
   const r = route.get();
   const page = r.kind === 'line' ? loadLine(r.svc, r.stop) : r.kind === 'stop' ? loadBoard(shownCode(r.code)) : null;
-  // The home's pinned stops whenever the home is on screen: beside the page in a wide window.
   if (!page) return loadSigns(signWindow());
   return split ? Promise.all([page, loadSigns(signsToAsk())]) : page;
 }
 
-/**
- * The pinned stops to fetch: the window around the one showing, less the
- * stop open beside the home once its card has times, as its page asks for
- * it already (rule 2: each stop once per REFRESH_MS). Its card keeps the
- * times it last had, aged, while the page beside it has them live.
- */
 export function signsToAsk() {
   const r = route.get();
   const open = split && r.kind === 'stop' ? shownCode(r.code) : null;
   return signWindow().filter((code) => code !== open || !signs.get().get(code)?.s);
 }
 
-/**
- * Pulled down to refresh (pull.js): what's on screen fetched again, unless
- * its times came under PULL_FRESH_MS ago. How it went: 'updated', 'failed',
- * or { state: 'fresh', inS }: nothing asked, and the timed refresh brings
- * new times in `inS` seconds (null if none is due), so "Updated 9 s ago"
- * still counting doesn't read as the pull having failed.
- */
 export async function pullRefresh() {
   const r = route.get();
   const shown = () => {
     if (r.kind === 'line') return [line.get()?.key === lineKey() ? line.get() : null];
     if (r.kind === 'stop') return [boards.get().get(shownCode(r.code))];
-    // The home: the pinned stop on screen, none on the last page.
     const code = pins()[pageOf(pins(), chosen.get())];
     return code ? [signs.get().get(code)] : [];
   };
   const fresh = (b) => b?.at && !b.error && Date.now() - b.at < PULL_FRESH_MS;
-  // Nothing pinned (or the last page): nothing on the home to fetch, and nothing that will change.
   if (!shown().length) return { state: 'fresh', inS: null };
   if (shown().every(fresh)) return { state: 'fresh', inS: nextTimedAt ? Math.max(1, Math.ceil((nextTimedAt - Date.now()) / 1000)) : null };
   const asked = Date.now();
@@ -347,7 +235,6 @@ export async function pullRefresh() {
   return shown().every((b) => b?.at >= asked && !b.error) ? 'updated' : 'failed';
 }
 
-/** Stop `code`'s own board, fetched unless it's fresh or already on its way. */
 function freshen(code) {
   const b = boards.get().get(code);
   if (fetching.has(code)) return;
@@ -356,13 +243,11 @@ function freshen(code) {
     loadBoard(code).finally(() => fetching.delete(code));
   }
 }
-/** A stop's page just brought on screen: the side of the road it shows, fetched unless it's fresh. */
 function showBoard(code) {
   if (code) freshen(shownCode(code));
 }
 
 export function parse(hash) {
-  // A stray % (an address typed or edited by hand) is kept as it is rather than throwing.
   const decode = (part) => {
     try {
       return decodeURIComponent(part);
@@ -376,21 +261,14 @@ export function parse(hash) {
   return { kind: 'home' };
 }
 
-/** The addresses gone forward from in the tab, so its Back goes back rather than forward again. */
 const trail = [];
 function go(hash) {
   trail.push(location.hash);
   location.hash = hash;
 }
-/** The home beside the page (a wide window, BusesTab): set as the tab draws. */
 let split = false;
-/**
- * A stop or a line picked on the home. Side by side it takes the page's
- * place rather than going on from it, so the page has no Back.
- */
 function openFromHome(hash) {
   if (!split) return go(hash);
-  // Already open: nothing redraws, so the trail its Back reads stays as it is.
   if (location.hash === hash) return;
   trail.length = 0;
   location.hash = hash;
@@ -405,28 +283,23 @@ function back(parent) {
 }
 function onHash() {
   if (!location.hash.startsWith('#buses')) return;
-  // The browser's own Back, to where the tab came from.
   if (trail.at(-1) === location.hash) trail.pop();
   const next = parse(location.hash);
   const was = route.get();
   if (JSON.stringify(next) === JSON.stringify(was)) return;
-  // A pinned stop closing beside the home: its card keeps the live times its page had, with nothing fetched.
   const kept = split && was.kind === 'stop' && pins().includes(was.code) ? signWithBoard(was.code) : null;
   if (kept) signs.set((m) => new Map(m).set(was.code, kept));
   route.set(next);
   window.scrollTo(0, 0);
-  // What was focused (a row, Back) has gone with the page: its heading takes it.
   if (document.activeElement !== document.body) focusSoon(headOnScreen, { preventScroll: true });
   if (next.kind === 'stop') showBoard(next.code);
   else if (next.kind === 'line') loadLine(next.svc, next.stop);
 }
 
-/** The heading of what the tab shows: the stop's or the line's (beside the home), else the home's title. */
 const headOnScreen = () => document.querySelector('#tab-buses .bt-detail .bt-head') ?? document.querySelector('#tab-buses .bt-head');
 
 export const stopHash = (code) => `#buses/stop/${encodeURIComponent(code)}`;
 export const lineHash = (svc, stop) => `#buses/line/${encodeURIComponent(svc)}${stop ? `/${encodeURIComponent(stop)}` : ''}`;
-/** A stop picked: its own page. */
 const openStop = (code) => go(stopHash(code));
 
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
@@ -435,15 +308,6 @@ const CLEAR = '<path d="M6 6l12 12M18 6 6 18"/>';
 const BUS = '<rect x="5" y="3.5" width="14" height="13.5" rx="3"/><path d="M5 10.5h14M8 17v2.5M16 17v2.5"/>';
 const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>';
 
-/**
- * Row `r` from an answer this browser got at `got`, as it stands at `now`
- * (both on the server's clock). The server counts its times down to when it
- * answered, so they're counted from `got`, never from the feed's `asOf`
- * (that would take the same seconds off twice). Once the answer is OLD_MS
- * old (refreshes failing), its times are counted down, a bus long due has
- * no time, and a live time says "Last known" (and "~", as a timetabled one
- * keeps): nothing old passes for live.
- */
 export function aged(r, got, now) {
   const s = (now - got) / 1000;
   if (r?.etaS == null || !(s * 1000 > OLD_MS)) return r;
@@ -451,7 +315,6 @@ export function aged(r, got, now) {
   return {
     ...r,
     old: true,
-    // Worded here from etaS (Big's own way), not the server's words from then.
     eta: null,
     etaS: left > -60 ? Math.max(0, left) : null,
     quality: r.quality === 'live' ? 'stale' : r.quality,
@@ -462,11 +325,6 @@ export function aged(r, got, now) {
   };
 }
 
-/**
- * "Updated 5 s ago": from the server's `asOf`, as old as the times are, not
- * when this browser fetched them. `live`: a row above has a live time, so
- * "Live" first says once what the dot by it means (board.js LiveDot).
- */
 function Updated({ asOf, live = false }) {
   const now = useStore(tick);
   if (!asOf) return null;
@@ -474,12 +332,10 @@ function Updated({ asOf, live = false }) {
   return html`<span class="bt-updated">${live && html`<span class="bt-live"><span class="dot" aria-hidden="true"></span>${t('Live')}</span> · `}${s < 5 ? t('Updated just now') : s < 60 ? t('Updated {0} s ago', s) : t('Updated {0} min ago', Math.floor(s / 60))}</span>`;
 }
 
-/** How old the times are, and under it why they couldn't be updated, if they couldn't. */
 function Status({ asOf, error, live }) {
   return html`${error && html`<span class="bt-error">${error}</span>`}<${Updated} asOf=${asOf} live=${live} />`;
 }
 
-/** A stop's board, then the services ending soon, and when it was updated. */
 function Board({ code }) {
   const all = useStore(boards);
   const now = useStore(tick);
@@ -509,16 +365,9 @@ function Board({ code }) {
   `;
 }
 
-/**
- * The sky at the top of a page, as Settings has it (account/sky.js): the
- * hour's colours, the moon and stars at night, ending on the low hills.
- * What's in it takes the sky's ink (app.css, .sky-head). Each page has its
- * own, so it swipes with the page.
- */
 const Sky = ({ children }) =>
   html`<div class="bt-sky"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
 
-/** The star that pins stop `code` (called `name`), filled while it's pinned. `cls` for a smaller one. Absent until the pins are known. */
 function Star({ code, name, cls = '' }) {
   const p = useStore(profile);
   if (!p) return null;
@@ -530,19 +379,12 @@ function Star({ code, name, cls = '' }) {
   `;
 }
 
-/**
- * A stop: whether it's pinned, its name with a star to pin
- * it, This side | Across the road when it has an opposite stop (both stops by
- * name when the opposite stop is only nearby), and its board.
- */
 function StopView({ code, kicker, above = null }) {
   const all = useStore(boards);
   const side = useStore(across);
   useStore(campus);
   const own = all.get(code)?.stop;
   const opposite = own?.opposite ?? stopOf(code)?.opposite ?? null;
-  // Its opposite stop is across the road, or (PGP and its Foyer) just nearby: then both are named.
-  // Always the page's own stop's words, whichever side is showing; across when null from an older server.
   const twinAcross = own?.oppositeAcross !== false;
   const twinName = own?.oppositeName ?? stopName(opposite);
   const shown = (side.has(code) && opposite) || code;
@@ -579,30 +421,14 @@ function StopView({ code, kicker, above = null }) {
   `;
 }
 
-/** How a service runs, as under its name on its line: "Loop from COM 3", "Kent Ridge MRT to UTown". The server's `name`, else worked out here for an older campus. */
 const routeWords = (r) =>
   r.name ?? (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
 
-/** A pinned stop's short name, as on its plate ("UTown"), for its segment. */
 const plateName = (code) => signs.get().get(code)?.s?.stop.name ?? stopOf(code)?.name ?? code;
 
-/** Stop `s`'s times as they stand at `now`, counted from `got` (aged): nothing old passes for live. */
 const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got, now)) });
 
-/**
- * Pinned stop `s` (/api/me/stops, answered at `got`) with the times of its
- * open page's `board` (/api/arrivals), for the stop whose page asks for it
- * in place of its card (signsToAsk), as the Android app does. Each row keeps
- * the card's own words (where it's going), so only the times change. The
- * board has at most one later bus, so the card's buses after as many as the
- * board shows fill in, counted on to the board's `got`, if they're timetable
- * guesses; a live time of the card's is as old as the card and never fills in. A service the board doesn't have
- * keeps its row, counted on and its live times "~". Public buses aren't on
- * the card.
- */
 export function withBoard(s, got, board) {
-  // Whole seconds toward zero, as the apps count it: a board a moment after the
-  // card, or stamped a moment before it when the clock estimate moved, changes nothing.
   const gone = Math.trunc((board.got - got) / 1000);
   const on = (x) => ({ ...x, etaS: x.etaS == null ? null : x.etaS - gone, eta: null });
   const guesses = (row) =>
@@ -612,9 +438,6 @@ export function withBoard(s, got, board) {
       .filter((x) => x.etaS > 0);
   const left = board.board.filter((b) => !b.paid);
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  // Each way of a service to its own first, then the service alone for the
-  // rows left: in one pass a way the board lacks, listed first, would take
-  // the bus of the way after it.
   const matched = s.board.map(() => null);
   const take = (test) =>
     s.board.forEach((row, n) => {
@@ -638,10 +461,6 @@ export function withBoard(s, got, board) {
       };
     }
     const later = b.later ?? [];
-    // Counted, not compared: the card's buses still to come, less as many as
-    // the board shows, are the ones after them. A time would keep a guess
-    // whose bus runs a little ahead of it, and show that bus twice. A row
-    // with no next bus (the service has ended) shows none for it.
     const shown = (b.etaS != null ? 1 : 0) + later.length;
     const after = [row, ...(row.later ?? [])]
       .filter((x) => x.etaS != null)
@@ -658,7 +477,6 @@ export function withBoard(s, got, board) {
       running: b.running,
       stopped: b.stopped,
       resumesAt: b.resumesAt,
-      // As many as the card had, the next bus's place too when the board has none.
       later: [...later, ...after].slice(0, Math.max(later.length, (row.later?.length ?? 0) + (b.etaS != null ? 0 : 1))),
       laterText: null,
     };
@@ -666,11 +484,6 @@ export function withBoard(s, got, board) {
   return { ...s, board: rows, available: board.available };
 }
 
-/**
- * Pinned stop `code`'s card as its open page has it: its sign with the
- * board's times (withBoard), on the board's clock. Null when there's no
- * newer board, or the page shows the other side of the road.
- */
 function signWithBoard(code) {
   const own = signs.get().get(code);
   const board = boards.get().get(code);
@@ -678,13 +491,7 @@ function signWithBoard(code) {
   return { s: withBoard(own.s, own.got, board), at: board.at, got: board.got, error: board.error };
 }
 
-/**
- * One pinned stop's page: its sign as Nearby shows it, and under it why it
- * couldn't update, or what a "~" means when one is showing. Before its
- * times come, its plate with its rows as shapes.
- */
 function PinPage({ code, entry: own, pinned, now, open }) {
-  // Open beside the home, its page's board is the live one: the card takes its times.
   useStore(boards);
   const entry = (open && signWithBoard(code)) || own;
   const s = entry?.s
@@ -717,13 +524,6 @@ function PinPage({ code, entry: own, pinned, now, open }) {
   `;
 }
 
-/**
- * The pinned stops: their names as one segmented control, as a stop's
- * page picks its side of the road, over a pager of their signs, one page
- * each and a last one saying how to pin another. Swiping picks the name,
- * and a name picked swipes there. The pager is as tall as the page showing,
- * as on Android and iPhone, so a stop with two services has no gap under it.
- */
 function PinnedStops({ pinned }) {
   const pick = useStore(chosen);
   const r = useStore(route);
@@ -732,12 +532,9 @@ function PinnedStops({ pinned }) {
   useStore(campus);
   const pager = useRef(null);
   const segs = useRef(null);
-  // The page came from a swipe: the pager is there already.
   const swiped = useRef(false);
   const moved = useRef(false);
-  // A stop unpinned (its star, here or on its page): pageOf finds the page that took its place.
   const gone = pick != null && pick !== ADD && !pinned.includes(pick);
-  // Beside its page, the stop open is the card showing, however it was opened (Now, Nearby, the map).
   const openPin = split && r.kind === 'stop' && pinned.includes(r.code) ? r.code : null;
   useEffect(() => {
     if (openPin && chosen.get() !== openPin) chosen.set(openPin);
@@ -745,11 +542,8 @@ function PinnedStops({ pinned }) {
   const index = pageOf(pinned, openPin ?? pick);
   const at = useRef(index);
   at.current = index;
-  // Swiped: once the pager settles, the page it rests on is the one picked.
   const settle = useRef(0);
-  /** Where page `i` starts in the pager: its width and the gap between pages, each. */
   const leftOf = (el, i) => i * (el.children[1] ? el.children[1].offsetLeft - el.children[0].offsetLeft : el.clientWidth);
-  /** A name picked: a swipe's settling that hasn't fired yet would put the old page back. */
   const choose = (code) => {
     clearTimeout(settle.current);
     chosen.set(code);
@@ -760,7 +554,6 @@ function PinnedStops({ pinned }) {
     if (gone) chosen.set(pinned[index]);
   }, [pinned.join()]);
 
-  // The page picked: the pager there (at once the first time), its name in view, its times fetched.
   useEffect(() => {
     const el = pager.current;
     if (el && !swiped.current) {
@@ -779,8 +572,6 @@ function PinnedStops({ pinned }) {
     freshenSigns();
   }, [index, pinned.join()]);
 
-  // As tall as the pages on screen: the one showing, or the two either side mid-swipe. The pages off
-  // screen overflow it, hidden.
   const fit = () => {
     const el = pager.current;
     if (!el) return;
@@ -788,14 +579,12 @@ function PinnedStops({ pinned }) {
     const shown = [Math.floor(x), Math.ceil(x)].map((n) => el.children[n]?.offsetHeight ?? 0);
     el.style.height = `${Math.max(...shown)}px`;
   };
-  // An answer can land at its skeleton's height, so nothing resizes: measured after every render too.
   useEffect(fit);
   useEffect(() => {
     const el = pager.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     let width = el.clientWidth;
     const ro = new ResizeObserver(() => {
-      // A new width (a phone turned, the tab shown again): the page picked kept in place.
       if (el.clientWidth !== width) {
         width = el.clientWidth;
         el.style.height = '';
@@ -840,22 +629,14 @@ function PinnedStops({ pinned }) {
   `;
 }
 
-/**
- * Every service, each opening its line: its badge, how it runs and the
- * stops it passes (the server's words), and how many of its buses are out.
- * Every badge is as wide as the widest, so the names line up.
- */
 function Lines({ routes }) {
   const counts = useStore(outs);
-  // The line open beside the home, marked as chosen.
   const open = useStore(route);
   return html`
     <div class="card bt-services">
       ${routes.map(([svc, r]) => {
         const name = routeWords(r);
         const via = r.via ?? null;
-        // Null: the feed didn't answer for it, so nothing is said. A count from a
-        // kept feed answer (stale) is said without the dot that marks live.
         const n = counts?.[svc] ?? null;
         return html`<button
           type="button"
@@ -875,13 +656,8 @@ function Lines({ routes }) {
   `;
 }
 
-/** The home's title in its band of sky, as Nearby's and Settings'. */
 const HomeSky = () => html`<${Band}><h2 class="tab-title bt-head" tabindex="-1">${t('Stops')}</h2><//>`;
 
-/**
- * The home: your pinned stops, one at a time as Nearby shows them, then
- * every service, which opens its line. The stops around you are the Nearby tab's.
- */
 function Home() {
   const p = useStore(profile);
   const c = useStore(campus);
@@ -901,11 +677,9 @@ function Home() {
   `;
 }
 
-/** Search a stop or a service: a stop opens its board, a service its line. */
 function Find() {
   const c = useStore(campus);
   const box = useRef(null);
-  // Every service then every stop (search.js), the services also what it offers before anything is typed.
   const dests = useMemo(() => busesTabIndex(c), [c]);
   const services = useMemo(() => dests.filter((d) => d.kind === 'service'), [dests]);
   return html`
@@ -931,13 +705,8 @@ function Find() {
   `;
 }
 
-/** What's typed in the home's search in a wide window, where its results take the home's place. */
 export const findText = store('');
 
-/**
- * The search in a wide window: a plain box, its results in the home pane
- * under it (Results) rather than a list over the home, as the apps show them.
- */
 function FindWide() {
   const q = useStore(findText);
   const box = useRef(null);
@@ -975,11 +744,6 @@ function FindWide() {
   `;
 }
 
-/**
- * What the wide search found, in the home pane: the services by their badge
- * and how they run, the stops by name with their code and the services
- * there, as the iPhone and Android apps list them. The one open is marked.
- */
 function Results() {
   const q = useStore(findText);
   const c = useStore(campus);
@@ -1030,15 +794,12 @@ function Results() {
   `;
 }
 
-/** What a page at address `hash` in the tab is called on a Back button: the home, a stop, a service. */
 function placeName(hash) {
   const r = parse(hash);
   return r.kind === 'stop' ? stopName(r.code) : r.kind === 'line' ? r.svc : t('Stops');
 }
 
-/** Back, named for where it goes: the page before in the tab, else `parent`. */
 function BackBar({ parent }) {
-  // Beside the home, only a page opened from another page has somewhere to go back to.
   if (split && parse(trail.at(-1) ?? parent).kind === 'home') return null;
   const label = placeName(trail.at(-1) ?? parent);
   return html`
@@ -1048,7 +809,6 @@ function BackBar({ parent }) {
   `;
 }
 
-/** A stop's board on a page of its own: from the home, the search, a line or Nearby. */
 function StopPage({ code }) {
   const p = useStore(profile);
   useStore(campus);
@@ -1060,12 +820,10 @@ function StopPage({ code }) {
   `;
 }
 
-/** A bus drawn on the line, with its plate and how full it is; `between`, on the line between two stops. Said in words too. */
 const BusMark = ({ between = false }) =>
   html`<span class="bt-bus" aria-hidden="true"><${Icon} paths=${BUS} /></span><span class="sr-only">${between ? t('Bus between stops') : t('Bus here')}</span>`;
 const Plate = ({ b }) => html`${b.plate && html`<span class="bt-plate">${b.plate}</span>`}<${Crowd} crowd=${b.crowd} />`;
 
-/** Your stop's time on the line, from its board row: nothing worked out here. */
 function YourTime({ r }) {
   if (!r) return null;
   if (r.running === false)
@@ -1078,11 +836,6 @@ function YourTime({ r }) {
   `;
 }
 
-/**
- * A service's stops as /api/line lists them (its lineStops), from the
- * campus data: in route order, a loop's first stop again at its end, each
- * with its names and the other services there.
- */
 export function campusLine(svc, r, stopsOf = stopOf) {
   const seq = r.loop && r.seq.length > 1 ? [...r.seq, r.seq[0]] : r.seq;
   return seq.map((code) => {
@@ -1096,17 +849,12 @@ export function campusLine(svc, r, stopsOf = stopOf) {
   });
 }
 
-/** Your stop's time before the line comes: its shapes, as tall as YourTime. */
 const YourTimeWaiting = () => html`
   <span class="bt-yours" aria-hidden="true"
     ><span class="bt-big"><${Bar} w="3.2rem" h="0.62em" /></span><span class="bt-meta"><${Bar} w="4.5rem" /></span
   ></span>
 `;
 
-/**
- * A service's line before it comes, without the campus data to draw it
- * from: its stops as shapes on a line in a tint of its colour, no buses.
- */
 function LineSkeleton({ color }) {
   return html`
     <${Skeleton} said=${t('Checking…')} quiet>
@@ -1127,10 +875,6 @@ function LineSkeleton({ color }) {
   `;
 }
 
-/**
- * A service's whole line: its stops in order on a line in its colour, its
- * buses at a stop or between two, and the stop you came from with its time.
- */
 function LinePage({ svc, stop }) {
   const l = useStore(line);
   const c = useStore(campus);
@@ -1141,17 +885,13 @@ function LinePage({ svc, stop }) {
   const scrolled = useRef(null);
   const color = data?.color ?? colorOf(svc);
   const r = c?.routes[svc];
-  // The campus data can draw the line only with its stops: an empty one is as good as none.
   const known = r?.seq?.length > 0;
-  // Your stop in view the first time the list shows (from the campus data or the line), not on every refresh.
   const drawn = Boolean(data) || known;
   useEffect(() => {
     if (!drawn || scrolled.current === key) return;
     scrolled.current = key;
     document.querySelector('.bt-stop.mine')?.scrollIntoView({ block: 'center' });
   }, [key, drawn]);
-  // Scrolled there before the line said the service isn't running: back up to
-  // the note saying so, once, when it first comes (not on later refreshes).
   const arrived = useRef(null);
   useEffect(() => {
     if (!data || arrived.current === key) return;
@@ -1169,21 +909,15 @@ function LinePage({ svc, stop }) {
     <//>
   `;
   if (mine?.error && !data) return html`${head}<p class="hint bt-empty">${mine.error}</p>`;
-  // Before the line comes: drawn from the campus data when it has the route
-  // (its stops, their names and the services there are the same words the
-  // line brings), with bars only for what's live; without it, shapes.
   if (!data && !known) return html`${head}<${LineSkeleton} color=${color} />`;
   const stops = data?.stops ?? campusLine(svc, r);
 
-  // A loop's first stop is listed again at its end: one stop, two rows.
   const n = new Set(stops.map((s) => s.code)).size;
-  // Not running: its stops, no buses, and why.
   const stopped = data?.running === false;
   const buses = data?.available && !stopped ? data.buses : [];
   const running =
     buses.length === 0 ? t('No buses running') : buses.length === 1 ? t('1 bus running') : t('{0} buses running', buses.length);
   const ends = data?.endsAt && Date.parse(data.endsAt) > now ? t('Runs until {0}', clock(data.endsAt)) : null;
-  // Your stop: where the line says, or before it comes, its first place on the line, as the API finds it.
   const yours = data ? (data.stop?.index ?? -1) : stop ? stops.findIndex((s) => s.code === stop) : -1;
   return html`
     ${head}
@@ -1231,11 +965,6 @@ function LinePage({ svc, stop }) {
   `;
 }
 
-/**
- * The tab's one "Checking…" for screen readers, while what's on screen is
- * still coming: the services or the pins on the home, the pinned stop in
- * view's times, a stop's board or a line. Every skeleton in the tab is quiet.
- */
 function TabStatus({ r }) {
   const p = useStore(profile);
   const c = useStore(campus);
@@ -1261,17 +990,12 @@ function TabStatus({ r }) {
   return html`<p class="sr-only" role="status">${pending ? t('Checking…') : ''}</p>`;
 }
 
-/**
- * The tab. `visible`: it's on screen (refreshing stops otherwise).
- * `locate`: where you are, for the walk to each pinned stop (app.js), never asking.
- */
 export function BusesTab({ visible, locate: where = null }) {
   const r = useStore(route);
   if (where) locate = where;
   const wide = useMedia('(min-width: 800px)');
   split = wide;
   const typed = useStore(findText);
-  // Widened past 800 with a page open: the home comes on screen beside it, its pinned stops with it.
   useEffect(() => {
     if (wide && visible) freshenSigns();
   }, [wide]);
@@ -1284,11 +1008,8 @@ export function BusesTab({ visible, locate: where = null }) {
 
   useEffect(() => {
     if (!visible) return;
-    // Come in from another tab (Nearby's links, the tab bar): Back goes up
-    // the tab, to the home, not back through what was before.
     trail.length = 0;
     route.set(parse(location.hash));
-    // Fresh each time it's shown: the pins may have changed on another device.
     loadCampus().catch(() => {});
     reloadProfile()
       .catch(() => {})
@@ -1318,8 +1039,6 @@ export function BusesTab({ visible, locate: where = null }) {
     };
   }, [visible]);
 
-  // The lines' counts while the home is on screen and the app in front: at once, then each LINES_MS
-  // (loadOuts keeps to that; checked more often so a timer firing early doesn't skip a round).
   useEffect(() => {
     if (!home) return;
     const ask = () => document.visibilityState === 'visible' && loadOuts();
@@ -1332,15 +1051,11 @@ export function BusesTab({ visible, locate: where = null }) {
     };
   }, [home]);
 
-  // First, so it stays the same status line whichever page is showing.
   const status = html`<${TabStatus} r=${r} />`;
   const page =
     r.kind === 'line' ? html`<${LinePage} svc=${r.svc} stop=${r.stop} />` : r.kind === 'stop' ? html`<${StopPage} code=${r.code} />` : null;
-  // The title in its band, then the search just under the hills, at the top of what it searches.
   if (!wide) return html`${status}${page ?? html`<${HomeSky} /><div class="bt-find"><${Find} /></div><${Home} />`}`;
-  // Side by side, what the search finds takes the home's place under it.
   const homePane = html`<${HomeSky} /><div class="bt-find"><${FindWide} /></div>${typed.trim() ? html`<${Results} />` : html`<${Home} />`}`;
-  // Side by side: the home, and the page opened from it or what to do with nothing open, under a sky of its own.
   return html`
     ${status}
     <div class="bt-split">

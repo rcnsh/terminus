@@ -1,17 +1,3 @@
-// The installed web app: the answer card and today, the way the
-// phone app shows them, the buses at a stop and along a line (app/buses.js),
-// the campus map (app/map.js) and Settings (the account page's,
-// account/settings.js). A bar along the bottom switches
-// between them, fading through as the phone app does.
-//
-// What's on screen lives in stores at the top (what the card is for, the
-// card, today, …); the functions under them fetch and set them, and the
-// components at the bottom draw them.
-//
-// The service worker (/sw.js) answers /api/me/next and /api/me/day from its cache
-// when the network is down; those replies carry x-terminus-cached with when
-// they were fetched, so the page can say it's showing old times.
-
 import {
   Bar,
   Fill,
@@ -47,9 +33,6 @@ import {
   walkSpeed,
 } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
-// sign.js brings board.js with the page, so that the Stops and Map tabs, which
-// both import it, don't depend on it arriving later (a failed import can't be
-// retried at the same address; loadTab's retry renews only the tab's file).
 import { ServicesSkeleton } from '/app/board.js';
 import { PinnedSkeleton, SignSkeleton, StopSign, anyGuess, keepPinCount, pinAccount } from '/app/sign.js';
 import { offlineNext } from '/app/offline.js';
@@ -69,76 +52,37 @@ import {
 import { PullToRefresh } from '/app/pull.js';
 import { TABS, tabOf } from '/app/tabs.js';
 
-/** How often the timed refresh asks for Today too: it moves slowly, and
- *  each one is an answer per class on the server. */
 const DAY_MS = 120_000;
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-// iPadOS says it's a Mac; one with a touch screen is an iPad.
 const iPhone =
   !/Android/.test(navigator.userAgent) &&
   (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-/** What the card is for: the plan, a favourite (its key), or a stop picked on the map or in the search. */
 const target = store({ kind: 'plan' });
-/** The favourites, for their chips: from the last answer, and from the profile as Settings or the map change it. */
 const places = store([]);
 profile.subscribe((p) => p && places.set(p.places.map(({ key, label }) => ({ key, label }))));
-/** /api/me, once fetched: who's signed in. */
 const me = store(null);
 me.subscribe((m) => pinAccount.set(m?.email ?? null));
-// The pins' count, kept with whose account it is for the Stops tab's shapes
-// the next time it opens before they're known. Only for a profile that came
-// once this page knew who's signed in, and under that account: one that came
-// before is kept at its next load (each opening of the Stops tab reloads it).
 profile.subscribe((p) => {
   const account = pinAccount.get();
   if (p && account) keepPinCount(account, (p.pinnedStops ?? []).length);
 });
-/**
- * The card: an answer (`a`), "Checking…" or another line (`text`), or the
- * offline plan (`offline`).
- */
 const card = store({ text: t('Checking…'), loading: true });
-/** "Updated 9:41", or "Updating…" while a card already seen is shown again. */
 const updated = store('');
-/** The banner above the chips when the card isn't live (offline, or no answer), else null. */
 const banner = store(null);
-/** Today, from /api/me/day. */
 const day = store(null);
-/** Taken off today here, by key, with the refresh that started after it: hidden until one comes back. */
 const removed = store(new Map());
-/**
- * The row left where an entry was taken off Today: the entry (`it`), the one
- * after it (`before`, its key, null at the end) and where it was (`at`, should
- * that one go too), its words, and Undo if there's one. In the list, so nothing moves.
- */
 const undo = store(null);
-/** The search under the chips is open. */
 const searching = store(false);
-/** Now, Nearby, Stops (`buses`), Map or Settings; null until the first draw. */
 const tab = store(null);
-/**
- * The Nearby tab: the stops around you (`stops`), "Checking…" before the
- * first answer (`loading`), or a line saying why there are none (`text`).
- */
 const nearby = store({ loading: true });
-/** "Updated 9:41" under Nearby's signs. */
 const nearbyUpdated = store('');
-/** app/buses.js, once the Stops tab has been opened. */
 const busesModule = store(null);
-/** app/map.js, once the map has been opened. */
 const mapModule = store(null);
-/** Settings: account/settings.js once loaded, or why not. */
 const settings = store({ status: 'idle', mod: null });
-/** A NUSMods link shared to the app, for Settings to offer to import. */
 let shared = null;
 
-/**
- * Somewhere searched for or picked on the map keeps a tab of its own, with
- * an X, as on the phone: up to 5, newest first, kept in this browser only.
- * One that's a favourite is that favourite's tab instead.
- */
 const ADDED_MAX = 5;
 const added = store(readAdded());
 function readAdded() {
@@ -153,9 +97,7 @@ function keepAdded(list) {
   added.set(list);
   try {
     localStorage.setItem(ADDED_PLACES_KEY, JSON.stringify(list));
-  } catch {
-    // Storage blocked: the tabs last until the page closes.
-  }
+  } catch {}
 }
 const favouriteNamed = (label) => places.get().find((p) => p.label.toLowerCase() === label.toLowerCase());
 function addPlace(to, label) {
@@ -163,10 +105,8 @@ function addPlace(to, label) {
   if (list.some((x) => x.to === to) || favouriteNamed(label)) return;
   keepAdded([{ to, label }, ...list].slice(0, ADDED_MAX));
 }
-/** The chip that's on: where focus goes when the control that had it goes. */
 const focusChosen = () => focusSoon(() => document.querySelector('.app-chips button[aria-pressed="true"]'));
 
-/** The X on an added place's tab: gone, and back to Next if it was showing. */
 function removeAdded(x) {
   keepAdded(added.get().filter((y) => y.to !== x.to));
   const now = target.get();
@@ -174,7 +114,6 @@ function removeAdded(x) {
   focusChosen();
 }
 
-/** GET a JSON route; `cached` is when the service worker's copy was fetched, if that's what came back. */
 async function get(path) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
   if (res.status === 401) await signedOut();
@@ -183,24 +122,14 @@ async function get(path) {
   return { data: await res.json(), cached: cached ? Number(cached) : null };
 }
 
-/** A time on this device's clock (the service worker's x-terminus-cached) on the server's, for showing. */
 const onServerClock = (localMs) => localMs + serverNow() - Date.now();
 
-/**
- * The banner for a card fetched at `cachedAt` by the service worker, or none
- * for a live one. `failed`: the request itself failed (the server answering
- * an error, say), so it isn't only a slow connection.
- */
 function stale(cachedAt, failed = false) {
   if (cachedAt === null) {
     slowTries = 0;
     return void banner.set(null);
   }
   const at = clock(new Date(onServerClock(cachedAt)).toISOString());
-  // Online, the kept copy means the network was too slow or the server
-  // failing (sw.js): try again sooner than the timed refresh, then less
-  // often (8 s, 16 s), and only while Now is on screen. Past that the timed
-  // refresh is soon enough: a struggling server isn't helped by more.
   if (navigator.onLine) {
     banner.set(staleText(at, { online: true, failed }));
     clearTimeout(slowRetry);
@@ -211,18 +140,9 @@ function stale(cachedAt, failed = false) {
 let slowRetry = null;
 let slowTries = 0;
 
-/** Whether Now is what the user is looking at: the timed refreshes wait otherwise. */
 const nowShown = () => document.visibilityState === 'visible' && tab.get() === 'now';
 
-/**
- * The card says when it will change by itself (card.nextChangeAt: the bus
- * leaving, time to go) and the plan when it moves on (refreshAt): fetched
- * again at the sooner, never sooner than MARK_MIN_MS from now, when that's
- * before the next 30 s refresh. A mark the answer already got past isn't
- * one: the server had it in hand, and waiting on it would ask every 5 s.
- */
 let markTimer = null;
-/** When a mark last brought a refresh (Date.now()). */
 let markAt = -Infinity;
 function atMarks(a) {
   clearTimeout(markTimer);
@@ -235,7 +155,6 @@ function atMarks(a) {
   }, wait);
 }
 
-/** A query string: the 12-hour style, and the other params given. */
 function query(params = {}) {
   const q = new URLSearchParams(hour12() ? { h12: '1' } : {});
   for (const [k, v] of Object.entries(params)) if (v !== null && v !== undefined) q.set(k, String(v));
@@ -243,14 +162,8 @@ function query(params = {}) {
   return s ? `?${s}` : '';
 }
 
-/** The last fix this page got ({ lat, lon, accuracy, at }), for a card asked before a fresh one comes. */
 let lastFix = null;
 
-/**
- * Where the phone is, only when location is already allowed: the plan then
- * starts from the nearest stop, as in the phone app. Never asks by itself;
- * the Nearby tab does. Null without one.
- */
 async function position({ ask = false } = {}) {
   if (!navigator.geolocation) return null;
   if (!ask) {
@@ -272,51 +185,31 @@ async function position({ ask = false } = {}) {
   });
 }
 
-/** position() as the API's query: lat, lon and acc. */
 async function here(opts) {
   const fix = await position(opts);
   return fix && fixQuery(fix, Date.now());
 }
 
-/**
- * The fix for Now's card without the wait for GPS: the fresh one if it comes
- * within FIX_GRACE_MS, else the last one (fixToSend). `fresh` keeps coming.
- */
 async function hereSoon() {
   const fresh = position();
   const grace = new Promise((resolve) => setTimeout(() => resolve(undefined), FIX_GRACE_MS));
   return { sent: fixToSend(await Promise.race([fresh, grace]), lastFix, Date.now()), fresh };
 }
 
-/**
- * Where you are for the Stops tab's pinned stops, as Now's card gets it
- * (hereSoon): only when location is already allowed, never asking. The
- * API's query (lat, lon, acc), or null.
- */
 async function stopsFix() {
   const { sent } = await hereSoon();
   return sent && fixQuery(sent, Date.now());
 }
 
-/** Counts refreshes: one that finishes after a newer one started (a chip tapped meanwhile) is dropped. */
 let generation = 0;
 
-/** The last Today and when it came: a timed refresh reuses it for DAY_MS. */
 let lastPlan = null;
 let planAt = 0;
 
-/** Refreshes on their way: a timed one waits for them rather than piling another on a slow connection. */
 let pending = 0;
 
-/** When the card last came live from the server, by this device's clock. */
 let fetchedAt = 0;
 
-/**
- * The card and Today. [timed]: by the clock, not something the user did, so
- * Today is asked for at most every DAY_MS. [back]: the page shown again,
- * which asks even with a call on its way: that call may have hung while the
- * phone slept, and the newer answer wins anyway.
- */
 async function refresh({ timed = false, back = false } = {}) {
   if (timed && pending && !back) return;
   pending++;
@@ -329,18 +222,15 @@ async function refresh({ timed = false, back = false } = {}) {
 
 async function refreshNow(timed) {
   const mine = ++generation;
-  // This refresh's answer sets the next mark.
   clearTimeout(markTimer);
   const to = target.get();
   try {
     const { sent, fresh } = await hereSoon();
     if (mine !== generation) return;
     const sentAt = Date.now();
-    // Asked without the fresh fix, or from somewhere else: once more when it comes.
     fresh.then((f) => mine === generation && refreshAgain(sent, f, sentAt) && refresh());
     const at = sent && fixQuery(sent, sentAt);
     const params = { ...(to.kind === 'place' ? { place: to.key } : to.kind === 'stop' ? { to: to.to } : {}), ...at };
-    // Today gets the location too: its next class is planned from here, as the card is.
     const askDay = !timed || !lastPlan || Date.now() - planAt >= DAY_MS;
     const [nextR, dayR] = await Promise.allSettled([
       get(`/api/me/next${query(params)}`),
@@ -355,17 +245,12 @@ async function refreshNow(timed) {
       lastPlan = plan;
       planAt = Date.now();
       day.set(plan.data);
-      // What was taken off before this refresh started is gone from it now.
       removed.set((m) => new Map([...m].filter(([, at]) => at >= mine)));
     }
-    // Offline with an answer gone stale (or none kept): the next thing on the
-    // day plan the service worker kept, with its leave-by from then.
     const offline = !next || next.cached !== null;
     const fallback = offline && to.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(plan?.data, serverNow()) : null;
     if (fallback) {
       card.set({ offline: fallback });
-      // When the plan itself was fetched: the service worker's time for a kept
-      // copy, else when this page got it (not now, which would read as fresh).
       stale(plan.cached ?? planAt, !next);
       updated.set('');
       return;
@@ -374,7 +259,6 @@ async function refreshNow(timed) {
     card.set({ a: next.data });
     seen.set(seenKey(to), next.data);
     stale(next.cached);
-    // A kept card is old already: its marks have passed, and the slow retry asks again.
     if (next.cached === null) {
       fetchedAt = Date.now();
       atMarks(next.data);
@@ -383,7 +267,6 @@ async function refreshNow(timed) {
     if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places.get())) places.set(next.data.places ?? []);
   } catch (err) {
     if (err.message === 'signed out' || mine !== generation) return;
-    // Online but no answer (the server busy, an error): not "offline".
     banner.set(
       navigator.onLine
         ? t("Couldn't update. Trying again soon.")
@@ -392,15 +275,9 @@ async function refreshNow(timed) {
   }
 }
 
-/** Each card drawn this visit, by what it was for: shown again at once when its chip is tapped, while it refreshes. */
 const seen = new Map();
 const seenKey = (to) => JSON.stringify(to);
 
-/**
- * The card the service worker kept for this target, from an earlier visit.
- * Its key is the one sw.js keeps it under (route, place, clock style,
- * language), and it's this account's: sw.js empties the cache on sign-out.
- */
 async function keptCard(to) {
   if (!('caches' in window) || (to.kind !== 'plan' && to.kind !== 'place')) return null;
   const q = new URLSearchParams();
@@ -408,7 +285,6 @@ async function keptCard(to) {
   if (hour12()) q.set('h12', '1');
   q.set('lang', window.i18n?.header ?? 'en');
   try {
-    // Only sw.js's data cache holds /api/me/next, whatever its version.
     const res = await caches.match(`${location.origin}/api/me/next?${q}`);
     return res ? await res.json() : null;
   } catch {
@@ -416,7 +292,6 @@ async function keptCard(to) {
   }
 }
 
-/** Before the answer arrives: the card already seen for this target if it still holds, else "Checking…". */
 async function drawSeen() {
   const to = target.get();
   const known = seen.get(seenKey(to)) ?? (await keptCard(to));
@@ -430,19 +305,15 @@ async function drawSeen() {
   }
 }
 
-/** Shows the card for `to` (a chip tapped, a search result, Go there on the map). */
 function choose(to) {
   target.set(to);
   drawSeen();
   refresh();
 }
 
-/** A search result: its card, under a chip of its own, as a stop picked on the map. */
 function goSomewhere(d) {
   searching.set(false);
-  // The search closes under the keyboard: its new chip takes the focus.
   focusChosen();
-  // A stop or a place is called by its name; a building or room by its code, as on its door.
   const label = d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code;
   const fav = favouriteNamed(label);
   if (fav) return choose({ kind: 'place', key: fav.key });
@@ -450,9 +321,7 @@ function goSomewhere(d) {
   choose({ kind: 'stop', to: d.code, label });
 }
 
-/** Go there, from a stop on the map: Now, with the card for that stop. */
 function goToStop({ code, name, place }) {
-  // A favourite already has its chip: that one, not a second.
   if (!place) addPlace(code, name);
   target.set(place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name });
   drawSeen();
@@ -460,25 +329,13 @@ function goToStop({ code, name, place }) {
   showTab();
 }
 
-/** Whether Nearby is what the user is looking at: its timed refreshes wait otherwise. */
 const nearbyShown = () => document.visibilityState === 'visible' && tab.get() === 'nearby';
 
-/** Counts Nearby's refreshes: one that finishes after a newer one started is dropped. */
 let nearbyAsked = 0;
-/** Nearby's refreshes on their way: a timed one waits for them, as the card's does. */
 let nearbyPending = 0;
-/** When Nearby last came from the server, by this device's clock; 0 when it shows no signs. */
 let nearbyAt = 0;
-/** How long Nearby's signs stay up while its timed refreshes fail: a few of them. */
 const NEARBY_KEEP_MS = 120_000;
 
-/**
- * Every bus at the stops around you, from the browser's location, which
- * this asks for: the Nearby tab is for nothing else. [timed]: by the clock,
- * so it waits for one already on its way, and one that fails leaves signs
- * under NEARBY_KEEP_MS old as they are, under the time they came: a missed
- * refresh (the GPS slow, a tunnel) isn't worth losing them for.
- */
 async function refreshNearby({ timed = false } = {}) {
   if (timed && nearbyPending) return;
   const mine = ++nearbyAsked;
@@ -486,7 +343,6 @@ async function refreshNearby({ timed = false } = {}) {
     if (timed && nearby.get().stops && Date.now() - nearbyAt < NEARBY_KEEP_MS) return;
     nearby.set({ text });
     nearbyUpdated.set('');
-    // Nothing to call fresh: a pull asks again.
     nearbyAt = 0;
   };
   nearbyPending++;
@@ -507,10 +363,6 @@ async function refreshNearby({ timed = false } = {}) {
   }
 }
 
-/**
- * Now pulled down to refresh (pull.js): fetched again, unless the card came
- * under PULL_FRESH_MS ago. How it went: 'updated', 'fresh' or 'failed'.
- */
 async function pullNow() {
   if (Date.now() - fetchedAt < PULL_FRESH_MS) return 'fresh';
   const asked = Date.now();
@@ -518,7 +370,6 @@ async function pullNow() {
   return fetchedAt >= asked ? 'updated' : 'failed';
 }
 
-/** Nearby pulled down to refresh, as Now is (pullNow). */
 async function pullNearby() {
   if (Date.now() - nearbyAt < PULL_FRESH_MS) return 'fresh';
   const asked = Date.now();
@@ -526,7 +377,6 @@ async function pullNearby() {
   return nearbyAt >= asked ? 'updated' : 'failed';
 }
 
-/** Pulled down on the tab on screen: Now, Nearby, or Stops once it has loaded. */
 function pullTab() {
   if (tab.get() === 'now') return pullNow();
   if (tab.get() === 'nearby') return pullNearby();
@@ -534,17 +384,11 @@ function pullTab() {
 }
 const pullable = () => tab.get() === 'now' || tab.get() === 'nearby' || (tab.get() === 'buses' && Boolean(busesModule.get()?.pullRefresh));
 
-/** An answer from a card's button or Undo: shown, then everything fetched again so Today and its offline copy follow. */
 function answered(a) {
   card.set({ a });
   refresh();
 }
 
-/**
- * Taking an entry off today (× on the row): a timetabled class, one you
- * added, or the trip home. Gone at once, with Undo for UNDO_MS, or until
- * the next one goes; the time waits while the row is pointed at or focused.
- */
 const UNDO_MS = 20_000;
 let undoTimer = null;
 function showUndo(value) {
@@ -552,12 +396,10 @@ function showUndo(value) {
   holdUndo(false);
   announce(value.text, { again: true });
 }
-/** `held`: the row is pointed at or focused, so its Undo stays; let go, its time starts again. */
 function holdUndo(held) {
   clearTimeout(undoTimer);
   if (!held && undo.get()) undoTimer = setTimeout(() => undo.set(null), UNDO_MS);
 }
-/** Focus on the removed row's Undo (or the row, when it can't be undone). */
 const focusUndo = (key) =>
   focusSoon(
     () =>
@@ -576,12 +418,10 @@ async function removeFromToday(it, at, before) {
       next.delete(it.key);
       return next;
     });
-    // Back in the list: focus on its × again, else on Today's heading.
     focusSoon(() => document.querySelector(`.remove-today[data-key="${CSS.escape(it.key)}"]`) ?? document.getElementById('today-title'));
     try {
       card.set({ a: await signal({ kind: 'reset', trip: it.key }) });
     } catch {
-      // Still off today on the server: off the list again, saying so, with Undo to try again.
       removed.set((m) => new Map(m).set(it.key, generation + 1));
       showUndo({ it, at, before, text: t("Couldn't put that back. Check your connection."), undo: putBack });
       focusUndo(it.key);
@@ -593,7 +433,6 @@ async function removeFromToday(it, at, before) {
   try {
     card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
   } catch {
-    // Said where it was done, just above the entry (back in the list), which the refresh below leaves alone.
     const lost = document.activeElement?.closest?.('.today-item.removed');
     showUndo({ it, at, before: it.key, text: t("Couldn't remove that. Check your connection.") });
     if (lost) focusUndo(it.key);
@@ -606,18 +445,10 @@ async function removeFromToday(it, at, before) {
   refresh();
 }
 
-/** Each tab's section, set as they're drawn. */
 const views = {};
-/** Counts switches: a fade that finishes after a newer tap is left to that one. */
 let switches = 0;
-/** Where Now and Settings were scrolled to, for coming back. */
 const scrolled = {};
 
-/**
- * What the page shows for tab `next` around the tab itself: the window's
- * title, as the bar along the bottom says it, and the body's class, which
- * hides the header and Now's sky where the tab draws its own top.
- */
 function markTab(next) {
   document.title = t('{0} · terminus', TABBAR.find((x) => x.id === next).label());
   document.body.classList.toggle('on-map', next === 'map');
@@ -626,10 +457,6 @@ function markTab(next) {
   document.body.classList.toggle('on-nearby', next === 'nearby');
 }
 
-/**
- * /api/me, asked for once by whichever wants it first (start(), or Settings
- * opened straight away); asked again after a failure, so a later try can work.
- */
 let meAsked = null;
 const askMe = () =>
   (meAsked ??= get('/api/me').then(
@@ -642,11 +469,6 @@ const askMe = () =>
 
 const tabInAddress = () => tabOf(location.hash);
 
-/**
- * Material's fade through, as on the phone: the old tab fades out quickly,
- * then the new one fades in with a slight zoom from the middle of the
- * screen. Reduced motion keeps only a short fade.
- */
 function fadeIn(node) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   node.style.transformOrigin = `50% ${window.innerHeight / 2 - node.getBoundingClientRect().top}px`;
@@ -661,24 +483,17 @@ function fadeIn(node) {
 const fadeOut = (node) =>
   node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
-/**
- * Now, Nearby, Stops, Map or Settings, from the address (tabs.js tabOf),
- * so Back and a reload keep the tab. The sections are shown and hidden here,
- * not by Preact, so the fade can swap them between its two halves.
- */
 async function showTab() {
   const next = tabInAddress();
   const from = tab.get();
   if (next === from) return;
   const mine = ++switches;
-  // The map's code starts now, not after the fade (if a touch hasn't started it already).
   if (next === 'map') preloadMap();
   const animate = from !== null && document.visibilityState === 'visible';
   if (from !== null) scrolled[from] = window.scrollY;
   if (animate) {
     const out = fadeOut(views[from]);
     await out.finished.catch(() => {});
-    // Tapped again meanwhile: that switch draws its own tab.
     if (mine !== switches) return out.cancel();
     for (const n of TABS) views[n].hidden = n !== next;
     out.cancel();
@@ -689,7 +504,6 @@ async function showTab() {
   window.scrollTo(0, scrolled[next] ?? 0);
   if (animate) fadeIn(views[next]);
   if (next === 'map') {
-    // The map's code on its first opening, after the fade: the tab shows at once.
     loadTab(mapModule, '/app/map.js');
   } else if (next === 'buses') {
     loadTab(busesModule, '/app/buses.js');
@@ -698,25 +512,13 @@ async function showTab() {
   } else if (next === 'nearby') {
     refreshNearby();
   } else if (from !== null) {
-    // start() refreshes once it has drawn the first tab.
     refresh();
   }
 }
 
-/** Failed imports of a tab's code so far, by path. */
 const importFails = new Map();
-/** Tabs whose code is on its way, by path. */
 const importing = new Set();
 
-/**
- * A tab's code into [mod], unless it's there already or on its way. A failed
- * import is `{ failed: true }` (the tab says it needs a connection), tried
- * again the next time the tab opens or the connection comes back. Browsers
- * keep a module that failed to load as failed for the page, so a retry asks
- * for it at a new address. What the tabs both import (board.js) comes with
- * the page instead (see the imports at the top): a new address for the tab
- * wouldn't fetch it again.
- */
 async function loadTab(mod, path) {
   if ((mod.get() && !mod.get().failed) || importing.has(path)) return;
   const fails = importFails.get(path) ?? 0;
@@ -732,7 +534,6 @@ async function loadTab(mod, path) {
   }
 }
 
-/** Settings the first time (the account page's, without its preview), and fresh from the account after. */
 async function openSettings() {
   const s = settings.get();
   if (s.status === 'ready') {
@@ -746,7 +547,6 @@ async function openSettings() {
   settings.set({ status: 'loading', mod: null });
   try {
     if (!me.get()) me.set(await askMe());
-    // settings-pages.js too, at once: otherwise it's found only once settings.js arrives.
     const [mod] = await Promise.all([import('/account/settings.js'), import('/account/settings-pages.js'), loadProfile(), loadCampus()]);
     settings.set({ status: 'ready', mod });
     if (shared) mod.offerImport(shared);
@@ -756,7 +556,6 @@ async function openSettings() {
   }
 }
 
-/** A NUSMods link shared to the installed app (the manifest's share_target), if this is one. */
 function sharedLink() {
   const q = new URLSearchParams(location.search);
   const text = [q.get('url'), q.get('text'), q.get('title')].filter(Boolean).join(' ');
@@ -766,7 +565,6 @@ function sharedLink() {
 const pushable = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const OFF = t("A reminder before it's time to leave, then updates on your bus as your trip goes on.");
 const ON = t('On for this device. Notifications follow your trip, as on your other devices.');
-/** "Notify me when to leave": whether it's on, what it says, and whether it has a button. */
 const push = store({ on: false, text: OFF, button: true });
 
 function b64urlBytes(s) {
@@ -774,12 +572,10 @@ function b64urlBytes(s) {
   return Uint8Array.from(b, (c) => c.charCodeAt(0));
 }
 
-/** Subscribes this browser (asking first if needed) and tells the server where to push. */
 async function subscribe() {
   const reg = await navigator.serviceWorker.ready;
   const { key } = await api('/api/me/push/key');
   let sub = await reg.pushManager.getSubscription();
-  // A subscription made with another server key can't be pushed to: make a new one.
   const was = sub?.options?.applicationServerKey;
   if (
     sub &&
@@ -794,8 +590,6 @@ async function subscribe() {
   }
   sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlBytes(key) });
   await api('/api/me/push', { method: 'POST', body: { subscription: sub.toJSON() } });
-  // Ask for the card again now there's somewhere to push: a trip object that
-  // woke before this found no one to tell, and waits for a request to watch again.
   refresh();
 }
 
@@ -805,11 +599,6 @@ async function unsubscribe() {
   await api('/api/me/push', { method: 'DELETE' }).catch(() => {});
 }
 
-/**
- * On iPhone push only works from the Home Screen, so in Safari the install
- * card says so instead. Once allowed, every open re-sends the subscription:
- * it belongs to this sign-in, and a browser can replace it at any time.
- */
 async function setupPush() {
   if (!pushable || (iPhone && !standalone)) return;
   const perm = Notification.permission;
@@ -850,7 +639,6 @@ async function togglePush() {
       });
     }
   } catch (err) {
-    // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
     push.set({
       on: false,
       text: err.status
@@ -864,11 +652,9 @@ async function togglePush() {
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
 const CLOSE = '<path d="M6 6l12 12M18 6 6 18"/>';
 
-/** "Notify me when to leave", in Settings under Notifications, where this browser can do it. */
 function Notify() {
   const s = useStore(push);
   const [busy, setBusy] = useState(false);
-  // A group of one row, as the rest of Settings' pages (settings-pages.js Group): blocked, the row says so without a switch.
   return html`
     <div class="trips">
       <section class="trips-group">
@@ -901,7 +687,6 @@ function Notify() {
   `;
 }
 
-/** iPhone Safari only, until installed or dismissed: iOS never offers it itself. */
 function InstallHint() {
   const shown = useRef(null);
   const hidden = useStore(installDismissed);
@@ -909,10 +694,7 @@ function InstallHint() {
     let dismissed = false;
     try {
       dismissed = localStorage.getItem('install-dismissed') === '1';
-    } catch {
-      // Storage blocked: show it, and just don't remember the dismissal.
-    }
-    // Only Safari can add to the Home Screen on iOS; other iOS browsers can't be helped here.
+    } catch {}
     const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
     shown.current = iPhone && safari && !standalone && !dismissed;
   }
@@ -941,9 +723,7 @@ function InstallHint() {
           installDismissed.set(true);
           try {
             localStorage.setItem('install-dismissed', '1');
-          } catch {
-            // Not remembered; it shows again next time.
-          }
+          } catch {}
         }}
       >${t('Not now')}</button>
     </section>
@@ -951,11 +731,6 @@ function InstallHint() {
 }
 const installDismissed = store(false);
 
-/**
- * Next, each favourite, then places added from the search: the phone
- * app's chips, then Elsewhere, which opens the search. In a short window the
- * wordmark leads the row, in place of the header (app.css).
- */
 function Chips() {
   const short = useShort();
   const to = useStore(target);
@@ -987,7 +762,6 @@ function Chips() {
   `;
 }
 
-/** Go somewhere else: the search under the chips, opened focused by the search button. */
 function Where() {
   const open = useStore(searching);
   const c = useStore(campus);
@@ -995,7 +769,6 @@ function Where() {
   useEffect(() => {
     if (!open) return;
     box.current?.focus();
-    // Every stop, building, room and place, the first time it opens.
     loadCampus().catch(() => {});
   }, [open]);
   if (!open) return null;
@@ -1021,16 +794,9 @@ function Where() {
   `;
 }
 
-/** A /api/me/day item's name: the server's `title` ("Home, from UTown"); worked out here for an older server. */
 const itemTitle = (it) =>
   it.title ?? (it.kind === 'home' ? (it.fromName ? t('Home, from {0}', it.fromName) : t('Home after your last class')) : it.label);
 
-/**
- * The offline card: the day plan's next item (offline.js picks it), as the
- * Android and Mac apps show it: the class and when it starts, then its
- * leave-by in the server's own line ("Leave by ~09:36 · R2 from PGP") while
- * that's still ahead, else "Leave now" and how. A trip home says from when.
- */
 function OfflineCard({ item, step }) {
   if (step === 'home') {
     return html`
@@ -1043,7 +809,6 @@ function OfflineCard({ item, step }) {
   }
   const l = item.leave;
   const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
-  // Planned a while ago, so an estimate: the server's line already says "~".
   const line = step === 'leaveBy' && item.line ? item.line : null;
   const where = `${itemTitle(item)} · ${t('starts {0}', clock(item.startsAt))}`;
   const big = line ?? (step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now'));
@@ -1057,30 +822,17 @@ function OfflineCard({ item, step }) {
   `;
 }
 
-/** A bus stop's sign on its pole: the Stops tab's icon. */
 const STOP_SIGN = '<rect x="6" y="2.5" width="12" height="9.5" rx="2.5"/><path d="M12 12v9.5M9 21.5h6M9.5 7.25h5"/>';
 
-/** Under the signs, once: what a "~" means, only when one is showing. */
 function NearbyFoot({ stops }) {
   return anyGuess(stops) && html`<div class="nb-foot"><p>${t('~ is a guess from the timetable, not a live time.')}</p></div>`;
 }
 
-/**
- * Nearby's stops as their signs, the name plate with the walk there, then a
- * row per service read like a stop's board: where it's going, its next bus
- * and the two after, in minutes, the next one large. Every bus is shown as it
- * comes: Nearby doesn't weigh the walk there. Every sign is the same size.
- * The name opens the stop's board and a row its service's line, both in the
- * Stops tab; the star pins the stop there.
- */
 function NearbySigns({ stops }) {
   const p = useStore(profile);
-  // Until the profile has come, what's pinned isn't known: no star to read wrong, or to unpin with.
-  // Nothing else has asked for it when the app opens on Nearby (the account, not the feed).
   useEffect(() => {
     if (!profile.get()) loadProfile().catch(() => {});
   }, []);
-  // Heard once for these stops, not again on every refresh: their names.
   const names = stops.map((s) => s.stop.name).join(', ');
   return html`
     <div class="nearby">
@@ -1099,11 +851,6 @@ function NearbySigns({ stops }) {
   `;
 }
 
-/**
- * The Nearby tab (ADR 0017): its title in a band of sky, as Stops and Settings have, then
- * the stops around you as their signs, shapes until the first come, or a
- * line saying why there are none; under them, when they came.
- */
 function NearbyArea() {
   const n = useStore(nearby);
   const when = useStore(nearbyUpdated);
@@ -1117,7 +864,6 @@ function NearbyArea() {
   `;
 }
 
-/** A point on the skeleton's line: its time, its dot, and what's there with what's under it, as bars. */
 const SkPoint = ({ dot, line = null, what, below = null }) => html`
   <li class=${['pt', dot, line].filter(Boolean).join(' ')}>
     <span class="time"><${Bar} w="3.2rem" /></span>
@@ -1126,13 +872,6 @@ const SkPoint = ({ dot, line = null, what, below = null }) => html`
   </li>
 `;
 
-/**
- * Now before its first answer, drawn as a trip's card (journey.js Steps):
- * where it's for and the large "Leave in" in the sky, the bus idling on
- * the road, then the bus's line and the trip's three points. Buttons
- * aren't drawn: nothing there can be pressed yet. Its
- * "Checking…" is there to be read, not announced, as the card says itself when it comes.
- */
 function CardSkeleton() {
   return html`
     <${Skeleton} said=${t('Checking…')} quiet cls="widget">
@@ -1156,15 +895,9 @@ function CardSkeleton() {
   `;
 }
 
-/**
- * The card for what's chosen, under Now's sky (sky.js): whatever it shows,
- * its top is up in the sky and it ends on the horizon, so the sky stays as
- * the chips switch. The sky is the hour's, whatever the card says.
- */
 function CardArea() {
   const c = useStore(card);
   const bar = useStore(undo);
-  // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a =
     c.a?.card && bar?.undo
       ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } }
@@ -1185,10 +918,6 @@ function CardArea() {
   `;
 }
 
-/**
- * Under the card ("Updated 9:41 · Is this wrong?"); placed under Today when
- * they're side by side (app.css), never moved, so an open report keeps its draft.
- */
 function CardFoot() {
   const c = useStore(card);
   const to = useStore(target);
@@ -1202,16 +931,13 @@ function CardFoot() {
   `;
 }
 
-/** The last time "Go later" offers in a day. */
 const LAST_MARK = 23 * 60 + 55;
-/** Half an hour from now on campus, on a five-minute mark: where "Go later" starts. Null once that's past LAST_MARK. */
 function soonOnCampus() {
   const sgt = new Date(serverNow() + 8 * 3600_000);
   const min = Math.ceil((sgt.getUTCHours() * 60 + sgt.getUTCMinutes() + 30) / 5) * 5;
   return min <= LAST_MARK ? min : null;
 }
 const hhmmOf = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-/** The date on campus `days` from today (YYYY-MM-DD), and its weekday (0 is Sunday). */
 function campusDay(days) {
   const d = new Date(serverNow() + 8 * 3600_000 + days * 86_400_000);
   return { date: d.toISOString().slice(0, 10), weekday: d.getUTCDay() };
@@ -1220,13 +946,6 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(
 const WEEKDAYS_LONG = () => [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
 const ALERT = '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>';
 
-/**
- * Somewhere other than the plan: going there later, today or on one of the
- * next two days, planned like a class (POST /api/me/once). Settings' own rows:
- * the day as pills, the time as a stepper in five minutes whose middle is
- * the browser's own time picker. A time already past is the server's to
- * refuse, and its message shows above the buttons.
- */
 function GoLater() {
   const to = useStore(target);
   const list = useStore(places);
@@ -1234,7 +953,6 @@ function GoLater() {
   const [day, setDay] = useState(0);
   const [at, setAt] = useState(0);
   const [msg, setMsg] = useState('');
-  // Counts refusals, so the same message shakes again on another try.
   const [tries, setTries] = useState(0);
   const [sending, setSending] = useState(false);
   useEffect(() => {
@@ -1248,7 +966,6 @@ function GoLater() {
       id="go-later"
       class="btn small ghost go-later"
       onClick=${() => {
-        // Too late for anything today: tomorrow morning instead.
         const soon = soonOnCampus();
         setDay(soon === null ? 1 : 0);
         setAt(soon ?? 9 * 60);
@@ -1264,7 +981,6 @@ function GoLater() {
     setMsg('');
     setAt(Math.min(LAST_MARK, Math.max(0, min)));
   };
-  // A time off the five-minute marks (from the picker) steps to the next mark.
   const earlier = () => pick(Math.ceil(at / 5) * 5 - 5);
   const later = () => pick(Math.floor(at / 5) * 5 + 5);
   const typed = (e) => {
@@ -1274,9 +990,7 @@ function GoLater() {
   const showPicker = (e) => {
     try {
       e.currentTarget.showPicker?.();
-    } catch {
-      // Not every browser opens it on demand; typing in the field still works.
-    }
+    } catch {}
   };
   const submit = async (e) => {
     e.preventDefault();
@@ -1284,20 +998,16 @@ function GoLater() {
     const where = to.kind === 'place' ? { place: to.key } : { to: to.to, label: to.label };
     setSending(true);
     try {
-      // From where the phone is, as the card is: otherwise the first plan starts where the timetable puts you.
       const from = await here();
       const a = await api(`/api/me/once${query(from ?? {})}`, { method: 'POST', body: { ...where, atMin: at, date } });
       target.set({ kind: 'plan' });
       card.set({ a });
       refresh();
-      // The form goes with its place's chip: focus on Next, the card it's planned on.
       focusChosen();
-      // Today's trip is on the card now; a later day's isn't yet, so say where it went.
       const time = clock(`${date}T${hhmmOf(at)}:00+08:00`);
       if (day === 1) toast(t('Planned for tomorrow at {0}', time));
       else if (day > 1) toast(t('Planned for {0} at {1}', WEEKDAYS_LONG()[days[day].weekday], time));
     } catch (err) {
-      // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
       setMsg((err.status && err.message) || t("Couldn't add it. Check your connection."));
       setTries((n) => n + 1);
     } finally {
@@ -1352,16 +1062,9 @@ function GoLater() {
   `;
 }
 
-/**
- * Today's rows: the day's entries not taken off here (`gone`), and the row
- * left where one was (`bar`, the undo store), as Today draws them.
- */
 function todayRows(plan, gone, bar) {
   const items = (plan?.items ?? []).filter((it) => !gone.has(it.key));
-  // The entry just taken off keeps its place, as a row saying so with Undo.
-  // A failed removal's row sits just above the entry it's about, which is back.
   const rows = items.map((it) => ({ it }));
-  // Kept above the entry that followed it, so a refresh meanwhile doesn't move it.
   if (bar?.it) {
     const next = bar.before === null ? rows.length : rows.findIndex((r) => r.it.key === bar.before);
     rows.splice(next >= 0 ? next : Math.min(bar.at, rows.length), 0, { note: bar });
@@ -1369,7 +1072,6 @@ function todayRows(plan, gone, bar) {
   return { items, rows };
 }
 
-/** Today, from /api/me/day: each class with when to leave and how, and the trips home. */
 function Today() {
   const plan = useStore(day);
   const gone = useStore(removed);
@@ -1400,7 +1102,6 @@ function Today() {
             `;
           }
           const title = itemTitle(it);
-          // The server's line ("Leave by ~09:36 · R2 from PGP", "Not going"; none once done); worked out here for an older server.
           let sub = null;
           if (it.line !== undefined) sub = it.line;
           else if (it.status === 'skipped') sub = t('Not going');
@@ -1435,7 +1136,6 @@ function Today() {
   `;
 }
 
-/** Offline, or the card couldn't update: a status line always on the page, so it's heard when it says so. */
 function Banner() {
   const text = useStore(banner);
   useEffect(() => {
@@ -1444,12 +1144,6 @@ function Banner() {
   return html`<div class="banner-slot" role="status">${text !== null && html`<p class="offline">${text}</p>`}</div>`;
 }
 
-/**
- * The Stops tab's home before its code arrives (buses.js Home): the title
- * in its band, the search, the headings, and the pinned stop and the
- * services as shapes. Its stop's board or a line opened from elsewhere
- * draws its own shapes once the code is here.
- */
 const StopsSkeleton = () => html`
   <${Skeleton} said=${t('Loading…')}>
     <${Band}><h2 class="tab-title">${t('Stops')}</h2><//>
@@ -1479,18 +1173,12 @@ function MapArea() {
   return html`<${mod.MapTab} visible=${now === 'map'} onGoTo=${goToStop} onSaved=${refresh} />`;
 }
 
-/** A row of the list as a shape: an icon, a name and what's set. */
 const SkeletonRows = ({ n }) => html`
   <div class="set-group">
     ${Array.from({ length: n }, (_, i) => html`<div class="settings-row set-item" key=${i}><span class="set-ico skel"></span><span class="row-text"><span class="row-title skel-line"></span><span class="row-sum skel-line short"></span></span></div>`)}
   </div>
 `;
 
-/**
- * Settings before its code arrives: its title in the sky's band, as the list
- * has, then the list's shapes, and beside them a page's, under a band of its
- * own, when side by side, so nothing moves when Settings takes its place.
- */
 function SettingsSkeleton() {
   const wide = useMedia('(min-width: 800px)');
   useEffect(() => {
@@ -1530,12 +1218,10 @@ function SettingsArea() {
   if (s.status === 'failed') return html`<p class="hint">${t('Settings need a connection.')}</p>`;
   if (s.status !== 'ready') return html`<${SettingsSkeleton} />`;
   const Settings = s.mod.Settings;
-  // "Notify me when to leave" in Settings, under Notifications, where this browser can do it.
   const canNotify = pushable && !(iPhone && !standalone);
   return html`<${Settings} me=${who} inApp sky Notify=${canNotify ? Notify : null} notifyOn=${notify.on} />`;
 }
 
-/** The tabs' links, in tabs.js TABS' order. Nearby's icon is the arrow a map points where you are with. */
 const TABBAR = [
   { id: 'now', href: '#now', label: () => t('Now'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>' },
   { id: 'nearby', href: '#nearby', label: () => t('Nearby'), icon: '<path d="M20.5 3.5 3.5 10.6l6.9 3 3 6.9 7.1-17Z"/>' },
@@ -1559,7 +1245,6 @@ const TABBAR = [
   },
 ];
 
-/** Map tapped while on it: back to the whole campus, nothing open or chosen, as on the phone. */
 function mapAgain(e) {
   if (tab.get() !== 'map' || location.hash !== '#map') return;
   e.preventDefault();
@@ -1590,12 +1275,6 @@ function TabBar() {
   `;
 }
 
-/**
- * Whether Now is two columns: a wide window (docs/agents/window-sizes.md)
- * with a day to show, the card on the left and Today on the right with the
- * card's foot under it. Without a day the card stays in the 560 column. The
- * body's now-split class widens the header with it (app.css).
- */
 function useNowSplit() {
   const wide = useMedia('(min-width: 800px)');
   const plan = useStore(day);
@@ -1608,12 +1287,6 @@ function useNowSplit() {
   return split;
 }
 
-/**
- * Today beside the card, under the horizon (app.css, .now-side): out of the
- * page's flow so it starts where the sky ends, so its height and the card's
- * foot's under it are kept on Now (--side-h, --foot-h) for Now to be at
- * least as tall.
- */
 function NowSide() {
   const box = useRef(null);
   useEffect(() => {
@@ -1636,19 +1309,10 @@ function NowSide() {
   return html`<div class="now-side" ref=${box}><${Today} /></div>`;
 }
 
-/**
- * The tabs as the rail on the left, from 800 wide, in #rail ahead of the
- * wordmark (app/index.html), so the keyboard meets them first, as the eye does.
- */
 function Rail() {
   return useMedia('(min-width: 800px)') ? html`<${TabBar} />` : null;
 }
 
-/**
- * The rail's place, made ahead of the header when the page has none: the
- * service worker can pair a kept older /app/ with this script (sw.js
- * decides file by file), and drawing into nothing would stop the app.
- */
 function railRoot() {
   const found = document.getElementById('rail');
   if (found) return found;
@@ -1658,15 +1322,11 @@ function railRoot() {
   return made;
 }
 
-/** The five tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
   const split = useNowSplit();
-  // From 800 the tabs are a rail drawn ahead of the page (Rail); the bar
-  // along the bottom stays last, under the page.
   const rail = useMedia('(min-width: 800px)');
-  // Notices above the chips; in a short window, after the card and Go later, so the answer comes first.
   const short = useShort();
   const notices = html`<${InstallHint} /><${Banner} />`;
   return html`
@@ -1692,34 +1352,22 @@ function App() {
 
 async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  // A tap on a notification with the app already open: show the new card.
   navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.kind === 'refresh') refresh();
   });
-  // The kept stops and routes were answered for an account that's since signed out: as any 401 here.
   campusRefused.subscribe((refused) => refused && signedOut().catch(() => {}));
-  // The tab in the address is marked before the first frame: showTab() comes
-  // only after the awaits below, and until then a tab with its own top
-  // (Settings) would show under the header and Now's sky.
   const opening = tabInAddress();
   markTab(opening);
   render(html`<${App} />`, document.getElementById('root'));
   render(html`<${Rail} />`, railRoot());
-  // Settings' code and the account alongside the card, not after /api/me.
   if (opening === 'settings') openSettings();
-  // The plan from last time at once, if it still holds (a look in the cache),
-  // then the new one asked for alongside /api/me rather than after it.
   await drawSeen();
   const first = refresh();
-  // /api/me renews the session, so the installed app stays signed in. It keeps
-  // the same token, so the card's requests sent with it are still good.
-  // Offline it comes from the cache like everything else, or not at all.
   try {
     me.set(await askMe());
   } catch (err) {
     if (err.message === 'signed out') return;
   }
-  // Shared from NUSMods: Settings, with the link ready to import.
   shared = sharedLink();
   if (shared) history.replaceState(null, '', '/app/#settings');
   setupPush();
@@ -1728,14 +1376,11 @@ async function start() {
   await first;
   setInterval(() => nowShown() && refresh({ timed: true }), REFRESH_MS);
   document.addEventListener('visibilitychange', () => nowShown() && refresh({ timed: true, back: true }));
-  // Nearby at the card's pace, and only while it's the tab on screen.
   setInterval(() => nearbyShown() && refreshNearby({ timed: true }), REFRESH_MS);
   document.addEventListener('visibilitychange', () => nearbyShown() && refreshNearby());
-  // Back online: every open page at once, so only the ones on screen.
   window.addEventListener('online', () => {
     if (nowShown()) refresh();
     if (nearbyShown()) refreshNearby();
-    // A tab whose code failed to load, on screen: try it again.
     if (tab.get() === 'map' && mapModule.get()?.failed) loadTab(mapModule, '/app/map.js');
     if (tab.get() === 'buses' && busesModule.get()?.failed) loadTab(busesModule, '/app/buses.js');
   });
