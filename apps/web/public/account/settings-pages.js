@@ -1325,7 +1325,7 @@ export function About() {
   `;
 }
 
-const NOTE_MAX = 1000;
+export const NOTE_MAX = 1000;
 const NOTE_WARN = 900;
 
 export function Feedback({ me, onAddEmail }) {

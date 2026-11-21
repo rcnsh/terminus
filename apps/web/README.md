@@ -67,4 +67,9 @@ The tests in `test/` load the site's modules under Node (`_web.mjs` maps
 top-level code as they do on a page, with no checks for Node) and render
 pages in happy-dom (`_dom.mjs`). Some
 read the API's real campus data from `apps/api/src`, and the answers every
-client is held to from the root's `fixtures/`.
+client is held to from the root's `fixtures/`. A value the website needs
+before it has asked the server anything (the map's extent, the
+location accuracy it sends, the feedback note's length, the report's
+reasons, the route colours, the sky's hours) is a copy of the API's,
+and a test imports the API's and fails when the two differ
+(`web-copies.test.js` and others).
