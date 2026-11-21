@@ -421,9 +421,6 @@ function StopView({ code, kicker, above = null }) {
   `;
 }
 
-const routeWords = (r) =>
-  r.name ?? (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
-
 const plateName = (code) => signs.get().get(code)?.s?.stop.name ?? stopOf(code)?.name ?? code;
 
 const agedSign = (s, got, now) => ({ ...s, board: s.board.map((r) => aged(r, got, now)) });
@@ -635,7 +632,7 @@ function Lines({ routes }) {
   return html`
     <div class="card bt-services">
       ${routes.map(([svc, r]) => {
-        const name = routeWords(r);
+        const name = r.name;
         const via = r.via ?? null;
         const n = counts?.[svc] ?? null;
         return html`<button
@@ -898,7 +895,7 @@ function LinePage({ svc, stop }) {
     arrived.current = key;
     if (data.running === false && stop) window.scrollTo({ top: 0 });
   }, [key, Boolean(data)]);
-  const where = r && routeWords(r);
+  const where = r?.name;
   const head = html`
     <${Sky}>
       <${BackBar} parent="#buses" />

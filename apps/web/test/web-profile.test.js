@@ -4,7 +4,7 @@ import { useLang, web } from './_web.mjs';
 import { buildCampusMap, buildDestinations } from '../../api/src/map/campus.ts';
 import { GRAPH } from '../../api/src/answer/graph.ts';
 import { haversineM } from '../../api/src/geo.ts';
-import { residenceList, residenceWalkMin as serverWalkMin } from '../../api/src/answer/residences.ts';
+import { residenceList } from '../../api/src/answer/residences.ts';
 import classBus from '../../../fixtures/answers/class-bus.json' with { type: 'json' };
 import riding from '../../../fixtures/answers/riding.json' with { type: 'json' };
 import ridingZh from '../../../fixtures/answers/zh/riding.json' with { type: 'json' };
@@ -89,15 +89,6 @@ test('a residence is found from its home stops, in any order, and only from exac
   assert.equal(P.residenceFor([]), null);
   assert.equal(P.residenceFor(['NOT-A-STOP']), null);
   assert.equal(P.residenceFor([...CAMPUS.residences[0].stops, 'COM3']), null);
-});
-
-test("a residence's walk in minutes is /campus's, and worked out the same way from an older answer", () => {
-  for (const r of CAMPUS.residences) {
-    assert.equal(P.residenceWalkMin(r), r.walkMin, r.name);
-    const { walkMin: _old, ...older } = r;
-    assert.equal(P.residenceWalkMin(older), serverWalkMin(r.walkM), r.name);
-  }
-  assert.equal(P.residenceWalkMin({ walkM: 10 }), 1);
 });
 
 test('a favourite is called what was picked, keyed from its name, one per place', () => {

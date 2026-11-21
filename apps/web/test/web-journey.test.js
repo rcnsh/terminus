@@ -171,28 +171,6 @@ test("every line the server sent is shown as it is, even when it's nothing", () 
     if (j.byText !== undefined && a.leave?.at)
       assert.equal(J.by(a, j, Date.parse(a.leave.at) - 60_000), j.byText, `${lang}/${name} byText`);
   }
-  assert.equal(
-    J.said({ walkText: null, walk: '5 min' }, 'walkText', () => 'worded here'),
-    null,
-  );
-  assert.equal(
-    J.said({ walk: '5 min' }, 'walkText', () => 'worded here'),
-    'worded here',
-  );
-});
-
-test('an answer from before the server sent its lines is worded here as the server words them', () => {
-  for (const [, name, a] of answers().filter(([l]) => l === 'en')) {
-    useLang('en');
-    const j = a.card.journey;
-    if (j.change) continue;
-    const old = Object.fromEntries(Object.entries(j).filter(([k]) => !(k in LINES) && k !== 'byText'));
-    for (const [key, show] of Object.entries(LINES)) {
-      if (j[key] === undefined) continue;
-      assert.equal(show(a, old), j[key], `${name} ${key}`);
-    }
-    if (a.leave?.at && j.leave) assert.equal(J.by(a, old, Date.parse(a.leave.at) - 60_000), j.byText, `${name} byText`);
-  }
 });
 
 test("the livery (drawn before sign-in, with no /api/campus to ask) has the API's colours", async () => {

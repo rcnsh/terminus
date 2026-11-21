@@ -1,22 +1,12 @@
 import { Bar, Icon, Skeleton, html, store, useStore, widthOf } from '/assets/ui.js';
 import { PIN_COUNT_KEY, inkOn, t } from '/account/dom.js';
 import { togglePin } from '/account/profile.js';
-import { NEXT, Row, STAR, colorOf, saidRow, svcVars } from '/app/board.js';
-
-const mins = (s) => Math.round(s / 60);
+import { NEXT, Row, STAR, colorOf, etaText as minutesText, saidRow, svcVars } from '/app/board.js';
 
 const BUS =
   '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
 
-const etaText = (b) =>
-  b.etaS == null
-    ? '–'
-    : (b.eta ??
-      (b.quality === 'scheduled' || b.quality === 'stale'
-        ? t('~{0}', t('{0} min', Math.max(1, mins(b.etaS))))
-        : b.etaS < 45
-          ? t('Arriving')
-          : t('{0} min', mins(b.etaS))));
+const etaText = (b) => (b.etaS == null ? '–' : (b.eta ?? minutesText(b.etaS, b.quality)));
 
 export const anyGuess = (stops) =>
   stops
@@ -38,7 +28,7 @@ function SignTime({ bus, first }) {
 function SignDest({ b }) {
   if (!b.dest) {
     const end = b.towards?.at(-1);
-    return html`<span class="nb-to" aria-hidden="true">${end ? t('to {0}', end) : (b.toText ?? t('Ends here'))}</span>`;
+    return html`<span class="nb-to" aria-hidden="true">${end ? t('to {0}', end) : b.toText}</span>`;
   }
   const i = b.destPlace ? b.dest.indexOf(b.destPlace) : -1;
   if (i < 0) return html`<span class="nb-to" aria-hidden="true">${b.dest}</span>`;

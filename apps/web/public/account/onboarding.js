@@ -6,7 +6,6 @@ import {
   limit,
   profile,
   ResidenceOptions,
-  residenceWalkMin,
   residencesByName,
   saveNow,
   stopName,
@@ -209,7 +208,7 @@ function Home({ nav }) {
     setMode(r ? 'hall' : 'off');
     if (!r) return;
     setStop(r.stops[0]);
-    setWalk(String(residenceWalkMin(r)));
+    setWalk(String(r.walkMin));
     setMsg(t("Stops for {0} added. The app won't direct you home when you're already there.", r.name));
   };
   const locate = () => {

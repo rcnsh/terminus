@@ -32,7 +32,6 @@ export function Quality({ r }) {
 
 export function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  if (r.eta == null && r.etaS < 60 && !approx(r.quality)) return html`<span class="bt-big now">${t('Arriving')}</span>`;
   const parts = (r.eta ?? etaText(r.etaS, r.quality)).split(/(\d+)/).filter(Boolean);
   if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
@@ -42,7 +41,7 @@ const minutesSaid = (s) => (Math.round(s / 60) === 1 ? t('1 minute') : t('{0} mi
 
 export function saidRow(b) {
   const end = b.towards?.at(-1);
-  const where = b.dest ? b.dest.replaceAll('\u00a0', ' ') : end ? t('to {0}', end) : (b.toText ?? t('Ends here'));
+  const where = b.dest ? b.dest.replaceAll('\u00a0', ' ') : end ? t('to {0}', end) : b.toText;
   const buses = [b, b.later?.[0], b.later?.[1]].map((bus, i) => {
     if (bus?.etaS == null) return null;
     if (bus.quality === 'live' && bus.etaS < 45) return i ? t('then {0}', t('Arriving')) : t('Arriving');
@@ -74,9 +73,7 @@ export const thenText = (r) =>
     : '');
 
 export function Dest({ r }) {
-  const to = r.towards;
-  if (to == null) return r.toText ?? t('Ends here');
-  return to.length ? to[to.length - 1] : t('Ends here');
+  return r.towards.at(-1) ?? t('Ends here');
 }
 
 const NextStop = ({ r }) => (r.towards?.length === 2 ? html`<span class="bt-next">${t('Next stop {0}', r.towards[0])}</span>` : null);

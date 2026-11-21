@@ -368,7 +368,7 @@ test('an estimate under a minute is ~1 min, never Arriving, which would pass for
   const aged = (quality) => B.aged({ svc: 'A1', etaS: 60, eta: '1 min', quality, later: [] }, got, got + 40_000);
   assert.equal(text(Board.Big({ r: aged('scheduled') })), '~1 min');
   assert.equal(text(Board.Big({ r: aged('live') })), '~1 min');
-  assert.equal(text(Board.Big({ r: { svc: 'A1', etaS: 20, quality: 'live', later: [] } })), 'Arriving');
+  assert.equal(text(Board.Big({ r: { svc: 'A1', etaS: 20, eta: 'now', quality: 'live', later: [] } })), 'now');
 });
 
 test("a Nearby row is said as the apps say it: the line, where it's going, each bus, never a tilde", async () => {

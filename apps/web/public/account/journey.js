@@ -77,38 +77,16 @@ export function spokenJourney(a, now) {
   return sentences([to(a, j), head, bus, j.change?.changeText, j.change && secondBus(j.change), a.card.late ? arrive(j) : null]);
 }
 
-export const said = (j, key, old) => (j[key] !== undefined ? j[key] : old());
+export const by = (a, j, now) => (a.card.phase !== 'waiting' && a.leave && j.leave && now < Date.parse(a.leave.at) ? j.byText : null);
 
-export const by = (a, j, now) =>
-  a.card.phase !== 'waiting' && a.leave && j.leave && now < Date.parse(a.leave.at) ? said(j, 'byText', () => t('by {0}', j.leave)) : null;
-
-export const to = (a, j) =>
-  said(j, 'title', () => [t('To {0}', j.to), a.card.kind === 'class' && a.timing ? startsAt(a) : null].filter(Boolean).join(' · '));
-
+export const to = (a, j) => j.title;
 export const startsAt = (a) => t(a.dest?.place ? 'arrive by {0}' : 'starts {0}', clock(a.timing.classAt));
-
-export const arrive = (j) =>
-  said(j, 'arriveText', () => (j.arrive ? [t('Arrive {0}', j.arrive), j.slack].filter(Boolean).join(' · ') : null));
-
-export const arriveWhere = (j) =>
-  said(j, 'arriveWhere', () => (j.walkEnd ? t('{0} walk from {1}', j.walkEnd, j.toStop) : t('at {0}', j.toStop)));
-
-export const walkText = (j) => said(j, 'walkText', () => (j.walk ? t('{0} walk', j.walk) : null));
-export const walkEndText = (j) => said(j, 'walkEndText', () => (j.walkEnd ? t('{0} walk', j.walkEnd) : null));
-
-export const rideText = (j) =>
-  said(j, 'rideText', () => [j.ride && t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ') || null);
-
-export const backup = (a, j) =>
-  said(j, 'backupText', () =>
-    !j.bus
-      ? j.why
-      : j.backup
-        ? a.card.kind === 'class'
-          ? t('Or go now: {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop)
-          : t('Or {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop)
-        : null,
-  );
+export const arrive = (j) => j.arriveText;
+export const arriveWhere = (j) => j.arriveWhere;
+export const walkText = (j) => j.walkText;
+export const walkEndText = (j) => j.walkEndText;
+export const rideText = (j) => j.rideText;
+export const backup = (a, j) => j.backupText;
 
 export function busIn(j, now) {
   if (!j.boardAt) return null;
