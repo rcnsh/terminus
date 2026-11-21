@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 const SCRIPTS = fileURLToPath(new URL('../scripts/data/', import.meta.url));
 const python = spawnSync('python3', ['--version']).status === 0;
+const skip = process.env.TERMINUS_SKIP_PYTHON === '1' && 'TERMINUS_SKIP_PYTHON=1';
 
 function py(code) {
+  assert.ok(python, 'python3 is not on PATH: install it, or set TERMINUS_SKIP_PYTHON=1 to skip the scraper tests');
   const res = spawnSync('python3', ['-I', '-c', `import sys, json\nsys.path.insert(0, ${JSON.stringify(SCRIPTS)})\n${code}`], {
     encoding: 'utf8',
     env: { PATH: process.env.PATH, LTA_ACCOUNT_KEY: 'test-lta-key' },
@@ -45,7 +47,7 @@ def attempt(fn):
         return f"{type(e).__name__}: {e}"
 `;
 
-test('the scrapers that send keys refuse every redirect, and send nothing on', { skip: !python }, () => {
+test('the scrapers that send keys refuse every redirect, and send nothing on', { skip }, () => {
   const out = py(`${SERVER}
 import scrape_lta, scrape_stops
 scrape_lta.BASE = base + "/"
@@ -63,7 +65,7 @@ print(json.dumps({"lta": lta, "stops": stops, "hits": hits}))
   );
 });
 
-test('the other scrapers refuse a redirect to plain http', { skip: !python }, () => {
+test('the other scrapers refuse a redirect to plain http', { skip }, () => {
   const out = py(`${SERVER}
 import route_shapes, fetch_calendar, walk_routes
 r = {}
@@ -75,7 +77,7 @@ print(json.dumps({"r": r, "hits": [h["path"] for h in hits]}))
   assert.ok(!out.hits.includes('/landed'));
 });
 
-test('every scraper caps the bytes it reads, and the LTA scraper the pages', { skip: !python }, () => {
+test('every scraper caps the bytes it reads, and the LTA scraper the pages', { skip }, () => {
   const out = py(`${SERVER}
 import scrape_lta, scrape_stops, fetch_calendar, walk_routes
 for m in (scrape_lta, scrape_stops, fetch_calendar, walk_routes):
@@ -100,7 +102,7 @@ print(json.dumps(r))
   assert.equal(out.more.pageHits, 3);
 });
 
-test("scrape_stops takes the version the Worker sends, and keeps the secret when it can't", { skip: !python }, () => {
+test("scrape_stops takes the version the Worker sends, and keeps the secret when it can't", { skip }, () => {
   const out = py(`import http.server, threading, os, io, contextlib, socket
 import scrape_stops
 hits = []
@@ -167,7 +169,7 @@ print(json.dumps({"r": r, "hits": hits}))
   assert.ok(hits.every((h) => h.token));
 });
 
-test('route_shapes asks only the Overpass project itself', { skip: !python }, () => {
+test('route_shapes asks only the Overpass project itself', { skip }, () => {
   const out = py(`import route_shapes
 print(json.dumps({"url": route_shapes.OVERPASS, "mirrors": hasattr(route_shapes, "MIRRORS")}))`);
   assert.deepEqual(out, { url: 'https://overpass-api.de/api/interpreter', mirrors: false });
@@ -213,17 +215,17 @@ print(json.dumps(problems))
 `);
 }
 
-test('check_scraped.py passes the committed data', { skip: !python }, () => {
+test('check_scraped.py passes the committed data', { skip }, () => {
   assert.deepEqual(checked(''), []);
 });
 
-test('check_scraped.py fails a stop moved more than 100 m, but not 50 m', { skip: !python }, () => {
+test('check_scraped.py fails a stop moved more than 100 m, but not 50 m', { skip }, () => {
   assert.match(checked('g["stops"][0]["lat"] += 0.001').join('\n'), /^stops moved more than 100 m: \S+ \(111 m\)$/m);
   assert.deepEqual(checked('g["stops"][0]["lat"] += 0.0005'), []);
   assert.match(checked('p["stops"][0]["lon"] -= 0.002').join('\n'), /public stops moved more than 100 m/);
 });
 
-test('check_scraped.py fails a route that runs another way; a new route passes', { skip: !python }, () => {
+test('check_scraped.py fails a route that runs another way; a new route passes', { skip }, () => {
   assert.match(checked('g["routes"][r] = g["routes"][r][::-1]').join('\n'), /^route \S+ changed: /m);
   assert.match(checked('g["routes"][r] = g["routes"][r][:-1]').join('\n'), /^route \S+ changed/m);
   assert.match(
@@ -233,13 +235,13 @@ test('check_scraped.py fails a route that runs another way; a new route passes',
   assert.deepEqual(checked('g["routes"]["NEW"] = g["routes"][r][:2]'), []);
 });
 
-test('check_scraped.py fails a short list that loses one item', { skip: !python }, () => {
+test('check_scraped.py fails a short list that loses one item', { skip }, () => {
   assert.match(checked('del g["routes"][r]').join('\n'), /^routes: \S+ gone$/m);
   assert.match(checked('del p["routes"][pr]; del p["along"][pr]').join('\n'), /^public routes: \S+ gone$/m);
   assert.match(checked('p["stops"] = p["stops"][1:]').join('\n'), /^public stops: \d+ gone$/m);
 });
 
-test('check_scraped.py fails a name that is not plain', { skip: !python }, () => {
+test('check_scraped.py fails a name that is not plain', { skip }, () => {
   assert.match(checked('g["stops"][0]["name"] = "<b>COM 3</b>"').join('\n'), /has an odd name/);
   assert.match(checked('g["stops"][0]["longName"] = "Go to evil.example"').join('\n'), /has an odd name/);
   assert.match(checked('g["stops"][0]["longName"] = "COM 3\\u0007"').join('\n'), /has an odd name/);
@@ -248,7 +250,7 @@ test('check_scraped.py fails a name that is not plain', { skip: !python }, () =>
   assert.deepEqual(checked('g["stops"][0]["longName"] = "电脑 3"; cal["holidays"][-1]["name"] = "春节 (Observed)"'), []);
 });
 
-test('check_scraped.py holds the calendar to calendarsync.ts valid()', { skip: !python }, () => {
+test('check_scraped.py holds the calendar to calendarsync.ts valid()', { skip }, () => {
   assert.match(checked('cal["holidays"][0]["date"] = "2026-02-30"').join('\n'), /holiday .* is malformed/);
   assert.match(checked('cal["holidays"] = cal["holidays"][:4]').join('\n'), /only 4 holidays/);
   assert.match(checked('cal["semesters"][-1]["start"] = "2027-06-22"').join('\n'), /is malformed/, 'a Tuesday');
@@ -264,7 +266,7 @@ test('check_scraped.py holds the calendar to calendarsync.ts valid()', { skip: !
   assert.deepEqual(checked('cal["semesters"].append({"acadYear": "2027/2028", "semester": 1, "start": "2027-08-09"})'), []);
 });
 
-test('check_scraped.py fails a semester moved, or many holidays to come gone', { skip: !python }, () => {
+test('check_scraped.py fails a semester moved, or many holidays to come gone', { skip }, () => {
   assert.match(
     checked('cal["semesters"][1]["start"] = "2027-01-18"').join('\n'),
     /semester 2026\/2027 2 moved from 2027-01-11 to 2027-01-18/,
