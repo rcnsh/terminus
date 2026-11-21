@@ -1,9 +1,3 @@
-/**
- * Every path the API answers and its operations (openapi.ts puts them in the
- * spec). Built afresh on each call, since openapi.ts adds the common errors
- * to what it returns.
- */
-
 import {
   stoppedParam,
   publicParam,
@@ -21,7 +15,6 @@ import {
   answerExample,
 } from './parts.ts';
 
-/** One stop's board as Nearby shows it: /api/me/nearby and /api/me/stops. */
 const nearbyStop = (): Record<string, unknown> => ({
   type: 'object',
   properties: {
@@ -753,7 +746,6 @@ export function paths(): Record<string, unknown> {
           'Send the anonymous token (if the app has one) as `Authorization: Bearer` to keep its setup. Then poll `/api/auth/app/poll`. ' +
           'One email per address per minute, a website sign-in’s included; a request lasts 15 minutes. After “This wasn’t me” on the approval page, the address takes no app sign-ins for 6 hours (403).',
         operationId: 'appStart',
-        // The anonymous token is optional.
         security: [{}, { bearer: [] }],
         requestBody: jsonBody(
           {
@@ -2074,7 +2066,6 @@ export function paths(): Record<string, unknown> {
         summary: 'Sign out',
         description: 'Ends this session (a browser’s, or a device token) and clears the cookie.',
         operationId: 'logout',
-        // Signed out already is fine: there is nothing to end.
         security: [{}, { bearer: [] }, { cookie: [] }],
         responses: {
           '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),

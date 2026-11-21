@@ -147,7 +147,7 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   `scripts/strings.py` fills in what Android or the Mac already says, and
   `--check` (in CI) fails on anything missing.
 - Place and service names (KR MRT, COM3, D2) stay English in both.
-- One glossary for all of it, at the top of `src/i18n.ts` (class 课, stop
+- One glossary for all of it, "In Chinese" in [GLOSSARY.md](docs/GLOSSARY.md) (class 课, stop
   车站, favourite 收藏, packed 很挤, email address 邮箱, …), with a space
   between Chinese and Latin letters or digits. When you change a word,
   change it everywhere.

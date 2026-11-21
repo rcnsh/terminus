@@ -1,5 +1,3 @@
-/** What the spec's paths and schemas share: parameters, responses and the example answer. */
-
 export const quality = {
   type: 'string',
   enum: ['live', 'scheduled', 'unknown', 'stale', 'ended'],
@@ -11,7 +9,6 @@ export const quality = {
     '`ended`: the service is outside its operating hours.',
 };
 
-/** `?stopped=1`: the services not running now too, for the Buses tab. */
 export const stoppedParam = {
   name: 'stopped',
   in: 'query',
@@ -21,7 +18,6 @@ export const stoppedParam = {
   schema: { type: 'string', enum: ['1'] },
 };
 
-/** `?public=1`: the public buses too, as an account's `publicBuses` does for `/api/me/*`. */
 export const publicParam = {
   name: 'public',
   in: 'query',
@@ -68,7 +64,6 @@ export const ok = (schema: Record<string, unknown>, example?: Record<string, unk
   content: { 'application/json': { schema, ...(example ? { example } : {}) } },
 });
 
-/** A 201: something was made. */
 export const created = (schema: Record<string, unknown>, example?: Record<string, unknown>) => ({
   ...ok(schema, example),
   description: 'Created',
@@ -83,13 +78,11 @@ export const RETRY_AFTER = {
   'Retry-After': { description: 'Seconds to wait before trying again.', schema: { type: 'integer', example: 60 } },
 };
 
-/** A 429 that always says how long to wait. */
 export const slowDown = (description: string) => ({
   ...errorResponse(description, { error: 'too many requests, slow down' }),
   headers: RETRY_AFTER,
 });
 
-/** `?lang=`: the language the server writes in, on the routes that write words. */
 export const langParam = {
   name: 'lang',
   in: 'query',
@@ -98,7 +91,6 @@ export const langParam = {
   schema: { type: 'string', enum: ['en', 'zh'] },
 };
 
-/** `?h12=1`: 12-hour clock times on the routes that write them. */
 export const h12Param = {
   name: 'h12',
   in: 'query',
@@ -107,7 +99,6 @@ export const h12Param = {
   schema: { type: 'string', enum: ['1'] },
 };
 
-/** What every answer route can say before it answers: no key, or too many requests. */
 export const KEYED_ERRORS = {
   '401': {
     ...errorResponse(
@@ -123,7 +114,6 @@ export const KEYED_ERRORS = {
   ),
 };
 
-/** Every /download/* route, on a server with no R2 bucket. */
 export const DOWNLOADS_OFF = errorResponse('Downloads are not set up on this server.', { error: 'downloads are not configured' });
 
 export const answerExample = {

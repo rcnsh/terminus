@@ -1,9 +1,3 @@
-/**
- * Distance on the Earth's surface. A leaf module: it imports nothing, so
- * resolve.ts, walk.ts and residences.ts can all use it without importing
- * each other in a circle.
- */
-
 const EARTH_R = 6_371_000;
 const rad = (d: number) => (d * Math.PI) / 180;
 

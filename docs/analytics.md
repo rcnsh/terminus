@@ -6,13 +6,22 @@ Dataset: `terminus` (the beta's is `terminus_beta`). Analytics Engine
 names columns only by position (`blob1`..`blob20`, `double1`..`double20`),
 and `blob1` is always the row's kind. Which field each kind keeps where is
 declared once, in `ROWS` in `src/analytics-rows.ts`: the Worker writes and
-reads the rows through it, so read a column's number there, with what it
-holds and its placeholder (-1 for unknown, '' for none) beside it. Kinds
+reads the rows through it, so read a column's number there (`COL`), and
+what it holds and its placeholder (-1 for unknown, '' for none) in the
+kind's section below. A `null` in `ROWS` is a column the kind keeps empty
+so the ones after it stay where queries already read them. Kinds
 give `blob2` on and `double1` on their own meanings. Rows already written
 can't be rewritten (they are kept about three months), so existing
-positions never move: a new field takes a position unused within its own
-kind and by any kind read in the same query (`arrival` and `board`). Each
+positions never move, get renamed into another meaning or go: a new field
+takes a position unused within its own
+kind and by any kind read in the same query (`arrival` and `board`,
+`answer` and `arrival`). Every field is required when writing, so a logger
+that drops one fails tsc rather than writing a believable '' or 0; a kind's
+`optional` fields may be left out. `writeRow` never throws. Each
 kind has a section below (`analytics-rows.test.js` checks).
+`analytics-rows.ts` sits at the top of `src`, not in `ops/`, so the feed
+code, which imports nothing from `src`'s folders, writes its failures
+through the same table.
 
 The queries here have no time bound unless they say so, so they read all
 three months; add `AND timestamp > NOW() - INTERVAL '7' DAY` for less.
@@ -25,6 +34,26 @@ logged, and neither are their `arrival` rows. Each answer also writes an
 `arrival` row for each timed bus at its stop (at most 8), with the bus's
 plate, crowd and berth, and the answer's stop, destination, quality,
 confidence and whether a location was sent. `index1` is the stop.
+
+- `answer` blobs: `stop` (the boarding stop, `none` when there is none),
+  `svc` ('' on an ended answer or with no bus), `dest` ('' for a bare
+  `/api/next`), `quality` (`live`, `scheduled`, `unknown`, `stale`,
+  `ended`), blob6 empty (the plate, on an `arrival` row), `crowd` (`low`,
+  `medium`, `high` or ''), blob8 empty, `berth` (the raw `busStopCode`),
+  `via` (the stop a trip changes buses at) and `svc2` (the bus after the
+  change), both '' on one bus.
+- `answer` doubles: double1 is 0 (`etaS`, on an `arrival` row), then
+  `boardS` (seconds until you can board), `rideS`, `totalS`, `hops`,
+  `walkS` (the walk to the boarding stop), all -1 with no bus;
+  `confidence` in the stop chosen (0..1), `ambiguousBerth` and `hadCoords`
+  (0 or 1), `walkAllS` (the whole-way walk, -1 when unknown) and
+  `changeWaitS` (the wait for the bus after a change, -1 on one bus).
+- `arrival` and `board` share their blobs: the answer's stop (a board's
+  own), `svc`, `dest` ('' on a board), the answer's `quality` (`live` on a
+  board), `plate`, `crowd`, blob8 empty, and `berth`, so a route's first
+  stop ends `-S`. An `arrival`'s doubles are the answer's, but double1 is
+  the bus's `etaS`, with `boardS`..`walkS` and `walkAllS` -1 and
+  `ambiguousBerth` 0. A `board` row (`logBoard`) has `etaS` alone.
 
 ## Is the direction algorithm right?
 

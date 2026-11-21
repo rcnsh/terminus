@@ -1,10 +1,3 @@
-/**
- * A user's saved setup, and the planner that turns it into "where next".
- *
- * The profile is one JSON document. It is validated in full on every write,
- * so the planner can trust what it reads back.
- */
-
 import { type TimetableClass, venueToStop } from './nusmods.ts';
 import { sgt } from '../config.ts';
 import type { Timing, Why } from '../types.ts';
@@ -21,81 +14,48 @@ import { LANG_PREFS, type LangPref, m } from '../i18n.ts';
 export interface Place {
   key: string;
   label: string;
-  /** Destination stop code. */
   to: string;
 }
 
 export interface UsualTime {
-  /** The favourite's key. */
   place: string;
-  day: number; // 0=Sun..6=Sat
-  atMin: number; // minutes past midnight SGT, when to be there
+  day: number;
+  atMin: number;
 }
 
 export interface OnceTrip {
-  date: string; // YYYY-MM-DD, Singapore
+  date: string;
   arriveByMin: number;
   to: string;
   label: string;
 }
 
-/** A usual time or a one-off counts as an hour there, for what comes after it. */
 export const PLACE_STAY_MIN = 60;
 
-/**
- * Home is stops only. Exact coordinates of where someone lives are more than
- * the planner needs, and not something to keep for strangers.
- */
 export interface Home {
-  /** Usual boarding stops near home, best first. */
   stops: string[];
 }
 
 export interface Profile {
   home: Home | null;
-  /** A gap between classes longer than this sends you home in between. */
   gapHours: number;
-  /** Outside [dayStartMin, dayEndMin) the planned answer rests. Minutes
-   *  past midnight SGT. */
   dayStartMin: number;
   dayEndMin: number;
-  /** Walk from home to the home stop. Counts when a trip starts from home
-   *  and the client sends no location. */
   homeWalkMin: number;
-  /** How fast you walk. Scales every walk except homeWalkMin, which is yours. */
   walkPace: Pace;
-  /** Aim one bus earlier when the bus you'd wait for is often busy. */
   fullBusMargin: boolean;
-  /** Count the public buses (95, 151, ...) at the campus's stops too. They have a fare, so off until asked for. */
   publicBuses: boolean;
-  /** A minute on foot counts for more than one at the stop (WALK.sunWeight); off, they count the same. */
   preferBus: boolean;
-  /** One-time screens already shown (the web onboarding, "new: walking pace"). */
   seen: string[];
-  /** From the NUSMods import. Replaced wholesale on re-import. */
   trips: TimetableClass[];
-  /** Entered by hand. Survives a re-import. */
   manual: TimetableClass[];
   places: Place[];
-  /** Favourites with a usual time: "Gym, Tuesdays 18:00". Each
-   *  is a trip on that day like a class, arriving by `atMin`. Kept apart from
-   *  `places`, keyed by the place's key, so an older app rewriting the places
-   *  can't drop them; one whose place is gone is ignored. */
   usual: UsualTime[];
-  /** One-off trips: "Science library at 14:00 today". A trip on
-   *  its date only, like a class. Past dates are dropped when the profile is
-   *  saved. */
   once: OnceTrip[];
-  /** The NUSMods share link, kept so next semester is one click. */
   share: string | null;
-  /** The semester `trips` were imported for. Null until something is imported. */
   term: Term | null;
-  /** The language terminus speaks: 'auto' follows each device. */
   lang: LangPref;
-  /** 12- or 24-hour times; 'auto' follows each device. */
   clock: ClockPref;
-  /** Stops pinned to the Buses tab, in the user's order: shuttle stops, or
-   *  public stops by LTA's code. */
   pinnedStops: string[];
 }
 
@@ -134,15 +94,9 @@ export const PROFILE_LIMITS = {
   usual: 30,
   once: 10,
   pinnedStops: 8,
-  /** Minutes from home to the home stop, inclusive. */
   homeWalkMin: { min: 0, max: 30 },
 } as const;
 
-/**
- * The limits as the profile endpoints send them (`limits`), so the apps'
- * pickers and fields stop at the same place the server does, instead of
- * each keeping its own copy of these numbers.
- */
 export function profileLimits() {
   const l = PROFILE_LIMITS;
   return {
@@ -163,15 +117,9 @@ type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
-/** A name on one line: it goes into card lines and notification titles. Control characters count as spaces. */
 // oxlint-disable-next-line no-control-regex
 const oneLine = (v: string): string => v.replace(/[\s\x00-\x1f\x7f]+/g, ' ').trim();
 
-/**
- * Validates a whole profile. Missing fields take their defaults, so a client
- * can send only what it knows about; anything present must be well formed.
- * `isPinnable` admits the public-only stops too, which a pin may name.
- */
 export function parseProfile(
   raw: unknown,
   isStop: (code: string) => boolean,
@@ -183,7 +131,6 @@ export function parseProfile(
 
   if (raw.home !== undefined && raw.home !== null) {
     const h = raw.home;
-    // Older clients also send lat/lon; they are accepted and dropped.
     if (!isObj(h)) return { ok: false, error: 'home must be {stops: [...]}' };
     const stops = h.stops ?? [];
     if (!Array.isArray(stops) || stops.length > PROFILE_LIMITS.homeStops || !stops.every((s) => typeof s === 'string' && isStop(s))) {
@@ -333,7 +280,6 @@ export function parseProfile(
       return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
     for (const [i, o] of list.entries()) {
       const bad = (why: string): Result => ({ ok: false, error: `once[${i}]: ${why}` });
-      // A real day: 2026-13-45 is never today, so a save would never drop it.
       if (!isObj(o) || !isDate(o.date)) return bad('date must be YYYY-MM-DD');
       if (!isInt(o.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
       if (typeof o.to !== 'string' || !isPlace(o.to)) return bad('to must be a known stop or place code');
@@ -359,12 +305,10 @@ export function parseProfile(
   return { ok: true, profile: p };
 }
 
-/** undefined = absent, false = malformed. */
 function parseWeeks(v: unknown): LessonWeeks | undefined | false {
   if (v === undefined) return undefined;
   if (Array.isArray(v)) return v.length <= 20 && v.every((w) => isInt(w, 1, 20)) ? (v as number[]) : false;
   if (!isObj(v)) return false;
-  // Real days, in order: a lesson on days that don't exist would silently never run.
   if (!isDate(v.start) || !isDate(v.end) || v.start > v.end) return false;
   const out: LessonWeeks = { start: v.start, end: v.end };
   if (v.weekInterval !== undefined) {
@@ -378,15 +322,9 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
   return out;
 }
 
-/**
- * The classes actually on for the SGT day containing `atMs`: manual entries
- * every week, imported ones only when the academic calendar says they run.
- */
 export function classesOn(profile: Profile, atMs: number): TimetableClass[] {
   const day = sgt(atMs).day;
   const date = sgtDate(atMs);
-  // Places at their usual time and one-off trips are trips like classes: an
-  // hour there, then whatever comes next.
   const stay = (arriveByMin: number) => Math.min(1440, arriveByMin + PLACE_STAY_MIN);
   const usual = (profile.usual ?? []).flatMap((u) => {
     const pl = u.day === day ? profile.places.find((p) => p.key === u.place) : undefined;
@@ -415,11 +353,6 @@ export function classesOn(profile: Profile, atMs: number): TimetableClass[] {
 
 export type ReimportReason = 'ended';
 
-/**
- * Why the imported timetable needs a fresh import, or null when it doesn't:
- * 'ended' once its semester (exams included) is over and the classes will
- * never run again.
- */
 export function reimportReason(profile: Profile, nowMs: number): ReimportReason | null {
   if (!profile.trips.length || !profile.term) return null;
   return termEnded(profile.term, nowMs) ? 'ended' : null;
@@ -432,51 +365,29 @@ export function needsReimport(profile: Profile, nowMs: number): boolean {
 export type NextTripWhy = Exclude<Why, 'place'>;
 
 export interface NextTrip {
-  /** Destination stop code. */
   to: string;
   label: string;
   why: NextTripWhy;
-  /** Where you are assumed to be when the client sends no location. */
   from: string | null;
-  /** The class this trip is about, when there is one. */
   trip: TimetableClass | null;
-  /** The room you're leaving, when `from` is the last class's stop: the walk
-   *  from it to the stop counts. Null when starting from home. */
   fromVenue: string | null;
-  /** Home after the last class: when that class ends, minutes past midnight. */
   lastEndMin?: number;
 }
 
-/** A class stays the target this long after it starts: you may still be on
- *  the way, and "next: the 14:00" would be wrong while you're on the bus. */
 export const LATE_GRACE_MIN = 15;
-/** With no location and no bus planned for the trip home, you're taken to be
- *  home this long after the last class ends (with one, see homeBy); until
- *  then the answer is the trip home. */
 export const HOME_BY_MIN = 60;
 
-/** Which of today's classes a trip signal is about. Stable for the day. */
 export function classKey(t: TimetableClass): string {
   return `${t.day}:${t.arriveByMin}:${t.to}`;
 }
 
-/** What the day's trip signals say about today's classes. */
 export interface DayState {
-  /** "Not going": dropped for today. */
   skipped: ReadonlySet<string>;
-  /** Reached (you said so, or were seen there): no longer the target. */
   done: ReadonlySet<string>;
-  /** Its bus was missed and nothing since says you got there: not where you're coming from. */
   missed?: ReadonlySet<string>;
-  /** When each trip home's planned bus has got you home (epoch ms), by trip key. */
   homeBy?: ReadonlyMap<string, number>;
 }
 
-/**
- * The trip home after `prev` that has already taken you there, by its key:
- * seen home, or its planned bus has had time to (homeBy). Then whatever comes
- * next today starts from home, however short the gap. Null when it hasn't.
- */
 export function homeAfter(prev: TimetableClass, state: DayState, nowMs: number): string | null {
   for (const key of [`home:${endOf(prev)}`, `gap-home:${prev.to}`])
     if (state.done.has(key) || (state.homeBy?.get(key) ?? Infinity) <= nowMs) return key;
@@ -485,18 +396,8 @@ export function homeAfter(prev: TimetableClass, state: DayState, nowMs: number):
 
 export const NO_DAY_STATE: DayState = { skipped: new Set(), done: new Set() };
 
-/** During a long gap, switch back from "home" to "next class" this long
- *  before the class starts. */
 export const GAP_RETURN_MIN = 60;
-/** Classes with no known end are assumed to last this long. */
 const DEFAULT_CLASS_MIN = 60;
-/**
- * NUS classes end about half an hour before the timetable's end time, to
- * leave time to get to the next one. What comes after a class (the trip home,
- * a gap long enough to go home in, "In CS2030 till") goes by when it really
- * ends: too early is better than too late. Only for NUSMods classes; times
- * entered by hand are taken as given.
- */
 export const ENDS_EARLY_MIN = 30;
 
 export const endOf = (t: TimetableClass) => {
@@ -504,19 +405,6 @@ export const endOf = (t: TimetableClass) => {
   return t.nusmods ? Math.max(t.arriveByMin + 15, end - ENDS_EARLY_MIN) : end;
 };
 
-/**
- * Where you should be heading now, from today's classes only:
- *
- * - before the first class: to it, from home
- * - between classes: to the next one, unless the gap is longer than
- *   gapHours, in which case home until GAP_RETURN_MIN before it
- * - after the last class: home
- * - no classes today: null, and the client shows nearby departures
- *
- * A class counts as "next" until LATE_GRACE_MIN after it starts, or until
- * it's reached. A skipped class is left out; a reached one still counts as
- * where you're coming from, and one whose bus was missed doesn't.
- */
 export function nextTripFor(profile: Profile, nowMs: number, state: DayState = NO_DAY_STATE): NextTrip | null {
   const t = sgt(nowMs);
   const nowMin = t.minutes;
@@ -525,16 +413,12 @@ export function nextTripFor(profile: Profile, nowMs: number, state: DayState = N
 
   const homeStop = profile.home?.stops[0] ?? null;
   const next = today.find((x) => !state.done.has(classKey(x)) && x.arriveByMin + LATE_GRACE_MIN > nowMin) ?? null;
-  // Where you're coming from: the last class you went to. One whose bus you
-  // missed (and that nothing since says you reached) is not it: without a
-  // location you'd be planned from a room you never got to.
   const prev =
     [...today]
       .reverse()
       .find((x) => x !== next && !state.missed?.has(classKey(x)) && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
 
   if (!next) {
-    // After the last class of the day. Its trip home taken off today: staying.
     if (!homeStop || !prev || state.skipped.has(`home:${endOf(prev)}`)) return null;
     return {
       to: homeStop,
@@ -552,16 +436,10 @@ export function nextTripFor(profile: Profile, nowMs: number, state: DayState = N
 
   const gapMin = next.arriveByMin - endOf(prev);
   const returnAt = next.arriveByMin - GAP_RETURN_MIN;
-  // A long gap goes home in between, unless that trip was taken off today.
-  // Not to a class at the home stop: "Home" is no trip then, and the class
-  // is planned from where you are, as /api/me/day has it (day.ts).
   const goesHome = homeStop && homeStop !== next.to && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
   if (goesHome && nowMin < returnAt) {
-    // Still in class: nothing to catch yet, but the answer is the trip home.
     return { to: homeStop, label: m().home, why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }
-  // In a long gap after going home, or home already since the last class,
-  // the origin is home.
   const wentHome = (goesHome && nowMin >= endOf(prev)) || homeAfter(prev, state, nowMs) !== null;
   return {
     to: next.to,
@@ -573,11 +451,6 @@ export function nextTripFor(profile: Profile, nowMs: number, state: DayState = N
   };
 }
 
-/**
- * A class reached before it starts (seen there, or said so): that's where
- * you are, rather than the next class or the trip home after it. The latest
- * one, if a few are.
- */
 export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<string>): TimetableClass | null {
   const nowMin = sgt(nowMs).minutes;
   return (
@@ -587,26 +460,17 @@ export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<
   );
 }
 
-/** A class running past dayEnd keeps the day open this long after it ends,
- *  so the trip home still gets an answer. */
 export const EVENING_GRACE_MIN = 45;
-/** A class starting near or before dayStart opens the day this early. */
 export const MORNING_LEAD_MIN = 90;
 
-/**
- * Whether the planned answer should rest: outside the user's day, stretched
- * to cover any class that starts early or ends late.
- */
 export function isResting(profile: Profile, nowMs: number): boolean {
   return restSide(profile, nowMs) !== null;
 }
 
-/** When today's answers rest for the evening, in minutes: the day's end, or later for a class that ends late. */
 function dayEndMin(profile: Profile, nowMs: number): number {
   return Math.max(profile.dayEndMin, ...classesOn(profile, nowMs).map((x) => endOf(x) + EVENING_GRACE_MIN));
 }
 
-/** When today's answers rest for the evening (epoch ms), or null when that's midnight or later. */
 export function restsAtMs(profile: Profile, nowMs: number): number | null {
   const end = dayEndMin(profile, nowMs);
   if (end >= 1440) return null;
@@ -614,7 +478,6 @@ export function restsAtMs(profile: Profile, nowMs: number): number | null {
   return nowMs - (t.minutes * 60_000 + (nowMs % 60_000)) + end * 60_000;
 }
 
-/** Which end of the day we are resting at, with today's effective start. */
 export function restSide(profile: Profile, nowMs: number): { side: 'before' | 'after'; startMin: number } | null {
   const t = sgt(nowMs);
   const today = classesOn(profile, nowMs);
@@ -625,11 +488,6 @@ export function restSide(profile: Profile, nowMs: number): { side: 'before' | 'a
   return null;
 }
 
-/**
- * The next moment the planned answer can change by itself: a class starts,
- * ends, or reaches its gap's return time, or the day starts or ends. Clients
- * refresh then instead of guessing. Falls back to the next SGT midnight.
- */
 export function planChangesAt(profile: Profile, nowMs: number): number {
   const t = sgt(nowMs);
   const midnight = nowMs - (t.minutes * 60_000 + (nowMs % 60_000));
@@ -651,20 +509,14 @@ export function planChangesAt(profile: Profile, nowMs: number): number {
   return midnight + (next ?? 1440) * 60_000;
 }
 
-/**
- * The resting headline. "Done for today" at 05:00 beside "Next: ..., today
- * 10:00" reads as a contradiction, so the morning says when the day starts.
- */
 export function restLabel(profile: Profile, nowMs: number, h12 = false): string {
   const r = restSide(profile, nowMs);
   if (r?.side === 'before' && classesOn(profile, nowMs).length) return m().dayStarts(clockMin(r.startMin, h12));
   return m().doneForToday;
 }
 
-/** How far ahead to look for the next class: a whole semester break. */
 const LOOKAHEAD_DAYS = 120;
 
-/** The first class after now, and how many days ahead it is. Today's skipped classes don't count. */
 export function nextClass(
   profile: Profile,
   nowMs: number,
@@ -680,20 +532,16 @@ export function nextClass(
   return null;
 }
 
-/** "Mon 28 Sep" in SGT. Built by hand: Intl output varies by runtime. */
 function shortDate(atMs: number): string {
   const d = new Date(atMs + 8 * 3_600_000);
   return m().shortDate(d.getUTCDay(), d.getUTCDate(), d.getUTCMonth());
 }
 
-/** "Next: CS2030 @ COM1, tomorrow 10:00", or a plain line when nothing is scheduled. */
 export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): string {
   if (reimportReason(profile, nowMs) === 'ended' && profile.term) {
     return m().timetableFor(termName(profile.term));
   }
   const n = nextClass(profile, nowMs, skipped);
-  // Recess, exams, a public holiday: say why today is empty, next class or not
-  // (in reading week and the exams, the semester's classes are all behind you).
   const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);
   if (!n)
     return profile.trips.length || profile.manual.length
@@ -712,11 +560,6 @@ export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped
   return m().nextClass(off, n.trip.label, when, clockMin(n.trip.arriveByMin, h12));
 }
 
-/**
- * The next class as its own card's lines (card.upcoming): when, what and
- * where, from the timetable alone. Null when nothing is coming, or the
- * timetable has ended. `stopName` names a stop code.
- */
 export function upcomingClass(
   profile: Profile,
   nowMs: number,
@@ -736,10 +579,8 @@ export function upcomingClass(
         : n.daysAhead < 7
           ? m().dayNames[n.trip.day]
           : shortDate(day);
-  // "CS2030 @ COM1": the module, without the room the line under it gives.
   const name = n.trip.label.split(' @ ')[0];
   const venue = n.trip.venue?.trim();
-  // The room's stop as it is now, not as it was when the timetable was saved.
   const stop = stopName((venue && venueToStop(venue)?.stop) || n.trip.to);
   return {
     when,
@@ -751,26 +592,16 @@ export function upcomingClass(
 
 export type OnTime = 'on-time' | 'tight' | 'late';
 
-/** At least this much spare time counts as comfortably on time. */
 export const ON_TIME_SLACK_S = 180;
 
-/** Past this, the stop is not really the venue's stop (off campus, bad data):
- *  a lateness figure would be noise. */
 export const MAX_VENUE_WALK_S = 20 * 60;
 
-/** When today's (SGT) run of this class starts, epoch ms. */
 export function classStartMs(trip: TimetableClass, nowMs: number): number {
   const day = new Date(nowMs + 8 * 3_600_000);
   const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - 8 * 3_600_000;
   return midnight + trip.arriveByMin * 60_000;
 }
 
-/**
- * Compare when you'd reach the class (arrival at the stop plus the walk to
- * the venue) with when it starts. The class is today's: the planner only
- * plans today. `estimated`: the arrival is a guess (a timetable bus, a ride
- * without a measured time), so its clock gets the same "~" as the card's.
- */
 export function timingFor(
   arriveAtIso: string | null | undefined,
   trip: TimetableClass,
@@ -784,7 +615,6 @@ export function timingFor(
   const reachMs = Date.parse(arriveAtIso) + walkToVenueS * 1000;
   const slackS = Math.round((classAt - reachMs) / 1000);
   const status: OnTime = slackS >= ON_TIME_SLACK_S ? 'on-time' : slackS >= 0 ? 'tight' : 'late';
-  // Same words as the class card (clock.ts): the colour carries "tight".
   const text =
     status === 'late'
       ? m().lateBy(Math.max(1, Math.round(-slackS / 60)))
