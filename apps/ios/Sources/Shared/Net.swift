@@ -171,7 +171,7 @@ enum Outdated {
     }
 
     private static let answers: Set<String> = [
-        "/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs",
+        "/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/lines", "/api/line", "/api/campus", "/api/stops/pairs",
     ]
 }
 

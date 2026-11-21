@@ -465,6 +465,16 @@ export function clientFrom(req: Request): Client {
 }
 
 export const KV_MIN_CLIENT = 'config:minClient';
+export const KEYED = [
+  '/api/next',
+  '/api/trip',
+  '/api/arrivals',
+  '/api/buses',
+  '/api/lines',
+  '/api/line',
+  '/api/campus',
+  '/api/stops/pairs',
+];
 export const UPDATE_REQUIRED = { error: 'Update terminus to keep using it.', update: true } as const;
 
 function versionParts(v: string): { core: number[]; pre: number[] | null } | null {

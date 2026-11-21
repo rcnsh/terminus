@@ -19,7 +19,7 @@ import { docsPageFor, openApiJson } from './openapi.ts';
 import { phaseAt, sgtMinute } from './site/pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { handleMe } from './accounts/me.ts';
-import { UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts/accounts.ts';
+import { KEYED, UPDATE_REQUIRED, accountsConfigured, clientOutdated, hasSessionCookie } from './accounts/accounts.ts';
 import { answering, answeringSince, feedStatus, readUpstream, runCron, statusRecords } from './ops/monitor.ts';
 import { ltaConfigured } from './feeds/lta.ts';
 import { calendarThrough } from './timetable/calendar.ts';
@@ -358,8 +358,6 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
 }
 
 const ME_DEPS: MeDeps = { answerFor, collectArrivals };
-
-const KEYED = ['/api/next', '/api/trip', '/api/arrivals', '/api/buses', '/api/lines', '/api/line', '/api/campus', '/api/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {

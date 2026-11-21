@@ -3648,9 +3648,11 @@ answers: [ADR 0026](adr/0026-apple-apps-read-answers-leniently.md)):
   doesn't stop the menu bar. A 503's `Retry-After` gates nothing; only the
   polling loops (the refresh, the map's) wait it out. Either is honoured
   for 1 s to 5 minutes. A 426 stops every request the server would refuse
-  (`Outdated.gated`, KEYED in index.ts: not signing in or out, downloads,
-  `DELETE /api/me` or `DELETE /api/me/push`) for 30 minutes, then one asks
-  again in case `config:minClient` was lowered.
+  (`Outdated.gated`, `KEYED` in `accounts.ts`: not signing in or out,
+  downloads, `DELETE /api/me` or `DELETE /api/me/push`) for 30 minutes,
+  then one asks again in case `config:minClient` was lowered. Each app
+  keeps its own copy of `KEYED`; `outdated-routes.test.js` fails when one
+  misses a route.
 - **Saving the profile** (`Api.changeProfile`, `SetupModel.edit`): the Mac
   sends `If-Match` as the website does, makes only its own change again on
   a 412 (three tries), shows changes at once and saves 0.4 s after the last
