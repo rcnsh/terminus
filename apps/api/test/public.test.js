@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, FROZEN_NOW } from './_stubs.mjs';
+import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch, FROZEN_NOW, keyed, withApiKey } from './_stubs.mjs';
 import { Trip } from '../src/push/tripdo.ts';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
@@ -291,7 +291,7 @@ test('/api/next?public=1 names the public bus, says it is one, and marks its leg
   const env = key();
   const ask = async (path) => {
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path), env, ctx);
+    const res = await worker.fetch(new Request(BASE + path, keyed()), await withApiKey(env), ctx);
     await ctx.settle();
     return res.json();
   };
@@ -331,7 +331,7 @@ test('/api/arrivals lists public buses at a public stop, and at a shared shelter
   const env = key();
   const ask = async (path) => {
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path), env, ctx);
+    const res = await worker.fetch(new Request(BASE + path, keyed()), await withApiKey(env), ctx);
     await ctx.settle();
     return [res.status, await res.json()];
   };

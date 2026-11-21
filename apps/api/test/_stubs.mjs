@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { COL } from '../src/analytics-rows.ts';
+import { hashToken } from '../src/accounts/accounts.ts';
+import { makeD1 } from './_d1.mjs';
 
 export function makeCache() {
   const store = new Map();
@@ -88,8 +90,29 @@ export function makeEnv(kv = makeKV(), ae = undefined) {
     NEXTBUS_APP_VERSION: '0.0.0-test',
     NEXTBUS_HTD_API: 'test-htd',
     NEXTBUS_APP_API: 'test-app',
-    [Symbol.for('terminus.testOpen')]: true,
   };
+}
+
+export const API_KEY = 'tk_test-key-for-the-answer-routes';
+
+export async function withApiKey(env) {
+  env.DB ??= makeD1();
+  const now = Date.now();
+  env.DB._db
+    .prepare("INSERT OR IGNORE INTO users (id, email, created, last_seen) VALUES ('key-owner', 'keys@example.test', ?, ?)")
+    .run(now, now);
+  env.DB._db
+    .prepare(
+      "INSERT OR IGNORE INTO api_keys (id, user_id, key_hash, name, hint, created) VALUES ('test-key', 'key-owner', ?, 'tests', 'utes', ?)",
+    )
+    .run(await hashToken(API_KEY), now);
+  return env;
+}
+
+export function keyed(init = {}) {
+  const headers = new Headers(init.headers);
+  if (!headers.has('x-api-key') && !headers.has('authorization')) headers.set('x-api-key', API_KEY);
+  return { ...init, headers };
 }
 
 export function shuttlePayload(shuttles) {

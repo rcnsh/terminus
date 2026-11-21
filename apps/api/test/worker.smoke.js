@@ -1,7 +1,19 @@
 import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV, named } from './_stubs.mjs';
+import {
+  FROZEN_NOW,
+  installGlobals,
+  makeAnalytics,
+  makeBucket,
+  makeCtx,
+  makeEnv,
+  makeFetch,
+  makeKV,
+  keyed,
+  named,
+  withApiKey,
+} from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { ME_ROUTES } from '../src/accounts/me.ts';
@@ -23,7 +35,7 @@ async function call(path, { fetchImpl, env, cache, headers } = {}) {
   const c = cache ?? installGlobals(fetchImpl);
   if (fetchImpl) globalThis.fetch = fetchImpl;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path, { headers }), env ?? makeEnv(), ctx);
+  const res = await worker.fetch(new Request(BASE + path, keyed({ headers })), await withApiKey(env ?? makeEnv()), ctx);
   await ctx.settle();
   return { res, ctx, cache: c };
 }
@@ -932,9 +944,9 @@ test('a failed stop is not asked again straight away', async () => {
 test('concurrent requests for a cold stop share one upstream call', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   installGlobals(fetchImpl);
-  const env = makeEnv();
+  const env = await withApiKey(makeEnv());
   const ctx = makeCtx();
-  const reqs = Array.from({ length: 10 }, () => worker.fetch(new Request(`${BASE}/api/arrivals?stop=PGP`), env, ctx));
+  const reqs = Array.from({ length: 10 }, () => worker.fetch(new Request(`${BASE}/api/arrivals?stop=PGP`, keyed()), env, ctx));
   const out = await Promise.all(reqs);
   await ctx.settle();
   assert.ok(out.every((r) => r.status === 200));
