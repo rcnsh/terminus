@@ -249,12 +249,11 @@ struct Api: Sendable {
     }
 
     func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> (DayPlan, Data, lang: String) {
-        let asked = Lang.header
         let written = Mutex<String?>(nil)
         let data = try await send("GET", "/api/me/day", query: Self.coords(lat, lon, acc) + Self.h12) { r in
             written.withLock { $0 = r.value(forHTTPHeaderField: "content-language") }
         }
-        let lang = written.withLock { $0 }.map { $0.hasPrefix("zh") ? "zh-Hans" : "en" } ?? asked
+        let lang = written.withLock { $0 }?.hasPrefix("zh") == true ? "zh-Hans" : "en"
         return (try JSONDecoder().decode(DayPlan.self, from: data), data, lang)
     }
 

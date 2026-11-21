@@ -254,10 +254,6 @@ private let noon = row(
     let r1 = try #require(pgp.board.first { $0.svc == "R1" })
     #expect(r1.destPlace == nil)
     #expect(NearbyCells.dest(r1) == ("Ends here", nil, ""))
-    let old = row(#"{"svc":"A1","etaS":60,"quality":"live","towards":["LT27","Kent Ridge Bus Terminal"]}"#)
-    #expect(old.dest == nil)
-    #expect(NearbyCells.dest(old) == (L("to %@", "Kent Ridge Bus Terminal"), nil, ""))
-    #expect(NearbyCells.dest(row(#"{"svc":"K","etaS":60,"quality":"live","toText":"to PGP"}"#)) == ("to PGP", nil, ""))
 }
 
 @Test func nearbyDestinationNeedsItsNarrowestTwoLines() {
@@ -370,17 +366,6 @@ private let noon = row(
     let live = row(#"{"svc":"D1","etaS":90,"quality":"live","eta":"2 min"}"#)
     let aged = BusTimes.aged(live, got: fetched, now: at(60))
     #expect(aged.etaText == L("~%@ min", "1"))
-}
-
-@Test func nearbyAnOlderServersNowForAGuessIsAboutAMinute() {
-    for quality in ["scheduled", "stale"] {
-        let old = row(
-            #"{"svc":"D1","etaS":20,"quality":"\#(quality)","eta":"now","later":[{"etaS":40,"quality":"\#(quality)","eta":"now"}]}"#)
-        let c = NearbyCells.cells(old)
-        #expect(c[0].text == L("~%@ min", "1"))
-        #expect(c[0].mark == "~" && c[0].figure == "1")
-        #expect(c[1].mark == "~" && c[1].figure == "1")
-    }
 }
 
 @Test func theRoadLineSaysArrivingOnlyForALiveBus() {

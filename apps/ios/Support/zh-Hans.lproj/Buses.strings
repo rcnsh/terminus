@@ -3,7 +3,6 @@
 "%@ more at this stop" = "这个车站还有 %@ 条线路";
 "%@ runs until %@" = "%@ 运行到 %@";
 "%@ stops" = "%@ 个车站";
-"%@ to %@" = "%@ 至 %@";
 ", " = "、";
 "1 bus running" = "1 辆巴士在运行";
 "1 minute" = "1 分钟";
@@ -21,7 +20,6 @@
 "Live" = "实时";
 "Live buses aren't available right now." = "暂时看不到实时巴士。";
 "Live times aren't available right now." = "现在无法获取实时时间。";
-"Loop from %@" = "%@ 环线";
 "min" = "分钟";
 "Next stop %@" = "下一站 %@";
 "No buses are running here now" = "现在没有巴士在这里运行";
@@ -51,7 +49,6 @@
 "This service's line isn't available." = "这条线路暂时无法显示。";
 "This side" = "这一边";
 "Times are shown for your stop only." = "只显示你的车站的时间。";
-"to %@" = "开往 %@";
 "Try again" = "重试";
 "Unpin %@" = "取消固定 %@";
 "Unpin this stop" = "取消固定这个车站";

@@ -179,7 +179,8 @@ struct BusProvider: TimelineProvider {
                     "leave": leave, "walk": "5 min", "bus": ["svc": "D2", "color": "#8e44c9", "stop": "PGP", "board": board],
                     "boardAt": t(14),
                     "ride": "10 min", "to": "GEA1000 @ UTown", "toStop": "UTown", "arrive": arrive, "arriveStop": arrive, "live": true,
-                    "title": L("To %@", "GEA1000 @ UTown"),
+                    "title": L("To %@", "GEA1000 @ UTown"), "place": "GEA1000", "arriveWhere": L("at %@", "UTown"),
+                    "walkText": L("%@ walk", "5 min"), "rideText": L("%@ ride", "10 min"), "arriveText": L("Arrive %@", arrive),
                 ],
             ],
         ]

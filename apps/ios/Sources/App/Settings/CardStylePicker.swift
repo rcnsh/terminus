@@ -72,13 +72,17 @@ struct SettingsCardSample: View {
             "mode": "trip", "dest": ["label": "UTown", "why": "place"], "departsAt": iso.string(from: board),
             "leave": ["at": iso.string(from: leave)],
             "card": [
-                "kind": "trip", "late": false, "phase": "idle",
+                "kind": "trip", "late": false, "phase": "idle", "title": "D2 · \(campusTime(board))",
                 "journey": [
                     "leave": campusTime(leave), "walk": min(4),
                     "bus": ["svc": "D2", "color": "#8E44C9", "stop": "PGP", "board": campusTime(board)],
                     "boardAt": iso.string(from: board), "ride": min(8), "to": "UTown", "toStop": "UTown",
                     "arrive": campusTime(arrive), "live": true,
                     "backup": ["svc": "A1", "color": "#D32F2F", "stop": "PGP", "board": campusTime(backup)],
+                    "title": L("To %@", "UTown"), "place": "UTown", "byText": L("by %@", campusTime(leave)),
+                    "walkText": L("%@ walk", min(4)), "rideText": L("%@ ride", min(8)),
+                    "arriveText": L("Arrive %@", campusTime(arrive)), "arriveWhere": L("at %@", "UTown"),
+                    "backupText": L("Or %@ at %@ from %@", "A1", campusTime(backup), "PGP"),
                 ] as [String: Any],
             ] as [String: Any],
         ]

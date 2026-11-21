@@ -39,12 +39,6 @@ enum MapFiles {
 
     static func readCampus(zh: Bool, in dir: URL) -> (data: Data, savedAt: Date?, etag: String?)? {
         let file = campusFile(zh: zh, in: dir)
-        let old = dir.appendingPathComponent("campus.json")
-        if !FileManager.default.fileExists(atPath: file.path), FileManager.default.fileExists(atPath: old.path) {
-            try? FileManager.default.moveItem(at: old, to: file)
-            try? FileManager.default.moveItem(at: dir.appendingPathComponent("campus.etag"), to: campusTag(zh: zh, in: dir))
-            try? FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: file.path)
-        }
         guard let data = try? Data(contentsOf: file) else { return nil }
         let at = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
         let etag = (try? String(contentsOf: campusTag(zh: zh, in: dir), encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 }

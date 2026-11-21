@@ -35,9 +35,7 @@ enum NearbyCells {
     static func cell(_ bus: Bus?, first: Bool) -> NearbyCell {
         guard let bus else { return NearbyCell() }
         var c = NearbyCell(mark: bus.approx ? "~" : "", pick: first)
-        let words =
-            bus.approx && bus.words.range(of: #"\d"#, options: .regularExpression) == nil
-            ? BusTimes.words(bus.etaS, quality: bus.quality) : bus.words
+        let words = bus.words
         if let r = words.range(of: #"\d+"#, options: .regularExpression) {
             c.figure = String(words[r])
             if first { c.trail = String(words[r.upperBound...]) }
@@ -50,10 +48,7 @@ enum NearbyCells {
     }
 
     static func dest(_ row: BoardRow) -> (before: String, place: String?, after: String) {
-        guard let dest = row.dest else {
-            if let end = row.towards.last { return (L("to %@", end), nil, "") }
-            return (row.toText ?? (row.endsHere ? L("Ends here") : ""), nil, "")
-        }
+        guard let dest = row.dest else { return ("", nil, "") }
         guard let place = row.destPlace, let r = dest.range(of: place) else { return (dest, nil, "") }
         return (String(dest[..<r.lowerBound]), place, String(dest[r.upperBound...]))
     }

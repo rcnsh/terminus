@@ -129,7 +129,7 @@ struct CardHead: View {
                 if let sub = a.doneSub { Text(sub).font(.footnote).foregroundStyle(inks.muted) }
             case .journey(let a, let j):
                 Lead(answer: a, now: now)
-                Text(JourneyText.to(a, j)).font(.footnote).foregroundStyle(inks.muted)
+                Text(JourneyText.to(j)).font(.footnote).foregroundStyle(inks.muted)
                 LeaveHead(answer: a, journey: j, now: now)
                 let under = [JourneyText.by(a, j, now: now), j.slack].compactMap { $0 }.joined(separator: " · ")
                 if !under.isEmpty { Text(under).font(.footnote).foregroundStyle(a.leaveLate ? inks.late : inks.muted) }

@@ -222,7 +222,7 @@ struct WidgetFace {
             }
         }
         return WidgetFace(
-            heading: JourneyText.to(a, j),
+            heading: JourneyText.to(j),
             headline: headline,
             accent: j.leave.flatMap { headline.contains($0) ? $0 : nil },
             late: a.leaveLate,

@@ -66,6 +66,6 @@ enum OfflineDay {
             how = L("walk")
         }
         let first = how.map { $0.prefix(1).uppercased(with: Lang.locale) + $0.dropFirst() }
-        return Lines(head: "\(item.serverTitle ?? item.label) · \(L("starts %@", starts))", big: big, how: first)
+        return Lines(head: "\(item.title) · \(L("starts %@", starts))", big: big, how: first)
     }
 }

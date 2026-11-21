@@ -34,44 +34,24 @@ enum JourneyText {
         return .s("\(max(1, left))")
     }
 
-    static func to(_ a: NextAnswer, _ j: Journey) -> String {
-        if let t = j.title { return t }
-        var parts = [L("To %@", j.to)]
-        if a.isClassPlan, let c = a.classAt { parts.append(a.startsAt(c)) }
-        return parts.joined(separator: " · ")
-    }
+    static func to(_ j: Journey) -> String { j.title ?? j.to }
 
     static func by(_ a: NextAnswer, _ j: Journey, now: Date) -> String? {
         guard a.phase != "waiting", let at = a.leaveAt, now < at else { return nil }
-        return j.byText ?? j.leave.map { L("by %@", $0) }
+        return j.byText
     }
 
-    static func arrive(_ j: Journey) -> String? {
-        if let t = j.arriveText { return t }
-        return j.arrive.map { ([L("Arrive %@", $0)] + [j.slack].compactMap { $0 }).joined(separator: " · ") }
-    }
+    static func arrive(_ j: Journey) -> String? { j.arriveText }
 
-    static func backup(_ a: NextAnswer, _ j: Journey) -> String? {
-        if let t = j.backupText { return t }
-        if j.bus == nil { return j.why }
-        guard let b = j.backup else { return nil }
-        let svc = b.paid ? "\(b.svc) ($)" : b.svc
-        return a.isClassPlan ? L("Or go now: %@ at %@ from %@", svc, b.board, b.stop) : L("Or %@ at %@ from %@", svc, b.board, b.stop)
-    }
+    static func backup(_ a: NextAnswer, _ j: Journey) -> String? { j.backupText }
 
-    static func walk(_ j: Journey) -> String? { j.walkText ?? j.walk.map { L("%@ walk", $0) } }
+    static func walk(_ j: Journey) -> String? { j.walkText }
 
-    static func walkEnd(_ j: Journey) -> String? { j.walkEndText ?? j.walkEnd.map { L("%@ walk", $0) } }
+    static func walkEnd(_ j: Journey) -> String? { j.walkEndText }
 
-    static func ride(_ j: Journey) -> String? {
-        if let t = j.rideText { return t }
-        let parts = [j.ride.map { L("%@ ride", $0) }, j.off.map { L("off at %@", $0) }].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
+    static func ride(_ j: Journey) -> String? { j.rideText }
 
-    static func arriveWhere(_ j: Journey) -> String {
-        j.slack ?? j.arriveWhere ?? j.walkEnd.map { L("%@ walk from %@", $0, j.toStop) } ?? L("at %@", j.toStop)
-    }
+    static func arriveWhere(_ j: Journey) -> String? { j.slack ?? j.arriveWhere }
 
     static func busIn(_ j: Journey, now: Date) -> String? {
         guard let at = j.boardDate else { return nil }

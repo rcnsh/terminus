@@ -190,22 +190,3 @@ private final class Reader {}
     #expect(refused.map(\.0) == [401])
     #expect(refused.map(\.1) == ["t"])
 }
-
-@MainActor @Test func theCopyKeptBeforeOnePerLanguageStillShowsOffline() async throws {
-    let dir = try scratch()
-    try campus("COM3").write(to: dir.appendingPathComponent("campus.json"))
-    try Data("\"v1\"".utf8).write(to: dir.appendingPathComponent("campus.etag"))
-    let server = Server()
-    let s = CampusStore(
-        dir: { dir }, zh: { true },
-        fetch: { _, etag in
-            await server.ask(etag)
-            throw URLError(.notConnectedToInternet)
-        }, refused: { _, _ in })
-    #expect(name(try await s.load(Reader(), token: "t") { _ in }) == "COM3")
-    #expect(MapFiles.readCampus(zh: true, in: dir)?.data == campus("COM3"))
-    let age = MapFiles.readCampus(zh: true, in: dir)?.savedAt.map { Date().timeIntervalSince($0) }
-    #expect(MapFiles.CampusRead.of(age: age) == .keptThenCheck)
-    await soon { await server.asked.count == 1 }
-    #expect(await server.asked == ["\"v1\""])
-}

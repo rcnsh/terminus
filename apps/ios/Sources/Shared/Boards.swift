@@ -92,8 +92,6 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         let code: String
         let name: String
         let longName: String?
-        let oppositeAcross: Bool?
-        let oppositeName: String?
     }
     let stop: Stop
     let walkS: Int?
@@ -116,7 +114,7 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
     }
 
     init(placeholder code: String, name: String) {
-        stop = Stop(code: code, name: name, longName: nil, oppositeAcross: nil, oppositeName: nil)
+        stop = Stop(code: code, name: name, longName: nil)
         walkS = nil
         available = true
         board = []
@@ -134,8 +132,8 @@ struct NearbyStop: Decodable, Identifiable, Sendable {
         available = c.bool(.available) ?? true
         board = c.lenientList(BoardRow.self, forKey: .board) ?? []
         opposite = c.string(.opposite).flatMap { $0.isEmpty ? nil : $0 }
-        oppositeAcross = c.bool(.oppositeAcross) ?? stop.oppositeAcross ?? true
-        oppositeName = c.string(.oppositeName) ?? stop.oppositeName
+        oppositeAcross = c.bool(.oppositeAcross) ?? true
+        oppositeName = c.string(.oppositeName)
         distM = c.lenientInt(forKey: .distM)
         viaText = c.string(.viaText).flatMap { $0.isEmpty ? nil : $0 }
     }
@@ -158,12 +156,6 @@ struct Board: Sendable {
         var b = self
         b.rows = rows.map { BusTimes.aged($0, got: got, now: now) }
         return b
-    }
-
-    static func of(_ s: NearbyStop, got: Date?) -> Board {
-        Board(
-            code: s.stop.code, name: s.stop.longName ?? s.stop.name, opposite: s.opposite, oppositeAcross: s.stop.oppositeAcross ?? true,
-            oppositeName: s.stop.oppositeName, available: s.available, rows: s.board, asOf: nil, distM: s.distM, got: got)
     }
 }
 

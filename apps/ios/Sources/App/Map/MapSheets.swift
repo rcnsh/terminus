@@ -618,7 +618,7 @@ struct BusSheet: View {
         let where_ = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next: %@", $0) }
         let title = bus.towards.map { L("Towards %@", $0) } ?? where_ ?? L("Bus %@", svc)
         let strip = strip
-        let stop = Self.stop(for: bus, svc: svc, in: campus)
+        let stop = Self.stop(for: bus, in: campus)
         SheetFrame(
             title: title,
             sub: bus.towards != nil ? where_ : nil,
@@ -680,18 +680,8 @@ struct BusSheet: View {
         }
     }
 
-    static func stop(for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
-        bus.at != nil
-            ? stop(code: bus.atCode, name: bus.at, for: bus, svc: svc, in: campus)
-            : stop(code: bus.nextStopCode ?? bus.upcomingCodes.first ?? nil, name: bus.nextStop, for: bus, svc: svc, in: campus)
-    }
-
-    static func stop(code: String?, name: String?, for bus: LiveBus, svc: String, in campus: CampusMap) -> MapStop? {
-        if let code, let s = campus.stop(code) { return s }
-        guard let name else { return nil }
-        let codes = campus.stops.filter { $0.name == name && $0.services.contains(svc) }.map(\.code)
-        guard !codes.isEmpty else { return nil }
-        return campus.nearest(codes, lat: bus.lat, lon: bus.lon).flatMap(campus.stop)
+    static func stop(for bus: LiveBus, in campus: CampusMap) -> MapStop? {
+        (bus.at != nil ? bus.atCode : bus.nextStopCode).flatMap(campus.stop)
     }
 
     private var facts: some View {
@@ -753,7 +743,7 @@ struct BusSheet: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 let first = i == 0
                 let last = i == rows.count - 1 && strip.more == 0
-                let stop = row.mark == .bus ? nil : Self.stop(code: row.code, name: row.name, for: bus, svc: svc, in: campus)
+                let stop = row.mark == .bus ? nil : row.code.flatMap(campus.stop)
                 if let stop {
                     Button {
                         map.showStop(stop.code, from: now)
