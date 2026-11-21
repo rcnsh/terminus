@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { page, settle } from './_dom.mjs';
 import { memoryStorage, web } from './_web.mjs';
 
-const { derive, keyRows } = await web('admin/views.js');
+const { attention, derive, keyRows } = await web('admin/views.js');
 const { render } = await web('assets/ui.js');
 
 test("the dashboard's days are Singapore days, and the week leaves today's few hours out", () => {
@@ -17,6 +17,34 @@ test("the dashboard's days are Singapore days, and the week leaves today's few h
   assert.equal(d.answers.at(-2), 100);
   assert.equal(d.answers7, 700);
   assert.equal(d.answersChange, 0);
+});
+
+test("the error rate counts only requests' errors, not the feed's and the cron's", () => {
+  const now = '2026-10-23T22:00:00Z';
+  const days = Array.from({ length: 15 }, (_, i) => new Date(Date.UTC(2026, 9, 10 + i)).toISOString().slice(0, 10));
+  const daily = days.flatMap((day) => [
+    { day, kind: 'answer', n: 10 },
+    { day, kind: 'error', n: 1 },
+    { day, kind: 'background', n: 40 },
+  ]);
+  const d = derive({ now, accounts: { total: 0 }, analytics: { daily } });
+  assert.equal(d.rate7, 0.1);
+  assert.equal(d.rate.at(-2), 0.1);
+  assert.equal(d.errors.at(-2), 41, 'the errors chart still shows every error');
+  assert.equal(d.failed.at(-2), 1);
+  assert.equal(d.background.at(-2), 40);
+});
+
+test('the Overview warns of a cron step failing run after run, which the error rate leaves out', () => {
+  const errors = [
+    { route: 'feed buses', n: '103' },
+    { route: 'cron token', n: '15' },
+    { route: 'cron eta', n: '1' },
+  ];
+  const d = derive({ now: '2026-10-23T22:00:00Z', accounts: { total: 0 }, analytics: { daily: [], errors } });
+  const said = attention({ analytics: d.an, collect: {} }, d).map(([, text]) => text);
+  assert.ok(said.includes('The cron’s token step failed 15 times this week.'), said.join(' | '));
+  assert.ok(!said.some((t) => /eta step|feed/.test(t)), 'not a one-off failure, nor the feed’s (the Feed page has those)');
 });
 
 test("each API key's requests: today and the 7 full days before it, what was turned away, its commonest route, and unlisted keys counted apart", () => {

@@ -172,11 +172,15 @@ services keep shorter hours.
 One row per error, counted on the dashboard's Answers page: `blob2` is the
 route of a request that failed unhandled (no query, `/api/me/devices/abc`
 as `/api/me/devices`), `cron <step>` for a cron step that failed, or `feed
-arrivals` / `feed buses` for a call to NUS that failed, with why in
-`blob3`. A feed failure is written at most once in 10 minutes per feed,
-stop or service and reason, remembered in memory by each Worker isolate
-(so each isolate writes its own), and the memory is cleared once it holds
-more than 500.
+arrivals` / `feed buses` for a call to NUS that failed. The cron's and the
+feed's rows say why in `blob3`, credentials blanked. The dashboard's error
+rate counts only the requests' errors (a route starting with `/`) against
+answers: the feed's and the cron's are left out whoever caused them, and
+the Overview warns of a cron step that failed 10 times in a week instead.
+A feed failure is written at most once in 10 minutes per feed, stop or
+service and reason, remembered in memory by each Worker isolate (so each
+isolate writes its own), and the memory is cleared once it holds more than
+500.
 
 ```sql
 SELECT blob2 AS route, blob3 AS reason, SUM(_sample_interval) AS n

@@ -45,10 +45,14 @@ export function derive(s) {
     return d15.map((d) => m.get(d) ?? 0);
   };
   const answers15 = perDay('answer');
-  const errors15 = perDay('error');
+  const failed15 = perDay('error');
+  const background15 = perDay('background');
+  const errors15 = failed15.map((n, i) => n + background15[i]);
   const answers = answers15.slice(1);
   const errors = errors15.slice(1);
-  const rate = answers.map((n, i) => (n ? errors[i] / n : null));
+  const failed = failed15.slice(1);
+  const background = background15.slice(1);
+  const rate = answers.map((n, i) => (n ? failed[i] / n : null));
   const week = (xs) => sum(xs.slice(7, 14));
   const before = (xs) => sum(xs.slice(0, 7));
   const change = (a, b) => (b ? (a - b) / b : null);
@@ -66,12 +70,14 @@ export function derive(s) {
     d30,
     answers,
     errors,
+    failed,
+    background,
     rate,
     answers7: week(answers15),
     answersChange: change(week(answers15), before(answers15)),
     errors7: week(errors15),
-    rate7: share(week(errors15), week(answers15)),
-    rateChange: change(share(week(errors15), week(answers15)) ?? 0, share(before(errors15), before(answers15)) ?? 0),
+    rate7: share(week(failed15), week(answers15)),
+    rateChange: change(share(week(failed15), week(answers15)) ?? 0, share(before(failed15), before(answers15)) ?? 0),
     signups,
     accountsRun,
     active: d30.map((d) => activeAll.get(d) ?? null),
@@ -98,14 +104,20 @@ export const SECTIONS = [
   ['collection', 'Collection', 'What’s collected. Everything is off until turned on here.'],
 ];
 
-function attention(s, d) {
+const CRON_WARN = 10;
+
+export function attention(s, d) {
   const out = [];
   if (s.feed && !s.feed.up) out.push(['bad', `The NUS feed is down, since ${when(s.feed.since)}.`, '#/feed']);
   const open = (s.incidents ?? []).find((i) => !i.end);
   if (open && s.feed?.up) out.push(['warn', `An outage from ${when(open.start)} is still open.`, '#/feed']);
   if (!s.analytics) out.push(['info', 'Analytics Engine isn’t connected: answers, crashes and active accounts are missing.', '#/answers']);
   else if (s.analytics.error) out.push(['bad', `Analytics Engine: ${s.analytics.error}`, '#/answers']);
-  if (d.rate7 != null && d.rate7 > 0.02) out.push(['warn', `${pct(d.rate7, 1)} of answers this week were errors.`, '#/answers']);
+  if (d.rate7 != null && d.rate7 > 0.02)
+    out.push(['warn', `${pct(d.rate7, 1)} as many failed requests as answers this week.`, '#/answers']);
+  for (const e of d.an?.errors ?? [])
+    if (e.route.startsWith('cron ') && Number(e.n) >= CRON_WARN)
+      out.push(['warn', `The cron’s ${e.route.slice(5)} step failed ${plural(Number(e.n), 'time')} this week.`, '#/answers']);
   if (d.crashFatal) out.push(['warn', `${plural(d.crashFatal, 'crash', 'crashes')} closed an app this week.`, '#/crashes']);
   else if (d.crashReports) out.push(['info', `${plural(d.crashReports, 'error report')} from the apps this week.`, '#/crashes']);
   if (s.feedback?.last7d) out.push(['info', `${plural(s.feedback.last7d, 'report')} from users this week.`, '#/reports']);
@@ -138,7 +150,7 @@ export function Overview({ s, d }) {
         href="#/answers"
       />
       <${Tile}
-        k="Error rate, 7 days to yesterday"
+        k="Request error rate, 7 days to yesterday"
         n=${d.an ? d.rate7 : null}
         show=${(x) => pct(x, 2)}
         delta=${d.an ? d.rateChange : null}
@@ -193,7 +205,7 @@ export function Overview({ s, d }) {
       d.an &&
       html`<${Card}
         title="Answers, last 14 days"
-        sub=${`${fmt(sum(d.answers))} answers and ${fmt(sum(d.errors))} errors (${pct(share(sum(d.errors), sum(d.answers)), 2)}) in 14 days.`}
+        sub=${`${fmt(sum(d.answers))} answers, ${fmt(sum(d.failed))} request errors (${pct(share(sum(d.failed), sum(d.answers)), 2)}) and ${fmt(sum(d.background))} from feeds and crons in 14 days.`}
         tools=${html`<a class="btn small ghost" href="#/answers">All answers</a>`}
       >
       <${Chart}
@@ -202,7 +214,7 @@ export function Overview({ s, d }) {
           label: dayLong(x),
           short: dayShort(x),
           values: [d.answers[i]],
-          note: `${fmt(d.errors[i])} errors · ${pct(d.rate[i], 2)}`,
+          note: `${fmt(d.failed[i])} request errors · ${pct(d.rate[i], 2)}`,
         }))}
         series=${[{ name: 'Answers', color: 'var(--s1)' }]}
       />
@@ -685,18 +697,24 @@ export function Answers({ s, d }) {
     values: show === 'answers' ? [d.answers[i]] : show === 'errors' ? [d.errors[i]] : [d.rate[i]],
     note:
       show === 'answers'
-        ? `${fmt(d.errors[i])} errors · ${pct(d.rate[i], 2)}`
+        ? `${fmt(d.failed[i])} request errors · ${pct(d.rate[i], 2)}`
         : show === 'errors'
-          ? `of ${fmt(d.answers[i])} answers · ${pct(d.rate[i], 2)}`
-          : `${fmt(d.errors[i])} errors of ${fmt(d.answers[i])}`,
+          ? `${fmt(d.failed[i])} in requests · ${fmt(d.background[i])} from feeds and crons`
+          : `${fmt(d.failed[i])} request errors of ${fmt(d.answers[i])} answers`,
   }));
   return html`
     <${Tiles}>
       <${Tile} k="Answers, 14 days" n=${total} sub=${`${fmt(Math.round(total / 14))} a day`} spark=${d.answers} />
       <${Tile} k="Answers, 7 days to yesterday" n=${d.answers7} delta=${d.answersChange} sub="vs the 7 days before" />
-      <${Tile} k="Errors, 14 days" n=${errs} spark=${d.errors} sparkColor="var(--bad)" />
       <${Tile}
-        k="Error rate, 7 days to yesterday"
+        k="Errors, 14 days"
+        n=${errs}
+        sub=${`${fmt(sum(d.failed))} in requests · ${fmt(sum(d.background))} from feeds and crons`}
+        spark=${d.errors}
+        sparkColor="var(--bad)"
+      />
+      <${Tile}
+        k="Request error rate, 7 days to yesterday"
         n=${d.rate7}
         show=${(x) => pct(x, 2)}
         delta=${d.rateChange}
@@ -733,7 +751,7 @@ export function Answers({ s, d }) {
         whole=${show !== 'rate'}
         fmt=${show === 'rate' ? (x) => pct(x, 2) : fmt}
         yfmt=${show === 'rate' ? (x) => pct(x, x < 0.01 ? 1 : 0) : compact}
-        series=${[{ name: show === 'answers' ? 'Answers' : show === 'errors' ? 'Errors' : 'Error rate', color: show === 'answers' ? 'var(--s1)' : 'var(--bad)' }]}
+        series=${[{ name: show === 'answers' ? 'Answers' : show === 'errors' ? 'Errors' : 'Request error rate', color: show === 'answers' ? 'var(--s1)' : 'var(--bad)' }]}
       />
     <//>
     <div class="grid two">
