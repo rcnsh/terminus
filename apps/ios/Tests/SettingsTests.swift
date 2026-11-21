@@ -185,3 +185,144 @@ final class SettingsDevicesTests: XCTestCase {
         XCTAssertEqual(settingsPlatformName(device(#"{"id":"d","platform":"android","watch":false}"#)), "Android")
     }
 }
+
+private final class FakeProfileServer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [String: Any]
+    private var tag = 1
+    private(set) var puts: [[String: Any]] = []
+    var refuse: ApiError?
+
+    init(_ profile: [String: Any]) { stored = profile }
+
+    var wire: ProfileWire {
+        ProfileWire(
+            fetch: { _ in self.locked { (try! JSONSerialization.data(withJSONObject: self.stored), "\(self.tag)") } },
+            save: { _, body, ifMatch in
+                try self.locked {
+                    if let e = self.refuse { throw e }
+                    if let ifMatch, ifMatch != "\(self.tag)" { throw ApiError(status: 412, message: "changed") }
+                    let p = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                    self.puts.append(p)
+                    self.stored = p
+                    self.tag += 1
+                    return (body, "\(self.tag)")
+                }
+            })
+    }
+
+    func changeElsewhere(_ key: String, _ value: Any) {
+        locked {
+            stored[key] = value
+            tag += 1
+        }
+    }
+
+    private func locked<T>(_ f: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try f()
+    }
+}
+
+@MainActor final class ProfileSaverTests: XCTestCase {
+    private func saver(_ server: FakeProfileServer) -> ProfileSaver {
+        let s = ProfileSaver(wire: server.wire, wait: .milliseconds(20))
+        s.token = { "t" }
+        s.loaded(ProfileDoc(["walkPace": "normal", "homeWalkMin": 5]), tag: "1")
+        return s
+    }
+
+    func testARunOfEditsIsOneSave() async {
+        let server = FakeProfileServer(["walkPace": "normal", "homeWalkMin": 5])
+        let s = saver(server)
+        s.edit { $0.walkPace = "fast" }
+        s.edit { $0.homeWalkMin = 8 }
+        XCTAssertEqual(s.doc?.walkPace, "fast")
+        try? await Task.sleep(for: .milliseconds(60))
+        await s.flush()
+        XCTAssertEqual(server.puts.count, 1)
+        XCTAssertEqual(server.puts.first?["homeWalkMin"] as? Int, 8)
+        XCTAssertFalse(s.saving)
+    }
+
+    func testAChangeElsewhereIsKeptAndTheEditsRedoneOnIt() async {
+        let server = FakeProfileServer(["walkPace": "normal", "homeWalkMin": 5])
+        let s = saver(server)
+        server.changeElsewhere("clock", "24")
+        s.edit { $0.walkPace = "slow" }
+        await s.flush()
+        XCTAssertEqual(server.puts.count, 1)
+        XCTAssertEqual(server.puts.first?["clock"] as? String, "24")
+        XCTAssertEqual(s.doc?.walkPace, "slow")
+        XCTAssertEqual(s.doc?.clock, "24")
+    }
+
+    func testARefusalPutsBackTheSavedProfileAndSaysWhy() async {
+        let server = FakeProfileServer(["walkPace": "normal", "homeWalkMin": 5])
+        server.refuse = ApiError(status: 400, message: "walkPace is not allowed")
+        let s = saver(server)
+        var said: [String] = []
+        s.say = { said.append($0) }
+        s.edit { $0.walkPace = "fast" }
+        await s.flush()
+        XCTAssertEqual(s.doc?.walkPace, "normal")
+        XCTAssertEqual(said.count, 1)
+        XCTAssertTrue(said.first?.contains("walkPace is not allowed") == true)
+    }
+
+    func testAnEditWhileSavingIsSavedNextOnWhatWasSaved() async {
+        let server = FakeProfileServer(["walkPace": "normal", "homeWalkMin": 5])
+        let s = saver(server)
+        s.edit { $0.walkPace = "fast" }
+        s.sendNow()
+        s.edit { $0.homeWalkMin = 9 }
+        XCTAssertEqual(s.doc?.walkPace, "fast")
+        XCTAssertEqual(s.doc?.homeWalkMin, 9)
+        try? await Task.sleep(for: .milliseconds(60))
+        await s.flush()
+        XCTAssertEqual(server.puts.count, 2)
+        XCTAssertEqual(server.puts.last?["walkPace"] as? String, "fast")
+        XCTAssertEqual(server.puts.last?["homeWalkMin"] as? Int, 9)
+    }
+
+    func testTwoChangesElsewhereInARowStillSave() async {
+        let server = FakeProfileServer(["walkPace": "normal", "homeWalkMin": 5])
+        let base = server.wire
+        let racing = Conflicts(1)
+        let wire = ProfileWire(
+            fetch: { t in
+                let r = try await base.fetch(t)
+                if racing.take() { server.changeElsewhere("clock", "24") }
+                return r
+            },
+            save: base.save)
+        let s = ProfileSaver(wire: wire, wait: .milliseconds(20))
+        s.token = { "t" }
+        s.loaded(ProfileDoc(["walkPace": "normal", "homeWalkMin": 5]), tag: "1")
+        var said: [String] = []
+        s.say = { said.append($0) }
+        server.changeElsewhere("dayStartMin", 420)
+        s.edit { $0.walkPace = "slow" }
+        await s.flush()
+        XCTAssertEqual(server.puts.count, 1)
+        XCTAssertEqual(s.doc?.walkPace, "slow")
+        XCTAssertEqual(s.doc?.clock, "24")
+        XCTAssertTrue(said.isEmpty)
+    }
+}
+
+private final class Conflicts: @unchecked Sendable {
+    private let lock = NSLock()
+    private var left: Int
+
+    init(_ n: Int) { left = n }
+
+    func take() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard left > 0 else { return false }
+        left -= 1
+        return true
+    }
+}
