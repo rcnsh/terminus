@@ -97,7 +97,7 @@ export class Trip {
     const stored = await this.storedDay();
     const next = today(stored, u.date);
     let changed = next !== stored;
-    const fresh = (key: string) => typeof u.basis?.[key] !== 'number' || tripRev(next, key) === u.basis[key];
+    const fresh = (key: string) => typeof u.basis?.[key] === 'number' && tripRev(next, key) === u.basis[key];
     const plansIn = Object.entries(u.plans ?? {}).filter(([key]) => fresh(key));
     for (const { key, rec } of u.items ?? []) {
       if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;

@@ -600,7 +600,7 @@ test('the Trip object saves a plan only from the revision of the trip it reads: 
   day = await post({ plans: { t: plan('R2') }, basis: { t: 4 } });
   assert.equal(day.plans.t.svc, 'R2', 'one from the revision stored is saved');
   day = await post({ plans: { t: plan('A1') } });
-  assert.equal(day.plans.t.svc, 'A1', 'an older Worker sends no basis: saved as always');
+  assert.equal(day.plans.t.svc, 'R2', 'a plan with no basis is dropped');
   day = await post({ plans: { u: plan('D2') }, basis: { u: 0 } });
   assert.equal(day.plans.u.svc, 'D2', 'another trip’s revision is its own');
 });
