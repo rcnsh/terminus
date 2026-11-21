@@ -1,4 +1,4 @@
-const SHELL = 'shell-v25';
+const SHELL = 'shell-v26';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -17,6 +17,7 @@ const SHELL_FILES = [
   '/app/app.css',
   '/assets/tabbar.css',
   '/assets/ui.js',
+  '/assets/storage.js',
   '/vendor/preact-10.29.8/preact.mjs',
   '/vendor/preact-10.29.8/hooks.mjs',
   '/vendor/preact-10.29.8/htm.mjs',

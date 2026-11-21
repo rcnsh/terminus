@@ -1618,6 +1618,12 @@ map; and Settings. It uses the same routes as the account page, with the session
   counted on past as many as the board shows, in whole seconds toward
   zero as the apps count. A call that ends after a newer one never puts
   back older times.
+- **What the browser keeps.** The website's modules read and write
+  `localStorage` and `sessionStorage` through `assets/storage.js` (`local`,
+  `perTab`): blocked storage (private browsing, site data off) reads as
+  null and a write returns false, so each choice just isn't remembered.
+  The classic scripts in `<head>` (`i18n.js`, `theme.js`, `errors.js`)
+  can't import it and keep one read and one write of their own.
 - **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`

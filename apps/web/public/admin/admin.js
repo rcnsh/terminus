@@ -3,6 +3,7 @@ import { addPasskey, passkeysWork, signIn } from '/admin/passkey.js';
 import { ago, motion, when } from '/admin/parts.js';
 import { Model } from '/admin/model.js';
 import { Accounts, Answers, Arrivals, Collection, Crashes, Devices, Feed, Overview, Reports, SECTIONS, derive } from '/admin/views.js';
+import { local, perTab } from '/assets/storage.js';
 
 const KEY = 'terminus-operator-token';
 const ONLY = 'terminus-timelapse-only';
@@ -13,29 +14,19 @@ const EVERY_MS = 60_000;
 const view = store({ locked: false, msg: '', stats: null, note: '', loading: false, at: 0, only: false });
 
 function token() {
-  try {
-    return sessionStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
+  return perTab.get(KEY);
 }
 
 function timelapseOnly() {
   if (memory) return onlyMemory;
-  try {
-    return sessionStorage.getItem(ONLY) === '1';
-  } catch {
-    return false;
-  }
+  return perTab.get(ONLY) === '1';
 }
 
 function remember(t, only = false) {
-  try {
-    if (t) sessionStorage.setItem(KEY, t);
-    else sessionStorage.removeItem(KEY);
-    if (t && only) sessionStorage.setItem(ONLY, '1');
-    else sessionStorage.removeItem(ONLY);
-  } catch {}
+  if (t) perTab.set(KEY, t);
+  else perTab.remove(KEY);
+  if (t && only) perTab.set(ONLY, '1');
+  else perTab.remove(ONLY);
 }
 
 let memory = null;
@@ -316,17 +307,9 @@ function useRoute() {
 }
 
 function useAuto() {
-  const [auto, setAuto] = useState(() => {
-    try {
-      return localStorage.getItem(AUTO) !== 'off';
-    } catch {
-      return true;
-    }
-  });
+  const [auto, setAuto] = useState(() => local.get(AUTO) !== 'off');
   useEffect(() => {
-    try {
-      localStorage.setItem(AUTO, auto ? 'on' : 'off');
-    } catch {}
+    local.set(AUTO, auto ? 'on' : 'off');
     if (!auto) return undefined;
     const tick = () => document.visibilityState === 'visible' && load();
     const id = setInterval(tick, EVERY_MS);
@@ -341,17 +324,9 @@ function useAuto() {
 }
 
 function useSideNarrow() {
-  const [narrow, setNarrow] = useState(() => {
-    try {
-      return localStorage.getItem(SIDE) === 'narrow';
-    } catch {
-      return false;
-    }
-  });
+  const [narrow, setNarrow] = useState(() => local.get(SIDE) === 'narrow');
   useEffect(() => {
-    try {
-      localStorage.setItem(SIDE, narrow ? 'narrow' : 'wide');
-    } catch {}
+    local.set(SIDE, narrow ? 'narrow' : 'wide');
   }, [narrow]);
   return [narrow, setNarrow];
 }

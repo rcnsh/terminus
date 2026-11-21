@@ -51,6 +51,7 @@ import {
 } from '/app/timing.js';
 import { PullToRefresh } from '/app/pull.js';
 import { TABS, tabOf } from '/app/tabs.js';
+import { local } from '/assets/storage.js';
 
 const DAY_MS = 120_000;
 
@@ -86,18 +87,12 @@ let shared = null;
 const ADDED_MAX = 5;
 const added = store(readAdded());
 function readAdded() {
-  try {
-    const list = JSON.parse(localStorage.getItem(ADDED_PLACES_KEY) ?? '[]');
-    return Array.isArray(list) ? list.filter((x) => typeof x?.to === 'string' && typeof x?.label === 'string').slice(0, ADDED_MAX) : [];
-  } catch {
-    return [];
-  }
+  const list = local.json(ADDED_PLACES_KEY);
+  return Array.isArray(list) ? list.filter((x) => typeof x?.to === 'string' && typeof x?.label === 'string').slice(0, ADDED_MAX) : [];
 }
 function keepAdded(list) {
   added.set(list);
-  try {
-    localStorage.setItem(ADDED_PLACES_KEY, JSON.stringify(list));
-  } catch {}
+  local.set(ADDED_PLACES_KEY, JSON.stringify(list));
 }
 const favouriteNamed = (label) => places.get().find((p) => p.label.toLowerCase() === label.toLowerCase());
 function addPlace(to, label) {
@@ -691,10 +686,7 @@ function InstallHint() {
   const shown = useRef(null);
   const hidden = useStore(installDismissed);
   if (shown.current === null) {
-    let dismissed = false;
-    try {
-      dismissed = localStorage.getItem('install-dismissed') === '1';
-    } catch {}
+    const dismissed = local.get('install-dismissed') === '1';
     const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
     shown.current = iPhone && safari && !standalone && !dismissed;
   }
@@ -721,9 +713,7 @@ function InstallHint() {
         class="btn small ghost"
         onClick=${() => {
           installDismissed.set(true);
-          try {
-            localStorage.setItem('install-dismissed', '1');
-          } catch {}
+          local.set('install-dismissed', '1');
         }}
       >${t('Not now')}</button>
     </section>
