@@ -1,14 +1,3 @@
-/**
- * How good the feed's arrival times are: each `arrival` row in Analytics
- * Engine (a plate, a stop, the seconds the feed gave) against when the
- * timelapse recorder saw that plate reach the stop (passingsOf). The cron
- * scores each closed day into `eta/YYYY-MM-DD.json` (scoreEtas); the
- * dashboard reads the last 14 (etaSummary). Nothing calls NUS. Off unless
- * the operator turns `eta` on (collect.ts). Good to about 15 s either way:
- * a prediction can be up to TTL.arrivalsMs old when logged, and positions
- * are read every pollMs. See docs/analytics.md, *Arrival-time accuracy (`eta`)*.
- */
-
 import type { Env } from '../types.ts';
 import { GRAPH } from '../answer/graph.ts';
 import { shapeFor, type RouteShape } from '../map/campus.ts';
@@ -19,89 +8,58 @@ import { sharedColumns } from '../analytics-rows.ts';
 import { SGT_MS } from '../config.ts';
 
 const DAY = 86_400_000;
-/** A bus counts as at a stop this many metres before the stop's mark on its line. */
 const ARRIVE_BEFORE_M = 25;
-/** Two readings further apart than this say nothing about what happened between. */
 const MAX_GAP_MS = 120_000;
-/** Faster than this between two readings is a bad fix, not a bus (about 72 km/h). */
 const MAX_SPEED_MPS = 20;
-/** A prediction is matched to the plate's first arrival this long after it was given at most. */
 const LATE_LIMIT_MS = 30 * 60_000;
-/** Predictions further ahead than this aren't scored: the feed only shows the next two buses. */
 const MAX_ETA_S = 30 * 60;
-/** Rows kept per day, so one busy day can't make a huge file. */
 const MAX_ROWS = 20_000;
-/** A recorded day this many days back not yet scored is still picked up: the model's window (etashadow.ts). */
 const SCORE_DAYS = 28;
 
 export const etaKey = (date: string) => `eta/${date}.json`;
 
-/** A plate reaching a stop: [t] epoch ms. */
 export interface Passing {
   svc: string;
   plate: string;
   stop: string;
   t: number;
-  /** When it could first be known: the reading that confirmed it, later than [t] when the bus was seen on either side of the stop. */
   seen?: number;
 }
 
-/** What the feed said: at [t], [plate] would reach [stop] in [etaS]. */
 export interface Prediction {
   t: number;
   svc: string;
   plate: string;
   stop: string;
   etaS: number;
-  /** The rows this one stands for: Analytics Engine samples at high volume
-   *  (its `_sample_interval`). 1 when absent. */
   w?: number;
-  /** The feed's busStopCode: `-S` at a route's first stop is a bus leaving (see departs). */
   berth?: string;
 }
 
-/**
- * A time for a bus leaving a route's first stop (the `-S` berth), not
- * arriving: buses wait there for their departure time, so its arrival,
- * minutes before, says nothing about it. Not scored.
- */
 export function departs(p: Pick<Prediction, 'berth'>): boolean {
   return !!p.berth?.toUpperCase().endsWith('-S');
 }
 
-/** One scored prediction: [errS] is how much later than said the bus came (negative: earlier). */
 export interface Scored {
   svc: string;
   etaS: number;
   errS: number;
-  /** Singapore hour the prediction was given in, 0 to 23. */
   hour: number;
 }
 
-/**
- * How eta.ts scores a day: kept as the file's `v` and in its R2 metadata,
- * so a day scored the older way is scored again (2: departures left out;
- * 3: passings measured from the last good reading).
- */
 export const ETA_V = 3;
 
-/** Whether the R2 object [head] is a day scored as ETA_V says. */
 export const scoredNow = (head: R2Object | null) => head?.customMetadata?.v === String(ETA_V);
 
-/** The day as kept in R2: rows are [service index, etaS, errS, hour]. Older versions have the same rows, scored the older way. */
 export interface EtaDay {
   v: 1 | 2 | typeof ETA_V;
   date: string;
-  /** Predictions read (after dropping repeats of one cached answer), and how
-   *  many found their bus, each sampled row counted for the rows it stands
-   *  for. `rows` are the rows read: under sampling, an even sample. */
   predictions: number;
   matched: number;
   services: string[];
   rows: [number, number, number, number][];
 }
 
-/** The line each service is recorded on, when it's the one this deploy has: [shape, loop]. */
 function linesOf(day: Pick<DayFile, 'routes' | 'services'>): Map<string, { shape: RouteShape; loop: boolean }> {
   const recorded = lineKeys(day);
   const now = lineKeys(null);
@@ -109,7 +67,6 @@ function linesOf(day: Pick<DayFile, 'routes' | 'services'>): Map<string, { shape
   for (const svc of day.services) {
     const seq = GRAPH.routes?.[svc] ?? [];
     const shape = shapeFor(svc, seq);
-    // A day recorded on another line measured its metres on that one.
     if (!shape || !recorded[svc] || recorded[svc] !== now[svc]) continue;
     const loop = GRAPH.loops?.[svc] ?? (seq.length > 2 && seq[0] === seq[seq.length - 1]);
     out.set(svc, { shape, loop });
@@ -117,39 +74,12 @@ function linesOf(day: Pick<DayFile, 'routes' | 'services'>): Map<string, { shape
   return out;
 }
 
-/**
- * A reading up to this far behind the last is the bus there: GPS error, or
- * reversing (A1 and A2 back out of Kent Ridge Bus Terminal along the road
- * they came in by, as buses.ts HOLD_BACK_M). Further back is a bus placed
- * on the far side of a road its line takes both ways.
- */
 const BACK_M = 500;
-/** Readings in a row that agree with each other, not with where the bus was, before it's taken to have moved there. */
 const RUN_TO_MOVE = 3;
-/** Round a loop's end and back to its start, or on to a one-way route's next trip, within this of the two ends together. */
 const WRAP_M = 1200;
 
-/**
- * Every time a recorded bus reached a stop on its line, from its metres
- * along the line in successive readings: the moment it passed the mark
- * ARRIVE_BEFORE_M before the stop, interpolated between the reading before
- * and the one after. Each reading is measured from the last good one (it
- * could have driven there: not far back, nor faster than a bus). One that
- * couldn't is passed over, a bus placed for a reading or two on the far
- * side of a road its line takes both ways, until RUN_TO_MOVE in a row agree
- * with each other: then the bus is there. With no good reading in the last
- * MAX_GAP_MS, two agreeing are enough. From a loop's end its start is
- * ahead, and from a one-way route's end a new trip begins, within WRAP_M of
- * the two ends together. Each passing carries `seen`, the reading that
- * confirmed it (an accepted run's last), so a score never uses a reading
- * that hadn't arrived. A stop is passed once: after a step back, the bus
- * driving on doesn't pass the stops it already had again (A1 and A2 would
- * otherwise reach KRB on arriving and again on leaving). A one-way route's
- * first stop is where a bus starts, not arrives, so it has none.
- */
 export function passingsOf(day: DayFile): Passing[] {
   const lines = linesOf(day);
-  // Each bus's readings, in order: [t, along].
   const series = new Map<string, { svc: string; plate: string; fixes: [number, number][] }>();
   let t = day.t0;
   for (const s of day.samples) {
@@ -170,21 +100,16 @@ export function passingsOf(day: DayFile): Passing[] {
   for (const { svc, plate, fixes } of series.values()) {
     const { shape, loop } = lines.get(svc)!;
     const total = shape.at.at(-1) ?? 0;
-    // On a loop the last stop is the first again; a one-way route's first is skipped.
     const stops = loop
       ? shape.stops.slice(0, -1).map((code, k) => ({ code, mark: shape.at[k] }))
       : shape.stops.slice(1).map((code, k) => ({ code, mark: shape.at[k + 1] }));
-    /** Metres driven from [from] to [to], or null when no bus could have: far back, too fast, or too long apart. */
     const drive = ([t1, a1]: [number, number], [t2, a2]: [number, number]): number | null => {
       const dt = t2 - t1;
       if (dt <= 0 || dt > MAX_GAP_MS) return null;
       let d = a2 - a1;
-      // Round the end: anywhere else, a reading far back is the far side of the road, not a lap ahead.
       if (total > 0 && total - a1 + a2 <= WRAP_M && d < 0) d = loop ? d + total : 0;
       return d < -BACK_M || d / (dt / 1000) > MAX_SPEED_MPS ? null : d;
     };
-    // Metres driven since the bus was last found somewhere new, and the
-    // furthest it got: a stop is passed once, not again after a step back.
     let odo = 0;
     let peak = 0;
     const cross = ([t1, a1]: [number, number], d: number, dt: number, seen: number) => {
@@ -196,15 +121,12 @@ export function passingsOf(day: DayFile): Passing[] {
         let target = mark - ARRIVE_BEFORE_M;
         if (loop && total > 0) {
           target = ((target % total) + total) % total;
-          // Crossed after wrapping round: measure it on the far side of the end.
           if (target <= a1) target += total;
         }
         if (target > from && target <= a1 + d) out.push({ svc, plate, stop: code, t: Math.round(t1 + ((target - a1) / d) * dt), seen });
       }
     };
-    // Where the bus is: the last reading that agreed with the one before.
     let good: [number, number] | null = null;
-    // Readings since that agree with each other but not with it.
     let run: [number, number][] = [];
     for (const fix of fixes) {
       const fromGood = good && drive(good, fix);
@@ -221,7 +143,6 @@ export function passingsOf(day: DayFile): Passing[] {
         continue;
       }
       run.push(fix);
-      // Against where it was, three readings say it's moved; with nowhere to go on, two.
       if (run.length < (good && fix[0] - good[0] <= MAX_GAP_MS ? RUN_TO_MOVE : 2)) continue;
       odo = peak = 0;
       for (let k = 1; k < run.length; k++) cross(run[k - 1], drive(run[k - 1], run[k])!, run[k][0] - run[k - 1][0], fix[0]);
@@ -232,15 +153,6 @@ export function passingsOf(day: DayFile): Passing[] {
   return out.sort((a, b) => a.t - b.t);
 }
 
-/**
- * Each prediction against the first time its plate reached its stop: from
- * the moment it was given (a minute earlier for one that said under two
- * minutes, since a bus about to arrive may already be there), to
- * LATE_LIMIT_MS after the time it said. A prediction that never found its
- * bus (off its line, or a gap in the recording) isn't scored, nor is a
- * bus leaving its first stop (departs). Repeats of one cached answer (the
- * same plate, stop and 15 s) count once.
- */
 export function scoreEtas(predictions: Prediction[], passings: Passing[]): { scored: Scored[]; predictions: number; matched: number } {
   const byKey = new Map<string, number[]>();
   for (const p of passings) {
@@ -270,18 +182,11 @@ export function scoreEtas(predictions: Prediction[], passings: Passing[]): { sco
   return { scored, predictions: count, matched };
 }
 
-/** An Analytics Engine timestamp ("2026-10-10 04:05:06", UTC) as epoch ms. */
 export function aeTime(s: unknown): number {
   const text = String(s);
   return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`);
 }
 
-/**
- * Analytics Engine's prediction rows with each question once: from the first
- * 'board' row on, the boards, and the answers' 'arrival' rows only before it
- * (predictionsFor). A row without a kind is an 'arrival' row. Hours the
- * operator stopped collecting `eta` after the first board have neither.
- */
 export function askedOnce<R extends { kind?: unknown; timestamp?: unknown }>(rows: R[]): R[] {
   let firstBoard = Infinity;
   for (const r of rows) {
@@ -294,21 +199,11 @@ export function askedOnce<R extends { kind?: unknown; timestamp?: unknown }>(row
   });
 }
 
-/**
- * The predictions logged inside day [date]'s recording window, from
- * Analytics Engine: the boards as fetched ('board' rows) from the first one
- * logged, and before it the stops answers chose ('arrival' rows, timed when
- * the answer was made, up to a cached board's age after the fetch). Never
- * both at once: they ask the same questions twice.
- */
 export async function predictionsFor(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch): Promise<Prediction[]> {
   const { open, close } = windowOf(date);
-  // Days back to reach the window's start, with one to spare, and whole
-  // hours back to its close, at most: Analytics Engine's SQL counts back from now.
   const days = Math.ceil((nowMs - open) / DAY) + 1;
   const hours = Math.max(0, Math.floor((nowMs - close) / 3_600_000));
   const dataset = env.AE_DATASET || 'terminus';
-  // One query for both kinds: 'board' rows keep the columns 'arrival' rows do (analytics-rows.ts ROWS).
   const c = sharedColumns('arrival', 'board');
   const rows = await aeSql(
     env,
@@ -317,7 +212,6 @@ export async function predictionsFor(env: Env, date: string, nowMs: number, fetc
       AND timestamp < NOW() - INTERVAL '${hours}' HOUR`,
     fetchImpl,
   );
-  // The day's own rows first: a board on the day before doesn't say this day had them.
   const inWindow = rows.filter((r) => {
     const t = aeTime(r.timestamp);
     return t >= open && t < close;
@@ -340,7 +234,6 @@ export async function gunzipJson<T>(gz: ArrayBuffer): Promise<T> {
   return (await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).json()) as T;
 }
 
-/** Day [date] scored, as kept: reads the recording and the day's predictions. */
 export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<EtaDay | null> {
   const stored = await env.FILES!.get(dayKey(date));
   if (!stored) return null;
@@ -358,15 +251,8 @@ export async function scoreDay(env: Env, date: string, nowMs: number, fetchImpl:
   };
 }
 
-/**
- * The cron's step: the oldest of the last SCORE_DAYS recorded days not yet
- * scored (as ETA_V says), one a run, the order the shadow model needs them in. Needs the recording (so the recorder has closed the
- * day) and Analytics Engine's SQL API to read the predictions with.
- */
 export async function recordEta(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<string | null> {
   if (!env.FILES || !env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !(await collecting(env, 'eta'))) return null;
-  // The latest service day may still be recording (or closed an hour ago,
-  // before the next opens): only a closed window is done.
   const previous = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
   let latest = serviceDate(nowMs);
   if (windowOf(latest).close > nowMs) latest = previous(latest);
@@ -386,7 +272,6 @@ export async function recordEta(env: Env, nowMs: number, fetchImpl: typeof fetch
   return null;
 }
 
-/** How far ahead a prediction looked, minutes: the dashboard's rows. */
 export const HORIZONS: { label: string; maxS: number }[] = [
   { label: 'under 2 min', maxS: 120 },
   { label: '2 to 5 min', maxS: 300 },
@@ -396,9 +281,7 @@ export const HORIZONS: { label: string; maxS: number }[] = [
 
 export interface EtaStats {
   n: number;
-  /** The middle error, s: positive is the bus coming later than said. */
   medianS: number | null;
-  /** Shares, 0 to 1: within a minute of what was said; over 2 minutes later; over a minute earlier. */
   within1: number | null;
   late2: number | null;
   early1: number | null;
@@ -414,7 +297,6 @@ export function statsOf(errs: number[]): EtaStats {
   return { n, medianS, within1: share((e) => Math.abs(e) <= 60), late2: share((e) => e > 120), early1: share((e) => e < -60) };
 }
 
-/** The last [days] scored days, together: by how far ahead, by service, by hour. */
 export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Record<string, unknown> | null> {
   if (!env.FILES) return null;
   const dates = Array.from({ length: days }, (_, i) => new Date(nowMs + SGT_MS - (i + 1) * DAY).toISOString().slice(0, 10));
@@ -434,8 +316,6 @@ export async function etaSummary(env: Env, nowMs: number, days = 14): Promise<Re
   const byHour = group((s) => s.hour);
   const bySvc = group((s) => s.svc);
   return {
-    // Under sampling the two counts are estimates (repeats are dropped
-    // before each row is weighted); matched / predictions is what's reliable.
     days: kept.map((d) => ({ date: d.date, predictions: d.predictions, matched: d.matched })),
     overall: statsOf(all.map((s) => s.errS)),
     horizons: HORIZONS.map((h, i) => ({

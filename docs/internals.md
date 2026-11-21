@@ -176,7 +176,10 @@ anything else (a script with an API key, a page open since before) gets a
 `/api/next`, `/api/trip`, `/api/arrivals`, `/api/buses`, `/api/line`, `/api/campus` and `/api/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
 session or device; without one they answer 401 with `WWW-Authenticate`. A key opens
-these routes only: on `/api/me/*` it is not a session, and gets 401. They're
+these routes only: on `/api/me/*` it is not a session, and gets 401. A
+bearer token starting `tk_` that is no key is still tried as a session:
+sessions are random base64url, and about 1 in 262,144 starts that way. A
+key's `last_used` is written at most every 10 minutes. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
@@ -794,7 +797,20 @@ change and once the second bus has gone (`changesAt`).
   - The wake's last writes hold the object like a POST: an `/update` asking
     for a sooner wake, or a `/clear`, that came in meanwhile stands.
   - At the Worker's compatibility date `deleteAll()` leaves the alarm, so
-    `/clear` and midnight delete it first.
+    `/clear` and midnight delete it first; a SQLite object's `deleteAll()`
+    inside its own alarm has failed without that.
+  - A POST to the object runs under `blockConcurrencyWhile`: it reads the
+    day, waits for its body and writes the day back, and two devices'
+    changes at once would otherwise put back a copy from before the other.
+    A day keeps at most `MAX_DAY_TRIPS` (64) trips and `STEP.maxTrips`
+    steps, so the record stays far below a stored value's size limit.
+  - A Live Activity's end, or a trip's end, that didn't go (APNs paused)
+    fails the wake, so it's tried again rather than leaving a finished trip
+    on the Lock Screen.
+  - FCM's OAuth token is signed by the Worker from `FCM_SERVICE_ACCOUNT`
+    (RS256, WebCrypto) and kept in KV for 50 minutes; each isolate keeps
+    it too, one read back from KV only for the part of its life certainly
+    left.
   - Each call to Firebase has a 5 s limit, and each device is sent to on
     its own, so one that fails or hangs doesn't keep the push from the
     rest. A token is dropped only when FCM says it's unregistered (404,
@@ -903,7 +919,14 @@ change and once the second bus has gone (`changesAt`).
   `apns-topic` (the bundle id; `<bundle id>.push-type.liveactivity` for a
   Live Activity), `apns-push-type`, `apns-priority`, `apns-expiration` and,
   for alerts, `apns-collapse-id` (`card` or `term`, as Android's
-  collapse key), 5 s per call.
+  collapse key), 5 s per call. `time-sensitive` breaks through a Focus
+  only with the app's Time Sensitive Notifications capability; without it
+  iOS treats it as `active`. A Live Activity push carries a `timestamp`, so
+  the phone drops one that arrives after a newer one, and priority 10 only
+  when the phase changed: Apple budgets those. A start sets
+  `input-push-token: 1`, which iOS 18 needs to send the new activity's
+  update token (iOS 17 sends it anyway). Apple says not to rely on a device
+  token's length (32 bytes today), and an activity's is longer.
 - **What an iPhone is sent**, where Android gets its data message:
   - time to look (due, missed, a tap on another device): an `alert` with
     the card's words (title `card.phaseText`, else its heading or title;
@@ -974,7 +997,8 @@ change and once the second bus has gone (`changesAt`).
 - **The Live Activity's `content-state`** (`liveActivityState`, the
   `LiveActivityState` type), from `/api/me/next`'s answer and card. Every
   key is always present, null when it doesn't apply; times are whole
-  epoch seconds (`Int`, read with `Date(timeIntervalSince1970:)`):
+  epoch seconds (`Int`, read with `Date(timeIntervalSince1970:)`; not
+  `Date`, which a default decoder counts from 2001):
 
   | Key | Type | What |
   | --- | --- | --- |
@@ -1168,6 +1192,61 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - The link in the email opens a page with a button, and only the button's
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
+- The web cookie is `__Host-tm_s`: the prefix pins it to this exact host
+  over HTTPS, so a sibling `*.terminus.run` or `*.rcn.sh` site can't set or
+  shadow it. Devices are named to the account page by a prefix of their
+  token hash, enough to revoke one and useless for signing in.
+- Addresses are plain (`normalizeEmail`): a `,`, `<` or `>` in the local
+  part is refused, since "x,blocked@example.com" is a different string from
+  a blocked address but could still reach it. Cooldowns, budgets and the
+  blocklist go by inbox (`inboxKey`: dots and `+tags` at Gmail are one
+  inbox); mail goes to the address as typed. Pairing codes leave out 0/O,
+  1/I/L and U, and every character is equally likely (rejection sampling).
+- The per-inbox hourly budget (`MAILS_PER_HOUR`), the day's wrong codes and
+  the operator's feedback mails (`OPERATOR_MAILS_PER_DAY`) are soft caps in
+  KV, which isn't atomic; each code's tries, the cooldown, a day's reports
+  and an account's API keys are counted in the same D1 statement that
+  writes, so requests at once can't all pass. An inbox over its budget is refused
+  before the global ceiling is taken, so it spends nothing of everyone's.
+- An email that fails to send deletes its link or app request, so the
+  cooldown isn't held by a message that never went. Sign-in emails put the
+  code first, in the subject too: a lone link under "Sign in to ..." is the
+  shape of a phishing mail, and filters treat it as one. A device's name
+  goes into emails, so it keeps only letters, digits and a little
+  punctuation, never a link or a line break.
+- `last_seen` is rewritten at most hourly (`touchMs`), or at once when the
+  app's `x-terminus-client` changes, so the dashboard's versions are
+  current. A failed write is logged: the cron deletes anonymous accounts by
+  `last_seen`, so one that kept failing would lose accounts in use. That
+  sweep names its index (`INDEXED BY users_anon_idle`): D1's planner
+  otherwise takes the UNIQUE email index and reads every anonymous account.
+- Every profile save's version is later than the one it replaces, even
+  within a millisecond, so a conditional write never mistakes one for
+  another. One-off trips are dropped once their day has passed. An import
+  with any module NUSMods didn't return replaces nothing, and imports are
+  limited per account (`import:` on `RL_AUTH`): each can fetch 15 modules.
+- Trip keys from a client become stored rows (signals, outcomes, choices),
+  so only the profile's own trips and a trip home are taken, and an
+  account keeps at most `MAX_PREFS` (200) trip choices, the oldest going
+  first. Answering a suggestion either way starts its count again, so the
+  same days can't suggest it twice.
+- `/api/me/day`'s plan is kept up to a minute per user (`dayCached`), keyed
+  by everything it's worked out from (profile, today's record, clock,
+  language, rough location), since a phone, a Mac and a tab each ask every
+  30 s or so.
+- A capped feedback report answers 429 with `Retry-After: 60`, not a day:
+  every client holds back all its requests until then. "This wasn't me"
+  answers app sign-ins to the address with a refusal other than 429, which
+  the apps would take as "wait" and hold back pairing too, the way in it
+  points them to.
+- Emailed links use the Worker's own site (`emailOrigin`, after
+  `linkOrigin`), whatever hostname the request came in on (a workers.dev
+  preview); only local development uses the request's origin.
+- A Turnstile site key without its secret is a broken rotation, and refuses
+  sign-in rather than quietly opening it. Turnstile not answering, or
+  refusing our secret, is logged and told to the visitor as "try again",
+  not as their failure. Deleting an account also forgets a sign-in code
+  still waiting in KV for its address.
 
 Setup and deploys: `pnpm run deploy` (and `deploy:beta`) first runs
 `scripts/deploy/predeploy.mjs`, which refuses a tree with unmerged files, conflict
@@ -1417,6 +1496,14 @@ map; and Settings. It uses the same routes as the account page, with the session
   its payload encrypted with aes128gcm, using WebCrypto only. Only
   subscriptions on browsers' push services are kept (FCM, Mozilla, Apple,
   Windows): the Worker POSTs to the endpoint, so any other host is refused.
+  Each push has a `Topic`, so a newer nudge replaces one not yet delivered,
+  and follows no redirect. A 404 or 410 forgets the subscription; anything
+  else keeps it. A 401 or 403 is the push service refusing our VAPID
+  signature (a key the browser didn't subscribe with, or a clock that reads
+  the token as expired): the browser's side is still good, and the web app
+  renews it with the current key when next opened. A VAPID key that won't
+  parse is logged once per isolate by the secret's name only, since a parse
+  error can quote the value.
 - **Every day, whether or not the app is open.** A Trip object only watches
   once a request asks it to. The Android app asks from its background
   refresh, but a Home Screen web app makes no requests unless it's opened. So
@@ -2236,6 +2323,11 @@ itself, so a session can't add passkeys.
 - To remove a lost device's passkey, edit `operator:passkeys` in KV; to
   remove every passkey and session, delete the key and rotate
   `HEALTH_TOKEN`. Scripts and `curl` still send `HEALTH_TOKEN` as before.
+- Each MAC carries a label (`challenge`, `session`), so a challenge never
+  passes as a session or back, and a session is exactly `op1.<expiry>.<mac>`:
+  anything after the MAC, however well signed, is no session.
+  `?register=1` checks the token before the browser makes a passkey, so a
+  mistyped token never leaves one on the device that the server won't know.
 
 ## Auth, confirmed
 
@@ -2336,6 +2428,22 @@ email that fails, or takes over 15 s, is sent again the next run). KV takes
 one write a second to a key, so the state is written once a run: a delivered
 alert is noted under `monitor:alerted`, and the next run clears it from the
 state. Each run puts the outage list right if an earlier write of it failed.
+
+The health check asks NUS for `COM3` (`PROBE_STOP`), served by several
+routes almost all day, and LTA for the Central Library's shelter
+(`PUBLIC_PROBE`, 16181), where the 95 and 151 call all day. One failed
+check is often a blip (NUS answers some requests with a 400), which is why
+it takes two. The public feed's state has no alerts: the shuttle is the
+product. Its cron steps each run on their own, so a KV failure doesn't stop
+D1 cleanup or the reverse; the healthchecks.io ping (`HEARTBEAT_URL`, the
+stable site only) goes last, after steps that failed too (those are on the
+dashboard), so it only notices a cron that stopped or a run that died.
+`armTrips` and `remindTerm` take at least one user a batch, since an empty
+batch would never finish the day, and a retry list keeps everything a run
+asked that failed, up to two batches. The term reminder retries only a
+send that failed: a user with no device it could go to would fail every
+time. Retried users' profiles are read 50 at a time (D1 binds at most 100
+values).
 
 **The beta's checks.** Only the stable Worker's cron asks NUS and LTA (one
 stop each, past the cache). Both Workers run the cron, and the beta asking
