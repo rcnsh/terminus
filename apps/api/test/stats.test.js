@@ -341,7 +341,6 @@ test("requests made with an API key are counted against it only while switched o
   const ae = makeAnalytics();
   const db = makeD1();
   const env = { ...makeEnv(makeKV(), ae), DB: db, HEALTH_TOKEN: 'op' };
-  delete env[Symbol.for('terminus.testOpen')];
   const now = Date.now();
   db._db.prepare('INSERT INTO users (id, email, created, last_seen) VALUES (?, ?, ?, ?)').run('u1', 'dev@u.nus.edu', now, now);
   db._db.prepare('INSERT INTO users (id, email, created, last_seen) VALUES (?, ?, ?, ?)').run('u2', null, now, now);

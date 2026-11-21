@@ -111,13 +111,15 @@ async function hkdf(salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, bytes: 
   return new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, bytes * 8));
 }
 
+type EcdhKeyDeriveParams = SubtleCryptoDeriveKeyAlgorithm & { public: CryptoKey };
+
 export async function encryptPayload(sub: WebSubscription, payload: Uint8Array): Promise<Uint8Array> {
   const uaPublic = fromB64url(sub.keys.p256dh);
   const authSecret = fromB64url(sub.keys.auth);
   const local = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
   const asPublic = new Uint8Array((await crypto.subtle.exportKey('raw', local.publicKey)) as ArrayBuffer);
   const uaKey = await crypto.subtle.importKey('raw', uaPublic, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-  const ecdh = { name: 'ECDH', public: uaKey } as unknown as SubtleCryptoDeriveKeyAlgorithm;
+  const ecdh: EcdhKeyDeriveParams = { name: 'ECDH', public: uaKey };
   const shared = new Uint8Array(await crypto.subtle.deriveBits(ecdh, local.privateKey, 256));
 
   const ikm = await hkdf(authSecret, shared, concat(enc.encode('WebPush: info\0'), uaPublic, asPublic), 32);

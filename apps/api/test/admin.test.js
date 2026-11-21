@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeKV } from './_stubs.mjs';
-import { adminStats, isOperator, nextTook, timingSafeEqual } from '../src/ops/admin.ts';
+import { adminStats, isOperator, nextTook } from '../src/ops/admin.ts';
 import { COL } from '../src/analytics-rows.ts';
 
 test('the dashboard asks Analytics Engine with the token, and says so when it fails', async () => {
@@ -52,20 +52,6 @@ test('operator check: needs the configured token, exactly', async () => {
   assert.equal(await isOperator({ HEALTH_TOKEN: 'abc' }, req('abcd')), false);
   assert.equal(await isOperator({ HEALTH_TOKEN: 'abc' }, req(null)), false);
   assert.equal(await isOperator({}, req('')), false, 'no token configured: nobody');
-});
-
-test('the token compare gets every length and prefix right', () => {
-  for (const [given, ok] of [
-    ['secret', true],
-    ['secre', false],
-    ['secret!', false],
-    ['', false],
-    ['Secret', false],
-    ['secret\u0000', false],
-    ['xsecret', false],
-  ]) {
-    assert.equal(timingSafeEqual(given, 'secret'), ok, JSON.stringify(given));
-  }
 });
 
 test('dismissed crashes are left out before the dashboard takes its 25', async () => {

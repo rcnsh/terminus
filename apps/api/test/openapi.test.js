@@ -187,7 +187,6 @@ async function world() {
     FILES: downloads(),
     ...w.limit,
   };
-  delete w.env[Symbol.for('terminus.testOpen')];
   const call = (path, opts) => send(w, path, opts);
   w.call = call;
 

@@ -237,7 +237,6 @@ const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateK
 env = {
   ...makeEnv(),
   LTA_ACCOUNT_KEY: 'dev',
-  [Symbol.for('terminus.testOpen')]: false,
   DB: db,
   EMAIL: email,
   EMAIL_FROM: 'login@example.test',

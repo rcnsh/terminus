@@ -3,10 +3,9 @@ import { authenticate, hashToken, newToken, tokenFrom } from './accounts.ts';
 
 export const KEY_PREFIX = 'tk_';
 export const MAX_KEYS = 5;
-export const TEST_OPEN = Symbol.for('terminus.testOpen');
 const TOUCH_MS = 10 * 60_000;
 
-export type Caller = { kind: 'key'; keyId: string; userId: string } | { kind: 'account'; userId: string } | { kind: 'open' };
+export type Caller = { kind: 'key'; keyId: string; userId: string } | { kind: 'account'; userId: string };
 
 function keyFrom(req: Request): { key: string; bearer: boolean } | null {
   const header = req.headers.get('x-api-key')?.trim();
@@ -17,7 +16,6 @@ function keyFrom(req: Request): { key: string; bearer: boolean } | null {
 }
 
 export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<Caller | null> {
-  if ((env as unknown as Record<symbol, unknown>)[TEST_OPEN] === true) return { kind: 'open' };
   const db = env.DB;
   if (!db) return null;
   const found = keyFrom(req);
