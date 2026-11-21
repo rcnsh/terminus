@@ -1120,7 +1120,8 @@ open class OutdatedGate(private val wall: () -> Long = { System.currentTimeMilli
         const val HOLD_MS = 30 * 60_000L
         const val KEY_AT = "outdated-at"
         const val KEY_VERSION = "outdated-version"
-        val ANSWERS = setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/line", "/api/campus", "/api/stops/pairs")
+        val ANSWERS =
+            setOf("/api/next", "/api/trip", "/api/arrivals", "/api/buses", "/api/lines", "/api/line", "/api/campus", "/api/stops/pairs")
     }
 
     @Volatile private var prefs: android.content.SharedPreferences? = null
