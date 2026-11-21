@@ -1,44 +1,23 @@
 import SwiftUI
 import UIKit
 
-/// The app's state: who this phone is signed in as, and what Now shows. The
-/// other tabs keep their own (BusesModel, MapModel, SettingsModel) and ask
-/// here for the token.
-///
-/// Every answer comes from the server, worded; the app only counts down. The
-/// plan is fetched every 30 s while Now is on screen ([pollS]), and kept in
-/// the app group for the widgets and the Live Activity (TripSync).
 @MainActor @Observable
 final class AppModel {
     static let shared = AppModel()
 
-    // MARK: the session
-
-    /// Signed in on this phone (anonymously or with an email).
     private(set) var paired: Bool
-    /// An account without an email: Settings offers to add one.
     var anonymous: Bool { didSet { Shared.defaults.set(anonymous, forKey: "anonymous") } }
-    /// The account's email, once known.
     var email: String? { didSet { Shared.defaults.set(email, forKey: "email") } }
-    /// The account hasn't finished its setup: onboarding shows.
     var needsSetup: Bool { didSet { Shared.defaults.set(needsSetup, forKey: "needsSetup") } }
-    /// Signed in while /me couldn't be asked, so whether setup is done isn't
-    /// known: asked again after each answer that comes through, and if the
-    /// account was never set up, setup takes over (as on Android).
     private var setupUnknown: Bool { didSet { Shared.defaults.set(setupUnknown, forKey: "setupUnknown") } }
     private var askingMe = false
-    /// Why this phone was signed out, said once on the welcome screen.
     var signedOutReason: String?
-    /// Changes with every sign-in and sign-out: a request from before one is dropped.
     private(set) var session = 0
 
     var token: String? { paired ? TokenStore.read() : nil }
     var api: Api { Api(token: token) }
 
-    // MARK: Now
-
     var target: Target = .plan
-    /// The last answer per view, so switching views never blanks the screen.
     private(set) var answers: [Target: NextAnswer] = [:]
     var answer: NextAnswer? { answers[target] }
     var plan: NextAnswer? { answers[.plan] }
@@ -48,22 +27,14 @@ final class AppModel {
         didSet { if setupUnknown, fetchedAt != nil { Task { await refreshMe() } } }
     }
     private(set) var places: [Place] = []
-    /// Places added from "Go somewhere else", a tab each until removed.
     private(set) var added: [Added] = Added.load()
     private(set) var destinations: [Destination] = []
-    /// Today's timeline, under the planned answer.
     private(set) var day: DayPlan?
     private var dayFetched: Date?
-    /// The language `day` is written in (Lang.header's form): for a moment
-    /// after a switch the server still writes the old one, so it's fetched again.
     private var dayLang: String?
-    /// Just taken off Today: its row says so where it was, with Undo (or why it didn't go).
     private(set) var removed: Removed?
-    /// A card button's signal on its way.
     private(set) var signalling = false
-    /// The server no longer serves this version (426).
     private(set) var updateRequired = Outdated.required
-    /// When each view's answer last came back, for a pull sooner than [Pull.freshS] to ask nothing.
     private var answeredAt: [String: Date] = [:]
 
     struct Added: Codable, Hashable, Identifiable {
@@ -76,7 +47,6 @@ final class AppModel {
         }
     }
 
-    /// An entry just taken off Today, kept in its place as a row saying so.
     struct Removed {
         let item: DayPlan.Item
         let at: Int
@@ -84,15 +54,8 @@ final class AppModel {
         var failed = false
     }
 
-    /// The pages to put the Stops tab on, picked elsewhere (Nearby,
-    /// the map's "Show as list"): a stop's board or a service's line over its
-    /// home, or [] for the home itself. Buses shows them and sets this back to nil.
     var openBuses: [BusRoute]?
-    /// The tab on screen. Kept here, not in the view, so a new language
-    /// (which redraws everything) leaves you where you were.
     var tab: MainTabs.Tab = .now
-
-    // MARK: "Is this wrong?"
 
     var reportSending = false
     var reportResult: String?
@@ -105,16 +68,11 @@ final class AppModel {
         email = Shared.defaults.string(forKey: "email")
         needsSetup = Shared.defaults.bool(forKey: "needsSetup")
         setupUnknown = Shared.defaults.bool(forKey: "setupUnknown")
-        // The last plan this phone was shown, while it still holds: drawn at
-        // once on opening the app, then refreshed.
         if paired, let data = Shared.lastAnswer, let a = try? NextAnswer.decode(data), !a.isOld(at: ServerClock.now) {
             answers[.plan] = a
             places = a.places
         }
         if paired, let data = Shared.lastDay, let d = try? JSONDecoder().decode(DayPlan.self, from: data) { day = d }
-        // Woken by a push or a background refresh before the phone's first
-        // unlock, the keychain can't be read yet: that isn't signed out. Look
-        // again once it can, so opening this same process shows the account.
         if !paired {
             NotificationCenter.default.addObserver(
                 forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil, queue: .main
@@ -134,18 +92,12 @@ final class AppModel {
         setupUnknown = Shared.defaults.bool(forKey: "setupUnknown")
     }
 
-    // MARK: signing in and out
-
-    /// A token was just stored (a new account, a sign-in, a pairing): start
-    /// showing answers. [needsSetup] nil: /me couldn't be asked, so it's found out later.
     func signedIn(token: String, anonymous: Bool, email: String? = nil, needsSetup: Bool? = false) {
         let addedEmail = paired && self.anonymous && !anonymous
         TokenStore.save(token)
         session += 1
-        // Maybe another account than the one the map last read (a sign-in from a guest).
         MapModel.shared.reset()
         Task { await MapModel.shared.loadProfile() }
-        // Settings too: an old account's reply, or an edit still waiting, mustn't be saved into this one.
         SettingsModel.shared.reset()
         paired = true
         self.anonymous = anonymous
@@ -164,18 +116,12 @@ final class AppModel {
         Task { await refreshMe() }
     }
 
-    /// Signed out here: local state goes first, so the screen reacts at once
-    /// even offline; the server is told when it can be.
     func signOut() {
         let token = TokenStore.read()
         clearLocal()
         if let token { Task.detached { try? await Api(token: token).logout() } }
     }
 
-    /// The server refused the token (401) while it was still this phone's.
-    /// An account without an email only goes when the server clears it out
-    /// after a long time unused, so it's told that rather than to sign in
-    /// with an email it never had (as Android does).
     func rejected(_ token: String, reason: String) {
         guard TokenStore.read() == token else { return }
         let wasAnonymous = anonymous
@@ -187,7 +133,6 @@ final class AppModel {
                 : L("This phone's setup was removed after a long time unused. Start again or sign in.")) : reason
     }
 
-    /// Everything the account left on this phone.
     func clearLocal() {
         TripSync.signedOut()
         TokenStore.clear()
@@ -211,12 +156,10 @@ final class AppModel {
         Shared.lastAnswer = nil
         Shared.lastDay = nil
         NearbyShared.forget()
-        // Settings outlives the tabs: the next account mustn't see, or save over, this one's.
         SettingsModel.shared.reset()
         MapModel.shared.reset()
     }
 
-    /// Who this phone is, from the server: the email, and whether setup is done.
     func refreshMe() async {
         guard let token, !askingMe else { return }
         askingMe = true
@@ -234,10 +177,7 @@ final class AppModel {
         } catch {}
     }
 
-    // MARK: Now
-
     func select(_ picked: Target) {
-        // Somewhere that's a favourite already is that favourite's tab.
         var t = picked
         if case .code(_, let label) = picked, let p = places.first(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
             t = .place(key: p.key)
@@ -252,13 +192,11 @@ final class AppModel {
         Task { await load(restart: true) }
     }
 
-    /// The Stops tab on `pages` over its home ([] for the home alone), from another tab.
     func showInBuses(_ pages: [BusRoute]) {
         openBuses = pages
         NotificationCenter.default.post(name: .openTab, object: MainTabs.Tab.buses)
     }
 
-    /// The X on an added place's tab: gone; showing it, back to Next.
     func removeAdded(_ a: Added) {
         setAdded(added.filter { $0.code != a.code })
         if case .code(let code, _) = target, code == a.code {
@@ -275,8 +213,6 @@ final class AppModel {
     private var loadTask: Task<Void, Never>?
     private var loadID = 0
 
-    /// Fetches the answer for the chip chosen. Only one runs; `restart` drops one in
-    /// flight, so a newly chosen view loads now rather than after the old one.
     func load(restart: Bool = false) async {
         guard let token else { return }
         if loadTask != nil {
@@ -302,11 +238,8 @@ final class AppModel {
         let sentAt = Date()
         let mine = loadID
         if let later {
-            // Asked without waiting for the new fix: once more when it comes,
-            // if it puts you somewhere else, so the card is for where you are.
             Task {
                 let new = await later.value
-                // Not if a newer load has begun since: it asks for itself.
                 guard gen == session, mine == loadID, Locator.refreshAgain(sent: loc, new: new, sentAt: sentAt) else { return }
                 await load(restart: true)
             }
@@ -320,8 +253,6 @@ final class AppModel {
                 let before = answers[.plan]
                 Shared.lastAnswer = a.raw
                 TripSync.answered(a)
-                // The timeline moves when the answer's trip does, when it's over two
-                // minutes old, and when it's in the other language.
                 if day == nil || (dayFetched.map { -$0.timeIntervalSinceNow > 120 } ?? true) || dayLang != Lang.header
                     || before?.dest?.label != a.dest?.label || before?.phase != a.phase
                 {
@@ -360,8 +291,6 @@ final class AppModel {
         }
     }
 
-    /// Pulled down: the card asked for again, unless it came back
-    /// within `Pull.freshS` (the server would send the same). Says how it went.
     func pull() async -> PullOutcome {
         let k = key(target)
         let start = Date()
@@ -370,7 +299,6 @@ final class AppModel {
         return (answeredAt[k] ?? .distantPast) >= start ? .updated : .failed
     }
 
-    /// Today's timeline; kept as it was when offline.
     func loadDay() async {
         guard let token else { return }
         let gen = session
@@ -386,8 +314,6 @@ final class AppModel {
         } catch {}
     }
 
-    /// A card button: "Not going", "Not on campus today", "Back on campus" or
-    /// "Undo". "Not going" is the × on Today by another name, so it goes the same way.
     func signal(_ action: CardAction) {
         guard let token else { return }
         if action.id == "skipped", let item = day?.items.first(where: { $0.key == action.trip }) {
@@ -417,9 +343,6 @@ final class AppModel {
         }
     }
 
-    /// "Earlier bus", "Later bus" (`to` the bus the card offered) or "Best bus"
-    /// (`to` nil). The server answers for the trip stepped on: a favourite's or
-    /// a stop's own card, else the plan, which goes to the widgets as a signal's does.
     func step(_ s: Step, to: StepTarget?, dir: String?) {
         guard let token, !signalling else { return }
         signalling = true
@@ -454,7 +377,6 @@ final class AppModel {
         }
     }
 
-    /// "Leave earlier" or "No thanks" on a suggestion; the card then comes back without it.
     func choose(_ s: Suggestion, accept: Bool) {
         guard let token, !signalling else { return }
         signalling = true
@@ -470,7 +392,6 @@ final class AppModel {
         }
     }
 
-    /// The × on Today, or "Not going": taken off today at once, its row saying so with Undo.
     func removeFromToday(_ item: DayPlan.Item) {
         guard let token, var d = day else { return }
         let at = d.items.firstIndex { $0.key == item.key } ?? 0
@@ -495,7 +416,6 @@ final class AppModel {
         }
     }
 
-    /// Undo on its row: back on today's list.
     func undoRemove() {
         guard let r = removed, !r.failed, let token else { return }
         removed = nil
@@ -515,7 +435,6 @@ final class AppModel {
         if removed?.item.key == key { removed = nil }
     }
 
-    /// A new plan from /me/signal: shown, and kept for the widgets.
     private func applyPlan(_ a: NextAnswer) {
         answers[.plan] = a
         places = a.places
@@ -525,11 +444,9 @@ final class AppModel {
         answeredAt["plan"] = Date()
     }
 
-    /// "Go later today": a one-off trip to the place on screen, planned like a class.
     func goLater(atMin: Int) async -> String? {
         guard let token, target != .plan else { return nil }
         let gen = session
-        // Where the phone is, as for the card: otherwise the first plan starts where the timetable puts you.
         let loc = await Locator.shared.quickFix().fix
         do {
             let a = try await Api(token: token).once(
@@ -544,8 +461,6 @@ final class AppModel {
         }
     }
 
-    /// The server words the answer, the day and the stops' boards: asked for
-    /// again in the new language, and the widgets redrawn in it.
     func languageChanged() {
         TripSync.restyled()
         BusesModel.shared.languageChanged()
@@ -566,8 +481,6 @@ final class AppModel {
             if let c = copy?.campus { destinations = c.destinations }
         }
     }
-
-    // MARK: "Is this wrong?"
 
     func report(reason: String?, note: String, answer: Data?) {
         guard let token else { return }
@@ -590,13 +503,8 @@ final class AppModel {
         reportSent = false
     }
 
-    // MARK: the refresh loop
-
-    /// The answer on Now is fetched again this often while it's on screen: the
-    /// API caches 15 s, so sooner shows nothing new.
     static let pollS: TimeInterval = 30
 
-    /// Runs while Now is on screen and the app is active.
     func poll() async {
         while !Task.isCancelled {
             await load()
@@ -605,18 +513,14 @@ final class AppModel {
     }
 }
 
-/// The device's name, as Settings and the account page show it: "iPhone 17 Pro".
 @MainActor func deviceName() -> String {
     var info = utsname()
     uname(&info)
     let id = withUnsafeBytes(of: &info.machine) { b in String(decoding: b.prefix(while: { $0 != 0 }), as: UTF8.self) }
-    // The simulator says only "arm64": its model is in the environment.
     let model = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? id
     return iPhoneNames[model] ?? UIDevice.current.model
 }
 
-/// Marketing names for the identifiers iOS reports, newest first; anything
-/// else is "iPhone" (UIDevice's model), which is still true.
 private let iPhoneNames: [String: String] = [
     "iPhone18,1": "iPhone 17 Pro", "iPhone18,2": "iPhone 17 Pro Max", "iPhone18,3": "iPhone 17", "iPhone18,4": "iPhone Air",
     "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max", "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus",

@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Settings › About: the app's mark, name and version; what it is, that it
-/// isn't NUS's, and where its data comes from; then its links and the
-/// licences. The version, tapped seven times, shows the developer settings
-/// (always there in debug and beta builds), as Android's build number does.
 struct SettingsAboutPane: View {
     let model: SettingsModel
     @State private var developer = Servers.menuShown
@@ -50,8 +46,6 @@ struct SettingsAboutPane: View {
         }
     }
 
-    /// Each link's name, where it goes (the address kept for good, as the
-    /// other apps do), and that place as people know it.
     private var links: [(String, String, String)] {
         let host = Api.siteHost
         let base = Api.linkBase
@@ -77,9 +71,6 @@ struct SettingsAboutPane: View {
     }
 }
 
-/// Which server the app talks to, from the ones built in (Servers): only
-/// shown with more than one, so in a debug build with the dev stub. Each
-/// keeps its own sign-in, so the app starts again on the one chosen.
 private struct ServerGroup: View {
     @State private var chosen = Servers.current
     @Environment(AppModel.self) private var app
@@ -125,8 +116,6 @@ private struct ServerGroup: View {
         return first ? L("Default") : nil
     }
 
-    /// A new server: whatever was on screen belonged to the old one. The
-    /// token is kept per server, so the app reads afresh who it is there.
     private func restart() {
         SettingsModel.shared.reset()
         if let token = TokenStore.read() {
@@ -137,8 +126,6 @@ private struct ServerGroup: View {
     }
 }
 
-/// The state the alerts, push and the widgets depend on, each in a row;
-/// then Copy diagnostics. Read again every few seconds while open.
 private struct DiagnosticsGroup: View {
     let model: SettingsModel
     @Environment(AppModel.self) private var app
@@ -223,7 +210,6 @@ private struct DiagnosticsGroup: View {
     }
 }
 
-/// The last requests to our server, newest first: what was asked, and how it went.
 private struct RequestsGroup: View {
     var body: some View {
         SettingsGroup(
@@ -248,7 +234,6 @@ private struct RequestsGroup: View {
     }
 }
 
-/// A name (and a line under it), and its value on the right in grey; `warn` in red.
 private struct DiagnosticRow: View {
     let label: String
     let value: String
@@ -262,7 +247,6 @@ private struct DiagnosticRow: View {
     }
 }
 
-/// "3 min ago", in the app's language.
 private func ago(_ at: Date, now: Date) -> String {
     let s = max(0, Int(now.timeIntervalSince(at)))
     if s < 60 { return L("%@ s ago", String(s)) }
@@ -271,8 +255,6 @@ private func ago(_ at: Date, now: Date) -> String {
     return L("%@ d ago", String(s / 86_400))
 }
 
-/// Settings › About › Licences: what terminus is built with, and the notices
-/// their licences ask to be shown.
 struct SettingsLicencesPane: View {
     var body: some View {
         ForEach(Self.entries, id: \.name) { e in
@@ -298,7 +280,6 @@ struct SettingsLicencesPane: View {
         let url: String
     }
 
-    /// The BSD licences' conditions and disclaimer, the same words in each.
     private static let bsdTerms = """
         Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 

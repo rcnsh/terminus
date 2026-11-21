@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Your timetable: a NUSMods share link, imported, and the week it makes.
 struct SetupClassesStep: View {
     @Bindable var model: OnboardingModel
 
@@ -11,14 +10,12 @@ struct SetupClassesStep: View {
             title: L("Your timetable"), sub: L("Paste your NUSMods share link. Each class goes to the stop nearest its room."),
             message: model.message
         ) {
-            // As on the home step: Continue means there's a timetable; with none, it's the skip.
             SetupButtons(
                 back: model.back,
                 skip: classes.isEmpty && !pending ? L("I'll do this later") : nil,
                 enabled: !model.importing,
                 busy: model.importing && pending
             ) {
-                // Continue imports a link that was pasted but not imported yet, then moves on once it has.
                 if pending {
                     Task { if await model.importTimetable() { model.next() } }
                 } else {
@@ -32,7 +29,6 @@ struct SetupClassesStep: View {
     }
 }
 
-/// The link, Import, and what came of it.
 private struct SetupTimetableImport: View {
     @Bindable var model: OnboardingModel
     @FocusState private var focused: Bool
@@ -97,14 +93,12 @@ private struct SetupTimetableImport: View {
         }
     }
 
-    /// NUSMods shares a sentence with the link in it: the link.
     static func nusmodsLink(in text: String) -> String? {
         guard let r = text.range(of: #"https?://(www\.)?nusmods\.com/timetable/\S+"#, options: .regularExpression) else { return nil }
         return String(text[r]).trimmingCharacters(in: CharacterSet(charactersIn: ".,)"))
     }
 }
 
-/// Imported classes whose room couldn't be placed: pick a stop for each, or skip it.
 private struct SetupUnplaced: View {
     let model: OnboardingModel
 
@@ -148,7 +142,6 @@ private struct SetupUnplaced: View {
     }
 }
 
-/// "Stop, building or room": the same search as Now's, the pick handed on.
 private struct SetupWherePicker: View {
     let id: String
     let destinations: [Destination]
@@ -168,7 +161,6 @@ private struct SetupWherePicker: View {
             .padding(10)
             .background(Color.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .id(id)
-            // The field to the top as the results come, or they'd be under the buttons and the keyboard.
             .onChange(of: query.isEmpty) { _, empty in
                 if !empty { withAnimation { scroll?.scrollTo(id, anchor: .top) } }
             }
@@ -206,15 +198,12 @@ private struct SetupWherePicker: View {
     }
 }
 
-/// The week as imported: each day's classes in order, each beside the stop
-/// terminus will take you to, so a wrong one is easy to spot before going on.
 private struct SetupWeek: View {
     let classes: [OnboardingModel.Class]
     let campus: Campus?
 
     var body: some View {
         if !classes.isEmpty {
-            // Monday first, as a timetable is read.
             let sorted = classes.sorted { a, b in
                 let da = (a.day + 6) % 7
                 let db = (b.day + 6) % 7
@@ -241,7 +230,6 @@ private struct SetupWeek: View {
                                         .frame(width: 64, alignment: .leading)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(c.label).font(.subheadline.weight(.semibold)).foregroundStyle(Color.ink).lineLimit(1)
-                                        // The room, unless the name already says it ("MA1521 @ LT27").
                                         if !c.venue.isEmpty && !c.label.contains(c.venue) {
                                             Text(c.venue).font(.footnote).foregroundStyle(Color.muted).lineLimit(1)
                                         }
@@ -262,7 +250,6 @@ private struct SetupWeek: View {
     }
 }
 
-/// A stop's name on a little plate, as on its sign.
 private struct SetupStopChip: View {
     let name: String
     var body: some View {

@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// The setup for a new account, one step at a time, the same four things the
-/// account page asks: home, timetable, pace, then notifications and location.
-/// Each step saves as it goes and can be skipped; so can the lot.
-///
-/// Each step shows what its choice does (your stops' signs, your week, a lap of
-/// a track at your pace, the alert you'd get), and its buttons stay at the foot
-/// of the screen, under the thumb, while the step scrolls above them.
 struct OnboardingFlow: View {
     @State private var model = OnboardingModel()
 
@@ -22,7 +15,6 @@ struct OnboardingFlow: View {
             }
             .padding(.leading, 8)
             .padding(.trailing, 16)
-            // Over the step's column, as wide as it is.
             .frame(maxWidth: columnWidth)
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
@@ -57,7 +49,6 @@ struct OnboardingFlow: View {
             .padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            // The first step's page in bars, in SetupPage's boxes: its title, the line under it, then its tiles.
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     SkeletonLine(font: .largeTitle.bold(), fraction: 0.75)
@@ -84,8 +75,6 @@ struct OnboardingFlow: View {
     }
 }
 
-/// Where you are in setup, drawn as a route: a stop per step, the line done so
-/// far in the accent, the stop you're at ringed, and each stop's name under it.
 private struct SetupStepLine: View {
     let step: Int
     private var names: [String] { [L("Home"), L("Classes"), L("Pace"), L("Alerts")] }
@@ -136,7 +125,6 @@ private struct SetupStepLine: View {
     }
 }
 
-/// A step: what it asks, scrolling, and its buttons pinned under it.
 struct SetupPage<Content: View, Buttons: View>: View {
     let title: String
     let sub: String
@@ -186,17 +174,13 @@ struct SetupPage<Content: View, Buttons: View>: View {
                 .padding(.bottom, 8)
                 .background(Color.page)
         }
-        // A screen reader's focus moves to the new step's title.
         .onAppear { titleFocused = true }
     }
 }
 
-/// Back on the left; the step's one big button filling the rest. With nothing
-/// to continue with yet, the big button is the skip, and says so.
 struct SetupButtons: View {
     var back: (() -> Void)?
     var nextLabel = L("Continue")
-    /// Set when there's nothing to continue with: the big button skips, outlined.
     var skip: String?
     var enabled = true
     var busy = false
@@ -230,7 +214,6 @@ struct SetupButtons: View {
     }
 }
 
-/// A setting's explanation, under it.
 struct SetupHint: View {
     let text: String
     init(_ text: String) { self.text = text }
@@ -242,8 +225,6 @@ struct SetupHint: View {
     }
 }
 
-/// One choice of several, as a tile: outlined, or filled with the accent's soft
-/// colour and edged in it when chosen, with a tick in the corner.
 struct SetupChoiceTile<Content: View>: View {
     let selected: Bool
     var id: String?
@@ -278,8 +259,6 @@ struct SetupChoiceTile<Content: View>: View {
     }
 }
 
-/// Setup's choice tiles in bars while what they offer is on its way: six,
-/// two to a row, each in a tile's box. Shimmered by the view around it.
 struct SetupTilesSkeleton: View {
     var body: some View {
         SetupTwoColumns(items: Array(0..<6)) { i in
@@ -298,7 +277,6 @@ struct SetupTilesSkeleton: View {
     }
 }
 
-/// Laid out two to a row, each row as tall as its taller tile, the last alone if it's odd.
 struct SetupTwoColumns<Item: Hashable, Cell: View>: View {
     let items: [Item]
     var gap: CGFloat = 8
@@ -323,7 +301,6 @@ struct SetupTwoColumns<Item: Hashable, Cell: View>: View {
 private struct SetupScrollKey: EnvironmentKey { static var defaultValue: ScrollViewProxy? { nil } }
 
 extension EnvironmentValues {
-    /// The setup step's scroll view, for a search to bring its results into view above the keyboard.
     var setupScroll: ScrollViewProxy? {
         get { self[SetupScrollKey.self] }
         set { self[SetupScrollKey.self] = newValue }

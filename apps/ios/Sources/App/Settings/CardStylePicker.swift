@@ -1,10 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// The card style: Steps or Route as segments, like the theme's, and the
-/// chosen one drawn under them with a made-up trip (a D2 from PGP to UTown,
-/// leaving in a few minutes), so the choice is made by looking without a
-/// card for each. The pick holds for the card on Now and the widgets.
 struct SettingsCardStyles: View {
     @Environment(Prefs.self) private var prefs
 
@@ -49,13 +45,10 @@ struct SettingsCardStyles: View {
     }
 }
 
-/// The sample trip, in one style: the card Now draws, without the sky, so
-/// what's chosen here is what Now shows. As Android's CardStylePicker.
 struct SettingsCardSample: View {
     let style: String
 
     var body: some View {
-        // Now ticks every second near the end; here the minute is enough.
         TimelineView(.everyMinute) { tick in
             if let a = Self.answer(tick.date), let j = a.card?.journey {
                 VStack(alignment: .leading, spacing: 4) {
@@ -67,9 +60,6 @@ struct SettingsCardSample: View {
         }
     }
 
-    /// A D2 from PGP to UTown, leaving in 4 min, with an A1 three minutes
-    /// after it: decoded as the server's answer would be, its words left for
-    /// the app to put, in the account's clock style.
     static func answer(_ now: Date) -> NextAnswer? {
         let leave = now.addingTimeInterval(4 * 60)
         let board = leave.addingTimeInterval(4 * 60)

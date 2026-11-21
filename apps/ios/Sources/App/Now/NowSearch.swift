@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// "Go somewhere else", opened by the search button at the end of the
-/// chips: a field under them, focused, with the results below. Picking one
-/// shows its card under a chip of its own and closes the search.
 struct NowSearch: View {
     let close: () -> Void
     @Environment(AppModel.self) private var app
@@ -53,7 +50,6 @@ struct NowSearch: View {
             Text(L("No stop, building or room by that name")).foregroundStyle(inks.muted).padding(.vertical, 12)
         }
         VStack(alignment: .leading, spacing: 0) {
-            // A stop and a building can share a code (COM3): keyed by both.
             ForEach(Array(matches.enumerated()), id: \.element.kindCode) { i, d in
                 if i == 0 || matches[i - 1].kind != d.kind {
                     SectionLabel(group(d.kind), color: inks.muted).padding(.top, 14).padding(.bottom, 4)
@@ -98,11 +94,9 @@ struct NowSearch: View {
     private func meta(_ d: Destination) -> String {
         switch d.kind {
         case "stop": return L("Bus stop")
-        // Served by more than one stop: the quicker one is used at the time.
         case "landmark":
             return [d.detail, L("%@ stop", d.stops.map(stopName).joined(separator: L(" or ")))].compactMap { $0 }.joined(separator: " · ")
         default:
-            // Walk times at the user's pace, as the server last said it.
             let speed = app.answer?.walkSpeedMs ?? 1.3
             var s = d.label != d.code ? "\(d.code) · " : ""
             s += L("%@ stop", stopName(d.stopCode))

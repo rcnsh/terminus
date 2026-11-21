@@ -136,6 +136,24 @@ Text, controls, cards and touch targets keep their phone sizes at
 every width. The extra room is for showing more beside, never for
 making things bigger.
 
+## iPhone app details
+
+- `readsWindowWidth()` reads the size with the safe areas included, so the
+  Duo's side status bar and a keyboard count. A fold moves the window to
+  the other panel, and iOS asks which way it may turn only when told
+  to, so the root asks again when the size changes.
+- Rotated after a search, iPadOS can hand a page the keyboard's room again
+  once the keyboard has gone, and keep it (the map drew in the top of the
+  window). `keyboardRoom()` ignores that room with no keyboard up, on
+  each navigation stack's pages too, since each is hosted on its own.
+- A list pane's navigation stack is handed the whole window's trailing
+  inset (the Duo's status bar and tab rail): `listPaneRoot()` ignores it.
+- With the status bar beside the page (the Duo open), the page's top
+  edge is the system's swipe down, which took taps on the map's pills:
+  `MainTabs` defers system gestures at the top there.
+- Under an iPad's tab bar along the top, the map's pills sit 8 under it,
+  as a second tier of the same control, rather than the 20 SwiftUI leaves.
+
 ## Checking a layout
 
 A change to any screen is checked at narrow, medium and wide before

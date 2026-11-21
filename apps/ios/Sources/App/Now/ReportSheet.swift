@@ -1,27 +1,19 @@
 import SwiftUI
 
-/// "Is this wrong?": the answer it's about, the reasons as chips, a note,
-/// and who the reply goes to. A reason or a note sends it; once sent, the
-/// sheet says so, which is the only confirmation. Without an email the
-/// server takes no reports, so it asks for one instead. As the web's sheet.
 struct ReportSheet: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
-    /// Set by "Add your email": Now opens the sign-in once this sheet has gone.
     @Binding var addEmail: Bool
     @State private var reason: String?
     @State private var note = ""
-    /// The answer as it was when the sheet opened: what the report is about, whatever refreshes meanwhile.
     @State private var raw: Data?
     @State private var line = ""
     @State private var fromNus = false
-    /// The reasons the card says fit it; nil: all of them.
     @State private var fits: [String]?
     @FocusState private var noteFocused: Bool
     @Environment(\.windowWidth) private var width
     @ScaledMetric(relativeTo: .body) private var threeLines: CGFloat = 66
 
-    /// What the report is about, from the start: a centred sheet is sized to what's in it as it opens.
     init(addEmail: Binding<Bool>) {
         _addEmail = addEmail
         let a = AppModel.shared.answer
@@ -31,11 +23,8 @@ struct ReportSheet: View {
         _fits = State(initialValue: a?.card?.reasons)
     }
 
-    /// Every reason, as /me/feedback takes them (REASONS in the API's feedback.ts), in the sheet's order.
     nonisolated static let allReasons = ["never-came", "times-off", "wrong-stop", "walk-longer", "wrong-class"]
 
-    /// The chips: only the reasons that fit the card (the server's `reasons`), so the sheet
-    /// never offers "Bus never came" with no bus; every one from a server that doesn't say.
     nonisolated static func reasons(fitting fits: [String]?) -> [String] {
         guard let fits else { return allReasons }
         return allReasons.filter(fits.contains)
@@ -53,7 +42,6 @@ struct ReportSheet: View {
         }
     }
 
-    /// Reasons about the bus itself: on an answer with NUS's live times (`fromNus`), picking one says they're NUS's before it's sent.
     private static let nusReasons: Set<String> = ["never-came", "times-off"]
     private var aboutNus: Bool { fromNus && (reason.map(Self.nusReasons.contains) ?? false) }
 
@@ -71,7 +59,6 @@ struct ReportSheet: View {
                         }
                 }
             } else {
-                // From 600 wide its bar is in the page, so the centred sheet is as tall as what's in it.
                 VStack(alignment: .leading, spacing: 0) {
                     if !app.reportSent {
                         Button(L("Cancel")) { dismiss() }
@@ -170,7 +157,6 @@ struct ReportSheet: View {
                     Button {
                         reason = on ? nil : key
                     } label: {
-                        // The fill alone marks it: a tick would widen the chip and push the row onto the next line.
                         Text(label)
                     }
                     .buttonStyle(ChipButtonStyle(filled: on))
@@ -200,7 +186,6 @@ struct ReportSheet: View {
             }
             TextField(text: $note, prompt: Text(L("What happened? A time or a stop helps.")), axis: .vertical) { Text(L("Your note")) }
                 .lineLimit(3...6)
-                // Asked for its height (a centred sheet sizing itself) it says one line; it draws three.
                 .frame(minHeight: width == .narrow ? nil : threeLines, alignment: .topLeading)
                 .focused($noteFocused)
                 .padding(12)
@@ -229,7 +214,6 @@ struct ReportSheet: View {
         }
     }
 
-    /// `text` with the email address in it picked out.
     private func withEmail(_ text: String, _ email: String) -> AttributedString {
         var s = AttributedString(text)
         if let r = s.range(of: email) {
@@ -240,7 +224,6 @@ struct ReportSheet: View {
     }
 }
 
-/// "Go later today at…": a one-off trip to the place on screen, planned like a class.
 struct GoLaterSheet: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -267,7 +250,6 @@ struct GoLaterSheet: View {
                     }
                 }
             } else {
-                // From 600 wide its bar is in the page, so the centred sheet is as tall as what's in it.
                 VStack(spacing: 12) {
                     HStack {
                         Button(L("Cancel")) { dismiss() }.buttonStyle(ChipButtonStyle())
@@ -281,7 +263,6 @@ struct GoLaterSheet: View {
                 .background(Color.page)
             }
         }
-        // A medium detent would clip the centred sheet to half its height.
         .presentationDetents(width == .narrow ? [.medium] : [.large])
         .centredSheet(fits: true)
     }
@@ -290,7 +271,6 @@ struct GoLaterSheet: View {
         DatePicker(L("Time"), selection: $time, displayedComponents: .hourAndMinute)
             .datePickerStyle(.wheel)
             .labelsHidden()
-            // Asked for its height (a centred sheet sizing itself) the wheel says less than it draws.
             .frame(height: width == .narrow ? nil : 216)
             .environment(\.timeZone, .campus)
             .environment(
@@ -317,8 +297,6 @@ struct GoLaterSheet: View {
     }
 }
 
-/// Half an hour from now on campus, to the next five minutes: where "Go later" starts.
-/// By the server's clock, which judges whether the time has passed, not this phone's.
 func soonOnCampus(_ now: Date = ServerClock.now) -> Date {
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = .campus

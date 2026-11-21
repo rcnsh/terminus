@@ -1,10 +1,6 @@
 import CoreLocation
 import SwiftUI
 
-/// Settings › Your trips: where you live, your day's hours and how you walk,
-/// each a short group with one line under it; then the classes you chose a
-/// bus earlier or no reminders for, and the trip history. As on Android
-/// (TripsSettings.kt), the web and the Mac.
 struct SettingsTripsPane: View {
     let model: SettingsModel
 
@@ -25,13 +21,11 @@ private struct HomeGroup: View {
     let model: SettingsModel
     let profile: ProfileDoc
     let campus: Campus
-    /// "Off campus" chosen while the stops are still a residence's: it stays until the stops change.
     @State private var offCampus = false
     @State private var locating: String?
 
     var body: some View {
         let stops = profile.homeStops
-        // The residence whose stops these are, if they're exactly one's; the common ones come first.
         let residence = campus.residences.first { $0.stops == stops }
         let picking = offCampus || residence == nil
         SettingsGroup(title: L("Where you live"), hint: L("Only your stops are saved.")) {
@@ -110,7 +104,6 @@ private struct HomeGroup: View {
         .accessibilityIdentifier("settings.homeStop")
     }
 
-    /// "Pick the stop nearest me": that stop first among your home stops, the rest kept after it.
     private func pickNearest(_ stops: [String]) async {
         locating = L("Finding the nearest stop…")
         guard let loc = await Locator.shared.fix(maxAge: 120), let near = settingsNearestStop(campus.stops, to: loc.coordinate) else {
@@ -122,7 +115,6 @@ private struct HomeGroup: View {
     }
 }
 
-/// The stop nearest a point, as the crow flies.
 func settingsNearestStop(_ stops: [Campus.Stop], to c: CLLocationCoordinate2D) -> Campus.Stop? {
     let here = CLLocation(latitude: c.latitude, longitude: c.longitude)
     return
@@ -134,7 +126,6 @@ func settingsNearestStop(_ stops: [Campus.Stop], to c: CLLocationCoordinate2D) -
         .min { $0.1 < $1.1 }?.0
 }
 
-/// What a menu row has chosen, and the up-down chevrons that say it opens a menu.
 struct SettingsMenuValue: View {
     let text: String
     @Environment(\.dynamicTypeSize) private var type
@@ -149,7 +140,6 @@ struct SettingsMenuValue: View {
     }
 }
 
-/// − value +, for small steps: round buttons either side, as on Android and the web.
 struct SettingsStepper: View {
     let text: String
     let less: String
@@ -227,7 +217,6 @@ private struct DayGroup: View {
     }
 }
 
-/// A time of day as the system's compact time picker, in the account's clock and the campus's minutes.
 struct SettingsTimeField: View {
     let label: String
     let minutes: Int
@@ -292,7 +281,6 @@ private struct WalkingGroup: View {
     }
 }
 
-/// What you chose for particular classes, each undoable.
 private struct TripChoicesGroup: View {
     let model: SettingsModel
 
@@ -319,7 +307,6 @@ private struct TripChoicesGroup: View {
     }
 }
 
-/// How each trip went, kept 35 days for the suggestions; cleared here without touching the rest.
 private struct TripHistoryGroup: View {
     let model: SettingsModel
     @State private var confirm = false

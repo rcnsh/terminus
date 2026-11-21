@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// "Stop, building or room": the same search as Now's, in a sheet, for where
-/// a class or a favourite goes. `pinned` (the stops your classes use) comes
-/// first, before anything is typed too. Calls `onPick` and closes.
 struct SettingsWherePicker: View {
     let title: String
     let destinations: [Destination]
@@ -31,7 +28,6 @@ struct SettingsWherePicker: View {
                 }
                 if top.isEmpty && rest.isEmpty {
                     if !q.isEmpty && destinations.isEmpty {
-                        // The places to search are on their way: the results' rows in bars, read once as "Loading…".
                         Section {
                             ForEach(0..<6, id: \.self) { i in
                                 VStack(alignment: .leading, spacing: 2) {
@@ -55,7 +51,6 @@ struct SettingsWherePicker: View {
                 }
             }
             .listStyle(.insetGrouped)
-            // One sweep for the list's rows of bars, running only while they show.
             .shimmering(!query.trimmingCharacters(in: .whitespaces).isEmpty && destinations.isEmpty)
             .scrollContentBackground(.hidden)
             .background(Color.page)
@@ -96,13 +91,11 @@ struct SettingsWherePicker: View {
     }
 }
 
-/// One answer in the search: a destination, or one of your timetable's stops.
 struct WhereItem: Hashable, Identifiable {
     let code: String
     let label: String
     let kind: String
     let detail: String?
-    /// Where a favourite or a class goes: a landmark itself, anything else its stop.
     let goesTo: String
 
     init(code: String, label: String, kind: String, detail: String?, goesTo: String) {
@@ -117,10 +110,7 @@ struct WhereItem: Hashable, Identifiable {
         self.init(code: d.code, label: d.label, kind: d.kind, detail: d.detail, goesTo: d.goesTo)
     }
 
-    /// A stop and a building can share a code (COM3): the kind tells them apart.
     var id: String { "\(kind):\(code)" }
 
-    /// Whether this is the place a timetable row stands for (its `code`, where
-    /// its classes go): that stop or landmark itself, not a building sharing its code.
     func isPlace(of row: WhereItem) -> Bool { (kind == "stop" || kind == "landmark") && code == row.code }
 }

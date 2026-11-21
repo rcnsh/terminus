@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// Sign in by email, approved from the email on any device: type the address,
-/// then the code from the email, or choose the number shown here on the page
-/// the email links to. As Settings' pages: the title in a band of the sky, then
-/// the plain page. Pushed from the welcome screen; in Settings, inside
-/// [SignInSheet]. `done` runs once this phone is signed in.
 struct SignInView: View {
     @State var model: SignInModel
     var done: @MainActor () -> Void
@@ -47,9 +42,6 @@ struct SignInView: View {
     }
 }
 
-/// For Settings: adds an email to this phone's account without one, the same
-/// pages in a sheet, with Cancel. On success the account is this phone's with
-/// its email (AppModel.signedIn), and the sheet closes.
 struct SignInSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = SignInModel(adding: true)
@@ -66,7 +58,6 @@ struct SignInSheet: View {
     }
 }
 
-/// A group of the page: its name above a card, and what it's for under it, as in Settings.
 private struct SignInGroup<Content: View>: View {
     let title: String
     var footer: String?
@@ -88,7 +79,6 @@ private struct SignInGroup<Content: View>: View {
     }
 }
 
-/// The main button, across the page, and what went wrong under it.
 private struct SignInAction: View {
     let text: String
     let enabled: Bool
@@ -168,7 +158,6 @@ private struct WaitingStep: View {
             }
             .onChange(of: code) { old, new in
                 if model.message != nil { model.message = nil }
-                // The sixth character, typed or pasted, sends it.
                 if new.count == SignInCode.length && old.count < SignInCode.length { model.enter(new, signedIn: done) }
             }
         }
@@ -178,7 +167,6 @@ private struct WaitingStep: View {
         ) {
             model.enter(code, signedIn: done)
         }
-        // Or approve it from the email on another device, by the number shown here.
         SignInGroup(title: L("Reading it on another device?")) {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -244,10 +232,6 @@ private struct ChooseStep: View {
     }
 }
 
-/// The code from the email in six boxes. One text field takes the keys,
-/// pastes, deletes and the keyboard's suggestion of a code from Mail, drawn as
-/// the boxes: each character typed fills the next box, a pasted code spreads
-/// over all six (SignInCode.edit), and the box that's next is outlined in the ink.
 struct SignInCodeBoxes: View {
     @Binding var code: String
     let label: String
@@ -256,7 +240,6 @@ struct SignInCodeBoxes: View {
 
     var body: some View {
         ZStack {
-            // The field itself, unseen behind the boxes: it's what the keyboard and Paste reach.
             TextField("", text: Binding(get: { code }, set: { code = SignInCode.edit(old: code, new: $0) }))
                 .keyboardType(.asciiCapable)
                 .textContentType(.oneTimeCode)

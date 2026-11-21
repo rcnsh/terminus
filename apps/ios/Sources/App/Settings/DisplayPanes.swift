@@ -1,10 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// Settings › Notifications: the leave alert before class and the Live
-/// Activity during a trip, on this phone only (kept in the app group as
-/// TripPrefs, which the system part acts on). Turning the alert on asks for
-/// permission; refused, the page says so, with the way to Settings.
 struct SettingsNotificationsPane: View {
     @State private var leave = TripPrefs.leaveAlerts
     @State private var live = TripPrefs.liveActivity
@@ -60,7 +56,6 @@ struct SettingsNotificationsPane: View {
         TripSync.prefsChanged()
     }
 
-    /// Turned on here, but off in the phone's Settings since: said, with the way there.
     private func check() {
         leave = TripPrefs.leaveAlerts
         live = TripPrefs.liveActivity
@@ -68,8 +63,6 @@ struct SettingsNotificationsPane: View {
     }
 }
 
-/// Settings › Language and time: the language (this phone and the account)
-/// and 12- or 24-hour times (the account, so every device).
 struct SettingsLanguagePane: View {
     let model: SettingsModel
     @Environment(Prefs.self) private var prefs
@@ -96,8 +89,6 @@ struct SettingsLanguagePane: View {
     }
 }
 
-/// Settings › Appearance: the theme, how the card draws a trip, and how the
-/// Buses near you widget explains the buses, all on this phone only.
 struct SettingsAppearancePane: View {
     @Environment(Prefs.self) private var prefs
 
