@@ -1,6 +1,7 @@
 import { registerHooks } from 'node:module';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { Window } from 'happy-dom';
 
 export const PUBLIC = new URL('../public/', import.meta.url);
 export const read = (p) => fs.readFileSync(new URL(p.replace(/^\//, ''), PUBLIC), 'utf8');
@@ -26,6 +27,12 @@ export function memoryStorage(entries = {}) {
 Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true, writable: true });
 Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage(), configurable: true, writable: true });
 globalThis.matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+
+const browser = new Window({ url: 'https://terminus.run/' });
+for (const k of ['document', 'history', 'addEventListener', 'removeEventListener']) {
+  const v = browser[k];
+  Object.defineProperty(globalThis, k, { value: typeof v === 'function' ? v.bind(browser) : v, configurable: true, writable: true });
+}
 
 export const web = (path) => import(new URL(path, PUBLIC).href);
 

@@ -1,8 +1,7 @@
-export const t = (en, ...args) =>
-  globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? ''));
-export const locale = () => globalThis.window?.i18n?.locale;
+export const t = (en, ...args) => (window.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
+export const locale = () => window.i18n?.locale;
 
-export const sentences = (parts) => parts.filter(Boolean).join(globalThis.window?.i18n?.lang === 'zh' ? '。' : '. ');
+export const sentences = (parts) => parts.filter(Boolean).join(window.i18n?.lang === 'zh' ? '。' : '. ');
 
 export function locationError(err) {
   if (err?.code === 1) return t('Location is off for this site. Choose your stop instead.');
@@ -52,7 +51,7 @@ export async function forgetAccountHere() {
     for (const k of [ADDED_PLACES_KEY, PIN_COUNT_KEY, LANG_APPLIED_KEY]) globalThis.localStorage?.removeItem(k);
   } catch {}
   const unsubscribe = (async () => {
-    const reg = await globalThis.navigator?.serviceWorker?.getRegistration('/app/');
+    const reg = await navigator.serviceWorker?.getRegistration('/app/');
     await (await reg?.pushManager?.getSubscription())?.unsubscribe();
   })().catch(() => {});
   await Promise.race([unsubscribe, new Promise((r) => setTimeout(r, 2000))]);

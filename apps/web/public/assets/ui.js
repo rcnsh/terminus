@@ -129,7 +129,7 @@ function speaker() {
   document.body.append(spoken);
   return spoken;
 }
-if (globalThis.document?.body) speaker();
+speaker();
 
 export function announce(text, { again = false } = {}) {
   if (!text || (!again && text === lastSaid)) return;

@@ -1,18 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { registerHooks } from 'node:module';
 
 import { buildCampusMap, shapeFor } from '../../api/src/map/campus.ts';
 import { placeBuses, pointAlong } from '../../api/src/map/buses.ts';
 import { GRAPH } from '../../api/src/answer/graph.ts';
 import { haversineM } from '../../api/src/geo.ts';
 
-const PUBLIC = new URL('../public/', import.meta.url);
-registerHooks({
-  resolve: (spec, ctx, next) => next(/^\/(assets|account|app|vendor)\//.test(spec) ? new URL(`.${spec}`, PUBLIC).href : spec, ctx),
-});
-globalThis.document ??= { addEventListener() {} };
-const { aheadBy, busesWaitMs, campusBounds, freePadding, pathOf, pointAt, positionAt, slideMs } = await import('../public/app/map.js');
+import { web } from './_web.mjs';
+
+const { aheadBy, busesWaitMs, campusBounds, freePadding, pathOf, pointAt, positionAt, slideMs } = await web('app/map.js');
 
 const CAMPUS = buildCampusMap(GRAPH);
 const SERVICES = Object.keys(GRAPH.routes).filter((svc) => shapeFor(svc, GRAPH.routes[svc]));

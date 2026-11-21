@@ -16,7 +16,7 @@ export const STARS = [
 
 export const starTop = (down) => `calc(${(down * 0.82).toFixed(3)} * var(--room, 108px) + 4px)`;
 
-for (const el of globalThis.document?.querySelectorAll('[data-stars]') ?? []) {
+for (const el of document.querySelectorAll('[data-stars]')) {
   const sky = document.createElement('span');
   sky.className = 'night-sky';
   sky.setAttribute('aria-hidden', 'true');

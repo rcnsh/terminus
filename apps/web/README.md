@@ -62,6 +62,9 @@ pnpm --filter @terminus/web test   # or pnpm test from the root, for the API's t
 ```
 
 The tests in `test/` load the site's modules under Node (`_web.mjs` maps
-`/assets/...` to `public/`) and render pages in happy-dom (`_dom.mjs`). Some
+`/assets/...` to `public/` and gives every test a browser's `window`,
+`document`, `history` and `localStorage`, so the modules run their
+top-level code as they do on a page, with no checks for Node) and render
+pages in happy-dom (`_dom.mjs`). Some
 read the API's real campus data from `apps/api/src`, and the answers every
 client is held to from the root's `fixtures/`.

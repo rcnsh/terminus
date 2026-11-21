@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { busesTabIndex, grouped, rank, results, samePlace, score } from '../public/account/search.js';
+import { web } from './_web.mjs';
+
+const { busesTabIndex, grouped, rank, results, samePlace, score } = await web('account/search.js');
 
 const FIXTURE = JSON.parse(fs.readFileSync(new URL('../../../fixtures/search.json', import.meta.url), 'utf8'));
 const ids = (list) => list.map((d) => `${d.kind}:${d.code}`);

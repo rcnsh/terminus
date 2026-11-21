@@ -174,7 +174,7 @@ export async function loadCampus() {
 
 export const campusRefused = store(false);
 
-globalThis.navigator?.serviceWorker?.addEventListener('message', (e) => {
+navigator.serviceWorker?.addEventListener('message', (e) => {
   if (e.data?.kind !== 'campus') return;
   if (e.data.status === 401) campusRefused.set(true);
   else if (!e.data.status && campus.get())
