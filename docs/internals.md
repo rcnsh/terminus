@@ -2115,6 +2115,43 @@ feed being down: the last answer while it's under five minutes old, then
 notice on the card. How far away the times are is not checked: after
 midnight every real arrival is the next morning's, hours away.
 
+### Reader details
+
+What `fms.ts` and `lta.ts` read, beyond the above, which the code relies on
+and nothing else records:
+
+- The envelope can nest more than one level deep (`etas` inside `result`
+  inside `data` on some endpoints), so `unwrap()` loops over
+  `WRAPPER_KEYS`, at most eight times, rather than looking one key up.
+- Raw ConnectX gives each arrival both `eta` (whole minutes) and `eta_s`
+  (seconds). `eta_s` wins: minutes rounded back to seconds turn 24055
+  into 24060.
+- One payload can report the same service, time, plate and berth twice
+  under two shapes; `normalize()` keeps the first.
+- A service name the graph doesn't know passes as the feed spells it: a
+  new route arrives before the weekly scrape adds it.
+- The proxy reports a refusal at HTTP 200 with a `code` other than
+  `00000`. Any other HTTP status is the host itself saying no (busy,
+  down), which no token fixes, so it isn't retried.
+- `TimeStamp` comes zoned (`2026-10-22T09:58:41+08:00`) or bare, and a
+  bare one is Singapore time.
+- `tryVersion()` mints a token and makes one `shuttle-service` call,
+  since a 10009 can come from either.
+- A response body cut short can leave a JWT without its last part, which
+  `failureReason()` blanks on top of `redactDetail()`.
+- `active-bus` answers `{ActiveBusCount, TimeStamp, activebus: [{vehplate,
+  lat, lng, speed, direction, loadInfo: {occupancy, crowdLevel, capacity,
+  ridership}}]}`. `RawBus.heading` is degrees clockwise from north, null
+  when the feed leaves it out; `speed` is km/h, 0 when standing.
+- `getBuses()` has no stale race: the map polls every few seconds and
+  would rather wait for fresh positions than draw a stale jump.
+- DataMall's `Load` is `SEA` (seats), `SDA` (standing) or `LSD` (limited
+  standing). Its gateway's maintenance page comes as HTML with a 200, and
+  is reported as non-JSON. A bus more than a minute past is gone; one
+  just due shows as now. A bus of a known service that matches neither
+  direction (a short working) is left out, and logged once an hour per
+  stop.
+
 ## Data flow, confirmed
 
 As of uNivUS 2.59.2 (2026-09-28). On 2026-09-05 uNivUS stopped

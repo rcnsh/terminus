@@ -176,13 +176,14 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
 
 ## Code style
 
-- Match the surrounding code. Comments explain **why**, in plain English,
-  in the present tense, at the density of the file around them, and point
-  to internals.md rather than repeating it. A comment says what the name
-  and the next line don't. History ("used to", "since
-  3.2", dates) belongs in git log. The exception is evidence about the
-  outside feeds (NUS, LTA, NUSMods): what was observed and when stays,
-  because nothing else records it.
+- Match the surrounding code, and write **no comments** (ADR 0018). Say
+  it with names and shape; put a deliberate odd choice in an ADR, how
+  something works or what a feed was seen to do (with when) in
+  internals.md, and a hack in an issue. History belongs in git log.
+  `pnpm lint` fails a file over its count in
+  `scripts/comments-baseline.json`; after deleting comments, run
+  `node scripts/comments.mjs --update`. To clear a slice, use the
+  `/delete-comment` skill.
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map", "your stop"),
   not internals.
