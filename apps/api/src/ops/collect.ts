@@ -1,6 +1,7 @@
 import type { Env } from '../types.ts';
 import { isOperator } from './admin.ts';
 import { json } from '../http.ts';
+import { type KvMemo, kvMemo } from '../memo.ts';
 
 export const COLLECTORS = ['active', 'eta', 'errors', 'legacy', 'settings', 'keys'] as const;
 export type Collector = (typeof COLLECTORS)[number];
@@ -15,18 +16,13 @@ export async function collecting(env: Env, name: Collector): Promise<boolean> {
   }
 }
 
-const SWITCH_MEMO_MS = 60_000;
-const switchMemo = new WeakMap<object, Map<Collector, { at: number; on: boolean }>>();
+const switches = Object.fromEntries(COLLECTORS.map((c) => [c, kvMemo(60_000, (env: Env) => collecting(env, c))])) as Record<
+  Collector,
+  KvMemo<Env, boolean>
+>;
 
 export async function collectingMemo(env: Env, name: Collector, nowMs = Date.now()): Promise<boolean> {
-  const kept = switchMemo.get(env.KV)?.get(name);
-  if (kept && nowMs - kept.at < SWITCH_MEMO_MS && nowMs >= kept.at) return kept.on;
-  const on = await collecting(env, name);
-  if (env.KV) {
-    const memo = switchMemo.get(env.KV) ?? new Map();
-    switchMemo.set(env.KV, memo.set(name, { at: nowMs, on }));
-  }
-  return on;
+  return switches[name].get(env, nowMs);
 }
 
 export async function collectState(env: Env): Promise<Record<Collector, boolean>> {
@@ -42,6 +38,6 @@ export async function handleCollect(req: Request, env: Env, nowMs: number): Prom
   if (!name || typeof body?.on !== 'boolean')
     return json({ error: 'name must be active, eta, errors, legacy, settings or keys, and on true or false' }, 400);
   await env.KV.put(keyOf(name), body.on ? 'on' : 'off');
-  switchMemo.get(env.KV)?.delete(name);
+  switches[name].clear(env);
   return json({ ...(await collectState(env)), [name]: body.on }, 200, { 'cache-control': 'no-store' });
 }

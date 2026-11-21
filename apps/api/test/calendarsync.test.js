@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import nusmods from './fixtures/calendar/nusmods.json' with { type: 'json' };
 import holidays from './fixtures/calendar/holidays.json' with { type: 'json' };
-import { BUNDLED, calendarThrough, termDay } from '../src/timetable/calendar.ts';
+import { BUNDLED, calendarThrough, termDay, useCalendar } from '../src/timetable/calendar.ts';
 import {
   CALENDAR_DATA_KEY,
   CALENDAR_NEXT_KEY,
@@ -12,7 +12,6 @@ import {
   fromSources,
   loadCalendar,
   refreshCalendar,
-  resetCalendar,
   valid,
 } from '../src/timetable/calendarsync.ts';
 import { checkCalendar, runCron } from '../src/ops/monitor.ts';
@@ -35,7 +34,7 @@ function sources({ cal = withNextYear, days = holidays, status = 200 } = {}) {
   return fn;
 }
 
-test.beforeEach(() => resetCalendar());
+test.beforeEach(() => useCalendar(null));
 
 test('the bundled calendar passes the checks the fetched one must', () => {
   assert.ok(valid(BUNDLED));
@@ -74,7 +73,7 @@ test('the cron fetches a newer calendar into KV, and every instance answers from
   assert.equal(await refreshCalendar(env, NOW), 'updated');
   assert.ok(calendarThrough() > '2028-01-01', `now through ${calendarThrough()}`);
   assert.deepEqual(termDay(aug2027), { acadYear: '2027/2028', semester: 1, kind: 'instructional', week: 4, holiday: null });
-  resetCalendar();
+  useCalendar(null);
   assert.equal(termDay(aug2027).kind, 'unknown');
   await loadCalendar(env, NOW);
   assert.equal(termDay(aug2027).week, 4, 'another instance, starting from the bundled copy, reads it from KV');
@@ -110,7 +109,7 @@ test('a source that drops a year loses nothing', async () => {
   const { '2027/2028': _gone, ...without } = withNextYear;
   globalThis.fetch = sources({ cal: without });
   assert.equal(await refreshCalendar(env, NOW + 7 * DAY), 'unchanged');
-  resetCalendar();
+  useCalendar(null);
   await loadCalendar(env, NOW + 7 * DAY);
   assert.equal(termDay(Date.UTC(2027, 7, 31, 2, 0)).acadYear, '2027/2028');
 });
@@ -154,7 +153,7 @@ test('the cron refreshes the calendar, and warns only when even the fetched one 
   assert.equal(sent.length, 1, 'mid-July 2027, the bundled calendar running out on 23 August and NUSMods without 2027/2028: warned');
   assert.match(sent[0].text, /fetches the calendar itself every week/);
 
-  resetCalendar();
+  useCalendar(null);
   sent.length = 0;
   globalThis.fetch = sources();
   await runCron(env, july + 14 * DAY);
@@ -210,7 +209,7 @@ test('a semester known already that moves is refused, and the old calendar stays
   assert.equal(Number(await env.KV.get(CALENDAR_NEXT_KEY)), NOW + 8 * DAY, 'tried again the next day');
   globalThis.fetch = sources({ cal: moving('2027/2028', 1, [2027, 8, 2]) });
   await assert.rejects(refreshCalendar(env, NOW + 8 * DAY), /2027\/2028 1/, 'a semester only fetched before is held to it as well');
-  resetCalendar();
+  useCalendar(null);
   const fresh = makeEnv(makeKV());
   globalThis.fetch = sources({ cal: moving('2026/2027', 1, [2026, 8, 3]) });
   await assert.rejects(refreshCalendar(fresh, NOW), /2026\/2027 1/, 'with nothing in KV, against the bundled copy');
@@ -228,7 +227,7 @@ test('a holiday to come that the source takes back goes; past ones stay', async 
   assert.equal(termDay(on('2026-11-09')).holiday, null, 'a holiday to come taken back upstream goes');
   assert.equal(termDay(on('2026-08-10')).holiday, 'National Day (Observed)', 'one already past stays');
   assert.equal(termDay(on('2026-11-08')).holiday, 'Deepavali');
-  resetCalendar();
+  useCalendar(null);
   await loadCalendar(env, NOW + 7 * DAY);
   assert.equal(termDay(on('2026-11-09')).holiday, null, 'another instance, reading KV over the bundled copy, agrees');
   assert.equal(termDay(on('2026-08-10')).holiday, 'National Day (Observed)');

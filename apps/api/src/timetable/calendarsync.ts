@@ -1,5 +1,6 @@
 import { BUNDLED, type CalendarData, currentCalendar, holidaySpan, mergeCalendars, sgtDate, useCalendar } from './calendar.ts';
 import type { Env } from '../types.ts';
+import { kvMemo } from '../memo.ts';
 
 export const NUSMODS_CALENDAR =
   'https://raw.githubusercontent.com/nusmodifications/nusmods/master/packages/nusmods-academic-calendar/academic-calendar.json';
@@ -14,7 +15,12 @@ const FETCH_TIMEOUT_MS = 15_000;
 const MAX_SHIFT_DAYS = 3;
 const MAX_TAKEN_BACK = 3;
 
-let loadedAt = -Infinity;
+const calendarLoads = kvMemo(RELOAD_MS, async (env: Pick<Env, 'KV'>, nowMs: number) => {
+  try {
+    const kept = (await env.KV.get(CALENDAR_DATA_KEY, 'json')) as CalendarData | null;
+    if (kept && valid(kept)) useCalendar(withBundled(kept, nowMs));
+  } catch {}
+});
 
 export function withBundled(kept: CalendarData | null, nowMs: number = Date.now()): CalendarData {
   if (!kept) return BUNDLED;
@@ -22,17 +28,7 @@ export function withBundled(kept: CalendarData | null, nowMs: number = Date.now(
 }
 
 export async function loadCalendar(env: Pick<Env, 'KV'> | null, nowMs: number = Date.now()): Promise<void> {
-  if (!env?.KV || nowMs - loadedAt < RELOAD_MS) return;
-  loadedAt = nowMs;
-  try {
-    const kept = (await env.KV.get(CALENDAR_DATA_KEY, 'json')) as CalendarData | null;
-    if (kept && valid(kept)) useCalendar(withBundled(kept, nowMs));
-  } catch {}
-}
-
-export function resetCalendar(): void {
-  loadedAt = -Infinity;
-  useCalendar(null);
+  if (env?.KV) await calendarLoads.get(env, nowMs);
 }
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;

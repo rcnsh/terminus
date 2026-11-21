@@ -2,6 +2,7 @@ import { KEEP_DAYS } from '../accounts/outcomes.ts';
 import { FEEDBACK_KEEP_DAYS } from './feedback.ts';
 import type { Env } from '../types.ts';
 import { sgt } from '../config.ts';
+import { kvMemo } from '../memo.ts';
 import { failureReason, fetchArrivals, renewToken } from '../feeds/fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from '../feeds/lta.ts';
 import { GRAPH_PUBLIC } from '../answer/graph.ts';
@@ -109,17 +110,14 @@ async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Pr
   await env.KV.put(INCIDENTS_KEY, JSON.stringify(list.slice(0, INCIDENTS_KEPT)));
 }
 
-const DOWN_MEMO_MS = 60_000;
-const downMemo = new WeakMap<object, { at: number; since: number | null }>();
+const RECORDS_MEMO_MS = 60_000;
+const downMemo = kvMemo(RECORDS_MEMO_MS, async (env: Env) => {
+  const u = await readUpstream(env);
+  return u && !answering(u) ? u.since : null;
+});
 
 export async function feedDownSince(env: Env, nowMs: number): Promise<number | null> {
-  if (!env.KV) return null;
-  const kept = downMemo.get(env.KV);
-  if (kept && nowMs - kept.at < DOWN_MEMO_MS && nowMs >= kept.at) return kept.since;
-  const u = await readUpstream(env);
-  const since = u && !answering(u) ? u.since : null;
-  downMemo.set(env.KV, { at: nowMs, since });
-  return since;
+  return env.KV ? downMemo.get(env, nowMs) : null;
 }
 
 export interface StatusRecords {
@@ -128,15 +126,13 @@ export interface StatusRecords {
   publicFeed: PublicFeedState | null;
 }
 
-const statusMemo = new WeakMap<object, { at: number; records: StatusRecords }>();
+const statusMemo = kvMemo(RECORDS_MEMO_MS, async (env: Env): Promise<StatusRecords> => {
+  const [upstream, incidents, publicFeed] = await Promise.all([readUpstream(env), readIncidents(env), readPublicFeed(env)]);
+  return { upstream, incidents, publicFeed };
+});
 
 export async function statusRecords(env: Env, nowMs: number): Promise<StatusRecords> {
-  const kept = statusMemo.get(env.KV);
-  if (kept && nowMs - kept.at < DOWN_MEMO_MS && nowMs >= kept.at) return kept.records;
-  const [upstream, incidents, publicFeed] = await Promise.all([readUpstream(env), readIncidents(env), readPublicFeed(env)]);
-  const records = { upstream, incidents, publicFeed };
-  if (env.KV) statusMemo.set(env.KV, { at: nowMs, records });
-  return records;
+  return statusMemo.get(env, nowMs);
 }
 
 export async function readUpstream(env: Env): Promise<UpstreamState | null> {

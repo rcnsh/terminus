@@ -23,8 +23,8 @@ import { alongNear, pointAlong } from '../src/map/buses.ts';
 import { shapeFor } from '../src/map/campus.ts';
 import { inService } from '../src/answer/hours.ts';
 import { GRAPH } from '../src/answer/graph.ts';
-import { BUNDLED } from '../src/timetable/calendar.ts';
-import { CALENDAR_DATA_KEY, resetCalendar } from '../src/timetable/calendarsync.ts';
+import { BUNDLED, useCalendar } from '../src/timetable/calendar.ts';
+import { CALENDAR_DATA_KEY } from '../src/timetable/calendarsync.ts';
 import {
   busesAt,
   busesOut,
@@ -221,7 +221,7 @@ test('a public holiday known only from KV runs holiday hours: services not runni
     generated: '2099-01-01',
     holidays: [...BUNDLED.holidays, { date: DATE, name: 'A holiday announced late' }],
   };
-  resetCalendar();
+  useCalendar(null);
   try {
     const h = harness({ buses: { D2: [busOn('D2', 400)] }, kv: makeKV({ [CALENDAR_DATA_KEY]: holiday }) });
     await start(h);
@@ -233,7 +233,7 @@ test('a public holiday known only from KV runs holiday hours: services not runni
     assert.ok(onHoliday.length < RUNNING.length, `holiday services: ${onHoliday}`);
     assert.deepEqual(asked, onHoliday);
   } finally {
-    resetCalendar();
+    useCalendar(null);
   }
 });
 

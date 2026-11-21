@@ -5,6 +5,7 @@ import { mailName } from '../site/site.ts';
 import { isBeta, linkOrigin } from '../origin.ts';
 import { m } from '../i18n.ts';
 import { TTL } from '../config.ts';
+import { kvMemo } from '../memo.ts';
 
 export const ACCOUNT_TTL = {
   linkMs: 15 * 60_000,
@@ -465,7 +466,6 @@ export function clientFrom(req: Request): Client {
 
 export const KV_MIN_CLIENT = 'config:minClient';
 export const UPDATE_REQUIRED = { error: 'Update terminus to keep using it.', update: true } as const;
-const minClientMemos = new WeakMap<object, { value: Record<string, string>; atMs: number }>();
 
 function versionParts(v: string): { core: number[]; pre: number[] | null } | null {
   const m = /^(\d+(?:\.\d+)*)(-[a-z]*\.?(\d+(?:\.\d+)*)?)?(?:\+.*)?$/.exec(v.trim().toLowerCase());
@@ -493,9 +493,7 @@ export function versionBelow(version: string, min: string): boolean {
   return compareNums(v.pre, lo.pre) < 0;
 }
 
-async function minClients(env: Env, nowMs: number): Promise<Record<string, string>> {
-  const memo = minClientMemos.get(env.KV);
-  if (memo && nowMs - memo.atMs < TTL.versionMemoMs) return memo.value;
+const minClients = kvMemo(TTL.versionMemoMs, async (env: Env): Promise<Record<string, string>> => {
   let value: Record<string, string> = {};
   try {
     const parsed: unknown = await env.KV.get(KV_MIN_CLIENT, 'json');
@@ -505,14 +503,13 @@ async function minClients(env: Env, nowMs: number): Promise<Record<string, strin
   } catch (err) {
     console.error(`ignoring ${KV_MIN_CLIENT}:`, err instanceof Error ? err.message : String(err));
   }
-  minClientMemos.set(env.KV, { value, atMs: nowMs });
   return value;
-}
+});
 
 export async function clientOutdated(env: Env, req: Request, nowMs: number): Promise<boolean> {
   const { platform, client } = clientFrom(req);
   if (!platform || !client) return false;
-  const min = (await minClients(env, nowMs))[platform];
+  const min = (await minClients.get(env, nowMs))[platform];
   return min !== undefined && versionBelow(client.slice(client.indexOf('/') + 1), min);
 }
 

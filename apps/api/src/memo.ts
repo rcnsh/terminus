@@ -70,3 +70,27 @@ export function perScope<T>(make: () => T): (scope?: object | null) => T {
     return kept;
   };
 }
+
+export interface KvMemo<E, T> {
+  get(env: E, nowMs: number): Promise<T>;
+  clear(env: E): void;
+}
+
+export function kvMemo<E extends { KV?: KVNamespace }, T>(ttlMs: number, read: (env: E, nowMs: number) => Promise<T>): KvMemo<E, T> {
+  const kept = new WeakMap<object, { atMs: number; value: Promise<T> }>();
+  return {
+    get(env, nowMs) {
+      const kv = env.KV;
+      if (!kv) return read(env, nowMs);
+      const hit = kept.get(kv);
+      if (hit && within(hit.atMs, nowMs, ttlMs)) return hit.value;
+      const entry = { atMs: nowMs, value: read(env, nowMs) };
+      kept.set(kv, entry);
+      entry.value.catch(() => kept.get(kv) === entry && kept.delete(kv));
+      return entry.value;
+    },
+    clear(env) {
+      if (env.KV) kept.delete(env.KV);
+    },
+  };
+}
