@@ -42,7 +42,7 @@ final class SettingsModel {
         if split { path = [page] } else { path.append(page) }
     }
 
-    private(set) var profile: ProfileDoc?
+    var profile: ProfileDoc? { saver.doc }
     private(set) var me: Me?
     private(set) var campus: Campus?
     private(set) var devices: [Device]?
@@ -61,6 +61,25 @@ final class SettingsModel {
 
     private var app: AppModel { AppModel.shared }
 
+    @ObservationIgnored private lazy var saver: ProfileSaver = {
+        let s = ProfileSaver()
+        s.held = { [weak self] in self?.importing ?? false }
+        s.say = { [weak self] in self?.say($0) }
+        s.onRejected = { [weak self] token in
+            guard let self, token == self.app.token else { return }
+            self.reset()
+            self.app.rejected(token, reason: signedOutHere)
+        }
+        s.onSaved = { [weak self] saved, before in
+            guard let self, saved.lang != before?.lang else { return }
+            Task {
+                await self.app.load(restart: true)
+                await self.app.loadDay()
+            }
+        }
+        return s
+    }()
+
     func refresh() async {
         guard let token = app.token else { return }
         let api = Api(token: token)
@@ -76,11 +95,7 @@ final class SettingsModel {
         do {
             let (data, tag) = try await api.profileData()
             guard token == app.token, let p = ProfileDoc(data: data) else { return }
-            if !saving {
-                profile = p
-                version = tag
-                followAccount(p)
-            }
+            if saver.loaded(p, tag: tag) { followAccount(p) }
         } catch {
             if rejected(error, token) { return }
             if profile == nil { say(failureMessage(error)) }
@@ -130,14 +145,8 @@ final class SettingsModel {
     }
 
     func reset() {
-        saveTask?.cancel()
-        saveTask = nil
-        sending = nil
-        epoch += 1
+        saver.reset()
         path = []
-        profile = nil
-        version = nil
-        pending = []
         me = nil
         devices = nil
         choices = []
@@ -150,80 +159,7 @@ final class SettingsModel {
         busy = false
     }
 
-    private var saveTask: Task<Void, Never>?
-    private var sending: Task<Void, Never>?
-    private var confirmed: ProfileDoc?
-    private var version: String?
-    private var pending: [(inout ProfileDoc) -> Void] = []
-    private var epoch = 0
-    private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
-
-    func edit(_ change: @escaping (inout ProfileDoc) -> Void) {
-        guard var next = profile, app.token != nil else { return }
-        if !saving { confirmed = profile }
-        change(&next)
-        pending.append(change)
-        profile = next
-        saveTask?.cancel()
-        saveTask = Task {
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            saveTask = nil
-            send()
-        }
-    }
-
-    private func send() {
-        guard sending == nil, !importing, !pending.isEmpty, let token = app.token, let base = confirmed else { return }
-        let changes = pending
-        pending = []
-        var doc = base
-        for change in changes { change(&doc) }
-        let body = doc.data
-        let from = version
-        let mine = epoch
-        sending = Task {
-            do {
-                let api = Api(token: token)
-                var (data, tag): (Data, String?)
-                do {
-                    (data, tag) = try await api.saveProfileData(body, ifMatch: from)
-                } catch let e as ApiError where e.status == 412 {
-                    let (fresh, freshTag) = try await api.profileData()
-                    guard mine == epoch else { return }
-                    guard var latest = ProfileDoc(data: fresh) else { throw URLError(.cannotParseResponse) }
-                    for change in changes { change(&latest) }
-                    if latest.missed { say(L("A class was changed on another device. Check it and try again.")) }
-                    (data, tag) = try await api.saveProfileData(latest.data, ifMatch: freshTag)
-                }
-                guard mine == epoch else { return }
-                sending = nil
-                guard let saved = ProfileDoc(data: data) else { return }
-                version = tag
-                let langSaved = saved.lang != confirmed?.lang
-                confirmed = saved
-                var shown = saved
-                for change in pending { change(&shown) }
-                profile = shown
-                if langSaved {
-                    Task {
-                        await app.load(restart: true)
-                        await app.loadDay()
-                    }
-                }
-                if saveTask == nil { send() }
-            } catch {
-                guard mine == epoch else { return }
-                sending = nil
-                saveTask?.cancel()
-                saveTask = nil
-                pending = []
-                if rejected(error, token) { return }
-                if let confirmed { profile = confirmed }
-                say(L("Not saved: %@", failureMessage(error)))
-            }
-        }
-    }
+    func edit(_ change: @escaping (inout ProfileDoc) -> Void) { saver.edit(change) }
 
     func setLang(_ pref: String) {
         guard pref != Prefs.shared.lang else { return }
@@ -264,28 +200,19 @@ final class SettingsModel {
     func importTimetable(_ link: String) {
         let share = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !share.isEmpty, !importing, let token = app.token else { return }
-        if saveTask != nil {
-            saveTask?.cancel()
-            saveTask = nil
-            send()
-        }
+        saver.sendNow()
         importing = true
         imported = nil
         let session = app.session
         Task {
-            while let s = sending { await s.value }
+            await saver.flush()
             do {
                 let r = try await Api(token: token).importTimetable(share)
                 importing = false
                 guard app.session == session else { return }
                 imported = r
                 unplaced = r.unplaced
-                let saved = ProfileDoc(r.profile)
-                confirmed = saved
-                var shown = saved
-                for change in pending { change(&shown) }
-                profile = shown
-                if saveTask == nil { send() }
+                saver.adopt(ProfileDoc(r.profile))
                 sharedLink = nil
                 if let m = me {
                     me = Me(email: m.email, anonymous: m.anonymous, onboarding: m.onboarding, needsReimport: false, term: r.term)
@@ -295,7 +222,7 @@ final class SettingsModel {
                 importing = false
                 guard app.session == session else { return }
                 if rejected(error, token) { return }
-                if saveTask == nil { send() }
+                saver.resume()
                 say(failureMessage(error))
             }
         }

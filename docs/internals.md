@@ -3446,15 +3446,18 @@ in [ADR 0024](adr/0024-iphone-hand-made-controls.md).
   the phone's first unlock, the keychain can't be read: that isn't signed
   out, and `AppModel` looks again once it can. A 401 for this phone's own
   token signs it out; one for a token already replaced doesn't.
-- **Saving the profile.** Settings and setup show an edit at once and save
-  0.4 s later, so a run of taps is one save; one save is in flight at a
-  time and is never cancelled (whether it saved is known only from its
-  answer); changes made meanwhile are replayed on what it saved, and a
-  refusal puts back the last saved profile with the reason. Settings sends
-  the ETag as `If-Match` and on a 412 reads the profile again and makes its
-  changes on that (`ProfileDoc.missed` says so when a class it changed was
-  changed elsewhere). Setup doesn't save during a NUSMods import, whose
-  answer replaces the timetable, and saves what's waiting before one. The
+- **Saving the profile.** Settings and setup share one `ProfileSaver`
+  each: an edit shows at once and saves 0.4 s later, so a run of taps is
+  one save; one save is in flight at a time and is never cancelled
+  (whether it saved is known only from its answer); changes made meanwhile
+  are replayed on what it saved, and a refusal puts back the last saved
+  profile with the reason. It sends the ETag as `If-Match` and on a 412
+  reads the profile again and makes its changes on that
+  (`ProfileDoc.missed` says so when a class it changed was changed
+  elsewhere). An answer after a sign-out or `reset()` is dropped. Before a
+  NUSMods import, whose answer replaces the timetable, what's waiting is
+  saved; Settings holds later saves until the import answers and then
+  replays them on it (`adopt`), and setup takes no edits meanwhile. The
   profile is kept as JSON, so fields this version doesn't know survive.
   The account's language and clock follow the account: one chosen on
   another device is applied here, one picked here before the account had

@@ -11,7 +11,7 @@ final class OnboardingModel {
     var step = 0
     private(set) var forward = true
 
-    private(set) var profile: [String: Any]?
+    var profile: [String: Any]? { saver.doc?.json }
     private(set) var campus: Campus?
     var message: String?
     private(set) var importing = false
@@ -26,14 +26,23 @@ final class OnboardingModel {
 
     private var api: Api { AppModel.shared.api }
 
+    @ObservationIgnored private lazy var saver: ProfileSaver = {
+        let s = ProfileSaver()
+        s.say = { [weak self] in self?.message = $0 }
+        s.onSaved = { [weak self] _, _ in self?.message = nil }
+        s.onRejected = { AppModel.shared.rejected($0, reason: signedOutHere) }
+        return s
+    }()
+
     func load() async {
         message = nil
         guard let token = AppModel.shared.token else { return }
         let session = AppModel.shared.session
         do {
-            let loaded = try await Api(token: token).profile()
+            let (data, tag) = try await Api(token: token).profileData()
             guard AppModel.shared.session == session else { return }
-            if !saving { profile = loaded }
+            guard let loaded = ProfileDoc(data: data) else { throw URLError(.cannotParseResponse) }
+            saver.loaded(loaded, tag: tag)
             if link.isEmpty { link = share ?? "" }
             syncLang()
         } catch let e as ApiError where e.status == 401 {
@@ -166,71 +175,12 @@ final class OnboardingModel {
         }
     }
 
-    private var saveTask: Task<Void, Never>?
-    private var sending: Task<Void, Never>?
-    private var pending: [@Sendable (inout [String: Any]) -> Void] = []
-    private var confirmed: [String: Any]?
-    private var saving: Bool { saveTask != nil || sending != nil || !pending.isEmpty }
-
-    func edit(_ change: @escaping @Sendable (inout [String: Any]) -> Void) {
-        guard let current = profile, !importing, AppModel.shared.token != nil else { return }
-        if !saving { confirmed = current }
-        var next = current
-        change(&next)
-        profile = next
-        pending.append(change)
-        saveTask?.cancel()
-        saveTask = Task {
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            saveTask = nil
-            send()
-        }
+    func edit(_ change: @escaping (inout [String: Any]) -> Void) {
+        guard !importing else { return }
+        saver.edit { change(&$0.json) }
     }
 
-    private func send() {
-        guard sending == nil, !pending.isEmpty, let token = AppModel.shared.token else { return }
-        let changes = pending
-        pending = []
-        let session = AppModel.shared.session
-        sending = Task {
-            do {
-                let saved = try await Api(token: token).changeProfile { p in
-                    for change in changes { change(&p) }
-                }
-                sending = nil
-                guard AppModel.shared.session == session else { return }
-                confirmed = saved
-                var shown = saved
-                for change in pending { change(&shown) }
-                profile = shown
-                message = nil
-                if saveTask == nil { send() }
-            } catch {
-                sending = nil
-                guard AppModel.shared.session == session else { return }
-                saveTask?.cancel()
-                saveTask = nil
-                pending = []
-                if let e = error as? ApiError, e.status == 401 {
-                    AppModel.shared.rejected(token, reason: signedOutHere)
-                    return
-                }
-                if let confirmed { profile = confirmed }
-                message = L("Not saved: %@", failureMessage(error))
-            }
-        }
-    }
-
-    private func flush() async {
-        if saveTask != nil {
-            saveTask?.cancel()
-            saveTask = nil
-            send()
-        }
-        let session = AppModel.shared.session
-        while let s = sending, AppModel.shared.session == session { await s.value }
-    }
+    private func flush() async { await saver.flush() }
 
     struct Class: Identifiable, Hashable {
         let id: String
@@ -273,7 +223,7 @@ final class OnboardingModel {
             let r = try await api.importTimetable(share)
             guard AppModel.shared.session == session else { return false }
             imported = r
-            profile = r.profile
+            saver.adopt(ProfileDoc(r.profile))
             unplaced = r.unplaced
             return true
         } catch {
