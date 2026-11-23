@@ -191,8 +191,7 @@ node apps/api/scripts/dev/dev-stub.mjs # local Worker on :8787 with a fake feed 
   something works or what a feed was seen to do (with when) in
   internals.md, and a hack in an issue. History belongs in git log.
   `pnpm lint` fails on any comment (`scripts/comments.mjs`; tool
-  directives, shebangs and migrations aside). The `/delete-comment` skill
-  clears comments a file brings in.
+  directives, shebangs and migrations aside).
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map", "your stop"),
   not internals.
