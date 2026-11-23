@@ -11,8 +11,8 @@ android {
         applicationId = "sh.rcn.terminus"
         minSdk = 31
         targetSdk = 37
-        versionCode = 73
-        versionName = "3.12.0"
+        versionCode = 74
+        versionName = "3.12.1"
     }
 
     flavorDimensions += "channel"

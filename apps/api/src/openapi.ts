@@ -5,7 +5,7 @@ import { Lru } from './memo.ts';
 
 export { docsPage, docsPageFor } from './openapi/docs.ts';
 
-export const API_VERSION = '3.12.0';
+export const API_VERSION = '3.12.1';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
   return withCommonErrors({
