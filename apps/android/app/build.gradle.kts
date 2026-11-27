@@ -5,7 +5,9 @@ plugins {
 
 android {
     namespace = "sh.rcn.terminus"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "sh.rcn.terminus"
