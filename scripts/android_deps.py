@@ -20,6 +20,7 @@ Exits 1 with the reasons when a check fails; the file is left unchanged.
 """
 
 import hashlib
+import json
 import re
 import sys
 import urllib.error
@@ -66,12 +67,32 @@ def entries(path):
     return out
 
 
+def published_as(base, group, name, version, file):
+    """The file name a repository serves for an artifact Gradle's module
+    metadata calls by another name (ui-util.aar is ui-util-android-1.13.0.aar),
+    or the name itself when the module doesn't rename it."""
+    module = fetch(f"{base}/{group.replace('.', '/')}/{name}/{version}/{name}-{version}.module")
+    if module is None:
+        return file
+    for variant in json.loads(module).get("variants", []):
+        for entry in variant.get("files", []):
+            if entry.get("name") == file and entry.get("url"):
+                return entry["url"]
+    return file
+
+
 def download(group, name, version, file):
     """The file and the repository it came from, its SHA-1 checked; or a
     reason it couldn't be."""
-    path = f"{group.replace('.', '/')}/{name}/{version}/{file}"
     for base in repositories(group):
+        path = f"{group.replace('.', '/')}/{name}/{version}/{file}"
         data = fetch(f"{base}/{path}")
+        if data is None:
+            served = published_as(base, group, name, version, file)
+            if served == file:
+                continue
+            path = f"{group.replace('.', '/')}/{name}/{version}/{served}"
+            data = fetch(f"{base}/{path}")
         if data is None:
             continue
         published = fetch(f"{base}/{path}.sha1")
